@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TIGER 论文解读</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false }
+          ],
+          throwOnError: false
+        });
+      }
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #2563eb; --primary-soft: #eff6ff;
+      --accent: #7c3aed; --shadow: 0 10px 30px rgba(15,23,42,0.08);
+      --radius: 18px; --max: 1120px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; background: linear-gradient(180deg,#f8fbff 0%,var(--bg) 240px); color: var(--text); font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; line-height: 1.8; }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .page { max-width: var(--max); margin: 0 auto; padding: 32px 20px 80px; }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    .back-link:hover { color: var(--primary); text-decoration: none; }
+    .hero { background: radial-gradient(circle at top right,rgba(37,99,235,0.14),transparent 30%), radial-gradient(circle at left bottom,rgba(124,58,237,0.10),transparent 24%), var(--card); border: 1px solid rgba(37,99,235,0.08); border-radius: 24px; box-shadow: var(--shadow); padding: 34px 34px 28px; margin-bottom: 22px; }
+    .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--primary-soft); color: var(--primary); font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+    h1 { margin: 0 0 10px; font-size: 34px; line-height: 1.25; letter-spacing: -0.02em; }
+    .subtitle { margin: 0; color: var(--muted); font-size: 16px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-top: 24px; }
+    .meta-card { background: #fbfdff; border: 1px solid #e7eefb; border-radius: 16px; padding: 14px 16px; }
+    .meta-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .meta-value { font-size: 14px; font-weight: 600; word-break: break-word; }
+    .layout { display: grid; grid-template-columns: 260px minmax(0,1fr); gap: 22px; align-items: start; }
+    .toc { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; }
+    .toc h2 { margin: 0 0 12px; font-size: 16px; }
+    .toc ul { margin: 0; padding-left: 16px; color: var(--muted); }
+    .toc li { margin: 8px 0; }
+    .content { display: flex; flex-direction: column; gap: 18px; }
+    .section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 26px 28px; }
+    .section h2 { margin: 0 0 14px; font-size: 24px; line-height: 1.35; }
+    .section h3 { margin: 26px 0 12px; font-size: 19px; }
+    .section h4 { margin: 22px 0 10px; font-size: 16px; color: #111827; }
+    .lead { margin: 0; color: #374151; }
+    .paper-info { background: #fafbff; border-left: 4px solid var(--primary); border-radius: 12px; padding: 14px 16px; margin: 16px 0 0; color: #334155; }
+    .paper-info p { margin: 6px 0; }
+    .highlight { background: linear-gradient(180deg,rgba(37,99,235,0.08),rgba(37,99,235,0.04)); border: 1px solid rgba(37,99,235,0.12); border-radius: 14px; padding: 14px 16px; margin: 16px 0; }
+    .highlight strong { color: #1d4ed8; }
+    .note { background: #fcfcfd; border: 1px dashed #cbd5e1; border-radius: 14px; padding: 14px 16px; color: #475467; margin: 14px 0; }
+    .formula-vars { background: #f8faff; border: 1px solid #dbeafe; border-radius: 12px; padding: 12px 16px; margin: 8px 0 16px; font-size: 14px; color: #374151; }
+    .formula-vars .var-title { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+    .formula-vars ul { margin: 0; padding-left: 18px; }
+    .formula-vars li { margin: 4px 0; }
+    ul, ol { padding-left: 22px; }
+    li + li { margin-top: 8px; }
+    .sub-list { margin-top: 8px; }
+    figure { margin: 20px 0; background: #fbfdff; border: 1px solid #e8edf5; border-radius: 16px; padding: 14px; }
+    figure img { width: 100%; display: block; border-radius: 12px; background: #f3f6fa; min-height: 60px; }
+    figcaption { margin-top: 10px; font-size: 14px; color: var(--muted); line-height: 1.6; }
+    .fig-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    table { width: 100%; border-collapse: collapse; margin: 16px 0; overflow: hidden; border-radius: 14px; font-size: 14px; }
+    thead th { background: #f3f6fb; color: #334155; text-align: left; font-weight: 700; border-bottom: 1px solid var(--line); }
+    th, td { padding: 12px 14px; border-bottom: 1px solid #eef2f7; vertical-align: top; }
+    tbody tr:nth-child(even) { background: #fcfdff; }
+    blockquote { margin: 16px 0; padding: 14px 18px; border-left: 4px solid var(--accent); background: rgba(124,58,237,0.05); border-radius: 0 12px 12px 0; color: #3f3f46; }
+    .two-col { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
+    .mini-card { border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; background: #fff; }
+    .mini-card h4 { margin-top: 0; }
+    .footer { margin-top: 18px; color: var(--muted); font-size: 13px; text-align: center; }
+    .katex-display { overflow-x: auto; overflow-y: hidden; padding: 6px 0; }
+    .img-placeholder { background: linear-gradient(135deg,#f0f4ff,#e8eef9); border-radius: 12px; padding: 32px 20px; text-align: center; color: #6b8ccc; font-size: 14px; line-height: 1.7; }
+    .img-placeholder strong { display: block; font-size: 15px; margin-bottom: 6px; color: #4a6fa8; }
+    @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } .toc { position: static; } .meta-grid { grid-template-columns: 1fr 1fr; } .fig-row, .two-col { grid-template-columns: 1fr; } }
+    @media (max-width: 640px) { .page { padding: 18px 12px 56px; } .hero, .section { padding: 20px 18px; } h1 { font-size: 28px; } .meta-grid { grid-template-columns: 1fr; } th, td { padding: 10px; } }
+  </style>
+</head>
+<body>
+<div class="page">
+  <a class="back-link" href="index.html">← 返回论文列表</a>
+
+  <header class="hero">
+    <div class="eyebrow">论文解读</div>
+    <h1>TIGER：用生成式检索重构推荐系统</h1>
+    <p class="subtitle">Recommender Systems with Generative Retrieval · NeurIPS 2023</p>
+    <div class="meta-grid">
+      <div class="meta-card"><div class="meta-label">作者</div><div class="meta-value">Rajput, Mehta et al. · Google DeepMind</div></div>
+      <div class="meta-card"><div class="meta-label">年份</div><div class="meta-value">2023 · NeurIPS</div></div>
+      <div class="meta-card"><div class="meta-label">论文链接</div><div class="meta-value"><a href="https://arxiv.org/abs/2305.05065" target="_blank">arXiv 2305.05065</a></div></div>
+      <div class="meta-card"><div class="meta-label">核心命题</div><div class="meta-value">生成式检索 + Semantic ID</div></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="toc">
+      <h2>目录</h2>
+      <ul>
+        <li><a href="#summary">一句话总结</a></li>
+        <li><a href="#background">背景与动机</a></li>
+        <li><a href="#method">方法详解</a>
+          <ul class="sub-list">
+            <li><a href="#semid-gen">Semantic ID 生成</a></li>
+            <li><a href="#rqvae">RQ-VAE 量化原理</a></li>
+            <li><a href="#gen-retrieval">生成式检索</a></li>
+          </ul>
+        </li>
+        <li><a href="#exp">实验结果</a>
+          <ul class="sub-list">
+            <li><a href="#exp-main">主实验</a></li>
+            <li><a href="#exp-semid-quality">SemID 层级分析</a></li>
+            <li><a href="#exp-coldstart">冷启动</a></li>
+            <li><a href="#exp-diversity">多样性</a></li>
+          </ul>
+        </li>
+        <li><a href="#insight">个人理解</a></li>
+      </ul>
+    </aside>
+
+    <main class="content">
+
+      <!-- 一句话总结 -->
+      <section class="section" id="summary">
+        <h2>一句话总结</h2>
+        <p class="lead"><strong>TIGER 把推荐系统的召回阶段从"向量查找最近邻"改造为"自回归生成下一个 item 的 Semantic ID"，核心是用 RQ-VAE 为每个 item 分配一个有语义层级的离散 token 序列，从而让 Transformer 的记忆本身成为检索索引。</strong></p>
+        <div class="paper-info">
+          <p><strong>发表：</strong>NeurIPS 2023</p>
+          <p><strong>原文：</strong><a href="https://arxiv.org/abs/2305.05065" target="_blank">https://arxiv.org/abs/2305.05065</a></p>
+          <p><strong>ar5iv 可读版：</strong><a href="https://ar5iv.labs.arxiv.org/html/2305.05065" target="_blank">ar5iv.labs.arxiv.org/html/2305.05065</a></p>
+        </div>
+        <div class="highlight">
+          <strong>核心贡献：</strong>首次将生成式检索（Generative Retrieval）引入推荐系统，提出 Semantic ID 概念，并证明相比随机 ID 和 LSH，RQ-VAE 生成的语义分层 token 显著提升推荐性能与冷启动能力。
+        </div>
+      </section>
+
+      <!-- 背景与动机 -->
+      <section class="section" id="background">
+        <h2>背景与动机</h2>
+
+        <figure>
+          <img src="https://ar5iv.labs.arxiv.org/html/2305.05065/assets/x1.png"
+               alt="Figure 1: TIGER 框架概览"
+               onerror="this.style.display='none';this.nextElementSibling.style.display='block'" />
+          <div class="img-placeholder" style="display:none">
+            <strong>Figure 1 — TIGER 框架概览</strong>
+            左侧：三个 item（Orange shoes Brand X, Red shoes Brand Y, Orange shoes Brand Y）各自由随机 atomic item ID 变为 Semantic ID 元组（如 (5,23,55)）；右侧：TIGER 把用户历史 Semantic ID 序列送入 Encoder，Decoder 自回归输出下一个 item 的 Semantic ID，查表即得推荐结果。
+          </div>
+          <figcaption><strong>Figure 1：TIGER 框架概览。</strong>每个 item 由内容特征经 RQ-VAE 量化为 Semantic ID 元组（如 $(5,23,55)$）。给定用户历史 Semantic ID 序列，Transformer Encoder-Decoder 自回归生成下一个 item 的 Semantic ID，查表得到推荐结果。</figcaption>
+        </figure>
+
+        <p>传统推荐系统的召回阶段通常依赖双塔模型（Dual Encoder）：用户 tower 和 item tower 各自输出 embedding，再用近似最近邻（ANN）检索候选集。这套范式经历了多年验证，但暗藏几个结构性问题：</p>
+        <ol>
+          <li><strong>item ID 是随机符号</strong>：学到的 embedding 无法跨 item 共享知识，相似 item 只靠协同过滤隐式关联。</li>
+          <li><strong>需要维护外部索引</strong>：每次 item 集合更新，都要重新构建 ANN 索引，工程成本高。</li>
+          <li><strong>冷启动问题严重</strong>：新 item 没有历史，ANN 无法检索到它。</li>
+          <li><strong>多样性控制困难</strong>：ANN 本质是找最相似，不容易调节结果的多样性。</li>
+        </ol>
+
+        <div class="highlight">
+          <strong>TIGER 的直觉：</strong>如果 Transformer 已经能通过自回归"记住"大量知识，为什么不把 item 库直接存进 Transformer 的参数里，让它直接生成下一个要推荐的 item？
+        </div>
+
+        <p>这和 NLP 中的生成式文档检索（DSI、NCI）思路一致，TIGER 是第一篇把这套范式搬进推荐系统的工作。</p>
+
+        <div class="note">
+          关键前提是：如果 item 的 ID 是随机的，生成模型无法利用 item 之间的语义关系。因此必须先构造一套有意义的 Semantic ID，让相似 item 有相近的 token，才能让生成模型真正发挥作用。
+        </div>
+      </section>
+
+      <!-- 方法详解 -->
+      <section class="section" id="method">
+        <h2>方法详解</h2>
+        <p>TIGER 分两个阶段：先为每个 item 生成 Semantic ID，再在 Semantic ID 序列上训练 Seq2Seq 推荐模型。</p>
+
+        <figure>
+          <div class="fig-row">
+            <div>
+              <img src="https://ar5iv.labs.arxiv.org/html/2305.05065/assets/x2.png"
+                   alt="Figure 2a: Semantic ID 生成流程"
+                   onerror="this.style.display='none';this.nextElementSibling.style.display='block'" />
+              <div class="img-placeholder" style="display:none">
+                <strong>Figure 2a — Semantic ID 生成</strong>
+                内容特征（文本标题/描述）→ Sentence-T5 编码器 → 768 维 dense embedding → RQ-VAE 残差量化 → Semantic ID 元组 $(c_0, c_1, c_2)$
+              </div>
+            </div>
+            <div>
+              <img src="https://ar5iv.labs.arxiv.org/html/2305.05065/assets/x3.png"
+                   alt="Figure 2b: Encoder-Decoder 结构"
+                   onerror="this.style.display='none';this.nextElementSibling.style.display='block'" />
+              <div class="img-placeholder" style="display:none">
+                <strong>Figure 2b — Transformer Encoder-Decoder</strong>
+                输入：用户 ID token + 历史 item 的 Semantic ID 序列（展开为 token 串）；Decoder 自回归输出下一个 item 的 Semantic ID 逐位 token。
+              </div>
+            </div>
+          </div>
+          <figcaption><strong>Figure 2：TIGER 的两个核心模块。</strong>左图：item 内容特征经 Sentence-T5 编码后，通过 RQ-VAE 残差量化为 Semantic ID；右图：Encoder-Decoder Transformer 接收用户历史 Semantic ID 序列，逐 token 自回归输出下一个 item 的 Semantic ID。</figcaption>
+        </figure>
+
+        <h3 id="semid-gen">阶段一：Semantic ID 生成</h3>
+        <p>给定 item 的内容特征（标题、描述、品类等），用预训练文本编码器（如 SentenceT5）生成 $d$ 维语义 embedding $\mathbf{x} \in \mathbb{R}^d$，再用 RQ-VAE 将其量化为长度 $m$ 的 codeword 元组 $(c_0, c_1, \ldots, c_{m-1})$，即该 item 的 Semantic ID。</p>
+
+        <p><strong>核心要求：</strong>相似内容的 item 应有重叠的 Semantic ID。例如，Semantic ID 为 $(10, 21, 35)$ 的 item 应比 ID 为 $(10, 23, 32)$ 的 item 更接近 $(10, 21, 40)$。</p>
+
+        <h3 id="rqvae">RQ-VAE 量化原理</h3>
+
+        <figure>
+          <img src="https://ar5iv.labs.arxiv.org/html/2305.05065/assets/x4.png"
+               alt="Figure 3: RQ-VAE 残差量化流程图"
+               onerror="this.style.display='none';this.nextElementSibling.style.display='block'" />
+          <div class="img-placeholder" style="display:none">
+            <strong>Figure 3 — RQ-VAE 残差量化</strong>
+            DNN Encoder 输出向量 $\mathbf{r}_0$（蓝色条）→ 在第 1 层 codebook 里找最近向量 $\mathbf{e}_{c_0}$（红色）→ 计算残差 $\mathbf{r}_1 = \mathbf{r}_0 - \mathbf{e}_{c_0}$ → 在第 2 层 codebook 里找最近向量 $\mathbf{e}_{c_1}$（绿色）→ 继续残差…最终得到 Semantic ID $(7, 1, 4)$。
+          </div>
+          <figcaption><strong>Figure 3：RQ-VAE 残差量化过程。</strong>DNN Encoder 的输出 $\mathbf{r}_0$ 依次在各层 codebook 中找最近向量，计算残差后传入下一层。三层量化后得到 Semantic ID $(7, 1, 4)$，对应各层 codebook 中被选中向量的索引。层数越低表示语义越粗，越高越细粒度。</figcaption>
+        </figure>
+
+        <p>Residual-Quantized VAE 用残差迭代量化生成层级 token。它由编码器、残差量化器、解码器三部分组成：</p>
+        <p>编码器将输入 $\mathbf{x}$ 映射为潜变量 $\mathbf{z} := \mathcal{E}(\mathbf{x})$，然后按以下方式逐层量化：</p>
+        <p>第 $d=0$ 层：初始残差 $\mathbf{r}_0 := \mathbf{z}$，从 codebook $\mathcal{C}_0 = \{\mathbf{e}_k\}_{k=1}^{K}$ 中找最近向量：</p>
+        $$
+        c_0 = \arg\min_{k} \|\mathbf{r}_0 - \mathbf{e}_k\|
+        $$
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$c_0$：第 0 层的 codeword 索引（即 Semantic ID 第一位）</li>
+            <li>$\mathbf{r}_0$：第 0 层的残差，等于编码器输出 $\mathbf{z}$</li>
+            <li>$\mathbf{e}_k$：codebook $\mathcal{C}_0$ 中的第 $k$ 个向量</li>
+            <li>$K$：codebook 大小（本文 $K=256$）</li>
+            <li>$\arg\min$：找使距离最小的索引 $k$</li>
+          </ul>
+          <p style="margin:8px 0 0;font-size:13px;color:#6b7280;">直觉：在第一层 codebook 里找和当前残差最近的向量，记录它的索引作为第一个语义 token。</p>
+        </div>
+
+        <p>第 $d=1$ 层：计算残差 $\mathbf{r}_1 := \mathbf{r}_0 - \mathbf{e}_{c_0}$，再重复上述过程找 $c_1$。依此类推，重复 $m$ 次得到 Semantic ID $(c_0, c_1, \ldots, c_{m-1})$。</p>
+
+        <p>训练 RQ-VAE 的损失：</p>
+        $$
+        \mathcal{L}_{RQVAE}(\mathbf{x}) = \mathcal{L}_{recon} + \mathcal{L}_{rqvae}
+        $$
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\mathcal{L}_{recon} = \|\mathbf{x} - \hat{\mathbf{x}}\|^2$：重建损失，让解码器输出尽量还原原始 embedding $\mathbf{x}$</li>
+            <li>$\hat{\mathbf{x}}$：解码器以量化表示 $\hat{\mathbf{z}} = \sum_{d=0}^{m-1} \mathbf{e}_{c_d}$ 为输入，还原出的向量</li>
+            <li>$\mathcal{L}_{rqvae} = \sum_{d=0}^{m-1} \bigl(\|\mathrm{sg}[\mathbf{r}_d] - \mathbf{e}_{c_d}\|^2 + \beta\|\mathbf{r}_d - \mathrm{sg}[\mathbf{e}_{c_d}]\|^2\bigr)$：量化损失</li>
+            <li>$\mathrm{sg}[\cdot]$：stop-gradient 操作，阻断梯度流，使 codebook 向量和编码器分别独立收敛</li>
+            <li>$\beta$：平衡两个量化方向的超参数，论文取 $\beta = 0.25$</li>
+          </ul>
+          <p style="margin:8px 0 0;font-size:13px;color:#6b7280;">第一项让 codebook 向量往残差方向移动；第二项（带 $\beta$）让编码器输出往 codebook 向量移动，两者相互靠拢，但各自独立更新。</p>
+        </div>
+
+        <h4>碰撞处理</h4>
+        <p>当 codebook 大小和序列长度不足以区分所有 item 时，多个 item 可能映射到同一 Semantic ID（碰撞）。处理方式：在相同 $(c_0, c_1, c_2)$ 的 item 后面追加一个区分码，变成 $(c_0, c_1, c_2, 0)$、$(c_0, c_1, c_2, 1)$……保证唯一性。</p>
+
+        <h3 id="gen-retrieval">阶段二：生成式检索</h3>
+        <p>把用户历史 item 序列转换为 Semantic ID 序列，训练一个 Encoder-Decoder Transformer（基于 T5X）做 Seq2Seq：</p>
+        <ul>
+          <li><strong>输入（Encoder）：</strong>用户 ID token + 历史 item 的 Semantic ID 序列（展开为连续 token）</li>
+          <li><strong>目标（Decoder）：</strong>下一个 item 的 Semantic ID</li>
+        </ul>
+
+        <p>训练目标（标准 next-token prediction）：</p>
+        $$
+        \mathcal{L}_{TIGER} = -\sum_{j=0}^{m-1} \log P\bigl(c_{n+1,j} \mid c_{n+1,0},\ldots,c_{n+1,j-1},\; \text{context};\;\theta\bigr)
+        $$
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$c_{n+1,j}$：第 $n+1$ 个（即下一个）item 的 Semantic ID 中第 $j$ 位 codeword</li>
+            <li>$c_{n+1,0},\ldots,c_{n+1,j-1}$：已生成的前 $j$ 位（自回归条件）</li>
+            <li>$\text{context}$：Encoder 编码的用户历史信息（用户 ID + 前 $n$ 个 item 的 Semantic ID 序列）</li>
+            <li>$\theta$：Transformer Encoder-Decoder 的参数</li>
+            <li>$m$：Semantic ID 长度（本文 $m=4$，前 3 位来自 RQ-VAE，第 4 位用于去碰撞）</li>
+          </ul>
+          <p style="margin:8px 0 0;font-size:13px;color:#6b7280;">这是标准的自回归语言模型目标，只不过生成的不是文字 token，而是 item 的 Semantic ID。Decoder 一次生成一个 codeword，生成完整 $(c_0, c_1, c_2, c_3)$ 后查表得到对应 item。</p>
+        </div>
+
+        <div class="highlight">
+          <strong>为什么能冷启动？</strong>RQ-VAE 对新 item 也能生成 Semantic ID（只需有内容特征），而相同前缀 $(c_0, c_1, c_2)$ 的新旧 item 被 TIGER 视为同类，可以"顺路"检索到新 item。
+        </div>
+      </section>
+
+      <!-- 实验结果 -->
+      <section class="section" id="exp">
+        <h2>实验结果</h2>
+
+        <h3 id="exp-main">主实验：TIGER vs SOTA 基线</h3>
+        <p>在 Amazon 三个数据集（Beauty / Sports and Outdoors / Toys and Games）上与 GRU4Rec、SASRec、BERT4Rec、S3-Rec、P5 等对比：</p>
+
+        <table>
+          <thead>
+            <tr><th>数据集</th><th>最强基线</th><th>TIGER Recall@5</th><th>TIGER NDCG@5</th><th>vs 最强基线</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Beauty</td><td>S3-Rec (R@5=0.0387)</td><td>0.0454</td><td>0.0321</td><td>+17.3% (Recall), +29% (NDCG)</td></tr>
+            <tr><td>Sports &amp; Outdoors</td><td>S3-Rec (R@5=0.0251)</td><td>0.0264</td><td>0.0181</td><td>+5.2% (Recall), +12.6% (NDCG)</td></tr>
+            <tr><td>Toys &amp; Games</td><td>SASRec (R@5=0.0463)</td><td>0.0521</td><td>0.0371</td><td>+12.5% (Recall), +21.2% (NDCG)</td></tr>
+          </tbody>
+        </table>
+
+        <h3>消融实验：ID 类型对比</h3>
+        <table>
+          <thead>
+            <tr><th>ID 类型</th><th>Beauty Recall@5</th><th>Beauty NDCG@5</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Random ID</td><td>0.0296</td><td>0.0205</td></tr>
+            <tr><td>LSH Semantic ID</td><td>0.0379</td><td>0.0259</td></tr>
+            <tr><td><strong>RQ-VAE Semantic ID</strong></td><td><strong>0.0454</strong></td><td><strong>0.0321</strong></td></tr>
+          </tbody>
+        </table>
+
+        <h3 id="exp-semid-quality">Semantic ID 层级质量分析（Figure 4）</h3>
+        <p>在 Amazon Beauty 数据集上，设置 RQ-VAE 为 3 层、codebook 大小为 4/16/256，可视化第一层 codeword $c_1$ 与品类的对应关系：</p>
+
+        <figure>
+          <div class="fig-row">
+            <div>
+              <img src="https://ar5iv.labs.arxiv.org/html/2305.05065/assets/x5.png"
+                   alt="Figure 4a: Beauty 数据集各 item 按 c1 着色的品类分布"
+                   onerror="this.style.display='none';this.nextElementSibling.style.display='block'" />
+              <div class="img-placeholder" style="display:none">
+                <strong>Figure 4a — 按 c₁ 着色的品类分布</strong>
+                每个点代表一个 item，颜色对应 c₁ 值（0~3）。可以看到 c₁=3 的 item 集中在"Hair"品类，c₁=1 集中在"Makeup/Skin"，说明第一层 codeword 捕获了粗粒度品类信息。
+              </div>
+            </div>
+            <div>
+              <img src="https://ar5iv.labs.arxiv.org/html/2305.05065/assets/NeurIPS/figures/cluster_images_new/code2_category_distributions.png"
+                   alt="Figure 4b: 固定 c1 后 c2 的细粒度品类分布"
+                   onerror="this.style.display='none';this.nextElementSibling.style.display='block'" />
+              <div class="img-placeholder" style="display:none">
+                <strong>Figure 4b — 固定 c₁ 后 c₂ 的细粒度分布</strong>
+                分别取 c₁∈{1,2,3,4}，展示每个 c₁ 下不同 c₂ 值对应的品类分布。c₂ 进一步将粗品类细分，验证了 RQ-VAE 生成的 Semantic ID 具有语义层级结构。
+              </div>
+            </div>
+          </div>
+          <figcaption><strong>Figure 4：Amazon Beauty 数据集上 RQ-VAE Semantic ID 的语义层级可视化。</strong>左图：整体 item 品类分布按第一层 codeword $c_1$ 着色，$c_1=3$ 对应 Hair，$c_1=1$ 对应 Makeup/Skin。右图：固定 $c_1$ 后，$c_2$ 进一步细分子品类，验证了"粗→细"的层级结构。</figcaption>
+        </figure>
+
+        <h3 id="exp-coldstart">冷启动推荐（Figure 5）</h3>
+        <p>模拟新 item：从训练集移除 5% 的测试 item（unseen items），RQ-VAE 对这些 item 也能生成 Semantic ID（纯靠内容），TIGER 通过前缀共享把新 item 纳入候选集。引入超参数 $\epsilon$（最多 $\epsilon$ 比例的候选为新 item）：</p>
+
+        <figure>
+          <div class="fig-row">
+            <div>
+              <img src="https://ar5iv.labs.arxiv.org/html/2305.05065/assets/NeurIPS/figures/cold_recall_K.png"
+                   alt="Figure 5a: 冷启动 Recall@K vs K"
+                   onerror="this.style.display='none';this.nextElementSibling.style.display='block'" />
+              <div class="img-placeholder" style="display:none">
+                <strong>Figure 5a — 冷启动 Recall@K vs K</strong>
+                ε=0.1 时，TIGER 在所有 K 值下均超过 Semantic_KNN 基线（用语义 embedding 做近邻检索），说明生成式框架对新 item 的检索能力强于直接 KNN。
+              </div>
+            </div>
+            <div>
+              <img src="https://ar5iv.labs.arxiv.org/html/2305.05065/assets/NeurIPS/figures/cold_recall_epsilon_2.png"
+                   alt="Figure 5b: 冷启动 Recall@10 vs ε"
+                   onerror="this.style.display='none';this.nextElementSibling.style.display='block'" />
+              <div class="img-placeholder" style="display:none">
+                <strong>Figure 5b — 冷启动 Recall@10 vs ε</strong>
+                在 ε≥0.1 的所有设置下，TIGER 均优于 Semantic_KNN，且随 ε 增大，两者差距扩大，说明 TIGER 更能利用语义前缀找到相关新 item。
+              </div>
+            </div>
+          </div>
+          <figcaption><strong>Figure 5：冷启动推荐实验（Amazon Beauty）。</strong>左图：$\epsilon=0.1$ 时 TIGER vs Semantic_KNN 的 Recall@K 对比；右图：Recall@10 随 $\epsilon$（新 item 最大占比）变化。TIGER 在 $\epsilon \geq 0.1$ 的所有条件下全面超越 KNN 基线。</figcaption>
+        </figure>
+
+        <h3 id="exp-diversity">推荐多样性</h3>
+        <p>通过调节 Decoder 的温度参数 $T$ 控制多样性。$T=1.0$ 时以精准为主，$T=2.0$ 时跨品类覆盖明显增大：</p>
+        <table>
+          <thead><tr><th>温度 T</th><th>Entropy@10</th><th>Entropy@20</th><th>Entropy@50</th></tr></thead>
+          <tbody>
+            <tr><td>T = 1.0</td><td>0.76</td><td>1.14</td><td>1.70</td></tr>
+            <tr><td>T = 1.5</td><td>1.14</td><td>1.52</td><td>2.06</td></tr>
+            <tr><td>T = 2.0</td><td>1.38</td><td>1.76</td><td>2.28</td></tr>
+          </tbody>
+        </table>
+        <p>这是 ANN 难以做到的——ANN 只能通过后处理（如 MMR）做多样性，而 TIGER 可以在生成阶段通过温度采样在<strong>语义层级</strong>上控制多样性（高温时第一层 token 变化范围更大，直接跨品类）。</p>
+      </section>
+
+      <!-- 个人理解 -->
+      <section class="section" id="insight">
+        <h2>个人理解</h2>
+
+        <h3>TIGER 的真正创新点在哪里</h3>
+        <ol>
+          <li><strong>把 Transformer 参数本身变成"索引"</strong>：不需要单独的 embedding 表或 ANN 索引，模型推断时直接 beam search 出 Semantic ID 元组，再查表得 item。这在原理上消除了传统双塔的"离线索引 + 在线 ANN"两步走。</li>
+          <li><strong>Semantic ID 兼顾语义和层级</strong>：RQ-VAE 的残差量化天然产生粗粒度→细粒度的层级结构，既支持知识共享（相似 item 有共同前缀），又能区分个体（末位 codeword 唯一化）。</li>
+          <li><strong>冷启动和多样性是自然涌现的能力</strong>：不需要专门设计冷启动模块，只是 Semantic ID 的前缀共享机制的副产物。</li>
+        </ol>
+
+        <h3>值得注意的局限</h3>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>工业规模挑战</h4>
+            <p>论文只在 1-2 万 item 的学术数据集上验证。工业场景 item 数亿，beam search 生成 Semantic ID 的延迟和 invalid ID 率是真实挑战。</p>
+          </div>
+          <div class="mini-card">
+            <h4>只依赖内容特征</h4>
+            <p>Semantic ID 完全来自内容 embedding，协同过滤信号没有进入 token 化过程，在行为驱动明显的场景可能次优。（SemID / TRM 论文正是解决了这个问题。）</p>
+          </div>
+          <div class="mini-card">
+            <h4>碰撞处理有点粗糙</h4>
+            <p>第 4 位只是顺序编号，没有语义含义，导致相似 item 的最后一位 token 完全无关，可能影响模型对末位 token 的学习。</p>
+          </div>
+          <div class="mini-card">
+            <h4>RQ-VAE 需单独训练</h4>
+            <p>两阶段训练（先 RQ-VAE，再 Seq2Seq）导致两个目标可能不完全一致，联合优化是后续工作的研究方向。</p>
+          </div>
+        </div>
+
+        <blockquote>
+          <strong>核心 takeaway：</strong>TIGER 的意义不只在于涨点，而在于提出了一个新的推荐系统范式：把 item 库"编码进" Transformer，用生成方式代替检索。这套思路在 LLM 时代有很强的延展性——SemID 把它用于排序，TRM 进一步引入协同信号和记忆 token。
+        </blockquote>
+      </section>
+    </main>
+  </div>
+
+  <div class="footer">论文解读 · 公式由 KaTeX 渲染 · <a href="index.html">← 返回列表</a></div>
+</div>
+</body>
+</html>

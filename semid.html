@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SemID 论文解读</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false }
+          ],
+          throwOnError: false
+        });
+      }
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #2563eb; --primary-soft: #eff6ff;
+      --accent: #7c3aed; --accent-soft: rgba(124,58,237,0.06);
+      --shadow: 0 10px 30px rgba(15,23,42,0.08); --radius: 18px; --max: 1120px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: linear-gradient(180deg,#f8fbff 0%,var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      line-height: 1.8;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .page { max-width: var(--max); margin: 0 auto; padding: 32px 20px 80px; }
+    .back-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      color: var(--muted); font-size: 14px; margin-bottom: 18px;
+    }
+    .back-link:hover { color: var(--primary); text-decoration: none; }
+
+    /* ── Hero ─────────────────────────────── */
+    .hero {
+      background: radial-gradient(circle at top right,rgba(37,99,235,0.14),transparent 30%),
+                  radial-gradient(circle at left bottom,rgba(124,58,237,0.10),transparent 24%),
+                  var(--card);
+      border: 1px solid rgba(37,99,235,0.08);
+      border-radius: 24px; box-shadow: var(--shadow);
+      padding: 34px 34px 28px; margin-bottom: 22px;
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 12px; border-radius: 999px;
+      background: var(--primary-soft); color: var(--primary);
+      font-size: 13px; font-weight: 600; margin-bottom: 16px;
+    }
+    h1 { font-size: 34px; line-height: 1.25; letter-spacing: -0.02em; margin-bottom: 10px; }
+    .subtitle { color: var(--muted); font-size: 16px; }
+    .meta-grid {
+      display: grid; grid-template-columns: repeat(4,minmax(0,1fr));
+      gap: 12px; margin-top: 24px;
+    }
+    .meta-card {
+      background: #fbfdff; border: 1px solid #e7eefb;
+      border-radius: 16px; padding: 14px 16px;
+    }
+    .meta-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .meta-value { font-size: 14px; font-weight: 600; word-break: break-word; }
+
+    /* ── Layout ──────────────────────────── */
+    .layout {
+      display: grid; grid-template-columns: 260px minmax(0,1fr);
+      gap: 22px; align-items: start;
+    }
+    .toc {
+      position: sticky; top: 20px;
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px;
+    }
+    .toc h2 { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+    .toc-list { list-style: none; padding: 0; }
+    .toc-list li { margin: 7px 0; }
+    .toc-list a { font-size: 13.5px; color: var(--muted); }
+    .toc-list a:hover { color: var(--primary); text-decoration: none; }
+    .toc-list .toc-sub { padding-left: 14px; margin-top: 4px; }
+    .toc-list .toc-sub li { margin: 4px 0; }
+    .toc-list .toc-sub a { font-size: 12.5px; }
+
+    /* ── Sections ────────────────────────── */
+    .content { display: flex; flex-direction: column; gap: 20px; }
+    .section {
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: var(--radius); box-shadow: var(--shadow);
+      padding: 28px 30px;
+    }
+    .section-title {
+      font-size: 22px; font-weight: 800; margin-bottom: 18px;
+      padding-bottom: 12px; border-bottom: 2px solid #f0f4ff;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .section-title .icon {
+      width: 32px; height: 32px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; flex-shrink: 0;
+    }
+    h3 { font-size: 18px; font-weight: 700; margin: 26px 0 12px; color: #111827; }
+    h4 { font-size: 15px; font-weight: 700; margin: 20px 0 10px; color: #1d4ed8; }
+    p { margin-bottom: 12px; }
+    p:last-child { margin-bottom: 0; }
+    ul, ol { padding-left: 22px; }
+    li { margin-bottom: 8px; }
+    li:last-child { margin-bottom: 0; }
+
+    /* ── Callout boxes ───────────────────── */
+    .callout {
+      border-radius: 14px; padding: 14px 18px; margin: 16px 0; font-size: 14.5px;
+    }
+    .callout-blue {
+      background: linear-gradient(180deg,rgba(37,99,235,0.08),rgba(37,99,235,0.04));
+      border: 1px solid rgba(37,99,235,0.16);
+    }
+    .callout-blue strong { color: #1d4ed8; }
+    .callout-amber {
+      background: #fffbeb; border: 1px solid #fde68a;
+    }
+    .callout-amber strong { color: #92400e; }
+    .callout-green {
+      background: #f0fdf4; border: 1px solid #86efac;
+    }
+    .callout-green strong { color: #166534; }
+    .callout-purple {
+      background: var(--accent-soft); border: 1px solid rgba(124,58,237,0.18);
+    }
+    .callout-purple strong { color: #6d28d9; }
+    .note {
+      background: #f8faff; border: 1px dashed #cbd5e1;
+      border-radius: 12px; padding: 12px 16px; color: #475467;
+      font-size: 13.5px; margin: 12px 0;
+    }
+    blockquote {
+      margin: 16px 0; padding: 14px 18px;
+      border-left: 4px solid var(--accent);
+      background: var(--accent-soft); border-radius: 0 12px 12px 0;
+      color: #3f3f46; font-size: 14.5px;
+    }
+
+    /* ── Paper info bar ──────────────────── */
+    .paper-info {
+      background: #fafbff; border-left: 4px solid var(--primary);
+      border-radius: 12px; padding: 14px 16px; margin: 16px 0; color: #334155;
+      font-size: 14px;
+    }
+    .paper-info p { margin: 5px 0; }
+
+    /* ── Figures ────────────────────────── */
+    figure {
+      margin: 22px 0; background: #fbfdff;
+      border: 1px solid #e8edf5; border-radius: 16px; padding: 14px;
+    }
+    figure img {
+      width: 100%; display: block; border-radius: 12px; background: #fff;
+    }
+    figcaption {
+      margin-top: 10px; font-size: 13.5px; color: var(--muted);
+      line-height: 1.6;
+    }
+    .fig-placeholder {
+      padding: 40px 24px; text-align: center; background: #f8faff;
+      border-radius: 12px; color: #94a3b8; font-size: 14px;
+      border: 2px dashed #e2e8f0;
+    }
+
+    /* ── Formula ────────────────────────── */
+    .formula-block {
+      background: #fafbff; border: 1px solid #e8edf5;
+      border-radius: 14px; padding: 16px 20px; margin: 14px 0;
+      overflow-x: auto;
+    }
+    .formula-vars {
+      background: #f0f7ff; border: 1px solid #bfdbfe;
+      border-radius: 12px; padding: 12px 16px;
+      margin: 6px 0 16px; font-size: 13.5px; color: #374151;
+    }
+    .formula-vars .var-title {
+      font-size: 11px; font-weight: 700; color: #6b7280;
+      text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px;
+    }
+    .formula-vars ul { margin: 0; padding-left: 18px; }
+    .formula-vars li { margin: 5px 0; }
+    .katex-display { overflow-x: auto; overflow-y: hidden; padding: 6px 0; }
+
+    /* ── Table ──────────────────────────── */
+    .table-wrap { overflow-x: auto; margin: 16px 0; }
+    table {
+      width: 100%; border-collapse: collapse;
+      overflow: hidden; border-radius: 12px;
+      font-size: 13.5px;
+    }
+    thead th {
+      background: #f3f6fb; color: #334155;
+      font-weight: 700; border-bottom: 2px solid var(--line);
+      text-align: left; padding: 12px 14px;
+    }
+    td { padding: 11px 14px; border-bottom: 1px solid #eef2f7; vertical-align: top; }
+    tbody tr:nth-child(even) { background: #fafcff; }
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 999px;
+      font-size: 11.5px; font-weight: 600;
+    }
+    .badge-green { background: #dcfce7; color: #166534; }
+    .badge-red { background: #fee2e2; color: #991b1b; }
+    .badge-blue { background: #dbeafe; color: #1e40af; }
+    .badge-gray { background: #f3f4f6; color: #374151; }
+
+    /* ── Two-col ────────────────────────── */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+    .mini-card {
+      border: 1px solid var(--line); border-radius: 14px;
+      padding: 16px 18px; background: #fff;
+    }
+    .mini-card h4 { margin-top: 0; font-size: 14px; }
+
+    /* ── Step list ──────────────────────── */
+    .step-list { display: flex; flex-direction: column; gap: 14px; margin: 16px 0; }
+    .step {
+      display: flex; gap: 14px;
+      background: #fafbff; border: 1px solid #e8edf5;
+      border-radius: 14px; padding: 14px 16px;
+    }
+    .step-num {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: var(--primary); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 800; flex-shrink: 0; margin-top: 2px;
+    }
+    .step-body { flex: 1; }
+    .step-body strong { display: block; margin-bottom: 4px; font-size: 14.5px; color: #111; }
+    .step-body p { font-size: 13.5px; color: #374151; margin: 0; }
+
+    /* ── Footer ─────────────────────────── */
+    .footer { margin-top: 18px; color: var(--muted); font-size: 13px; text-align: center; }
+
+    @media (max-width: 920px) {
+      .layout { grid-template-columns: 1fr; }
+      .toc { position: static; }
+      .meta-grid, .two-col { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 640px) {
+      .page { padding: 18px 12px 56px; }
+      .hero, .section { padding: 20px 18px; }
+      h1 { font-size: 26px; }
+      .meta-grid, .two-col { grid-template-columns: 1fr; }
+      th, td { padding: 10px; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+  <a class="back-link" href="index.html">← 返回论文列表</a>
+
+  <!-- ── Hero ──────────────────────────────────────────── -->
+  <header class="hero">
+    <div class="eyebrow">📄 论文解读 · Ranking × Semantic ID</div>
+    <h1>SemID：将 Semantic ID 带入工业级排序模型</h1>
+    <p class="subtitle">Better Generalization with Semantic IDs: A Case Study in Ranking for Recommendations</p>
+    <div class="meta-grid">
+      <div class="meta-card">
+        <div class="meta-label">作者</div>
+        <div class="meta-value">Singh*, Vu*, Mehta* et al. · Google DeepMind / Google</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">发表</div>
+        <div class="meta-value">arXiv 2306.08121 · v2: 2024.05</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">场景</div>
+        <div class="meta-value">YouTube 亿级视频排序模型（生产）</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">核心命题</div>
+        <div class="meta-value">SID 替代随机哈希 Video ID 用于工业排序</div>
+      </div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- ── TOC ──────────────────────────────────────────── -->
+    <aside class="toc">
+      <h2>📋 目录</h2>
+      <ul class="toc-list">
+        <li><a href="#summary">一句话总结</a></li>
+        <li><a href="#background">背景与动机</a>
+          <ul class="toc-sub">
+            <li><a href="#bg-problem">随机哈希的三大问题</a></li>
+            <li><a href="#bg-dense">直接用 Dense Embedding 的困境</a></li>
+            <li><a href="#bg-insight">SemID 的核心切入点</a></li>
+          </ul>
+        </li>
+        <li><a href="#method">方法详解</a>
+          <ul class="toc-sub">
+            <li><a href="#method-overview">整体框架（两阶段）</a></li>
+            <li><a href="#method-rqvae">Stage 1：RQ-VAE 生成 SID</a></li>
+            <li><a href="#method-codebook">Codebook Collapse 问题及解法</a></li>
+            <li><a href="#method-ngram">Stage 2-A：N-gram 适配</a></li>
+            <li><a href="#method-spm">Stage 2-B：SPM 适配（推荐方案）</a></li>
+            <li><a href="#method-training">训练流程</a></li>
+            <li><a href="#method-inference">推理（Serving）流程</a></li>
+            <li><a href="#method-vs-tiger">与 TIGER 的核心区别</a></li>
+          </ul>
+        </li>
+        <li><a href="#exp">实验结果</a>
+          <ul class="toc-sub">
+            <li><a href="#exp-setup">实验设置</a></li>
+            <li><a href="#exp-dense">Dense Embedding 的失败</a></li>
+            <li><a href="#exp-main">SID 主实验结果</a></li>
+            <li><a href="#exp-hierarchy">SID 语义层级验证</a></li>
+            <li><a href="#exp-stability">SID 时间稳定性</a></li>
+          </ul>
+        </li>
+        <li><a href="#insight">个人理解与延伸</a></li>
+      </ul>
+    </aside>
+
+    <!-- ── Main Content ──────────────────────────────────── -->
+    <main class="content">
+
+      <!-- ═══ 一句话总结 ═══ -->
+      <section class="section" id="summary">
+        <div class="section-title">
+          <span class="icon" style="background:#dbeafe;">💡</span>
+          一句话总结
+        </div>
+        <p>
+          <strong>SemID 把 TIGER 提出的 Semantic ID 体系从"学术召回实验"搬到了 YouTube 亿级视频的生产排序模型中，核心贡献是解决了"8个整数的 SID 如何适配进排序模型 embedding table"这个工程问题，最终用 SPM 子词分组方案在整体 CTR AUC 和冷启动 CTR/1D AUC 上同时超越了随机哈希 ID 基线，且 serving cost 保持不变。</strong>
+        </p>
+        <div class="paper-info">
+          <p>📄 <strong>原文：</strong><a href="https://arxiv.org/abs/2306.08121" target="_blank">https://arxiv.org/abs/2306.08121</a></p>
+          <p>🔗 <strong>前驱工作：</strong>TIGER（arXiv 2305.05065，NeurIPS 2023）—— SID 的发明者</p>
+          <p>🧑‍💻 <strong>作者团队：</strong>Anima Singh, Trung Vu, Nikhil Mehta 等（三位并列一作），Google DeepMind + Google</p>
+        </div>
+        <div class="callout callout-blue">
+          <strong>三句话核心贡献：</strong><br>
+          ① 提出 N-gram 和 SPM 两种将 SID 序列适配进排序模型 embedding table 的方案；<br>
+          ② 在 YouTube 生产排序模型上验证：SPM-SID 整体 CTR AUC 和冷启动 CTR/1D AUC 均超越随机哈希基线；<br>
+          ③ 用 SID 前缀语义层级分析和时间稳定性实验，证明了 SID 在工业场景下的可行性。
+        </div>
+      </section>
+
+      <!-- ═══ 背景与动机 ═══ -->
+      <section class="section" id="background">
+        <div class="section-title">
+          <span class="icon" style="background:#fef9c3;">🔍</span>
+          背景与动机
+        </div>
+
+        <!-- 问题一：随机哈希 -->
+        <h3 id="bg-problem">随机哈希 ID 的三大根本问题</h3>
+        <p>
+          工业推荐系统里，每个 item（视频、商品）都有一个 ID，通常的做法是
+          <strong>随机哈希</strong>：把字符串 ID 哈希到一个大 embedding table（几千万行）的某一行，
+          然后直接拿那行向量作为 item 的表示，让模型在训练过程中更新这个向量。
+        </p>
+        <p>这套方案快捷实用，但存在三个深层问题：</p>
+        <div class="step-list">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <strong>随机碰撞无语义</strong>
+              <p>哈希函数把不同视频随机映射到同一行，"篮球教学"和"美食探店"可能共享同一个 embedding 向量，导致 embedding 空间无法形成有意义的语义聚类，模型泛化受限。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <strong>长尾视频学不到</strong>
+              <p>YouTube 视频数量符合幂律分布：头部少量视频占据大部分曝光，大量长尾视频曝光极少。长尾视频对应的 embedding 行训练次数严重不足，几乎等于随机初始化。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <strong>新视频冷启动差</strong>
+              <p>一个刚上线的新视频没有任何历史曝光，它的 embedding 是随机初始化值，排序模型对这个视频几乎没有判断能力，冷启动效果差。</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 问题二：Dense Embedding -->
+        <h3 id="bg-dense">直接用 Dense Content Embedding 行不行？</h3>
+        <p>
+          一个直觉的解决方案是：既然随机哈希没有语义，那就换成<strong>内容 embedding</strong>（比如 Video-BERT 输出的 2048 维向量），让 item 表示本身携带语义。
+          直接塞进排序模型试试？
+        </p>
+        <div class="callout callout-amber">
+          <strong>结果：整体 CTR AUC 反而下降了。</strong>为什么？
+        </div>
+        <p>原因在于排序模型对 embedding 有两个互相矛盾的需求：</p>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>🧠 记忆能力（Memorization）</h4>
+            <p style="font-size:13.5px;">记住某个具体视频的质量特征（点击率、完播率等），需要 embedding 是<strong>可训练的、可随训练数据更新的</strong>。</p>
+            <p style="font-size:13.5px;">随机哈希 → 每个 ID 对应独立的一行 → 很强的记忆能力。</p>
+          </div>
+          <div class="mini-card">
+            <h4>🌐 泛化能力（Generalization）</h4>
+            <p style="font-size:13.5px;">对没见过的新视频和长尾视频也能给出合理排序，需要 embedding 携带<strong>语义信息</strong>，类似内容能共享表示。</p>
+            <p style="font-size:13.5px;">Dense Content Embedding → 语义丰富，但固定不可训练 → 泛化好，记忆差。</p>
+          </div>
+        </div>
+        <p>
+          加深模型（1.5x/2x 层数）可以弥补 dense embedding 缺乏记忆能力的问题，但 serving cost 成倍增加，生产上不可接受。
+          VideoRec（端到端训练视频编码器）效果更好，但计算成本是 ID 方案的 <strong>10–50 倍</strong>，同样无法在生产中部署。
+        </p>
+
+        <!-- SemID 切入点 -->
+        <h3 id="bg-insight">SemID 的核心切入点</h3>
+        <div class="callout callout-purple">
+          <strong>核心思想：</strong>
+          把 2048 维的 dense content embedding 压缩成 <strong>8 个整数</strong>（Semantic ID），
+          既保留了语义信息，又让排序模型可以给每个整数学习一个 embedding，恢复记忆能力。
+          最重要的是，前缀相同的 SID 意味着语义相近，使相似内容产生"<strong>有意义的碰撞</strong>"而非随机碰撞。
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2306.08121/x1.png"
+               alt="Figure 1: RQ-VAE 示意图"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+                 <div style='font-size:20px;margin-bottom:12px'>📊 Figure 1: RQ-VAE 量化流程</div>
+                 <div>输入视频 content embedding <strong>x</strong> → Encoder → 潜变量 <strong>z</strong></div>
+                 <div>→ 残差量化第1层：找 codebook 中最近向量 → 记录索引 1，计算残差</div>
+                 <div>→ 残差量化第2层：对残差再量化 → 记录索引 4</div>
+                 <div>→ ... 重复 L=8 层 → 最终得到 SID = (1, 4, 6, 2, ...)</div>
+               </div>`" />
+          <figcaption>
+            <strong>Figure 1（论文原图）：RQ-VAE 量化流程。</strong>
+            输入向量 $\mathbf{x}$ 经过 Encoder 得到潜变量 $\mathbf{z}$，然后在 $L$ 个量化层中递归找最近 codebook 向量并计算残差。
+            每层记录被选中的 codebook 向量索引（如 1, 4, 6, 2…），这串索引序列就是 Semantic ID。
+            图中例子：视频的 Semantic ID 为 $(1, 4, 6, 2)$。
+          </figcaption>
+        </figure>
+
+        <div class="note">
+          <strong>为什么"有意义的碰撞"很关键？</strong><br>
+          随机哈希的碰撞是完全随机的——"科学纪录片"和"美妆教程"可能碰撞到同一行，互相干扰梯度更新。
+          而 SID 的前缀共享是语义驱动的——前缀相同说明内容 embedding 在 RQ-VAE codebook 空间中接近，
+          同前缀的视频共享 embedding 行是 <em>有意义的参数共享</em>，有助于长尾视频从相关头部视频中借到知识。
+        </div>
+      </section>
+
+      <!-- （方法、实验、总结章节将在下一步续写） -->
+
+    </main>
+  </div>
+  <div class="footer">论文解读 · 公式由 KaTeX 渲染 · <a href="index.html">← 返回列表</a></div>
+</div>
+</body>
+</html>

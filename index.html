@@ -3,583 +3,744 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>YYZ 论文博客专区</title>
+  <title>论文阅读笔记</title>
   <style>
     :root {
-      --bg: #f4f7fb;
-      --panel: #ffffff;
-      --text: #182230;
-      --muted: #667085;
-      --line: #e4e7ec;
-      --primary: #2563eb;
-      --primary-soft: #eff6ff;
-      --shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
-      --radius: 20px;
-      --max: 1180px;
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #2563eb; --primary-soft: #eff6ff;
+      --shadow: 0 8px 24px rgba(15,23,42,0.08); --max: 980px;
     }
-
-    * { box-sizing: border-box; }
-
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
     body {
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-      background:
-        radial-gradient(circle at top left, rgba(37, 99, 235, 0.10), transparent 28%),
-        radial-gradient(circle at right top, rgba(124, 58, 237, 0.08), transparent 24%),
-        var(--bg);
+      background: linear-gradient(180deg,#f8fbff 0%,var(--bg) 200px);
       color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      line-height: 1.7; min-height: 100vh;
     }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .page { max-width: var(--max); margin: 0 auto; padding: 40px 20px 80px; }
 
-    a {
-      color: inherit;
+    /* ── Hero ─────────────────────────── */
+    .hero { text-align: center; padding: 52px 24px 28px; }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 14px; border-radius: 999px;
+      background: var(--primary-soft); color: var(--primary);
+      font-size: 13px; font-weight: 600; margin-bottom: 18px;
+    }
+    .hero h1 { font-size: 38px; letter-spacing: -0.03em; line-height: 1.2; margin-bottom: 10px; }
+    .hero p { color: var(--muted); font-size: 15px; }
+    .stats {
+      display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
+      margin: 20px 0 0;
+    }
+    .stat-pill {
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: 999px; padding: 6px 16px;
+      font-size: 13px; color: var(--muted);
+    }
+    .stat-pill strong { color: var(--text); }
+
+    /* ── Tab bar ──────────────────────── */
+    .tabs-wrap {
+      margin: 30px 0 0; overflow-x: auto;
+      border-bottom: 2px solid var(--line);
+      -ms-overflow-style: none; scrollbar-width: none;
+    }
+    .tabs-wrap::-webkit-scrollbar { display: none; }
+    .tabs {
+      display: flex; gap: 0; white-space: nowrap;
+      min-width: max-content;
+    }
+    .tab-btn {
+      position: relative; display: inline-flex; align-items: center; gap: 7px;
+      padding: 11px 18px 10px;
+      border: none; background: none; cursor: pointer;
+      font-size: 14px; font-weight: 500; color: var(--muted);
+      transition: color 0.15s;
+    }
+    .tab-btn:hover { color: var(--primary); }
+    .tab-btn.active { color: var(--primary); font-weight: 700; }
+    .tab-btn.active::after {
+      content: ''; position: absolute; bottom: -2px; left: 0; right: 0;
+      height: 2px; background: var(--primary); border-radius: 2px 2px 0 0;
+    }
+    .tab-count {
+      background: #e5e7eb; color: #6b7280;
+      border-radius: 999px; font-size: 11px; font-weight: 700;
+      padding: 1px 7px; line-height: 1.6;
+    }
+    .tab-btn.active .tab-count { background: #dbeafe; color: var(--primary); }
+    .tab-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ── Content panels ───────────────── */
+    .panel { display: none; padding-top: 24px; }
+    .panel.visible { display: block; }
+
+    .cat-header {
+      display: flex; align-items: baseline; gap: 10px;
+      margin-bottom: 14px;
+    }
+    .cat-header h2 { font-size: 16px; font-weight: 700; }
+    .cat-header .cat-desc { color: var(--muted); font-size: 13px; }
+
+    /* ── Paper card ───────────────────── */
+    .paper-list { display: flex; flex-direction: column; gap: 12px; }
+    .paper-card {
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: 18px; box-shadow: var(--shadow);
+      padding: 20px 22px;
+      display: grid; grid-template-columns: 1fr auto;
+      align-items: center; gap: 14px;
+      text-decoration: none; color: inherit;
+      transition: box-shadow 0.18s, transform 0.18s;
+    }
+    .paper-card:hover {
+      box-shadow: 0 16px 36px rgba(37,99,235,0.13);
+      transform: translateY(-2px);
       text-decoration: none;
     }
-
-    .page {
-      max-width: var(--max);
-      margin: 0 auto;
-      padding: 28px 20px 80px;
+    /* no-link card (paper not yet interpreted) */
+    .paper-card.no-link {
+      cursor: default; opacity: 0.75;
     }
-
-    .hero {
-      background: linear-gradient(135deg, #ffffff 0%, #f9fbff 100%);
-      border: 1px solid rgba(37, 99, 235, 0.10);
-      border-radius: 28px;
+    .paper-card.no-link:hover {
+      transform: none;
       box-shadow: var(--shadow);
-      padding: 36px;
-      margin-bottom: 24px;
     }
+    .card-meta {
+      display: flex; align-items: center; gap: 7px;
+      flex-wrap: wrap; margin-bottom: 7px;
+    }
+    .tag {
+      padding: 3px 10px; border-radius: 999px;
+      font-size: 11.5px; font-weight: 600;
+    }
+    .ty { background: #f0fdf4; color: #15803d; }
+    .tv { background: #f5f3ff; color: #6d28d9; }
+    .tc-sid    { background: #fff7ed; color: #c2410c; }
+    .tc-gen    { background: #eff6ff; color: #1d4ed8; }
+    .tc-rank   { background: #f0fdf4; color: #065f46; }
+    .tc-seq    { background: #fdf4ff; color: #7e22ce; }
+    .tc-llm    { background: #fffbeb; color: #92400e; }
+    .tc-mm     { background: #fff1f2; color: #9f1239; }
+    .tc-nlp    { background: #f0f9ff; color: #0369a1; }
+    .tc-infra  { background: #f8fafc; color: #475569; }
+    .tc-indus  { background: #fef3c7; color: #92400e; }
 
-    .eyebrow {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 12px;
+    .card-title {
+      font-size: 17px; font-weight: 700; line-height: 1.35;
+      margin-bottom: 4px; color: var(--text);
+    }
+    .card-subtitle { font-size: 13px; color: var(--muted); line-height: 1.5; }
+    .card-summary {
+      font-size: 13.5px; color: #374151; margin-top: 8px; line-height: 1.65;
+    }
+    .card-arrow {
+      width: 36px; height: 36px; border-radius: 50%;
       background: var(--primary-soft);
-      color: var(--primary);
-      border-radius: 999px;
-      font-size: 13px;
-      font-weight: 700;
-      margin-bottom: 18px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; font-size: 15px; color: var(--primary);
+      transition: background 0.15s, color 0.15s;
     }
-
-    h1 {
-      margin: 0;
-      font-size: 42px;
-      line-height: 1.15;
-      letter-spacing: -0.03em;
-    }
-
-    .hero p {
-      margin: 14px 0 0;
-      max-width: 760px;
-      color: var(--muted);
-      font-size: 16px;
-      line-height: 1.8;
-    }
-
-    .hero-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      margin-top: 22px;
-    }
-
-    .button {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 12px 18px;
-      border-radius: 12px;
-      border: 1px solid transparent;
-      font-size: 14px;
-      font-weight: 700;
-      cursor: pointer;
-    }
-
-    .button.primary {
-      background: var(--primary);
-      color: #fff;
-    }
-
-    .button.secondary {
-      background: #fff;
-      border-color: var(--line);
-      color: var(--text);
-    }
-
-    .stats {
-      margin-top: 24px;
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 14px;
-    }
-
-    .stat-card {
-      background: rgba(255, 255, 255, 0.72);
-      border: 1px solid rgba(37, 99, 235, 0.08);
-      border-radius: 18px;
-      padding: 16px 18px;
-    }
-
-    .stat-card .label {
-      color: var(--muted);
-      font-size: 12px;
-      margin-bottom: 4px;
-    }
-
-    .stat-card .value {
-      font-size: 20px;
-      font-weight: 800;
-    }
-
-    .toolbar {
-      display: grid;
-      grid-template-columns: 1.4fr 1fr;
-      gap: 18px;
-      margin-bottom: 20px;
-    }
-
-    .panel {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 20px;
-      box-shadow: var(--shadow);
-      padding: 20px;
-    }
-
-    .panel-title {
-      margin: 0 0 12px;
-      font-size: 18px;
-    }
-
-    .input,
-    .select {
-      width: 100%;
-      border: 1px solid var(--line);
-      background: #fff;
-      border-radius: 12px;
-      padding: 12px 14px;
-      font-size: 14px;
-      color: var(--text);
-      outline: none;
-    }
-
-    .input:focus,
-    .select:focus {
-      border-color: #9ec5ff;
-      box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.10);
-    }
-
-    .tag-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-
-    .tag-chip {
-      border: 1px solid var(--line);
-      background: #fff;
-      color: #344054;
-      padding: 8px 12px;
-      border-radius: 999px;
-      font-size: 13px;
-      cursor: pointer;
-      transition: all 0.15s ease;
-    }
-
-    .tag-chip.active,
-    .tag-chip:hover {
-      background: var(--primary-soft);
-      color: var(--primary);
-      border-color: rgba(37, 99, 235, 0.20);
-    }
-
-    .section-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      margin: 28px 0 14px;
-    }
-
-    .section-head h2 {
-      margin: 0;
-      font-size: 24px;
-    }
-
-    .section-head p {
-      margin: 0;
-      color: var(--muted);
-      font-size: 14px;
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 18px;
-    }
-
-    .post-card {
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 20px;
-      box-shadow: var(--shadow);
-      padding: 20px;
-      min-height: 260px;
-    }
-
-    .post-top {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 5px 10px;
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
-      border-radius: 999px;
-      font-size: 12px;
-      color: #475467;
-    }
-
-    .badge.featured {
-      background: #eef4ff;
-      color: var(--primary);
-      border-color: rgba(37, 99, 235, 0.16);
-    }
-
-    .post-card h3 {
-      margin: 0;
-      font-size: 22px;
-      line-height: 1.35;
-    }
-
-    .subtitle {
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.6;
-      margin: -6px 0 0;
-    }
-
-    .summary {
-      color: #344054;
-      line-height: 1.75;
-      margin: 0;
-      flex: 1;
-    }
-
-    .tag-list {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .post-tag {
-      background: #f8fafc;
-      color: #475467;
-      border-radius: 999px;
-      padding: 6px 10px;
-      font-size: 12px;
-    }
-
-    .meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px 14px;
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    .post-actions {
-      display: flex;
-      gap: 12px;
-      margin-top: 6px;
+    .paper-card:hover .card-arrow { background: var(--primary); color: #fff; }
+    .card-arrow-todo {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: #f3f4f6;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; font-size: 13px; color: #9ca3af;
     }
 
     .empty {
-      display: none;
-      background: var(--panel);
-      border: 1px dashed #cbd5e1;
-      border-radius: 18px;
-      padding: 28px;
-      text-align: center;
-      color: var(--muted);
-    }
-
-    .guide {
-      margin-top: 28px;
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 18px;
-    }
-
-    .guide-card {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      padding: 20px;
-      box-shadow: var(--shadow);
-    }
-
-    .guide-card h3 {
-      margin: 0 0 10px;
-      font-size: 18px;
-    }
-
-    .guide-card p,
-    .guide-card li {
-      color: #475467;
-      line-height: 1.75;
-      font-size: 14px;
+      padding: 36px; text-align: center; color: var(--muted);
+      background: var(--card); border: 1px dashed var(--line);
+      border-radius: 16px; font-size: 14px;
     }
 
     .footer {
-      margin-top: 28px;
-      color: var(--muted);
-      font-size: 13px;
-      text-align: center;
-    }
-
-    code.inline {
-      background: #f2f4f7;
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: 12px;
-    }
-
-    @media (max-width: 960px) {
-      .stats,
-      .grid,
-      .guide,
-      .toolbar {
-        grid-template-columns: 1fr;
-      }
+      text-align: center; color: var(--muted);
+      font-size: 13px; margin-top: 48px;
     }
 
     @media (max-width: 640px) {
-      .page {
-        padding: 16px 12px 48px;
-      }
-
-      .hero,
-      .panel,
-      .post-card,
-      .guide-card {
-        padding: 18px;
-      }
-
-      h1 {
-        font-size: 32px;
-      }
+      .hero h1 { font-size: 28px; }
+      .tab-btn { padding: 10px 13px; font-size: 13px; }
+      .paper-card { padding: 16px; }
+      .card-title { font-size: 15px; }
     }
   </style>
 </head>
 <body>
-  <div class="page">
-    <section class="hero">
-      <div class="eyebrow">个人博客专区 · HTML 上传优先</div>
-      <h1>YYZ 的论文阅读博客</h1>
-      <p>
-        这是一个面向论文解读沉淀的静态博客专区。你以后只需要把阅读后的 HTML 网页放进
-        <code class="inline">blog/posts/</code>，再在 <code class="inline">blog/data/posts.js</code>
-        里补一条元信息，就能在首页自动展示。
-      </p>
-      <div class="hero-actions">
-        <a class="button primary" href="./posts/trm-paper-notes.html">阅读示例论文</a>
-        <a class="button secondary" href="./README.md">查看上传说明</a>
-      </div>
-      <div class="stats" id="stats"></div>
-    </section>
+<div class="page">
 
-    <section class="toolbar">
-      <div class="panel">
-        <h2 class="panel-title">搜索论文</h2>
-        <input id="searchInput" class="input" type="text" placeholder="搜索标题、摘要、作者、标签..." />
-      </div>
-      <div class="panel">
-        <h2 class="panel-title">年份筛选</h2>
-        <select id="yearSelect" class="select">
-          <option value="all">全部年份</option>
-        </select>
-      </div>
-    </section>
-
-    <section class="panel" style="margin-bottom: 20px;">
-      <h2 class="panel-title">标签筛选</h2>
-      <div id="tagFilters" class="tag-row"></div>
-    </section>
-
-    <div class="section-head">
-      <div>
-        <h2>论文列表</h2>
-        <p id="resultInfo">正在加载文章...</p>
-      </div>
+  <!-- ── Hero ──────────────────────────────────────────── -->
+  <div class="hero">
+    <div class="hero-badge">📄 论文解读</div>
+    <h1>论文阅读笔记</h1>
+    <p>推荐 · 搜索 · NLP · 工业落地</p>
+    <div class="stats">
+      <div class="stat-pill">共 <strong>9</strong> 篇</div>
+      <div class="stat-pill">Semantic ID <strong>7</strong></div>
+      <div class="stat-pill">生成式推荐 <strong>7</strong></div>
+      <div class="stat-pill">排序 Scaling <strong>2</strong></div>
     </div>
-
-    <section id="postGrid" class="grid"></section>
-    <section id="emptyState" class="empty">没有匹配的文章，试试清空筛选条件。</section>
-
-    <section class="guide">
-      <div class="guide-card">
-        <h3>以后怎么传论文</h3>
-        <ol>
-          <li>把新的论文解读整理成一个独立 HTML 页面。</li>
-          <li>存到 <code class="inline">blog/posts/</code> 目录。</li>
-          <li>在 <code class="inline">blog/data/posts.js</code> 追加一条文章信息。</li>
-        </ol>
-      </div>
-      <div class="guide-card">
-        <h3>推荐文章字段</h3>
-        <p>建议维护这些信息：标题、日期、年份、标签、摘要、原论文链接、作者、阅读时长、文件路径。</p>
-      </div>
-      <div class="guide-card">
-        <h3>后续可升级方向</h3>
-        <p>如果你后面想做得更完整，我可以继续给你加：自动生成索引、封面图、标签页、归档页、静态发布脚本。</p>
-      </div>
-    </section>
-
-    <div class="footer">当前博客为纯静态版本，直接打开 <code class="inline">blog/index.html</code> 即可浏览。</div>
   </div>
 
-  <script src="./data/posts.js"></script>
-  <script>
-    const posts = Array.isArray(window.BLOG_POSTS) ? window.BLOG_POSTS : [];
-    const searchInput = document.getElementById('searchInput');
-    const yearSelect = document.getElementById('yearSelect');
-    const tagFilters = document.getElementById('tagFilters');
-    const postGrid = document.getElementById('postGrid');
-    const emptyState = document.getElementById('emptyState');
-    const resultInfo = document.getElementById('resultInfo');
-    const stats = document.getElementById('stats');
+  <!-- ── Tab bar ────────────────────────────────────────── -->
+  <div class="tabs-wrap">
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('all',this)">
+        全部 <span class="tab-count">9</span>
+      </button>
+      <button class="tab-btn" onclick="switchTab('sid',this)">
+        <span class="tab-dot" style="background:#c2410c"></span>
+        Semantic ID &amp; 表征 <span class="tab-count">7</span>
+      </button>
+      <button class="tab-btn" onclick="switchTab('gen',this)">
+        <span class="tab-dot" style="background:#1d4ed8"></span>
+        生成式推荐与检索 <span class="tab-count">7</span>
+      </button>
+      <button class="tab-btn" onclick="switchTab('rank',this)">
+        <span class="tab-dot" style="background:#065f46"></span>
+        排序模型 Scaling <span class="tab-count">2</span>
+      </button>
+      <button class="tab-btn" onclick="switchTab('seq',this)">
+        <span class="tab-dot" style="background:#7e22ce"></span>
+        序列建模 &amp; 行为理解 <span class="tab-count">0</span>
+      </button>
+      <button class="tab-btn" onclick="switchTab('llm',this)">
+        <span class="tab-dot" style="background:#92400e"></span>
+        LLM × 推荐 <span class="tab-count">0</span>
+      </button>
+      <button class="tab-btn" onclick="switchTab('mm',this)">
+        <span class="tab-dot" style="background:#9f1239"></span>
+        多模态推荐 <span class="tab-count">0</span>
+      </button>
+      <button class="tab-btn" onclick="switchTab('nlp',this)">
+        <span class="tab-dot" style="background:#0369a1"></span>
+        NLP 基础 <span class="tab-count">0</span>
+      </button>
+      <button class="tab-btn" onclick="switchTab('infra',this)">
+        <span class="tab-dot" style="background:#475569"></span>
+        系统与工程 <span class="tab-count">0</span>
+      </button>
+    </div>
+  </div>
 
-    let activeTag = 'all';
+  <!-- ═══════════════════════════════════════════════════
+       全部（按时间升序）
+       ═══════════════════════════════════════════════════ -->
+  <div id="panel-all" class="panel visible">
+    <div class="paper-list">
 
-    function uniq(values) {
-      return [...new Set(values.filter(Boolean))];
-    }
-
-    function renderStats() {
-      const allTags = uniq(posts.flatMap(post => post.tags || []));
-      const years = uniq(posts.map(post => post.year)).sort((a, b) => String(b).localeCompare(String(a)));
-      const featuredCount = posts.filter(post => post.featured).length;
-
-      const items = [
-        { label: '文章总数', value: posts.length },
-        { label: '标签数量', value: allTags.length },
-        { label: '覆盖年份', value: years.length },
-        { label: '精选文章', value: featuredCount }
-      ];
-
-      stats.innerHTML = items.map(item => `
-        <div class="stat-card">
-          <div class="label">${item.label}</div>
-          <div class="value">${item.value}</div>
+      <!-- TIGER 2023 -->
+      <a class="paper-card" href="tiger.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2023</span>
+            <span class="tag tv">NeurIPS 2023 · arXiv 2305.05065</span>
+            <span class="tag tc-gen">生成式推荐</span>
+            <span class="tag tc-sid">Semantic ID</span>
+          </div>
+          <div class="card-title">TIGER：用生成式检索重构推荐系统召回阶段</div>
+          <div class="card-subtitle">Recommender Systems with Generative Retrieval · Rajput, Mehta et al. · Google DeepMind</div>
+          <div class="card-summary">首次将生成式检索（Generative Retrieval）引入推荐系统：用 RQ-VAE 为 item 生成层级 Semantic ID，Transformer Encoder-Decoder 自回归预测下一个 item 的 Semantic ID。在 Amazon 三数据集全面超越 SASRec/BERT4Rec，原生支持冷启动和多样性调节。</div>
         </div>
-      `).join('');
-    }
+        <div class="card-arrow">→</div>
+      </a>
 
-    function renderYearOptions() {
-      const years = uniq(posts.map(post => post.year)).sort((a, b) => String(b).localeCompare(String(a)));
-      years.forEach(year => {
-        const option = document.createElement('option');
-        option.value = year;
-        option.textContent = year;
-        yearSelect.appendChild(option);
-      });
-    }
-
-    function renderTagFilters() {
-      const tags = uniq(posts.flatMap(post => post.tags || [])).sort((a, b) => a.localeCompare(b, 'zh-CN'));
-      const chips = ['all', ...tags].map(tag => {
-        const label = tag === 'all' ? '全部标签' : tag;
-        const activeClass = tag === activeTag ? 'active' : '';
-        return `<button class="tag-chip ${activeClass}" data-tag="${tag}">${label}</button>`;
-      });
-      tagFilters.innerHTML = chips.join('');
-
-      tagFilters.querySelectorAll('.tag-chip').forEach(button => {
-        button.addEventListener('click', () => {
-          activeTag = button.dataset.tag;
-          renderTagFilters();
-          renderPosts();
-        });
-      });
-    }
-
-    function formatTags(tags) {
-      return (tags || []).map(tag => `<span class="post-tag">${tag}</span>`).join('');
-    }
-
-    function formatMeta(post) {
-      const items = [post.date, post.author, post.readingTime, post.type].filter(Boolean);
-      return items.map(item => `<span>${item}</span>`).join('');
-    }
-
-    function matches(post) {
-      const keyword = searchInput.value.trim().toLowerCase();
-      const year = yearSelect.value;
-      const haystack = [
-        post.title,
-        post.subtitle,
-        post.summary,
-        post.author,
-        ...(post.tags || [])
-      ].filter(Boolean).join(' ').toLowerCase();
-
-      const hitKeyword = !keyword || haystack.includes(keyword);
-      const hitYear = year === 'all' || String(post.year) === String(year);
-      const hitTag = activeTag === 'all' || (post.tags || []).includes(activeTag);
-      return hitKeyword && hitYear && hitTag;
-    }
-
-    function renderPosts() {
-      const filtered = posts.filter(matches);
-      resultInfo.textContent = `共 ${filtered.length} 篇 / 全部 ${posts.length} 篇`;
-
-      if (!filtered.length) {
-        postGrid.innerHTML = '';
-        emptyState.style.display = 'block';
-        return;
-      }
-
-      emptyState.style.display = 'none';
-      postGrid.innerHTML = filtered.map(post => `
-        <article class="post-card">
-          <div class="post-top">
-            ${post.featured ? '<span class="badge featured">精选</span>' : ''}
-            ${post.year ? `<span class="badge">${post.year}</span>` : ''}
+      <!-- SemID 2023/2024 -->
+      <a class="paper-card" href="semid.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2023/2024</span>
+            <span class="tag tv">arXiv 2306.08121</span>
+            <span class="tag tc-sid">Semantic ID</span>
+            <span class="tag tc-rank">排序</span>
           </div>
-          <div>
-            <h3><a href="${post.file}">${post.title}</a></h3>
-            ${post.subtitle ? `<p class="subtitle">${post.subtitle}</p>` : ''}
-          </div>
-          <p class="summary">${post.summary || ''}</p>
-          <div class="tag-list">${formatTags(post.tags)}</div>
-          <div class="meta">${formatMeta(post)}</div>
-          <div class="post-actions">
-            <a class="button primary" href="${post.file}">打开文章</a>
-            ${post.source ? `<a class="button secondary" href="${post.source}" target="_blank" rel="noreferrer">原论文</a>` : ''}
-          </div>
-        </article>
-      `).join('');
-    }
+          <div class="card-title">SemID：将 Semantic ID 带入 YouTube 亿级排序模型</div>
+          <div class="card-subtitle">Better Generalization with Semantic IDs · Singh, Vu et al. · Google DeepMind</div>
+          <div class="card-summary">随机哈希 video ID 制约长尾和冷启动泛化；SemID 提出 N-gram 和 SPM 两种子词 embedding 方案，在 YouTube ~1 亿视频语料上验证 SPM-SID 同时超越随机哈希基线的整体 CTR AUC 和冷启动 CTR/1D AUC，serving cost 不增加。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
 
-    searchInput.addEventListener('input', renderPosts);
-    yearSelect.addEventListener('change', renderPosts);
+      <!-- LIGER 2024.11 -->
+      <div class="paper-card no-link">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2024.11</span>
+            <span class="tag tv">arXiv 2411.18814</span>
+            <span class="tag tc-gen">混合召回</span>
+            <span class="tag tc-sid">Semantic ID</span>
+          </div>
+          <div class="card-title">LIGER：融合生成式与稠密检索的序列推荐</div>
+          <div class="card-subtitle">Unifying Generative and Dense Retrieval for Sequential Recommendation · Liu Yang, Fabian Paischer et al. · Meta AI</div>
+          <div class="card-summary">系统比较生成式召回（TIGER）与稠密召回在学术 benchmark 上的性能差距，发现生成式召回冷启动为零。提出 LIGER 混合方案：用 SID 做候选生成，再补入冷启动 item，以 dense embedding 重排，同时训练 next-token 预测和余弦相似度 loss，兼顾效率与冷启动表现。</div>
+        </div>
+        <div class="card-arrow-todo">待</div>
+      </div>
 
-    renderStats();
-    renderYearOptions();
-    renderTagFilters();
-    renderPosts();
-  </script>
+      <!-- OneRec 2025.02 -->
+      <div class="paper-card no-link">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025.02</span>
+            <span class="tag tv">arXiv 2502.18965</span>
+            <span class="tag tc-gen">端到端生成</span>
+            <span class="tag tc-sid">Semantic ID</span>
+            <span class="tag tc-indus">快手线上 +1.68%</span>
+          </div>
+          <div class="card-title">OneRec：用统一生成模型替代多级漏斗，快手主场景落地</div>
+          <div class="card-subtitle">Unifying Retrieve and Rank with Generative Recommender and Preference Alignment · Deng et al. · Kuaishou</div>
+          <div class="card-summary">首个工业级单阶段生成推荐系统，用 Encoder-Decoder + MoE 替代三级漏斗（召回→粗排→精排）。创新点：① Balanced K-Means 残差量化解决 hourglass 现象；② Session-wise 生成（一次输出整批视频）替代逐 item 预测；③ Iterative Preference Alignment (IPA) 结合 DPO 从奖励模型自动构造偏好对。快手主页 A/B：总观看时长 +1.68%，人均观看时长 +6.56%。</div>
+        </div>
+        <div class="card-arrow-todo">待</div>
+      </div>
+
+      <!-- COBRA 2025.03 -->
+      <div class="paper-card no-link">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025.03</span>
+            <span class="tag tv">arXiv 2503.02453</span>
+            <span class="tag tc-gen">稀疏-稠密级联</span>
+            <span class="tag tc-sid">Semantic ID</span>
+            <span class="tag tc-indus">百度广告 +3.60%</span>
+          </div>
+          <div class="card-title">COBRA：级联稀疏-稠密表示，统一生成式与稠密检索</div>
+          <div class="card-subtitle">Sparse Meets Dense: Unified Generative Recommendations with Cascaded Sparse-Dense Representations · Yang, Ji et al. · Baidu</div>
+          <div class="card-summary">现有生成式推荐（如 TIGER）仅用离散 SID，信息损失大；COBRA 提出级联表示：先自回归生成 SID（粗粒度），再以 SID 为条件生成稠密向量（细粒度），两者拼接作为序列输入。推理时 BeamFusion 融合 Beam 分数与 ANN 相似度分数。百度广告平台亿级用户 A/B：转化率 +3.60%，ARPU +4.15%。</div>
+        </div>
+        <div class="card-arrow-todo">待</div>
+      </div>
+
+      <!-- ETEGRec 2025 SIGIR -->
+      <div class="paper-card no-link">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">SIGIR 2025 · arXiv 2409.05546</span>
+            <span class="tag tc-gen">端到端 Tokenizer</span>
+            <span class="tag tc-sid">Semantic ID</span>
+          </div>
+          <div class="card-title">ETEGRec：端到端联合优化 Item Tokenizer 与生成式推荐器</div>
+          <div class="card-subtitle">Generative Recommender with End-to-End Learnable Item Tokenization · Liu, Zheng et al. · RUC + Kuaishou</div>
+          <div class="card-summary">现有方法将 Item Tokenizer（RQ-VAE）与生成推荐器解耦训练，导致 tokenizer 无法感知推荐目标。ETEGRec 提出双 Encoder-Decoder 架构：tokenizer 和 recommender 各自一套 Enc-Dec，通过序列-物品对齐（KL 散度拉近编码器输出与物品 token 分布）和偏好-语义对齐（InfoNCE 拉近 decoder 隐态与重建物品语义）实现联合优化，并引入交替训练保证稳定性。Amazon 三数据集全面超越 TIGER/LETTER。</div>
+        </div>
+        <div class="card-arrow-todo">待</div>
+      </div>
+
+      <!-- MTGRec 2025 SIGIR -->
+      <div class="paper-card no-link">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">SIGIR 2025 · arXiv 2504.04400</span>
+            <span class="tag tc-gen">多 Tokenizer 预训练</span>
+            <span class="tag tc-sid">Semantic ID</span>
+          </div>
+          <div class="card-title">MTGRec：多标识符 Item Tokenization + 课程学习预训练</div>
+          <div class="card-subtitle">Pre-training Generative Recommender with Multi-Identifier Item Tokenization · Zheng, Liu et al. · RUC + Huawei</div>
+          <div class="card-summary">现有生成式推荐 one-to-one tokenization 导致长尾 token 曝光不足、数据多样性差。MTGRec 从 RQ-VAE 训练过程取相邻 epoch 的多个 checkpoint 作为语义相关的多个 tokenizer，将单条用户序列扩增为多组 token 序列用于预训练。引入基于一阶梯度近似的数据影响力估计，动态调整各 tokenizer 数据的采样概率（课程学习）。微调时固定单一 tokenizer 保证 item 可识别。Amazon 三数据集超越 TIGER/LETTER/TIGER++，在长尾 item 改善尤其显著。</div>
+        </div>
+        <div class="card-arrow-todo">待</div>
+      </div>
+
+      <!-- TRM 2026 -->
+      <a class="paper-card" href="trm.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2026</span>
+            <span class="tag tv">arXiv 2601.22694</span>
+            <span class="tag tc-rank">排序 Scaling</span>
+            <span class="tag tc-sid">Semantic Token</span>
+          </div>
+          <div class="card-title">TRM：用语义 Token 替代 Item ID，解锁大排序模型的扩展潜力</div>
+          <div class="card-subtitle">Farewell to Item IDs: Unlocking the Scaling Potential of Large Ranking Models via Semantic Tokens · Zhao et al. · ByteDance</div>
+          <div class="card-summary">Item ID 是孤立符号，难以共享知识且制约 scaling；TRM 提出协同感知表示 + 混合 Tokenization（Gen+Mem）+ 判别式生成式联合训练，线上搜索 CTR AUC +0.65%、稀疏参数减少 33%，scaling law 特性显著改善。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- GRID 2025.07 -->
+      <div class="paper-card no-link">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025.07</span>
+            <span class="tag tv">arXiv 2507.22224</span>
+            <span class="tag tc-gen">框架&amp;消融</span>
+            <span class="tag tc-sid">Semantic ID</span>
+          </div>
+          <div class="card-title">GRID：生成式推荐 Semantic ID 实践手册（Snap 开源框架）</div>
+          <div class="card-subtitle">Generative Recommendation with Semantic IDs: A Practitioner's Handbook · Snap Inc.</div>
+          <div class="card-summary">对生成式推荐中 SID 使用方式进行大规模消融研究的实践指南。关键发现：RK-Means（Residual K-Means）量化方案通常优于 RQ-VAE；Encoder-Decoder 架构优于 Decoder-only；同时公开了完整可复现代码框架，便于研究者快速实验不同组合。</div>
+        </div>
+        <div class="card-arrow-todo">待</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════
+       Semantic ID & 表征（按时间升序）
+       ═══════════════════════════════════════════════════ -->
+  <div id="panel-sid" class="panel">
+    <div class="cat-header">
+      <span class="tab-dot" style="background:#c2410c;width:9px;height:9px;border-radius:50%;display:inline-block"></span>
+      <h2>Semantic ID &amp; Item 表征</h2>
+      <span class="cat-desc">如何为 item 生成有语义的离散 token（RQ-VAE、RK-Means、协同感知量化、端到端 tokenizer 等）</span>
+    </div>
+    <div class="paper-list">
+
+      <!-- TIGER 2023 -->
+      <a class="paper-card" href="tiger.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2023</span>
+            <span class="tag tv">NeurIPS 2023</span>
+            <span class="tag tc-sid">RQ-VAE · 层级 SID</span>
+          </div>
+          <div class="card-title">TIGER：RQ-VAE 生成层级 Semantic ID</div>
+          <div class="card-subtitle">Google DeepMind</div>
+          <div class="card-summary">奠基工作。用 RQ-VAE 为每个 item 生成 m 级 Semantic ID（每级 codebook 大小 256），共享 item 前缀隐含语义层级关系，支持冷启动 item 直接用内容 embedding 映射到 SID。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- SemID 2023/2024 -->
+      <a class="paper-card" href="semid.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2023/2024</span>
+            <span class="tag tv">arXiv 2306.08121</span>
+            <span class="tag tc-sid">N-gram / SPM · 排序侧 SID</span>
+          </div>
+          <div class="card-title">SemID：N-gram 与 SPM 子词 embedding 用于亿级排序模型</div>
+          <div class="card-subtitle">Google DeepMind</div>
+          <div class="card-summary">与生成式召回不同，SemID 将 SID 用于排序侧 embedding 替换。对比 N-gram tokenization 与 Sentence-Piece Model（SPM），SPM-SID 在 CTR AUC 和冷启动 AUC 上均优于随机哈希 ID，serving cost 不变。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- LIGER 2024.11（SID 使用方式） -->
+      <div class="paper-card no-link">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2024.11</span>
+            <span class="tag tv">arXiv 2411.18814</span>
+            <span class="tag tc-sid">SID + 文本表征</span>
+          </div>
+          <div class="card-title">LIGER：SID 输入 + dense embedding 输出的混合架构</div>
+          <div class="card-subtitle">Meta AI</div>
+          <div class="card-summary">将 SID 和文本 embedding 拼接作为输入，同时输出 dense embedding 用于相似度检索和 SID 预测，解决纯 SID 生成方案冷启动为零的问题。</div>
+        </div>
+        <div class="card-arrow-todo">待</div>
+      </div>
+
+      <!-- ETEGRec 2025 -->
+      <div class="paper-card no-link">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">SIGIR 2025</span>
+            <span class="tag tc-sid">端到端可学习 Tokenizer</span>
+          </div>
+          <div class="card-title">ETEGRec：联合优化 RQ-VAE Tokenizer 与推荐器</div>
+          <div class="card-subtitle">RUC + Kuaishou</div>
+          <div class="card-summary">打破 tokenizer 预训练后冻结的惯例，通过双对齐 loss（SIA + PSA）让 RQ-VAE 感知推荐优化目标，token 分配随训练动态调整，更好适配推荐任务。</div>
+        </div>
+        <div class="card-arrow-todo">待</div>
+      </div>
+
+      <!-- MTGRec 2025 -->
+      <div class="paper-card no-link">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">SIGIR 2025</span>
+            <span class="tag tc-sid">多 Tokenizer · 长尾优化</span>
+          </div>
+          <div class="card-title">MTGRec：相邻 epoch checkpoint 作为多语义相关 Tokenizer</div>
+          <div class="card-subtitle">RUC + Huawei</div>
+          <div class="card-summary">取 RQ-VAE 训练过程中相邻 epoch 的多个 checkpoint 作为多个 tokenizer，每个 item 拥有多个语义相近但有细微差异的 SID，大幅扩增训练数据，特别改善长尾 item 的 token 曝光频次。</div>
+        </div>
+        <div class="card-arrow-todo">待</div>
+      </div>
+
+      <!-- GRID 2025.07 -->
+      <div class="paper-card no-link">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025.07</span>
+            <span class="tag tv">arXiv 2507.22224</span>
+            <span class="tag tc-sid">RK-Means · 消融对比</span>
+          </div>
+          <div class="card-title">GRID：RK-Means vs RQ-VAE 系统性消融</div>
+          <div class="card-subtitle">Snap Inc.</div>
+          <div class="card-summary">对比 RQ-VAE 和 RK-Means（Residual K-Means）等多种 SID 生成方案，发现 RK-Means 在多数情况下优于 RQ-VAE；同时验证了 codebook 层数、codebook 大小等关键超参的影响。</div>
+        </div>
+        <div class="card-arrow-todo">待</div>
+      </div>
+
+      <!-- TRM 2026 -->
+      <a class="paper-card" href="trm.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2026</span>
+            <span class="tag tv">arXiv 2601.22694</span>
+            <span class="tag tc-sid">协同感知 Token · 混合 Gen+Mem</span>
+          </div>
+          <div class="card-title">TRM：协同感知量化 + 混合 Tokenization，服务大排序 Scaling</div>
+          <div class="card-subtitle">ByteDance</div>
+          <div class="card-summary">将用户交互信号引入 token 生成过程（协同感知量化），混合生成式（Gen）和记忆式（Mem）表示让 token 兼顾语义泛化和高频 item 记忆，与大排序模型联合训练。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════
+       生成式推荐与检索（按时间升序）
+       ═══════════════════════════════════════════════════ -->
+  <div id="panel-gen" class="panel">
+    <div class="cat-header">
+      <span class="tab-dot" style="background:#1d4ed8;width:9px;height:9px;border-radius:50%;display:inline-block"></span>
+      <h2>生成式推荐与检索</h2>
+      <span class="cat-desc">用自回归/seq2seq 直接生成 item ID，替代传统双塔 + ANN 召回范式；含工业落地与方法融合</span>
+    </div>
+    <div class="paper-list">
+
+      <!-- TIGER 2023 -->
+      <a class="paper-card" href="tiger.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2023</span>
+            <span class="tag tv">NeurIPS 2023 · arXiv 2305.05065</span>
+            <span class="tag tc-gen">开创性工作</span>
+          </div>
+          <div class="card-title">TIGER：用生成式检索重构推荐系统召回阶段</div>
+          <div class="card-subtitle">Recommender Systems with Generative Retrieval · Rajput, Mehta et al. · Google DeepMind</div>
+          <div class="card-summary">首次将生成式检索范式引入推荐系统。RQ-VAE 生成层级 Semantic ID，T5 Encoder-Decoder 自回归输出下一个 item 的 Semantic ID，三数据集全面超越 SOTA，冷启动和多样性原生支持。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- LIGER 2024.11 -->
+      <div class="paper-card no-link">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2024.11</span>
+            <span class="tag tv">arXiv 2411.18814</span>
+            <span class="tag tc-gen">生成式 + 稠密混合</span>
+          </div>
+          <div class="card-title">LIGER：融合生成式与稠密检索，解决冷启动难题</div>
+          <div class="card-subtitle">Unifying Generative and Dense Retrieval for Sequential Recommendation · Meta AI</div>
+          <div class="card-summary">分析 TIGER（生成式）与 Dense Retrieval 的性能差距和冷启动问题，提出 LIGER：共用 SID 输入，Decoder 预测 SID，Encoder 输出 dense embedding；推理时生成式召回 K 个候选 + 补入冷启动 item，用 dense embedding 重排。在 Beauty/Sports/Toys/Steam 四数据集取得生成式/稠密最优折中。</div>
+        </div>
+        <div class="card-arrow-todo">待</div>
+      </div>
+
+      <!-- OneRec 2025.02 -->
+      <div class="paper-card no-link">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025.02</span>
+            <span class="tag tv">arXiv 2502.18965</span>
+            <span class="tag tc-gen">端到端单阶段</span>
+            <span class="tag tc-indus">快手主场景 +1.68%</span>
+          </div>
+          <div class="card-title">OneRec：工业级单阶段生成推荐，替代三级漏斗</div>
+          <div class="card-subtitle">Unifying Retrieve and Rank · Deng et al. · Kuaishou</div>
+          <div class="card-summary">1B 参数 Encoder-Decoder + MoE，session-wise 生成（一次生成整批 5-10 个视频）替代逐 item 预测。Balanced K-Means 残差量化保证 codebook 均衡；IPA 策略用奖励模型评分自动构造 DPO 偏好对。快手主页线上 A/B：观看时长 +1.68%，人均单次观看时长 +6.56%。</div>
+        </div>
+        <div class="card-arrow-todo">待</div>
+      </div>
+
+      <!-- COBRA 2025.03 -->
+      <div class="paper-card no-link">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025.03</span>
+            <span class="tag tv">arXiv 2503.02453</span>
+            <span class="tag tc-gen">稀疏-稠密级联</span>
+            <span class="tag tc-indus">百度广告 +3.60%</span>
+          </div>
+          <div class="card-title">COBRA：级联 Sparse-Dense 表示，BeamFusion 推理</div>
+          <div class="card-subtitle">Sparse Meets Dense · Yang, Ji et al. · Baidu</div>
+          <div class="card-summary">输入序列中每个 item 用（SID embedding || dense vector）拼接表示；Decoder 先预测 SID 再以 SID 为条件预测 dense vector，形成粗到细两级生成。BeamFusion 将 Beam 分数与 ANN 余弦分数加权融合，控制召回多样性。在 Beauty/Sports/Toys 超越 TIGER 15-24%；百度广告 2 亿日活 A/B：转化 +3.60%，ARPU +4.15%。</div>
+        </div>
+        <div class="card-arrow-todo">待</div>
+      </div>
+
+      <!-- ETEGRec 2025 -->
+      <div class="paper-card no-link">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">SIGIR 2025 · arXiv 2409.05546</span>
+            <span class="tag tc-gen">端到端 Tokenizer</span>
+          </div>
+          <div class="card-title">ETEGRec：端到端联合优化 Item Tokenizer 与推荐器</div>
+          <div class="card-subtitle">Generative Recommender with End-to-End Learnable Item Tokenization · RUC + Kuaishou</div>
+          <div class="card-summary">双 Enc-Dec 架构（RQ-VAE tokenizer + T5 recommender）。序列-物品对齐（SIA）：用 KL 散度拉近 Encoder 序列表示与 item collaborative embedding 在 codebook 空间的分布；偏好-语义对齐（PSA）：用 InfoNCE 拉近 Decoder 第一个隐态与重建 item 语义。交替训练（固定一方优化另一方）保证稳定性。Amazon 2023 三数据集全面优于 TIGER/LETTER。</div>
+        </div>
+        <div class="card-arrow-todo">待</div>
+      </div>
+
+      <!-- MTGRec 2025 -->
+      <div class="paper-card no-link">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">SIGIR 2025 · arXiv 2504.04400</span>
+            <span class="tag tc-gen">多 Tokenizer 预训练</span>
+          </div>
+          <div class="card-title">MTGRec：多 Tokenizer 数据增强 + 课程学习预训练</div>
+          <div class="card-subtitle">Pre-training Generative Recommender with Multi-Identifier Item Tokenization · RUC + Huawei</div>
+          <div class="card-summary">取 RQ-VAE 多个训练 epoch checkpoint 作为 n 个语义相关 tokenizer，一条用户序列扩增为 n 条 token 序列。数据影响力估计（一阶梯度近似）动态调整各 tokenizer 数据采样比例（课程学习预训练），微调时用单一 tokenizer。支持更深 T5（8 层）稳定 scaling；长尾 item 改善尤其显著。</div>
+        </div>
+        <div class="card-arrow-todo">待</div>
+      </div>
+
+      <!-- GRID 2025.07 -->
+      <div class="paper-card no-link">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025.07</span>
+            <span class="tag tv">arXiv 2507.22224</span>
+            <span class="tag tc-gen">框架 &amp; 消融</span>
+          </div>
+          <div class="card-title">GRID：生成式推荐实践手册，Snap 开源可复现框架</div>
+          <div class="card-subtitle">Generative Recommendation with Semantic IDs: A Practitioner's Handbook · Snap Inc.</div>
+          <div class="card-summary">针对 GR 方法的各设计选择（SID 生成方案、模型架构、训练目标等）进行系统消融。关键结论：RK-Means 优于 RQ-VAE；Encoder-Decoder 优于 Decoder-only；大 codebook + 多层 SID 通常更好。开源完整可复现代码，便于研究者在此基础上快速迭代。</div>
+        </div>
+        <div class="card-arrow-todo">待</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════
+       排序模型 Scaling（按时间升序）
+       ═══════════════════════════════════════════════════ -->
+  <div id="panel-rank" class="panel">
+    <div class="cat-header">
+      <span class="tab-dot" style="background:#065f46;width:9px;height:9px;border-radius:50%;display:inline-block"></span>
+      <h2>排序模型 Scaling</h2>
+      <span class="cat-desc">大参数排序模型的 Scaling Law、MoE、稀疏 embedding 替代方案</span>
+    </div>
+    <div class="paper-list">
+
+      <!-- SemID 2023/2024 -->
+      <a class="paper-card" href="semid.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2023/2024</span>
+            <span class="tag tv">arXiv 2306.08121</span>
+            <span class="tag tc-rank">排序侧 SID</span>
+          </div>
+          <div class="card-title">SemID：Semantic ID 用于 YouTube 亿级排序，冷启动 + CTR 双提升</div>
+          <div class="card-subtitle">Better Generalization with Semantic IDs · Google DeepMind</div>
+          <div class="card-summary">首次验证 SID 可替代排序侧随机哈希 ID embedding，SPM-SID 在整体 CTR AUC 和冷启动 CTR/1D AUC 双胜，serving cost 不变。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- TRM 2026 -->
+      <a class="paper-card" href="trm.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2026</span>
+            <span class="tag tv">arXiv 2601.22694</span>
+            <span class="tag tc-rank">大排序 · Scaling</span>
+          </div>
+          <div class="card-title">TRM：用语义 Token 替代 Item ID，解锁大排序模型的扩展潜力</div>
+          <div class="card-subtitle">Farewell to Item IDs · Zhao et al. · ByteDance</div>
+          <div class="card-summary">传统 item ID embedding table 是 scaling 瓶颈。TRM 以 Semantic Token 替代，判别式+生成式联合训练；线上 CTR AUC +0.65%，稀疏参数减少 33%，模型越大提升越稳定。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════
+       序列建模 & 行为理解（待补充）
+       ═══════════════════════════════════════════════════ -->
+  <div id="panel-seq" class="panel">
+    <div class="cat-header">
+      <span class="tab-dot" style="background:#7e22ce;width:9px;height:9px;border-radius:50%;display:inline-block"></span>
+      <h2>序列建模 &amp; 行为理解</h2>
+      <span class="cat-desc">SASRec、BERT4Rec、多兴趣建模、长短期行为序列等</span>
+    </div>
+    <div class="empty">暂无解读，敬请期待</div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════
+       LLM × 推荐（待补充）
+       ═══════════════════════════════════════════════════ -->
+  <div id="panel-llm" class="panel">
+    <div class="cat-header">
+      <span class="tab-dot" style="background:#92400e;width:9px;height:9px;border-radius:50%;display:inline-block"></span>
+      <h2>LLM × 推荐</h2>
+      <span class="cat-desc">用 LLM 做推理、对话推荐、文本特征增强、推荐 instruction tuning 等</span>
+    </div>
+    <div class="empty">暂无解读，敬请期待</div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════
+       多模态推荐（待补充）
+       ═══════════════════════════════════════════════════ -->
+  <div id="panel-mm" class="panel">
+    <div class="cat-header">
+      <span class="tab-dot" style="background:#9f1239;width:9px;height:9px;border-radius:50%;display:inline-block"></span>
+      <h2>多模态推荐</h2>
+      <span class="cat-desc">图文 item 理解、视觉 embedding 融合、跨模态对齐等</span>
+    </div>
+    <div class="empty">暂无解读，敬请期待</div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════
+       NLP 基础（待补充）
+       ═══════════════════════════════════════════════════ -->
+  <div id="panel-nlp" class="panel">
+    <div class="cat-header">
+      <span class="tab-dot" style="background:#0369a1;width:9px;height:9px;border-radius:50%;display:inline-block"></span>
+      <h2>NLP 基础</h2>
+      <span class="cat-desc">Transformer、BERT、预训练语言模型、文本表征等基础工作</span>
+    </div>
+    <div class="empty">暂无解读，敬请期待</div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════
+       系统与工程（待补充）
+       ═══════════════════════════════════════════════════ -->
+  <div id="panel-infra" class="panel">
+    <div class="cat-header">
+      <span class="tab-dot" style="background:#475569;width:9px;height:9px;border-radius:50%;display:inline-block"></span>
+      <h2>系统与工程</h2>
+      <span class="cat-desc">训练系统、serving 优化、异构计算、在线学习等工程实践</span>
+    </div>
+    <div class="empty">暂无解读，敬请期待</div>
+  </div>
+
+  <div class="footer">
+    此列表由 paper-reader skill 自动维护 · 新增论文时在对应 panel 里追加一张卡片（按发表时间升序排列）<br>
+    ✅ 有解读 &nbsp;&nbsp; 待 = 仅收录，尚未生成详细解读
+  </div>
+</div>
+
+<script>
+  function switchTab(id, btn) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('visible'));
+    document.getElementById('panel-' + id).classList.add('visible');
+  }
+</script>
 </body>
 </html>
