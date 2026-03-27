@@ -229,24 +229,120 @@
     </div>
   </div>
 
-  <!-- ═══════════════════════════════════════════════════
-       全部（按时间升序）
-       ═══════════════════════════════════════════════════ -->
+  <!-- 全部 -->
   <div id="panel-all" class="panel visible">
     <div class="paper-list">
 
-      <!-- TIGER 2023 -->
-      <a class="paper-card" href="tiger.html">
+      <!-- TRM 2026 -->
+      <a class="paper-card" href="trm.html">
         <div>
           <div class="card-meta">
-            <span class="tag ty">2023</span>
-            <span class="tag tv">NeurIPS 2023 · arXiv 2305.05065</span>
-            <span class="tag tc-gen">生成式推荐</span>
+            <span class="tag ty">2026</span>
+            <span class="tag tv">arXiv 2601.22694</span>
+            <span class="tag tc-rank">排序 Scaling</span>
+            <span class="tag tc-sid">Semantic Token</span>
+          </div>
+          <div class="card-title">TRM：用语义 Token 替代 Item ID，解锁大排序模型的扩展潜力</div>
+          <div class="card-subtitle">Farewell to Item IDs: Unlocking the Scaling Potential of Large Ranking Models via Semantic Tokens · Zhao et al. · ByteDance</div>
+          <div class="card-summary">Item ID 是孤立符号，难以共享知识且制约 scaling；TRM 提出协同感知表示 + 混合 Tokenization（Gen+Mem）+ 判别式生成式联合训练，线上搜索 CTR AUC +0.65%、稀疏参数减少 33%，scaling law 特性显著改善。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- GRID 2025.07 -->
+      <a class="paper-card" href="grid.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025.07</span>
+            <span class="tag tv">arXiv 2507.22224</span>
+            <span class="tag tc-gen">框架&amp;消融</span>
             <span class="tag tc-sid">Semantic ID</span>
           </div>
-          <div class="card-title">TIGER：用生成式检索重构推荐系统召回阶段</div>
-          <div class="card-subtitle">Recommender Systems with Generative Retrieval · Rajput, Mehta et al. · Google DeepMind</div>
-          <div class="card-summary">首次将生成式检索（Generative Retrieval）引入推荐系统：用 RQ-VAE 为 item 生成层级 Semantic ID，Transformer Encoder-Decoder 自回归预测下一个 item 的 Semantic ID。在 Amazon 三数据集全面超越 SASRec/BERT4Rec，原生支持冷启动和多样性调节。</div>
+          <div class="card-title">GRID：生成式推荐 Semantic ID 实践手册（Snap 开源框架）</div>
+          <div class="card-subtitle">Generative Recommendation with Semantic IDs: A Practitioner's Handbook · Snap Inc.</div>
+          <div class="card-summary">对生成式推荐中 SID 使用方式进行大规模消融研究的实践指南。关键发现：RK-Means（Residual K-Means）量化方案通常优于 RQ-VAE；Encoder-Decoder 架构优于 Decoder-only；同时公开了完整可复现代码框架，便于研究者快速实验不同组合。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- MTGRec 2025 SIGIR -->
+      <a class="paper-card" href="mtgrec.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">SIGIR 2025 · arXiv 2504.04400</span>
+            <span class="tag tc-gen">多 Tokenizer 预训练</span>
+            <span class="tag tc-sid">Semantic ID</span>
+          </div>
+          <div class="card-title">MTGRec：多标识符 Item Tokenization + 课程学习预训练</div>
+          <div class="card-subtitle">Pre-training Generative Recommender with Multi-Identifier Item Tokenization · Zheng, Liu et al. · RUC + Huawei</div>
+          <div class="card-summary">现有生成式推荐 one-to-one tokenization 导致长尾 token 曝光不足、数据多样性差。MTGRec 从 RQ-VAE 训练过程取相邻 epoch 的多个 checkpoint 作为语义相关的多个 tokenizer，将单条用户序列扩增为多组 token 序列用于预训练。引入基于一阶梯度近似的数据影响力估计，动态调整各 tokenizer 数据的采样概率（课程学习）。微调时固定单一 tokenizer 保证 item 可识别。Amazon 三数据集超越 TIGER/LETTER/TIGER++，在长尾 item 改善尤其显著。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- ETEGRec 2025 SIGIR -->
+      <a class="paper-card" href="etegrec.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">SIGIR 2025 · arXiv 2409.05546</span>
+            <span class="tag tc-gen">端到端 Tokenizer</span>
+            <span class="tag tc-sid">Semantic ID</span>
+          </div>
+          <div class="card-title">ETEGRec：端到端联合优化 Item Tokenizer 与生成式推荐器</div>
+          <div class="card-subtitle">Generative Recommender with End-to-End Learnable Item Tokenization · Liu, Zheng et al. · RUC + Kuaishou</div>
+          <div class="card-summary">现有方法将 Item Tokenizer（RQ-VAE）与生成推荐器解耦训练，导致 tokenizer 无法感知推荐目标。ETEGRec 提出双 Encoder-Decoder 架构：tokenizer 和 recommender 各自一套 Enc-Dec，通过序列-物品对齐（KL 散度拉近编码器输出与物品 token 分布）和偏好-语义对齐（InfoNCE 拉近 decoder 隐态与重建物品语义）实现联合优化，并引入交替训练保证稳定性。Amazon 三数据集全面超越 TIGER/LETTER。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- COBRA 2025.03 -->
+      <a class="paper-card" href="cobra.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025.03</span>
+            <span class="tag tv">arXiv 2503.02453</span>
+            <span class="tag tc-gen">稀疏-稠密级联</span>
+            <span class="tag tc-sid">Semantic ID</span>
+            <span class="tag tc-indus">百度广告 +3.60%</span>
+          </div>
+          <div class="card-title">COBRA：级联稀疏-稠密表示，统一生成式与稠密检索</div>
+          <div class="card-subtitle">Sparse Meets Dense: Unified Generative Recommendations with Cascaded Sparse-Dense Representations · Yang, Ji et al. · Baidu</div>
+          <div class="card-summary">现有生成式推荐（如 TIGER）仅用离散 SID，信息损失大；COBRA 提出级联表示：先自回归生成 SID（粗粒度），再以 SID 为条件生成稠密向量（细粒度），两者拼接作为序列输入。推理时 BeamFusion 融合 Beam 分数与 ANN 相似度分数。百度广告平台亿级用户 A/B：转化率 +3.60%，ARPU +4.15%。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- OneRec 2025.02 -->
+      <a class="paper-card" href="onerec.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025.02</span>
+            <span class="tag tv">arXiv 2502.18965</span>
+            <span class="tag tc-gen">端到端生成</span>
+            <span class="tag tc-sid">Semantic ID</span>
+            <span class="tag tc-indus">快手线上 +1.68%</span>
+          </div>
+          <div class="card-title">OneRec：用统一生成模型替代多级漏斗，快手主场景落地</div>
+          <div class="card-subtitle">Unifying Retrieve and Rank with Generative Recommender and Preference Alignment · Deng et al. · Kuaishou</div>
+          <div class="card-summary">首个工业级单阶段生成推荐系统，用 Encoder-Decoder + MoE 替代三级漏斗（召回→粗排→精排）。创新点：① Balanced K-Means 残差量化解决 hourglass 现象；② Session-wise 生成（一次输出整批视频）替代逐 item 预测；③ Iterative Preference Alignment (IPA) 结合 DPO 从奖励模型自动构造偏好对。快手主页 A/B：总观看时长 +1.68%，人均观看时长 +6.56%。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- LIGER 2024.11 -->
+      <a class="paper-card" href="liger.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2024.11</span>
+            <span class="tag tv">arXiv 2411.18814</span>
+            <span class="tag tc-gen">混合召回</span>
+            <span class="tag tc-sid">Semantic ID</span>
+          </div>
+          <div class="card-title">LIGER：融合生成式与稠密检索的序列推荐</div>
+          <div class="card-subtitle">Unifying Generative and Dense Retrieval for Sequential Recommendation · Liu Yang, Fabian Paischer et al. · Meta AI</div>
+          <div class="card-summary">系统比较生成式召回（TIGER）与稠密召回在学术 benchmark 上的性能差距，发现生成式召回冷启动为零。提出 LIGER 混合方案：用 SID 做候选生成，再补入冷启动 item，以 dense embedding 重排，同时训练 next-token 预测和余弦相似度 loss，兼顾效率与冷启动表现。</div>
         </div>
         <div class="card-arrow">→</div>
       </a>
@@ -267,126 +363,26 @@
         <div class="card-arrow">→</div>
       </a>
 
-      <!-- LIGER 2024.11 -->
-      <div class="paper-card no-link">
+      <!-- TIGER 2023 -->
+      <a class="paper-card" href="tiger.html">
         <div>
           <div class="card-meta">
-            <span class="tag ty">2024.11</span>
-            <span class="tag tv">arXiv 2411.18814</span>
-            <span class="tag tc-gen">混合召回</span>
+            <span class="tag ty">2023</span>
+            <span class="tag tv">NeurIPS 2023 · arXiv 2305.05065</span>
+            <span class="tag tc-gen">生成式推荐</span>
             <span class="tag tc-sid">Semantic ID</span>
           </div>
-          <div class="card-title">LIGER：融合生成式与稠密检索的序列推荐</div>
-          <div class="card-subtitle">Unifying Generative and Dense Retrieval for Sequential Recommendation · Liu Yang, Fabian Paischer et al. · Meta AI</div>
-          <div class="card-summary">系统比较生成式召回（TIGER）与稠密召回在学术 benchmark 上的性能差距，发现生成式召回冷启动为零。提出 LIGER 混合方案：用 SID 做候选生成，再补入冷启动 item，以 dense embedding 重排，同时训练 next-token 预测和余弦相似度 loss，兼顾效率与冷启动表现。</div>
-        </div>
-        <div class="card-arrow-todo">待</div>
-      </div>
-
-      <!-- OneRec 2025.02 -->
-      <div class="paper-card no-link">
-        <div>
-          <div class="card-meta">
-            <span class="tag ty">2025.02</span>
-            <span class="tag tv">arXiv 2502.18965</span>
-            <span class="tag tc-gen">端到端生成</span>
-            <span class="tag tc-sid">Semantic ID</span>
-            <span class="tag tc-indus">快手线上 +1.68%</span>
-          </div>
-          <div class="card-title">OneRec：用统一生成模型替代多级漏斗，快手主场景落地</div>
-          <div class="card-subtitle">Unifying Retrieve and Rank with Generative Recommender and Preference Alignment · Deng et al. · Kuaishou</div>
-          <div class="card-summary">首个工业级单阶段生成推荐系统，用 Encoder-Decoder + MoE 替代三级漏斗（召回→粗排→精排）。创新点：① Balanced K-Means 残差量化解决 hourglass 现象；② Session-wise 生成（一次输出整批视频）替代逐 item 预测；③ Iterative Preference Alignment (IPA) 结合 DPO 从奖励模型自动构造偏好对。快手主页 A/B：总观看时长 +1.68%，人均观看时长 +6.56%。</div>
-        </div>
-        <div class="card-arrow-todo">待</div>
-      </div>
-
-      <!-- COBRA 2025.03 -->
-      <div class="paper-card no-link">
-        <div>
-          <div class="card-meta">
-            <span class="tag ty">2025.03</span>
-            <span class="tag tv">arXiv 2503.02453</span>
-            <span class="tag tc-gen">稀疏-稠密级联</span>
-            <span class="tag tc-sid">Semantic ID</span>
-            <span class="tag tc-indus">百度广告 +3.60%</span>
-          </div>
-          <div class="card-title">COBRA：级联稀疏-稠密表示，统一生成式与稠密检索</div>
-          <div class="card-subtitle">Sparse Meets Dense: Unified Generative Recommendations with Cascaded Sparse-Dense Representations · Yang, Ji et al. · Baidu</div>
-          <div class="card-summary">现有生成式推荐（如 TIGER）仅用离散 SID，信息损失大；COBRA 提出级联表示：先自回归生成 SID（粗粒度），再以 SID 为条件生成稠密向量（细粒度），两者拼接作为序列输入。推理时 BeamFusion 融合 Beam 分数与 ANN 相似度分数。百度广告平台亿级用户 A/B：转化率 +3.60%，ARPU +4.15%。</div>
-        </div>
-        <div class="card-arrow-todo">待</div>
-      </div>
-
-      <!-- ETEGRec 2025 SIGIR -->
-      <div class="paper-card no-link">
-        <div>
-          <div class="card-meta">
-            <span class="tag ty">2025</span>
-            <span class="tag tv">SIGIR 2025 · arXiv 2409.05546</span>
-            <span class="tag tc-gen">端到端 Tokenizer</span>
-            <span class="tag tc-sid">Semantic ID</span>
-          </div>
-          <div class="card-title">ETEGRec：端到端联合优化 Item Tokenizer 与生成式推荐器</div>
-          <div class="card-subtitle">Generative Recommender with End-to-End Learnable Item Tokenization · Liu, Zheng et al. · RUC + Kuaishou</div>
-          <div class="card-summary">现有方法将 Item Tokenizer（RQ-VAE）与生成推荐器解耦训练，导致 tokenizer 无法感知推荐目标。ETEGRec 提出双 Encoder-Decoder 架构：tokenizer 和 recommender 各自一套 Enc-Dec，通过序列-物品对齐（KL 散度拉近编码器输出与物品 token 分布）和偏好-语义对齐（InfoNCE 拉近 decoder 隐态与重建物品语义）实现联合优化，并引入交替训练保证稳定性。Amazon 三数据集全面超越 TIGER/LETTER。</div>
-        </div>
-        <div class="card-arrow-todo">待</div>
-      </div>
-
-      <!-- MTGRec 2025 SIGIR -->
-      <div class="paper-card no-link">
-        <div>
-          <div class="card-meta">
-            <span class="tag ty">2025</span>
-            <span class="tag tv">SIGIR 2025 · arXiv 2504.04400</span>
-            <span class="tag tc-gen">多 Tokenizer 预训练</span>
-            <span class="tag tc-sid">Semantic ID</span>
-          </div>
-          <div class="card-title">MTGRec：多标识符 Item Tokenization + 课程学习预训练</div>
-          <div class="card-subtitle">Pre-training Generative Recommender with Multi-Identifier Item Tokenization · Zheng, Liu et al. · RUC + Huawei</div>
-          <div class="card-summary">现有生成式推荐 one-to-one tokenization 导致长尾 token 曝光不足、数据多样性差。MTGRec 从 RQ-VAE 训练过程取相邻 epoch 的多个 checkpoint 作为语义相关的多个 tokenizer，将单条用户序列扩增为多组 token 序列用于预训练。引入基于一阶梯度近似的数据影响力估计，动态调整各 tokenizer 数据的采样概率（课程学习）。微调时固定单一 tokenizer 保证 item 可识别。Amazon 三数据集超越 TIGER/LETTER/TIGER++，在长尾 item 改善尤其显著。</div>
-        </div>
-        <div class="card-arrow-todo">待</div>
-      </div>
-
-      <!-- TRM 2026 -->
-      <a class="paper-card" href="trm.html">
-        <div>
-          <div class="card-meta">
-            <span class="tag ty">2026</span>
-            <span class="tag tv">arXiv 2601.22694</span>
-            <span class="tag tc-rank">排序 Scaling</span>
-            <span class="tag tc-sid">Semantic Token</span>
-          </div>
-          <div class="card-title">TRM：用语义 Token 替代 Item ID，解锁大排序模型的扩展潜力</div>
-          <div class="card-subtitle">Farewell to Item IDs: Unlocking the Scaling Potential of Large Ranking Models via Semantic Tokens · Zhao et al. · ByteDance</div>
-          <div class="card-summary">Item ID 是孤立符号，难以共享知识且制约 scaling；TRM 提出协同感知表示 + 混合 Tokenization（Gen+Mem）+ 判别式生成式联合训练，线上搜索 CTR AUC +0.65%、稀疏参数减少 33%，scaling law 特性显著改善。</div>
+          <div class="card-title">TIGER：用生成式检索重构推荐系统召回阶段</div>
+          <div class="card-subtitle">Recommender Systems with Generative Retrieval · Rajput, Mehta et al. · Google DeepMind</div>
+          <div class="card-summary">首次将生成式检索（Generative Retrieval）引入推荐系统：用 RQ-VAE 为 item 生成层级 Semantic ID，Transformer Encoder-Decoder 自回归预测下一个 item 的 Semantic ID。在 Amazon 三数据集全面超越 SASRec/BERT4Rec，原生支持冷启动和多样性调节。</div>
         </div>
         <div class="card-arrow">→</div>
       </a>
 
-      <!-- GRID 2025.07 -->
-      <div class="paper-card no-link">
-        <div>
-          <div class="card-meta">
-            <span class="tag ty">2025.07</span>
-            <span class="tag tv">arXiv 2507.22224</span>
-            <span class="tag tc-gen">框架&amp;消融</span>
-            <span class="tag tc-sid">Semantic ID</span>
-          </div>
-          <div class="card-title">GRID：生成式推荐 Semantic ID 实践手册（Snap 开源框架）</div>
-          <div class="card-subtitle">Generative Recommendation with Semantic IDs: A Practitioner's Handbook · Snap Inc.</div>
-          <div class="card-summary">对生成式推荐中 SID 使用方式进行大规模消融研究的实践指南。关键发现：RK-Means（Residual K-Means）量化方案通常优于 RQ-VAE；Encoder-Decoder 架构优于 Decoder-only；同时公开了完整可复现代码框架，便于研究者快速实验不同组合。</div>
-        </div>
-        <div class="card-arrow-todo">待</div>
-      </div>
-
     </div>
   </div>
 
-  <!-- ═══════════════════════════════════════════════════
-       Semantic ID & 表征（按时间升序）
-       ═══════════════════════════════════════════════════ -->
+  <!-- Semantic ID & 表征 -->
   <div id="panel-sid" class="panel">
     <div class="cat-header">
       <span class="tab-dot" style="background:#c2410c;width:9px;height:9px;border-radius:50%;display:inline-block"></span>
@@ -395,17 +391,77 @@
     </div>
     <div class="paper-list">
 
-      <!-- TIGER 2023 -->
-      <a class="paper-card" href="tiger.html">
+      <!-- TRM 2026 -->
+      <a class="paper-card" href="trm.html">
         <div>
           <div class="card-meta">
-            <span class="tag ty">2023</span>
-            <span class="tag tv">NeurIPS 2023</span>
-            <span class="tag tc-sid">RQ-VAE · 层级 SID</span>
+            <span class="tag ty">2026</span>
+            <span class="tag tv">arXiv 2601.22694</span>
+            <span class="tag tc-sid">协同感知 Token · 混合 Gen+Mem</span>
           </div>
-          <div class="card-title">TIGER：RQ-VAE 生成层级 Semantic ID</div>
-          <div class="card-subtitle">Google DeepMind</div>
-          <div class="card-summary">奠基工作。用 RQ-VAE 为每个 item 生成 m 级 Semantic ID（每级 codebook 大小 256），共享 item 前缀隐含语义层级关系，支持冷启动 item 直接用内容 embedding 映射到 SID。</div>
+          <div class="card-title">TRM：协同感知量化 + 混合 Tokenization，服务大排序 Scaling</div>
+          <div class="card-subtitle">ByteDance</div>
+          <div class="card-summary">将用户交互信号引入 token 生成过程（协同感知量化），混合生成式（Gen）和记忆式（Mem）表示让 token 兼顾语义泛化和高频 item 记忆，与大排序模型联合训练。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- GRID 2025.07 -->
+      <a class="paper-card" href="grid.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025.07</span>
+            <span class="tag tv">arXiv 2507.22224</span>
+            <span class="tag tc-sid">RK-Means · 消融对比</span>
+          </div>
+          <div class="card-title">GRID：RK-Means vs RQ-VAE 系统性消融</div>
+          <div class="card-subtitle">Snap Inc.</div>
+          <div class="card-summary">对比 RQ-VAE 和 RK-Means（Residual K-Means）等多种 SID 生成方案，发现 RK-Means 在多数情况下优于 RQ-VAE；同时验证了 codebook 层数、codebook 大小等关键超参的影响。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- MTGRec 2025 -->
+      <a class="paper-card" href="mtgrec.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">SIGIR 2025</span>
+            <span class="tag tc-sid">多 Tokenizer · 长尾优化</span>
+          </div>
+          <div class="card-title">MTGRec：相邻 epoch checkpoint 作为多语义相关 Tokenizer</div>
+          <div class="card-subtitle">RUC + Huawei</div>
+          <div class="card-summary">取 RQ-VAE 训练过程中相邻 epoch 的多个 checkpoint 作为多个 tokenizer，每个 item 拥有多个语义相近但有细微差异的 SID，大幅扩增训练数据，特别改善长尾 item 的 token 曝光频次。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- ETEGRec 2025 -->
+      <a class="paper-card" href="etegrec.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">SIGIR 2025</span>
+            <span class="tag tc-sid">端到端可学习 Tokenizer</span>
+          </div>
+          <div class="card-title">ETEGRec：联合优化 RQ-VAE Tokenizer 与推荐器</div>
+          <div class="card-subtitle">RUC + Kuaishou</div>
+          <div class="card-summary">打破 tokenizer 预训练后冻结的惯例，通过双对齐 loss（SIA + PSA）让 RQ-VAE 感知推荐优化目标，token 分配随训练动态调整，更好适配推荐任务。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- LIGER 2024.11 -->
+      <a class="paper-card" href="liger.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2024.11</span>
+            <span class="tag tv">arXiv 2411.18814</span>
+            <span class="tag tc-sid">SID + 文本表征</span>
+          </div>
+          <div class="card-title">LIGER：SID 输入 + dense embedding 输出的混合架构</div>
+          <div class="card-subtitle">Meta AI</div>
+          <div class="card-summary">将 SID 和文本 embedding 拼接作为输入，同时输出 dense embedding 用于相似度检索和 SID 预测，解决纯 SID 生成方案冷启动为零的问题。</div>
         </div>
         <div class="card-arrow">→</div>
       </a>
@@ -425,77 +481,17 @@
         <div class="card-arrow">→</div>
       </a>
 
-      <!-- LIGER 2024.11（SID 使用方式） -->
-      <div class="paper-card no-link">
+      <!-- TIGER 2023 -->
+      <a class="paper-card" href="tiger.html">
         <div>
           <div class="card-meta">
-            <span class="tag ty">2024.11</span>
-            <span class="tag tv">arXiv 2411.18814</span>
-            <span class="tag tc-sid">SID + 文本表征</span>
+            <span class="tag ty">2023</span>
+            <span class="tag tv">NeurIPS 2023</span>
+            <span class="tag tc-sid">RQ-VAE · 层级 SID</span>
           </div>
-          <div class="card-title">LIGER：SID 输入 + dense embedding 输出的混合架构</div>
-          <div class="card-subtitle">Meta AI</div>
-          <div class="card-summary">将 SID 和文本 embedding 拼接作为输入，同时输出 dense embedding 用于相似度检索和 SID 预测，解决纯 SID 生成方案冷启动为零的问题。</div>
-        </div>
-        <div class="card-arrow-todo">待</div>
-      </div>
-
-      <!-- ETEGRec 2025 -->
-      <div class="paper-card no-link">
-        <div>
-          <div class="card-meta">
-            <span class="tag ty">2025</span>
-            <span class="tag tv">SIGIR 2025</span>
-            <span class="tag tc-sid">端到端可学习 Tokenizer</span>
-          </div>
-          <div class="card-title">ETEGRec：联合优化 RQ-VAE Tokenizer 与推荐器</div>
-          <div class="card-subtitle">RUC + Kuaishou</div>
-          <div class="card-summary">打破 tokenizer 预训练后冻结的惯例，通过双对齐 loss（SIA + PSA）让 RQ-VAE 感知推荐优化目标，token 分配随训练动态调整，更好适配推荐任务。</div>
-        </div>
-        <div class="card-arrow-todo">待</div>
-      </div>
-
-      <!-- MTGRec 2025 -->
-      <div class="paper-card no-link">
-        <div>
-          <div class="card-meta">
-            <span class="tag ty">2025</span>
-            <span class="tag tv">SIGIR 2025</span>
-            <span class="tag tc-sid">多 Tokenizer · 长尾优化</span>
-          </div>
-          <div class="card-title">MTGRec：相邻 epoch checkpoint 作为多语义相关 Tokenizer</div>
-          <div class="card-subtitle">RUC + Huawei</div>
-          <div class="card-summary">取 RQ-VAE 训练过程中相邻 epoch 的多个 checkpoint 作为多个 tokenizer，每个 item 拥有多个语义相近但有细微差异的 SID，大幅扩增训练数据，特别改善长尾 item 的 token 曝光频次。</div>
-        </div>
-        <div class="card-arrow-todo">待</div>
-      </div>
-
-      <!-- GRID 2025.07 -->
-      <div class="paper-card no-link">
-        <div>
-          <div class="card-meta">
-            <span class="tag ty">2025.07</span>
-            <span class="tag tv">arXiv 2507.22224</span>
-            <span class="tag tc-sid">RK-Means · 消融对比</span>
-          </div>
-          <div class="card-title">GRID：RK-Means vs RQ-VAE 系统性消融</div>
-          <div class="card-subtitle">Snap Inc.</div>
-          <div class="card-summary">对比 RQ-VAE 和 RK-Means（Residual K-Means）等多种 SID 生成方案，发现 RK-Means 在多数情况下优于 RQ-VAE；同时验证了 codebook 层数、codebook 大小等关键超参的影响。</div>
-        </div>
-        <div class="card-arrow-todo">待</div>
-      </div>
-
-      <!-- TRM 2026 -->
-      <a class="paper-card" href="trm.html">
-        <div>
-          <div class="card-meta">
-            <span class="tag ty">2026</span>
-            <span class="tag tv">arXiv 2601.22694</span>
-            <span class="tag tc-sid">协同感知 Token · 混合 Gen+Mem</span>
-          </div>
-          <div class="card-title">TRM：协同感知量化 + 混合 Tokenization，服务大排序 Scaling</div>
-          <div class="card-subtitle">ByteDance</div>
-          <div class="card-summary">将用户交互信号引入 token 生成过程（协同感知量化），混合生成式（Gen）和记忆式（Mem）表示让 token 兼顾语义泛化和高频 item 记忆，与大排序模型联合训练。</div>
+          <div class="card-title">TIGER：RQ-VAE 生成层级 Semantic ID</div>
+          <div class="card-subtitle">Google DeepMind</div>
+          <div class="card-summary">奠基工作。用 RQ-VAE 为每个 item 生成 m 级 Semantic ID（每级 codebook 大小 256），共享 item 前缀隐含语义层级关系，支持冷启动 item 直接用内容 embedding 映射到 SID。</div>
         </div>
         <div class="card-arrow">→</div>
       </a>
@@ -503,9 +499,7 @@
     </div>
   </div>
 
-  <!-- ═══════════════════════════════════════════════════
-       生成式推荐与检索（按时间升序）
-       ═══════════════════════════════════════════════════ -->
+  <!-- 生成式推荐与检索 -->
   <div id="panel-gen" class="panel">
     <div class="cat-header">
       <span class="tab-dot" style="background:#1d4ed8;width:9px;height:9px;border-radius:50%;display:inline-block"></span>
@@ -513,6 +507,98 @@
       <span class="cat-desc">用自回归/seq2seq 直接生成 item ID，替代传统双塔 + ANN 召回范式；含工业落地与方法融合</span>
     </div>
     <div class="paper-list">
+
+      <!-- GRID 2025.07 -->
+      <a class="paper-card" href="grid.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025.07</span>
+            <span class="tag tv">arXiv 2507.22224</span>
+            <span class="tag tc-gen">框架 &amp; 消融</span>
+          </div>
+          <div class="card-title">GRID：生成式推荐实践手册，Snap 开源可复现框架</div>
+          <div class="card-subtitle">Generative Recommendation with Semantic IDs: A Practitioner's Handbook · Snap Inc.</div>
+          <div class="card-summary">针对 GR 方法的各设计选择（SID 生成方案、模型架构、训练目标等）进行系统消融。关键结论：RK-Means 优于 RQ-VAE；Encoder-Decoder 优于 Decoder-only；大 codebook + 多层 SID 通常更好。开源完整可复现代码，便于研究者在此基础上快速迭代。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- MTGRec 2025 -->
+      <a class="paper-card" href="mtgrec.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">SIGIR 2025 · arXiv 2504.04400</span>
+            <span class="tag tc-gen">多 Tokenizer 预训练</span>
+          </div>
+          <div class="card-title">MTGRec：多 Tokenizer 数据增强 + 课程学习预训练</div>
+          <div class="card-subtitle">Pre-training Generative Recommender with Multi-Identifier Item Tokenization · RUC + Huawei</div>
+          <div class="card-summary">取 RQ-VAE 多个训练 epoch checkpoint 作为 n 个语义相关 tokenizer，一条用户序列扩增为 n 条 token 序列。数据影响力估计（一阶梯度近似）动态调整各 tokenizer 数据采样比例（课程学习预训练），微调时用单一 tokenizer。支持更深 T5（8 层）稳定 scaling；长尾 item 改善尤其显著。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- ETEGRec 2025 -->
+      <a class="paper-card" href="etegrec.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">SIGIR 2025 · arXiv 2409.05546</span>
+            <span class="tag tc-gen">端到端 Tokenizer</span>
+          </div>
+          <div class="card-title">ETEGRec：端到端联合优化 Item Tokenizer 与推荐器</div>
+          <div class="card-subtitle">Generative Recommender with End-to-End Learnable Item Tokenization · RUC + Kuaishou</div>
+          <div class="card-summary">双 Enc-Dec 架构（RQ-VAE tokenizer + T5 recommender）。序列-物品对齐（SIA）：用 KL 散度拉近 Encoder 序列表示与 item collaborative embedding 在 codebook 空间的分布；偏好-语义对齐（PSA）：用 InfoNCE 拉近 Decoder 第一个隐态与重建 item 语义。交替训练（固定一方优化另一方）保证稳定性。Amazon 2023 三数据集全面优于 TIGER/LETTER。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- COBRA 2025.03 -->
+      <a class="paper-card" href="cobra.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025.03</span>
+            <span class="tag tv">arXiv 2503.02453</span>
+            <span class="tag tc-gen">稀疏-稠密级联</span>
+            <span class="tag tc-indus">百度广告 +3.60%</span>
+          </div>
+          <div class="card-title">COBRA：级联 Sparse-Dense 表示，BeamFusion 推理</div>
+          <div class="card-subtitle">Sparse Meets Dense · Yang, Ji et al. · Baidu</div>
+          <div class="card-summary">输入序列中每个 item 用（SID embedding || dense vector）拼接表示；Decoder 先预测 SID 再以 SID 为条件预测 dense vector，形成粗到细两级生成。BeamFusion 将 Beam 分数与 ANN 余弦分数加权融合，控制召回多样性。在 Beauty/Sports/Toys 超越 TIGER 15-24%；百度广告 2 亿日活 A/B：转化 +3.60%，ARPU +4.15%。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- OneRec 2025.02 -->
+      <a class="paper-card" href="onerec.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025.02</span>
+            <span class="tag tv">arXiv 2502.18965</span>
+            <span class="tag tc-gen">端到端单阶段</span>
+            <span class="tag tc-indus">快手主场景 +1.68%</span>
+          </div>
+          <div class="card-title">OneRec：工业级单阶段生成推荐，替代三级漏斗</div>
+          <div class="card-subtitle">Unifying Retrieve and Rank · Deng et al. · Kuaishou</div>
+          <div class="card-summary">1B 参数 Encoder-Decoder + MoE，session-wise 生成（一次生成整批 5-10 个视频）替代逐 item 预测。Balanced K-Means 残差量化保证 codebook 均衡；IPA 策略用奖励模型评分自动构造 DPO 偏好对。快手主页线上 A/B：观看时长 +1.68%，人均单次观看时长 +6.56%。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- LIGER 2024.11 -->
+      <a class="paper-card" href="liger.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2024.11</span>
+            <span class="tag tv">arXiv 2411.18814</span>
+            <span class="tag tc-gen">生成式 + 稠密混合</span>
+          </div>
+          <div class="card-title">LIGER：融合生成式与稠密检索，解决冷启动难题</div>
+          <div class="card-subtitle">Unifying Generative and Dense Retrieval for Sequential Recommendation · Meta AI</div>
+          <div class="card-summary">分析 TIGER（生成式）与 Dense Retrieval 的性能差距和冷启动问题，提出 LIGER：共用 SID 输入，Decoder 预测 SID，Encoder 输出 dense embedding；推理时生成式召回 K 个候选 + 补入冷启动 item，用 dense embedding 重排。在 Beauty/Sports/Toys/Steam 四数据集取得生成式/稠密最优折中。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
 
       <!-- TIGER 2023 -->
       <a class="paper-card" href="tiger.html">
@@ -529,104 +615,10 @@
         <div class="card-arrow">→</div>
       </a>
 
-      <!-- LIGER 2024.11 -->
-      <div class="paper-card no-link">
-        <div>
-          <div class="card-meta">
-            <span class="tag ty">2024.11</span>
-            <span class="tag tv">arXiv 2411.18814</span>
-            <span class="tag tc-gen">生成式 + 稠密混合</span>
-          </div>
-          <div class="card-title">LIGER：融合生成式与稠密检索，解决冷启动难题</div>
-          <div class="card-subtitle">Unifying Generative and Dense Retrieval for Sequential Recommendation · Meta AI</div>
-          <div class="card-summary">分析 TIGER（生成式）与 Dense Retrieval 的性能差距和冷启动问题，提出 LIGER：共用 SID 输入，Decoder 预测 SID，Encoder 输出 dense embedding；推理时生成式召回 K 个候选 + 补入冷启动 item，用 dense embedding 重排。在 Beauty/Sports/Toys/Steam 四数据集取得生成式/稠密最优折中。</div>
-        </div>
-        <div class="card-arrow-todo">待</div>
-      </div>
-
-      <!-- OneRec 2025.02 -->
-      <div class="paper-card no-link">
-        <div>
-          <div class="card-meta">
-            <span class="tag ty">2025.02</span>
-            <span class="tag tv">arXiv 2502.18965</span>
-            <span class="tag tc-gen">端到端单阶段</span>
-            <span class="tag tc-indus">快手主场景 +1.68%</span>
-          </div>
-          <div class="card-title">OneRec：工业级单阶段生成推荐，替代三级漏斗</div>
-          <div class="card-subtitle">Unifying Retrieve and Rank · Deng et al. · Kuaishou</div>
-          <div class="card-summary">1B 参数 Encoder-Decoder + MoE，session-wise 生成（一次生成整批 5-10 个视频）替代逐 item 预测。Balanced K-Means 残差量化保证 codebook 均衡；IPA 策略用奖励模型评分自动构造 DPO 偏好对。快手主页线上 A/B：观看时长 +1.68%，人均单次观看时长 +6.56%。</div>
-        </div>
-        <div class="card-arrow-todo">待</div>
-      </div>
-
-      <!-- COBRA 2025.03 -->
-      <div class="paper-card no-link">
-        <div>
-          <div class="card-meta">
-            <span class="tag ty">2025.03</span>
-            <span class="tag tv">arXiv 2503.02453</span>
-            <span class="tag tc-gen">稀疏-稠密级联</span>
-            <span class="tag tc-indus">百度广告 +3.60%</span>
-          </div>
-          <div class="card-title">COBRA：级联 Sparse-Dense 表示，BeamFusion 推理</div>
-          <div class="card-subtitle">Sparse Meets Dense · Yang, Ji et al. · Baidu</div>
-          <div class="card-summary">输入序列中每个 item 用（SID embedding || dense vector）拼接表示；Decoder 先预测 SID 再以 SID 为条件预测 dense vector，形成粗到细两级生成。BeamFusion 将 Beam 分数与 ANN 余弦分数加权融合，控制召回多样性。在 Beauty/Sports/Toys 超越 TIGER 15-24%；百度广告 2 亿日活 A/B：转化 +3.60%，ARPU +4.15%。</div>
-        </div>
-        <div class="card-arrow-todo">待</div>
-      </div>
-
-      <!-- ETEGRec 2025 -->
-      <div class="paper-card no-link">
-        <div>
-          <div class="card-meta">
-            <span class="tag ty">2025</span>
-            <span class="tag tv">SIGIR 2025 · arXiv 2409.05546</span>
-            <span class="tag tc-gen">端到端 Tokenizer</span>
-          </div>
-          <div class="card-title">ETEGRec：端到端联合优化 Item Tokenizer 与推荐器</div>
-          <div class="card-subtitle">Generative Recommender with End-to-End Learnable Item Tokenization · RUC + Kuaishou</div>
-          <div class="card-summary">双 Enc-Dec 架构（RQ-VAE tokenizer + T5 recommender）。序列-物品对齐（SIA）：用 KL 散度拉近 Encoder 序列表示与 item collaborative embedding 在 codebook 空间的分布；偏好-语义对齐（PSA）：用 InfoNCE 拉近 Decoder 第一个隐态与重建 item 语义。交替训练（固定一方优化另一方）保证稳定性。Amazon 2023 三数据集全面优于 TIGER/LETTER。</div>
-        </div>
-        <div class="card-arrow-todo">待</div>
-      </div>
-
-      <!-- MTGRec 2025 -->
-      <div class="paper-card no-link">
-        <div>
-          <div class="card-meta">
-            <span class="tag ty">2025</span>
-            <span class="tag tv">SIGIR 2025 · arXiv 2504.04400</span>
-            <span class="tag tc-gen">多 Tokenizer 预训练</span>
-          </div>
-          <div class="card-title">MTGRec：多 Tokenizer 数据增强 + 课程学习预训练</div>
-          <div class="card-subtitle">Pre-training Generative Recommender with Multi-Identifier Item Tokenization · RUC + Huawei</div>
-          <div class="card-summary">取 RQ-VAE 多个训练 epoch checkpoint 作为 n 个语义相关 tokenizer，一条用户序列扩增为 n 条 token 序列。数据影响力估计（一阶梯度近似）动态调整各 tokenizer 数据采样比例（课程学习预训练），微调时用单一 tokenizer。支持更深 T5（8 层）稳定 scaling；长尾 item 改善尤其显著。</div>
-        </div>
-        <div class="card-arrow-todo">待</div>
-      </div>
-
-      <!-- GRID 2025.07 -->
-      <div class="paper-card no-link">
-        <div>
-          <div class="card-meta">
-            <span class="tag ty">2025.07</span>
-            <span class="tag tv">arXiv 2507.22224</span>
-            <span class="tag tc-gen">框架 &amp; 消融</span>
-          </div>
-          <div class="card-title">GRID：生成式推荐实践手册，Snap 开源可复现框架</div>
-          <div class="card-subtitle">Generative Recommendation with Semantic IDs: A Practitioner's Handbook · Snap Inc.</div>
-          <div class="card-summary">针对 GR 方法的各设计选择（SID 生成方案、模型架构、训练目标等）进行系统消融。关键结论：RK-Means 优于 RQ-VAE；Encoder-Decoder 优于 Decoder-only；大 codebook + 多层 SID 通常更好。开源完整可复现代码，便于研究者在此基础上快速迭代。</div>
-        </div>
-        <div class="card-arrow-todo">待</div>
-      </div>
-
     </div>
   </div>
 
-  <!-- ═══════════════════════════════════════════════════
-       排序模型 Scaling（按时间升序）
-       ═══════════════════════════════════════════════════ -->
+  <!-- 排序模型 Scaling -->
   <div id="panel-rank" class="panel">
     <div class="cat-header">
       <span class="tab-dot" style="background:#065f46;width:9px;height:9px;border-radius:50%;display:inline-block"></span>
@@ -634,21 +626,6 @@
       <span class="cat-desc">大参数排序模型的 Scaling Law、MoE、稀疏 embedding 替代方案</span>
     </div>
     <div class="paper-list">
-
-      <!-- SemID 2023/2024 -->
-      <a class="paper-card" href="semid.html">
-        <div>
-          <div class="card-meta">
-            <span class="tag ty">2023/2024</span>
-            <span class="tag tv">arXiv 2306.08121</span>
-            <span class="tag tc-rank">排序侧 SID</span>
-          </div>
-          <div class="card-title">SemID：Semantic ID 用于 YouTube 亿级排序，冷启动 + CTR 双提升</div>
-          <div class="card-subtitle">Better Generalization with Semantic IDs · Google DeepMind</div>
-          <div class="card-summary">首次验证 SID 可替代排序侧随机哈希 ID embedding，SPM-SID 在整体 CTR AUC 和冷启动 CTR/1D AUC 双胜，serving cost 不变。</div>
-        </div>
-        <div class="card-arrow">→</div>
-      </a>
 
       <!-- TRM 2026 -->
       <a class="paper-card" href="trm.html">
@@ -661,6 +638,21 @@
           <div class="card-title">TRM：用语义 Token 替代 Item ID，解锁大排序模型的扩展潜力</div>
           <div class="card-subtitle">Farewell to Item IDs · Zhao et al. · ByteDance</div>
           <div class="card-summary">传统 item ID embedding table 是 scaling 瓶颈。TRM 以 Semantic Token 替代，判别式+生成式联合训练；线上 CTR AUC +0.65%，稀疏参数减少 33%，模型越大提升越稳定。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- SemID 2023/2024 -->
+      <a class="paper-card" href="semid.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2023/2024</span>
+            <span class="tag tv">arXiv 2306.08121</span>
+            <span class="tag tc-rank">排序侧 SID</span>
+          </div>
+          <div class="card-title">SemID：Semantic ID 用于 YouTube 亿级排序，冷启动 + CTR 双提升</div>
+          <div class="card-subtitle">Better Generalization with Semantic IDs · Google DeepMind</div>
+          <div class="card-summary">首次验证 SID 可替代排序侧随机哈希 ID embedding，SPM-SID 在整体 CTR AUC 和冷启动 CTR/1D AUC 双胜，serving cost 不变。</div>
         </div>
         <div class="card-arrow">→</div>
       </a>
@@ -680,9 +672,7 @@
     <div class="empty">暂无解读，敬请期待</div>
   </div>
 
-  <!-- ═══════════════════════════════════════════════════
-       LLM × 推荐（待补充）
-       ═══════════════════════════════════════════════════ -->
+
   <div id="panel-llm" class="panel">
     <div class="cat-header">
       <span class="tab-dot" style="background:#92400e;width:9px;height:9px;border-radius:50%;display:inline-block"></span>
@@ -692,9 +682,7 @@
     <div class="empty">暂无解读，敬请期待</div>
   </div>
 
-  <!-- ═══════════════════════════════════════════════════
-       多模态推荐（待补充）
-       ═══════════════════════════════════════════════════ -->
+
   <div id="panel-mm" class="panel">
     <div class="cat-header">
       <span class="tab-dot" style="background:#9f1239;width:9px;height:9px;border-radius:50%;display:inline-block"></span>
@@ -704,9 +692,7 @@
     <div class="empty">暂无解读，敬请期待</div>
   </div>
 
-  <!-- ═══════════════════════════════════════════════════
-       NLP 基础（待补充）
-       ═══════════════════════════════════════════════════ -->
+
   <div id="panel-nlp" class="panel">
     <div class="cat-header">
       <span class="tab-dot" style="background:#0369a1;width:9px;height:9px;border-radius:50%;display:inline-block"></span>
@@ -716,9 +702,7 @@
     <div class="empty">暂无解读，敬请期待</div>
   </div>
 
-  <!-- ═══════════════════════════════════════════════════
-       系统与工程（待补充）
-       ═══════════════════════════════════════════════════ -->
+
   <div id="panel-infra" class="panel">
     <div class="cat-header">
       <span class="tab-dot" style="background:#475569;width:9px;height:9px;border-radius:50%;display:inline-block"></span>
@@ -729,8 +713,7 @@
   </div>
 
   <div class="footer">
-    此列表由 paper-reader skill 自动维护 · 新增论文时在对应 panel 里追加一张卡片（按发表时间升序排列）<br>
-    ✅ 有解读 &nbsp;&nbsp; 待 = 仅收录，尚未生成详细解读
+    © 2025 · 推荐系统论文笔记
   </div>
 </div>
 
