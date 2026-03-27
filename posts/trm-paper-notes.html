@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TRM 论文解读</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false }
+          ],
+          throwOnError: false
+        });
+      }
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #667085;
+      --line: #e5e7eb;
+      --primary: #2563eb;
+      --primary-soft: #eff6ff;
+      --accent: #7c3aed;
+      --shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+      --radius: 18px;
+      --max: 1120px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background: linear-gradient(180deg, #f8fbff 0%, var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      line-height: 1.8;
+    }
+
+    a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .page {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 32px 20px 80px;
+    }
+
+    .hero {
+      background: radial-gradient(circle at top right, rgba(37, 99, 235, 0.14), transparent 30%),
+                  radial-gradient(circle at left bottom, rgba(124, 58, 237, 0.10), transparent 24%),
+                  var(--card);
+      border: 1px solid rgba(37, 99, 235, 0.08);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      padding: 34px 34px 28px;
+      margin-bottom: 22px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 34px;
+      line-height: 1.25;
+      letter-spacing: -0.02em;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 16px;
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    .meta-card {
+      background: #fbfdff;
+      border: 1px solid #e7eefb;
+      border-radius: 16px;
+      padding: 14px 16px;
+    }
+
+    .meta-label {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+
+    .meta-value {
+      font-size: 14px;
+      font-weight: 600;
+      word-break: break-word;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr);
+      gap: 22px;
+      align-items: start;
+    }
+
+    .toc {
+      position: sticky;
+      top: 20px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    .toc h2 {
+      margin: 0 0 12px;
+      font-size: 16px;
+    }
+
+    .toc ul {
+      margin: 0;
+      padding-left: 16px;
+      color: var(--muted);
+    }
+
+    .toc li {
+      margin: 8px 0;
+    }
+
+    .content {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .section {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 26px 28px;
+    }
+
+    .section h2 {
+      margin: 0 0 14px;
+      font-size: 24px;
+      line-height: 1.35;
+    }
+
+    .section h3 {
+      margin: 26px 0 12px;
+      font-size: 19px;
+      line-height: 1.4;
+    }
+
+    .section h4 {
+      margin: 22px 0 10px;
+      font-size: 16px;
+      line-height: 1.5;
+      color: #111827;
+    }
+
+    .lead {
+      margin: 0;
+      color: #374151;
+    }
+
+    .paper-info {
+      background: #fafbff;
+      border-left: 4px solid var(--primary);
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin: 16px 0 0;
+      color: #334155;
+    }
+
+    .paper-info p {
+      margin: 6px 0;
+    }
+
+    .highlight {
+      background: linear-gradient(180deg, rgba(37, 99, 235, 0.08), rgba(37, 99, 235, 0.04));
+      border: 1px solid rgba(37, 99, 235, 0.12);
+      border-radius: 14px;
+      padding: 14px 16px;
+      margin: 16px 0;
+    }
+
+    .highlight strong {
+      color: #1d4ed8;
+    }
+
+    .note {
+      background: #fcfcfd;
+      border: 1px dashed #cbd5e1;
+      border-radius: 14px;
+      padding: 14px 16px;
+      color: #475467;
+      margin: 14px 0;
+    }
+
+    ul, ol {
+      padding-left: 22px;
+    }
+
+    li + li {
+      margin-top: 8px;
+    }
+
+    .sub-list {
+      margin-top: 8px;
+    }
+
+    figure {
+      margin: 20px 0;
+      background: #fbfdff;
+      border: 1px solid #e8edf5;
+      border-radius: 16px;
+      padding: 14px;
+    }
+
+    figure img {
+      width: 100%;
+      display: block;
+      border-radius: 12px;
+      background: #fff;
+    }
+
+    figcaption {
+      margin-top: 10px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      overflow: hidden;
+      border-radius: 14px;
+      font-size: 14px;
+    }
+
+    thead th {
+      background: #f3f6fb;
+      color: #334155;
+      text-align: left;
+      font-weight: 700;
+      border-bottom: 1px solid var(--line);
+    }
+
+    th, td {
+      padding: 12px 14px;
+      border-bottom: 1px solid #eef2f7;
+      vertical-align: top;
+    }
+
+    tbody tr:nth-child(even) {
+      background: #fcfdff;
+    }
+
+    blockquote {
+      margin: 16px 0;
+      padding: 14px 18px;
+      border-left: 4px solid var(--accent);
+      background: rgba(124, 58, 237, 0.05);
+      border-radius: 0 12px 12px 0;
+      color: #3f3f46;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .mini-card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px 16px;
+      background: #fff;
+    }
+
+    .mini-card h4 {
+      margin-top: 0;
+    }
+
+    .footer {
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+    }
+
+    .katex-display {
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 6px 0;
+    }
+
+    @media (max-width: 920px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .toc {
+        position: static;
+      }
+
+      .meta-grid,
+      .two-col {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .page {
+        padding: 18px 12px 56px;
+      }
+
+      .hero,
+      .section {
+        padding: 20px 18px;
+      }
+
+      h1 {
+        font-size: 28px;
+      }
+
+      .meta-grid,
+      .two-col {
+        grid-template-columns: 1fr;
+      }
+
+      th, td {
+        padding: 10px 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <div class="eyebrow">论文解读 · HTML 版</div>
+      <h1>TRM：用语义 Token 替代 Item ID</h1>
+      <p class="subtitle">Farewell to Item IDs: Unlocking the Scaling Potential of Large Ranking Models via Semantic Tokens</p>
+      <div class="meta-grid">
+        <div class="meta-card">
+          <div class="meta-label">作者</div>
+          <div class="meta-value">Zhao et al. · ByteDance</div>
+        </div>
+        <div class="meta-card">
+          <div class="meta-label">年份</div>
+          <div class="meta-value">2026</div>
+        </div>
+        <div class="meta-card">
+          <div class="meta-label">来源</div>
+          <div class="meta-value">arXiv</div>
+        </div>
+        <div class="meta-card">
+          <div class="meta-label">核心命题</div>
+          <div class="meta-value">Semantic Token 替代 Item ID</div>
+        </div>
+      </div>
+    </header>
+
+    <div class="layout">
+      <aside class="toc">
+        <h2>目录</h2>
+        <ul>
+          <li><a href="#summary">一句话总结</a></li>
+          <li><a href="#background">背景与动机</a></li>
+          <li><a href="#method">方法详解</a>
+            <ul class="sub-list">
+              <li><a href="#module1">模块 I：Collaborative-aware Representation</a></li>
+              <li><a href="#module2">模块 II：Hybrid Tokenization</a></li>
+              <li><a href="#module3">模块 III：Joint Optimization</a></li>
+            </ul>
+          </li>
+          <li><a href="#exp">实验结果</a></li>
+          <li><a href="#insight">个人理解</a></li>
+        </ul>
+      </aside>
+
+      <main class="content">
+        <section class="section" id="summary">
+          <h2>一句话总结</h2>
+          <p class="lead">这篇论文的核心观点是：<strong>Item ID 本质上是孤立符号，难以共享知识，也不利于大模型 scaling；而 Semantic Tokens 位于更稳定、可共享的语义空间，更适合大规模排序模型持续扩张。</strong></p>
+          <div class="paper-info">
+            <p><strong>原文链接：</strong><a href="https://arxiv.org/abs/2601.22694" target="_blank" rel="noreferrer">https://arxiv.org/abs/2601.22694</a></p>
+            <p><strong>代码状态：</strong>未开源</p>
+            <p><strong>当前版本：</strong>基于你桌面 `paper-notes.md` 的 TRM 解读，转换为单文件 HTML 展示。</p>
+          </div>
+          <div class="highlight">
+            <strong>核心贡献：</strong>提出 TRM 框架，从 <strong>协同感知表示学习</strong>、<strong>混合 tokenization</strong>、<strong>联合优化</strong> 三个层面系统解决“语义 token 替代 item ID 后老 item 性能下降”的问题，并在线上搜索场景验证效果。
+          </div>
+        </section>
+
+        <section class="section" id="background">
+          <h2>背景与动机</h2>
+          <p>推荐系统中的大型排序模型通常把每个 item 视为一个独立的 ID，再为它分配一个独立 embedding。这种方式简单直接，但一旦 item 集合快速演化，就会暴露出四个根本问题：</p>
+          <ol>
+            <li><strong>冷启动问题</strong>：新 item 没有足够点击和交互，embedding 训练不充分。</li>
+            <li><strong>知识遗忘</strong>：旧 item 退役后，embedding 中承载的知识一起消失，无法迁移给新 item。</li>
+            <li><strong>分布不稳定</strong>：item ID 集合不断变化，导致 sparse 表分布波动，dense 参数也更难稳定收敛。</li>
+            <li><strong>扩展瓶颈</strong>：embedding table 随 item 数量线性膨胀，参数巨大，但知识共享能力很差。</li>
+          </ol>
+
+          <figure>
+            <img src="https://arxiv.org/html/2601.22694v1/x1.png" alt="Figure 1: ID-based vs Token-based Scaling 对比" />
+            <figcaption>Figure 1：ID-based 模型在 scaling up 时 norm variance 波动显著，token-based 模型分布更平滑、更稳定；同时图中点出了 new ID emerging 和 old ID retirement 两个核心问题。</figcaption>
+          </figure>
+
+          <div class="highlight">
+            <strong>论文的问题意识非常明确：</strong>不是简单证明“token 比 ID 好”，而是要回答：<strong>为什么 token 更适合 scaling？以及为什么已有 semantic token 方法对老 item 会掉点？</strong>
+          </div>
+
+          <p>作者给出的理论直觉是：Semantic Token 构成一个更封闭、更稳定、更有结构的集合。根据 scaling law，若损失满足</p>
+          $$
+          L \propto N^{-\beta}
+          $$
+          <p>那么更大的 <span>$\beta$</span> 就意味着更陡的扩展收益曲线。作者认为 token-based 表示具有更小的有效维度和更好的语义平滑性，因此更容易获得更大的 <span>$\beta$</span>。</p>
+
+          <div class="note">
+            相关工作如 TIGER、OneRec、SemID 已尝试用 semantic token 替代 item ID，但它们在新 item 上常有优势，在老 item 上却容易掉点。TRM 的真正创新点，在于把这个现象拆开讲清楚，并给出有针对性的解决方案。
+          </div>
+        </section>
+
+        <section class="section" id="method">
+          <h2>方法详解</h2>
+          <p>TRM（Token-based Recommendation Model）由三个模块组成：先学一个“带用户行为语义”的 item 表示，再把它 token 化，同时保住泛化和记忆，最后用判别式 + 生成式联合训练把 token 结构吃干榨尽。</p>
+
+          <figure>
+            <img src="https://arxiv.org/html/2601.22694v1/x2.png" alt="Figure 2: TRM 整体框架" />
+            <figcaption>Figure 2：TRM 框架全貌。左侧是协同感知的表示学习，中间是 gen-token 与 mem-token 的混合 tokenization，右侧是点击率预测与 semantic token 生成的联合优化。</figcaption>
+          </figure>
+
+          <h3 id="module1">模块 I：Collaborative-aware Representation</h3>
+          <p>目标是学习一个既懂内容语义、又懂用户行为偏好的 item embedding，作为后续 tokenization 的基础。</p>
+
+          <h4>第一阶段：In-domain Captioning</h4>
+          <p>作者先用短视频领域数据微调多模态大模型（文中用的是 Qwen2.5-VL），让模型学会理解视频帧、标题、ASR 和 OCR，并生成符合该业务域的 caption。损失函数是标准自回归生成目标：</p>
+          $$
+          \mathcal{L}_{cap} = -\mathbb{E}_{(V,T)} \sum_{k=1}^{|T|} \log P\bigl(t_k \mid t_1,\ldots,t_{k-1}, V;\, \theta\bigr)
+          $$
+
+          <h4>第二阶段：Collaborative Alignment</h4>
+          <p>仅靠内容语义还不够，因为推荐系统真正关心的是“用户视角下什么内容相近”。所以第二阶段再引入协同过滤信号，用对比学习把 embedding 朝用户行为空间拉齐：</p>
+          $$
+          \mathcal{L}_{align} = -\mathbb{E}_{(a,b)\in\mathcal{P}} \log \frac{\exp(\mathrm{sim}(h_a,h_b)/\tau)}{\sum_{b'\in\mathcal{B}} \exp(\mathrm{sim}(h_a,h_{b'})/\tau)}
+          $$
+          <p>最终表示学习总损失为：</p>
+          $$
+          \mathcal{L}_{rep} = \mathcal{L}_{cap} + \lambda_{align} \cdot \mathcal{L}_{align}
+          $$
+
+          <div class="two-col">
+            <div class="mini-card">
+              <h4>直觉例子</h4>
+              <p>视频 A 是“做蛋糕”，视频 B 是“做茶点”。从画面和文本看，它们可能都属于“甜品制作”，语义很近。</p>
+            </div>
+            <div class="mini-card">
+              <h4>为什么要引入协同信号</h4>
+              <p>如果 A 和 B 的受众完全不同，纯内容表示会把它们放太近；加入协同行为后，两者会被拉开，得到更符合推荐目标的 embedding。</p>
+            </div>
+          </div>
+
+          <h3 id="module2">模块 II：Hybrid Tokenization</h3>
+          <p>这是本文最核心的创新。作者发现：<strong>直接把 embedding 量化成 semantic tokens，确实利于新 item 泛化，但会损伤老 item 的记忆能力。</strong></p>
+
+          <figure>
+            <img src="https://arxiv.org/html/2601.22694v1/x3.png" alt="Figure 3: AUC Gain vs Item Lifetime" />
+            <figcaption>Figure 3：已有 token-based 方法在新 item 上常有收益，但在老 item 上会明显掉点；TRM 的 Hybrid Tokens 则在不同 item 生命周期上都保持正向收益。</figcaption>
+          </figure>
+
+          <h4>问题的根因</h4>
+          <p>RQ-Kmeans 等残差量化方法本质上是粗粒度聚类，只能给出类似 <span>$[s_1, s_2, \ldots, s_n]$</span> 的 token 序列，但这些 token 的简单拼接或求和，并不能表达 <strong>token 组合语义</strong>。</p>
+          <blockquote>
+            例如：如果 token_3 表示“蛋糕”，token_16 表示“蜡烛”，那么 $[3,16]$ 的简单组合并不会天然表达“生日”这个语义概念。
+          </blockquote>
+
+          <h4>TRM 的解决方案：两类 token 同时保留</h4>
+          <ul>
+            <li><strong>Gen-tokens</strong>：由 RQ-Kmeans 生成，总数约 20,480，负责捕获粗粒度语义，适合新 item 与长尾 item 的泛化。</li>
+            <li><strong>Mem-tokens</strong>：基于 BPE 生成，总数最多 20M，负责记住高频 token 组合，对老 item 尤其重要。</li>
+          </ul>
+
+          <p>最终二者通过 Wide &amp; Deep 结构融合：</p>
+          $$
+          h_{hybrid} = h_{deep}(\mathrm{gen\text{-}tokens}) + h_{wide}(\mathrm{mem\text{-}tokens})
+          $$
+
+          <div class="highlight">
+            <strong>可以把它理解为：</strong>gen-token 负责“这个 item 大概属于哪类内容”，mem-token 负责“这个 item 作为老 item，到底有哪些高频组合模式需要被记住”。前者偏泛化，后者偏记忆。
+          </div>
+
+          <figure>
+            <img src="https://arxiv.org/html/2601.22694v1/x5.png" alt="Figure 5: Mem-token 数量 vs AUC Gain" />
+            <figcaption>Figure 5：随着 mem-token 数量增加，各生命周期 item 的 AUC 增益同步提升，在约 20M 时趋于饱和；老 item 的收益最大，印证 mem-token 的主要价值在“保记忆”。</figcaption>
+          </figure>
+
+          <h3 id="module3">模块 III：Joint Optimization</h3>
+          <p>如果只把 token 当普通离散特征喂给排序模型，那么 token 的层级结构没有被真正利用。TRM 因此加入生成式目标，让模型显式学习 token 序列中的依赖关系。</p>
+
+          <h4>判别式目标：预测用户行为</h4>
+          $$
+          \mathcal{L}_d = \mathbb{E}_{(X_Q,X_I,X_U,Y)}\; \mathrm{BCE}\!\bigl(Y, P(\hat Y \mid X_Q,X_I,X_U;\,\theta_d)\bigr)
+          $$
+
+          <h4>生成式目标：对正样本 token 序列做 next-token prediction</h4>
+          $$
+          \mathcal{L}_g = \mathbb{E}_{(X_Q,X_U,Y)}\; \mathbf{1}[Y=1] \cdot \sum_{j=1}^{L} \mathrm{CE}\!\bigl(s_j, P(\hat s_j \mid X_Q,X_U,s_1,\ldots,s_{j-1};\,\theta_g)\bigr)
+          $$
+
+          <h4>联合目标</h4>
+          $$
+          \mathcal{L} = \mathcal{L}_d + \lambda \cdot \mathcal{L}_g \qquad (\lambda = 0.1)
+          $$
+
+          <p>这里的关键点不是“多加一个 loss”，而是：token 序列本身有层级结构，前几个 token 决定粗类，后几个 token 决定细粒度语义。NTP loss 会强制模型把这种结构学进去，而不仅仅把 token 当离散 ID 使用。</p>
+        </section>
+
+        <section class="section" id="exp">
+          <h2>实验结果</h2>
+
+          <h3>主实验：效果和存储同时提升</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>模型</th>
+                <th>CTR AUC</th>
+                <th>Real Play AUC</th>
+                <th>Dense Param</th>
+                <th>Sparse Param</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>RankMixer (ID)</td>
+                <td>+0.58%</td>
+                <td>+0.76%</td>
+                <td>335M</td>
+                <td>7.52T</td>
+              </tr>
+              <tr>
+                <td>SEMID Token</td>
+                <td>+0.56%</td>
+                <td>+0.75%</td>
+                <td>345M</td>
+                <td>5.08T</td>
+              </tr>
+              <tr>
+                <td><strong>TRM-RankMixer</strong></td>
+                <td><strong>+0.65%</strong></td>
+                <td><strong>+0.85%</strong></td>
+                <td><strong>352M</strong></td>
+                <td><strong>5.07T</strong></td>
+              </tr>
+            </tbody>
+          </table>
+          <p>TRM 在效果上优于 ID-based 和已有 token-based 基线，同时把 sparse 参数从 7.52T 降到 5.07T，节省约 <strong>32.6%</strong> 的存储。</p>
+
+          <h3>Scaling Law：规模越大，TRM 越占优</h3>
+          <figure>
+            <img src="https://arxiv.org/html/2601.22694v1/x4.png" alt="Figure 4: Scaling Behavior 对比" />
+            <figcaption>Figure 4：随着 dense 参数量和 FLOPs 增加，TRM 的 qAUC 提升曲线持续上扬，而多个 ID-based 大模型逐渐饱和。</figcaption>
+          </figure>
+
+          <table>
+            <thead>
+              <tr>
+                <th>模型</th>
+                <th>Dense Params</th>
+                <th>QAUC Gain</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>WuKong (ID)</td>
+                <td>约 1.9B</td>
+                <td>饱和于 +0.55%</td>
+              </tr>
+              <tr>
+                <td>SEMID Token</td>
+                <td>1843M</td>
+                <td>+0.68%</td>
+              </tr>
+              <tr>
+                <td><strong>TRM-RankMixer</strong></td>
+                <td><strong>1888M</strong></td>
+                <td><strong>+0.75%</strong></td>
+              </tr>
+            </tbody>
+          </table>
+
+          <h3>消融实验：Hybrid Tokenization 贡献最大</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>移除项</th>
+                <th>CTR AUC</th>
+                <th>CTR QAUC</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>w/o Collaborative Alignment</td>
+                <td>−0.05%</td>
+                <td>−0.03%</td>
+              </tr>
+              <tr>
+                <td><strong>w/o Hybrid Tokenization</strong></td>
+                <td><strong>−0.09%</strong></td>
+                <td><strong>−0.07%</strong></td>
+              </tr>
+              <tr>
+                <td>w/o Generative Objective</td>
+                <td>−0.05%</td>
+                <td>−0.05%</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <h3>在线 A/B：业务指标也提升</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>指标</th>
+                <th>提升</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>搜索活跃天数</td><td>+0.26%</td></tr>
+              <tr><td>更换查询率</td><td>−0.75%</td></tr>
+              <tr><td>严格 CTR</td><td>+0.39%</td></tr>
+              <tr><td>点赞率</td><td>+1.51%</td></tr>
+              <tr><td>评论率</td><td>+1.80%</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="section" id="insight">
+          <h2>个人理解</h2>
+
+          <h3>这篇论文最强的地方</h3>
+          <ol>
+            <li><strong>把问题拆对了</strong>：不是停留在“token 好像更先进”的表面，而是具体指出已有 semantic token 方法为什么会在老 item 上掉点。</li>
+            <li><strong>方法设计有对应关系</strong>：Collaborative-aware 解决“内容语义不等于用户语义”，Hybrid Tokenization 解决“泛化与记忆冲突”，Joint Optimization 解决“token 结构没有被学到”。</li>
+            <li><strong>理论和工程两头都站住了</strong>：既给出 scaling law 的理论解释，也做了线上 A/B，说明它不是只在论文里成立。</li>
+          </ol>
+
+          <h3>我觉得还可以追问的点</h3>
+          <ol>
+            <li><strong>链路较重</strong>：MLLM 预训练、RQ-Kmeans、BPE、联合训练，这整套流程对工程团队要求很高。</li>
+            <li><strong>极新 item 收益仍有限</strong>：mem-token 对老 item 提升明显，但对刚上线的新 item 额外帮助不大。</li>
+            <li><strong>生成目标只用正样本</strong>：负样本 token 结构没有被系统利用，后续可能还有提升空间。</li>
+          </ol>
+
+          <blockquote>
+            <strong>核心 takeaway：</strong>Item ID 的问题在于它把每个 item 当成孤立符号；Semantic Token 的优势在于它把 item 放进了一个可共享、可组合、可扩展的语义空间。对大模型来说，后者显然更适合作为长期演进的基础设施。
+          </blockquote>
+        </section>
+      </main>
+    </div>
+
+    <div class="footer">已生成为独立 HTML，可直接用浏览器打开查看；公式由 KaTeX 在页面加载后渲染。</div>
+  </div>
+</body>
+</html>

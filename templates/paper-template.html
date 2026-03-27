@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>论文解读模板</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #667085;
+      --line: #e5e7eb;
+      --primary: #2563eb;
+      --shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+      --radius: 18px;
+      --max: 960px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: linear-gradient(180deg, #f8fbff 0%, var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.8;
+    }
+    .page {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 32px 20px 64px;
+    }
+    .hero, .section {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 24px;
+      margin-bottom: 18px;
+    }
+    .eyebrow {
+      display: inline-block;
+      padding: 6px 12px;
+      background: #eff6ff;
+      color: var(--primary);
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+    h1 { margin: 0 0 8px; font-size: 32px; }
+    h2 { margin: 0 0 12px; font-size: 24px; }
+    h3 { margin: 20px 0 10px; font-size: 18px; }
+    .subtitle, .muted { color: var(--muted); }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+    .meta-card {
+      border: 1px solid #e7eefb;
+      border-radius: 14px;
+      padding: 12px 14px;
+      background: #fbfdff;
+    }
+    .meta-label { color: var(--muted); font-size: 12px; }
+    .meta-value { font-weight: 700; }
+    .highlight {
+      background: #eff6ff;
+      border: 1px solid #dbeafe;
+      border-radius: 14px;
+      padding: 14px 16px;
+    }
+    code {
+      background: #f3f4f6;
+      border-radius: 8px;
+      padding: 2px 6px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    @media (max-width: 760px) {
+      .meta-grid { grid-template-columns: 1fr 1fr; }
+      h1 { font-size: 28px; }
+    }
+    @media (max-width: 520px) {
+      .meta-grid { grid-template-columns: 1fr; }
+      .page { padding: 16px 12px 40px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="hero">
+      <div class="eyebrow">论文解读模板</div>
+      <h1>这里替换成你的论文标题</h1>
+      <p class="subtitle">这里替换成英文标题 / 副标题</p>
+
+      <div class="meta-grid">
+        <div class="meta-card">
+          <div class="meta-label">作者</div>
+          <div class="meta-value">作者名</div>
+        </div>
+        <div class="meta-card">
+          <div class="meta-label">年份</div>
+          <div class="meta-value">2026</div>
+        </div>
+        <div class="meta-card">
+          <div class="meta-label">来源</div>
+          <div class="meta-value">arXiv / Conference</div>
+        </div>
+        <div class="meta-card">
+          <div class="meta-label">核心主题</div>
+          <div class="meta-value">一句话概括</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>一句话总结</h2>
+      <div class="highlight">
+        这里写 2-4 句话，说明这篇论文解决什么问题、核心方法是什么、结果如何。
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>论文信息</h2>
+      <ul>
+        <li><strong>原文链接：</strong><a href="https://arxiv.org/" target="_blank" rel="noreferrer">替换成论文链接</a></li>
+        <li><strong>任务类型：</strong>推荐 / NLP / CV / 多模态 / 系统</li>
+        <li><strong>你的结论：</strong>值不值得继续深挖</li>
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2>背景与动机</h2>
+      <p>这里描述论文为什么要做这件事，现有方法的瓶颈是什么。</p>
+    </section>
+
+    <section class="section">
+      <h2>方法详解</h2>
+      <h3>模块一</h3>
+      <p>写核心模块、输入输出、关键机制。</p>
+      <h3>模块二</h3>
+      <p>补充创新点和直觉理解。</p>
+    </section>
+
+    <section class="section">
+      <h2>实验结果</h2>
+      <p>这里写指标、对比基线、消融实验、线上结果。</p>
+    </section>
+
+    <section class="section">
+      <h2>个人理解</h2>
+      <ul>
+        <li>这篇论文最强的点是什么</li>
+        <li>它的局限是什么</li>
+        <li>和你当前工作的关联点是什么</li>
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2>新增到博客时还要做什么</h2>
+      <ol>
+        <li>把本文件复制到 <code>blog/posts/你的文章名.html</code></li>
+        <li>替换页面内容</li>
+        <li>在 <code>blog/data/posts.js</code> 里补一条索引</li>
+        <li>重新打开 <code>blog/index.html</code> 检查展示是否正常</li>
+      </ol>
+      <p class="muted">提示：如果你已经有现成 HTML 页面，也可以直接放进 <code>blog/posts/</code>，不必使用这个模板。</p>
+    </section>
+  </div>
+</body>
+</html>
