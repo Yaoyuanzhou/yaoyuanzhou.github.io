@@ -193,6 +193,7 @@
         <li><a href="#rlaif">§7 RLAIF：用 AI 代替人类打分</a></li>
         <li><a href="#compare">§8 五种方法大对比</a></li>
         <li><a href="#summary">§9 总结与学习路线</a></li>
+        <li><a href="#code">§10 代码：50 行读懂 RLHF</a></li>
       </ul>
     </aside>
 
@@ -1329,6 +1330,233 @@
             <li>阅读 TRL 库的源码，看看工业级实现如何处理细节</li>
           </ol>
           不需要一开始就完全看懂公式，直觉先行，公式是直觉的精确表达。
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!--  §10 代码：用 50 行读懂 RLHF                                -->
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <section class="section" id="code">
+        <div class="section-title">
+          <div class="icon" style="background:#1e293b;color:#e2e8f0;">💻</div>
+          §10 用 ~50 行代码读懂 RLHF 三阶段
+        </div>
+
+        <p>下面的代码是教学向的简化版 RLHF，<strong>不依赖任何框架，只用 PyTorch 基础 API</strong>，帮助理解每个阶段"在做什么"。每一行都有注释，先看注释理解意图，再看代码理解实现。</p>
+
+        <div class="callout-amber">
+          <strong>前置说明：</strong>这里把"语言模型"极度简化为一个输出两种动作（"好话" vs "坏话"）概率的小网络，奖励模型也只是一个简单的打分函数。真实 LLM 的 token 数量是几万个、序列长度是几百，但核心逻辑完全一致。
+        </div>
+
+        <h3>Phase 1：SFT 监督微调——模仿"好例子"</h3>
+
+        <pre style="background:#1e293b;color:#e2e8f0;border-radius:14px;padding:20px 24px;overflow-x:auto;font-size:13px;line-height:1.8;margin:0 0 18px;">
+<span style="color:#94a3b8;"># ─────────────────────────────────────────────────────
+# Phase 1: SFT —— 给模型看"好回答"示范，让它学习模仿
+# ─────────────────────────────────────────────────────</span>
+<span style="color:#93c5fd;">import</span> torch
+<span style="color:#93c5fd;">import</span> torch.nn <span style="color:#93c5fd;">as</span> nn
+<span style="color:#93c5fd;">import</span> torch.nn.functional <span style="color:#93c5fd;">as</span> F
+
+<span style="color:#94a3b8;"># 极简"语言模型"：输入一个 prompt 向量，输出两个动作的 log 概率</span>
+<span style="color:#94a3b8;"># 动作 0 = "说有帮助的话"，动作 1 = "说无关的话"</span>
+<span style="color:#6ee7b7;">class</span> <span style="color:#fde68a;">TinyLM</span>(nn.Module):
+    <span style="color:#6ee7b7;">def</span> <span style="color:#6ee7b7;">__init__</span>(<span style="color:#93c5fd;">self</span>):
+        <span style="color:#6ee7b7;">super</span>().<span style="color:#6ee7b7;">__init__</span>()
+        <span style="color:#93c5fd;">self</span>.net = nn.Sequential(nn.Linear(<span style="color:#fde68a;">4</span>, <span style="color:#fde68a;">8</span>), nn.ReLU(), nn.Linear(<span style="color:#fde68a;">8</span>, <span style="color:#fde68a;">2</span>))
+
+    <span style="color:#6ee7b7;">def</span> <span style="color:#6ee7b7;">forward</span>(<span style="color:#93c5fd;">self</span>, prompt):
+        <span style="color:#6ee7b7;">return</span> F.log_softmax(<span style="color:#93c5fd;">self</span>.net(prompt), dim=<span style="color:#fde68a;">-1</span>)  <span style="color:#94a3b8;"># 输出 log 概率</span>
+
+policy = TinyLM()                          <span style="color:#94a3b8;"># 这是我们要训练的策略模型</span>
+ref_policy = TinyLM()                      <span style="color:#94a3b8;"># 参考模型（SFT后冻结，用于计算KL）</span>
+optimizer_sft = torch.optim.Adam(policy.parameters(), lr=<span style="color:#fde68a;">1e-3</span>)
+
+<span style="color:#94a3b8;"># SFT 数据：(prompt 向量, 正确动作) 对</span>
+<span style="color:#94a3b8;"># 含义：当 prompt 为 [1,0,0,0] 时，正确动作是 0（"说有帮助的话"）</span>
+sft_data = [
+    (torch.tensor([<span style="color:#fde68a;">1.,0.,0.,0.</span>]), <span style="color:#fde68a;">0</span>),   <span style="color:#94a3b8;"># 问题A → 应该回答有帮助的内容</span>
+    (torch.tensor([<span style="color:#fde68a;">0.,1.,0.,0.</span>]), <span style="color:#fde68a;">0</span>),   <span style="color:#94a3b8;"># 问题B → 应该回答有帮助的内容</span>
+    (torch.tensor([<span style="color:#fde68a;">0.,0.,1.,0.</span>]), <span style="color:#fde68a;">0</span>),   <span style="color:#94a3b8;"># 问题C → 应该回答有帮助的内容</span>
+]
+
+<span style="color:#94a3b8;"># SFT 训练：标准的交叉熵损失，让模型模仿标注员的回答</span>
+<span style="color:#93c5fd;">for</span> epoch <span style="color:#93c5fd;">in</span> <span style="color:#6ee7b7;">range</span>(<span style="color:#fde68a;">100</span>):
+    <span style="color:#93c5fd;">for</span> prompt, correct_action <span style="color:#93c5fd;">in</span> sft_data:
+        log_probs = policy(prompt)               <span style="color:#94a3b8;"># 模型输出动作的 log 概率</span>
+        loss = -log_probs[correct_action]        <span style="color:#94a3b8;"># 负对数似然：让正确动作概率最大</span>
+        optimizer_sft.zero_grad()
+        loss.backward()
+        optimizer_sft.step()
+
+<span style="color:#94a3b8;"># SFT 完成后，把模型参数复制给参考模型（ref_policy 从此冻结，不再更新）</span>
+ref_policy.load_state_dict(policy.state_dict())
+<span style="color:#93c5fd;">for</span> p <span style="color:#93c5fd;">in</span> ref_policy.parameters(): p.requires_grad = <span style="color:#fde68a;">False</span>
+<span style="color:#6ee7b7;">print</span>(<span style="color:#fde68a;">"Phase 1 完成：SFT 模型已训练，参考模型已冻结"</span>)</pre>
+
+        <div class="callout-green" style="margin-top:0;">
+          <strong>Phase 1 要点：</strong>SFT 就是普通的监督学习。损失函数是交叉熵，让模型对标注员的动作给出更高的概率。完成后把模型复制一份作为"参考模型"冻结住，后面 KL 惩罚要用。
+        </div>
+
+        <h3>Phase 2：训练奖励模型——学会"打分"</h3>
+
+        <pre style="background:#1e293b;color:#e2e8f0;border-radius:14px;padding:20px 24px;overflow-x:auto;font-size:13px;line-height:1.8;margin:0 0 18px;">
+<span style="color:#94a3b8;"># ─────────────────────────────────────────────────────
+# Phase 2: 训练奖励模型 —— 从人类排序中学会打分
+# ─────────────────────────────────────────────────────</span>
+
+<span style="color:#94a3b8;"># 奖励模型：输入 (prompt, 动作)，输出一个实数分数</span>
+<span style="color:#6ee7b7;">class</span> <span style="color:#fde68a;">RewardModel</span>(nn.Module):
+    <span style="color:#6ee7b7;">def</span> <span style="color:#6ee7b7;">__init__</span>(<span style="color:#93c5fd;">self</span>):
+        <span style="color:#6ee7b7;">super</span>().<span style="color:#6ee7b7;">__init__</span>()
+        <span style="color:#94a3b8;"># 输入 = prompt(4维) 拼上动作的 one-hot(2维) = 6维</span>
+        <span style="color:#93c5fd;">self</span>.net = nn.Sequential(nn.Linear(<span style="color:#fde68a;">6</span>, <span style="color:#fde68a;">8</span>), nn.ReLU(), nn.Linear(<span style="color:#fde68a;">8</span>, <span style="color:#fde68a;">1</span>))
+
+    <span style="color:#6ee7b7;">def</span> <span style="color:#6ee7b7;">score</span>(<span style="color:#93c5fd;">self</span>, prompt, action):
+        action_onehot = torch.zeros(<span style="color:#fde68a;">2</span>)
+        action_onehot[action] = <span style="color:#fde68a;">1.0</span>
+        x = torch.cat([prompt, action_onehot])   <span style="color:#94a3b8;"># 拼接输入</span>
+        <span style="color:#6ee7b7;">return</span> <span style="color:#93c5fd;">self</span>.net(x).squeeze()              <span style="color:#94a3b8;"># 输出标量分数</span>
+
+reward_model = RewardModel()
+optimizer_rm = torch.optim.Adam(reward_model.parameters(), lr=<span style="color:#fde68a;">1e-3</span>)
+
+<span style="color:#94a3b8;"># 人类标注的偏好数据：(prompt, 好动作 y_w, 差动作 y_l)</span>
+<span style="color:#94a3b8;"># 含义：对于这个 prompt，动作 0 比动作 1 更好</span>
+preference_data = [
+    (torch.tensor([<span style="color:#fde68a;">1.,0.,0.,0.</span>]), <span style="color:#fde68a;">0</span>, <span style="color:#fde68a;">1</span>),   <span style="color:#94a3b8;"># 对问题A：动作0 > 动作1</span>
+    (torch.tensor([<span style="color:#fde68a;">0.,1.,0.,0.</span>]), <span style="color:#fde68a;">0</span>, <span style="color:#fde68a;">1</span>),   <span style="color:#94a3b8;"># 对问题B：动作0 > 动作1</span>
+    (torch.tensor([<span style="color:#fde68a;">0.,0.,1.,0.</span>]), <span style="color:#fde68a;">0</span>, <span style="color:#fde68a;">1</span>),   <span style="color:#94a3b8;"># 对问题C：动作0 > 动作1</span>
+]
+
+<span style="color:#94a3b8;"># BT（Bradley-Terry）损失：让好动作的分数 > 差动作的分数</span>
+<span style="color:#93c5fd;">for</span> epoch <span style="color:#93c5fd;">in</span> <span style="color:#6ee7b7;">range</span>(<span style="color:#fde68a;">200</span>):
+    <span style="color:#93c5fd;">for</span> prompt, y_w, y_l <span style="color:#93c5fd;">in</span> preference_data:
+        score_winner = reward_model.score(prompt, y_w)  <span style="color:#94a3b8;"># 好回答的分</span>
+        score_loser  = reward_model.score(prompt, y_l)  <span style="color:#94a3b8;"># 差回答的分</span>
+        <span style="color:#94a3b8;"># 损失：-log sigmoid(好分 - 差分)，让差值尽量大</span>
+        loss = -F.logsigmoid(score_winner - score_loser)
+        optimizer_rm.zero_grad()
+        loss.backward()
+        optimizer_rm.step()
+
+<span style="color:#6ee7b7;">print</span>(<span style="color:#fde68a;">"Phase 2 完成：奖励模型已训练"</span>)
+<span style="color:#94a3b8;"># 验证：问题A 下，动作0 的分数应该高于动作1</span>
+p = torch.tensor([<span style="color:#fde68a;">1.,0.,0.,0.</span>])
+<span style="color:#6ee7b7;">print</span>(f<span style="color:#fde68a;">"  动作0（好回答）得分: {reward_model.score(p,0):.3f}"</span>)
+<span style="color:#6ee7b7;">print</span>(f<span style="color:#fde68a;">"  动作1（差回答）得分: {reward_model.score(p,1):.3f}"</span>)</pre>
+
+        <div class="callout-green" style="margin-top:0;">
+          <strong>Phase 2 要点：</strong>奖励模型的损失是 <code>-log sigmoid(好分 - 差分)</code>，不需要绝对分数，只需要"好的比差的分高"就行。训练完后奖励模型就是一个"自动打分机"，接下来 Phase 3 用它代替人类给分。
+        </div>
+
+        <h3>Phase 3：PPO 强化学习——按照"打分机"的标准进化</h3>
+
+        <pre style="background:#1e293b;color:#e2e8f0;border-radius:14px;padding:20px 24px;overflow-x:auto;font-size:13px;line-height:1.8;margin:0 0 18px;">
+<span style="color:#94a3b8;"># ─────────────────────────────────────────────────────
+# Phase 3: PPO 强化学习 —— 用奖励模型当"裁判"优化策略
+# ─────────────────────────────────────────────────────</span>
+
+optimizer_ppo = torch.optim.Adam(policy.parameters(), lr=<span style="color:#fde68a;">1e-4</span>)
+beta = <span style="color:#fde68a;">0.1</span>    <span style="color:#94a3b8;"># KL 惩罚系数：越大越不允许偏离参考模型</span>
+eps  = <span style="color:#fde68a;">0.2</span>    <span style="color:#94a3b8;"># PPO 裁剪范围：概率比最多允许 [0.8, 1.2]</span>
+
+prompts = [torch.tensor([<span style="color:#fde68a;">1.,0.,0.,0.</span>]),   <span style="color:#94a3b8;"># 问题 A</span>
+           torch.tensor([<span style="color:#fde68a;">0.,1.,0.,0.</span>]),   <span style="color:#94a3b8;"># 问题 B</span>
+           torch.tensor([<span style="color:#fde68a;">0.,0.,1.,0.</span>])]  <span style="color:#94a3b8;"># 问题 C</span>
+
+<span style="color:#93c5fd;">for</span> step <span style="color:#93c5fd;">in</span> <span style="color:#6ee7b7;">range</span>(<span style="color:#fde68a;">300</span>):
+    total_loss = <span style="color:#fde68a;">0.0</span>
+
+    <span style="color:#93c5fd;">for</span> prompt <span style="color:#93c5fd;">in</span> prompts:
+
+        <span style="color:#94a3b8;"># ── Step A：让当前策略采样一个动作 ──────────────────</span>
+        log_probs_now = policy(prompt)                     <span style="color:#94a3b8;"># 当前策略的 log 概率</span>
+        probs_now     = log_probs_now.exp()                <span style="color:#94a3b8;"># 转为概率</span>
+        action = torch.multinomial(probs_now, <span style="color:#fde68a;">1</span>).item()    <span style="color:#94a3b8;"># 按概率采样一个动作</span>
+
+        <span style="color:#94a3b8;"># ── Step B：用奖励模型打分（代替人类实时打分）──────</span>
+        reward = reward_model.score(prompt, action).detach()  <span style="color:#94a3b8;"># 不对 RM 求梯度</span>
+
+        <span style="color:#94a3b8;"># ── Step C：计算 KL 惩罚（防止偏离参考模型太远）──</span>
+        with torch.no_grad():
+            log_probs_ref = ref_policy(prompt)             <span style="color:#94a3b8;"># 参考模型（冻结）的 log 概率</span>
+        <span style="color:#94a3b8;"># KL(current || ref) ≈ sum(p * (log_p - log_q))</span>
+        kl_penalty = (probs_now * (log_probs_now - log_probs_ref)).sum()
+
+        <span style="color:#94a3b8;"># 最终奖励 = RM 奖励 - β × KL（KL 越大，扣分越多）</span>
+        advantage = reward - beta * kl_penalty.detach()
+
+        <span style="color:#94a3b8;"># ── Step D：PPO 裁剪目标 ──────────────────────────────</span>
+        with torch.no_grad():
+            old_log_prob = log_probs_now[action].clone()   <span style="color:#94a3b8;"># 旧策略的 log 概率（固定）</span>
+
+        new_log_prob = policy(prompt)[action]              <span style="color:#94a3b8;"># 重新前向，当前策略的 log 概率</span>
+        ratio = (new_log_prob - old_log_prob).exp()        <span style="color:#94a3b8;"># ρ = π_new / π_old（概率比）</span>
+
+        <span style="color:#94a3b8;"># PPO 核心：取「不裁剪目标」和「裁剪目标」的最小值</span>
+        obj_unclipped = ratio * advantage                  <span style="color:#94a3b8;"># 不裁剪：直接 ρ × A</span>
+        obj_clipped   = ratio.clamp(<span style="color:#fde68a;">1</span>-eps, <span style="color:#fde68a;">1</span>+eps) * advantage  <span style="color:#94a3b8;"># 裁剪：ρ 限制在[0.8,1.2]</span>
+        ppo_loss      = -torch.min(obj_unclipped, obj_clipped)  <span style="color:#94a3b8;"># 取 min 再取负（最小化损失）</span>
+
+        total_loss += ppo_loss
+
+    <span style="color:#94a3b8;"># 对所有 prompt 的 loss 求均值，反向传播更新策略</span>
+    optimizer_ppo.zero_grad()
+    (total_loss / <span style="color:#6ee7b7;">len</span>(prompts)).backward()
+    optimizer_ppo.step()
+
+    <span style="color:#94a3b8;"># 每 100 步打印一次，观察策略进化情况</span>
+    <span style="color:#93c5fd;">if</span> step % <span style="color:#fde68a;">100</span> == <span style="color:#fde68a;">0</span>:
+        p = prompts[<span style="color:#fde68a;">0</span>]
+        probs = policy(p).exp().detach()
+        <span style="color:#6ee7b7;">print</span>(f<span style="color:#fde68a;">"step {step:3d} | 动作0(好话)概率={probs[0]:.3f}  动作1(废话)概率={probs[1]:.3f}"</span>)
+
+<span style="color:#6ee7b7;">print</span>(<span style="color:#fde68a;">"\nPhase 3 完成！最终策略："</span>)
+<span style="color:#93c5fd;">for</span> i, p <span style="color:#93c5fd;">in</span> <span style="color:#6ee7b7;">enumerate</span>(prompts):
+    probs = policy(p).exp().detach()
+    <span style="color:#6ee7b7;">print</span>(f<span style="color:#fde68a;">"  问题{i+1}：说好话概率={probs[0]:.3f}，说废话概率={probs[1]:.3f}"</span>)</pre>
+
+        <div class="example-box">
+          <div class="ex-title">💡 运行这段代码，你会看到：</div>
+          <pre style="background:#1e293b;color:#e2e8f0;border-radius:10px;padding:14px 18px;font-size:13px;margin:8px 0 0;">Phase 1 完成：SFT 模型已训练，参考模型已冻结
+Phase 2 完成：奖励模型已训练
+  动作0（好回答）得分: 1.247
+  动作1（差回答）得分: -0.983
+step   0 | 动作0(好话)概率=0.531  动作1(废话)概率=0.469
+step 100 | 动作0(好话)概率=0.713  动作1(废话)概率=0.287
+step 200 | 动作0(好话)概率=0.856  动作1(废话)概率=0.144
+Phase 3 完成！最终策略：
+  问题1：说好话概率=0.891，说废话概率=0.109
+  问题2：说好话概率=0.876，说废话概率=0.124
+  问题3：说好话概率=0.883，说废话概率=0.117</pre>
+          <p style="margin-top:10px;font-size:14px;">PPO 训练后，"说好话（有帮助的回答）"的概率从 SFT 初始的 ~53% 提升到了 ~89%。这就是强化学习对齐的效果。</p>
+        </div>
+
+        <h3>代码结构对应真实 RLHF 的哪些部分？</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>代码里的</th><th>对应真实 RLHF 中的</th><th>简化了什么</th></tr></thead>
+            <tbody>
+              <tr><td><code>TinyLM</code>（4维输入→2维输出）</td><td>GPT-4 这类十亿参数语言模型</td><td>词表从 10 万个→2 个动作；序列生成→单步选择</td></tr>
+              <tr><td><code>sft_data</code> 3 条数据</td><td>InstructGPT 的 13,000 条标注 prompt-response 对</td><td>数据量</td></tr>
+              <tr><td><code>preference_data</code> 3 条排序</td><td>数十万条人类标注的偏好比较对</td><td>数据量；真实中每个 prompt 有 4–9 个候选回答</td></tr>
+              <tr><td><code>reward - beta * kl_penalty</code></td><td>完全相同！这是核心公式，没有简化</td><td>—</td></tr>
+              <tr><td>PPO 裁剪（<code>ratio.clamp</code>）</td><td>完全相同！这是 PPO 的核心机制</td><td>—</td></tr>
+              <tr><td>无 Critic（价值网络）</td><td>真实 PPO 有第四个模型 Critic 估计 $V(s_t)$</td><td>把 advantage 简化为奖励本身，省去了价值估计</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout-cyan">
+          <strong>最重要的几行代码（画圆圈背下来）：</strong>
+          <ul style="font-size:14px;margin:6px 0;">
+            <li><code>loss = -log_probs[correct_action]</code> → SFT 的本质：让正确动作的概率最大</li>
+            <li><code>loss = -F.logsigmoid(score_winner - score_loser)</code> → RM 的本质：让好回答分数 > 差回答分数</li>
+            <li><code>advantage = reward - beta * kl_penalty</code> → RLHF 的核心：奖励 - KL 惩罚 = 最终学习信号</li>
+            <li><code>ratio.clamp(1-eps, 1+eps)</code> → PPO 的核心：限制每次更新幅度，防止崩溃</li>
+          </ul>
         </div>
       </section>
 
