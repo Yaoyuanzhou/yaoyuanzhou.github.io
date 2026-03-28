@@ -60,7 +60,7 @@
     .meta-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
     .meta-value { font-size: 14px; font-weight: 600; word-break: break-word; }
     .layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 22px; align-items: start; }
-    .toc { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; }
+    .toc { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; max-height: calc(100vh - 40px); overflow-y: auto; }
     .toc h2 { margin: 0 0 12px; font-size: 15px; color: var(--text); }
     .toc-list { list-style: none; margin: 0; padding: 0; }
     .toc-list li { margin: 0; }
