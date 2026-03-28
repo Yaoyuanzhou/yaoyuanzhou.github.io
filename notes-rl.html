@@ -149,6 +149,12 @@
       <h2>目录</h2>
       <ul class="toc-list">
         <li><a href="#tldr">一句话总结</a></li>
+        <li><a href="#pipeline">§0 大模型完整训练流水线</a>
+          <ul class="toc-sub">
+            <li><a href="#pipeline-overview">0.1 不只是「预训练 + RLHF」</a></li>
+            <li><a href="#rlhf-vs-algo">0.2 RLHF 是框架，PPO 是算法</a></li>
+          </ul>
+        </li>
         <li><a href="#pretrain">§1 预训练模型为什么不够用？</a>
           <ul class="toc-sub">
             <li><a href="#pretrain-what">1.1 预训练到底在做什么</a></li>
@@ -215,6 +221,234 @@
           GRPO = 让模型多写几个答案，自己和自己比，好的留下坏的丢掉；
           RLAIF = 裁判不用人了，换成另一个 AI 来打分。
         </blockquote>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!--  §0 大模型完整训练流水线                                        -->
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <section class="section" id="pipeline">
+        <div class="section-title">
+          <div class="icon" style="background:#ecfeff;">🗺️</div>
+          §0 大模型完整训练流水线——不只是「预训练 + RLHF」
+        </div>
+
+        <p>很多人以为大模型的训练就是「先预训练，然后 RLHF 一下就完事了」。实际上这是一个<strong>四阶段流水线</strong>，每个阶段解决不同的问题，缺一不可。</p>
+
+        <h3 id="pipeline-overview">0.1 完整四阶段流水线</h3>
+
+        <div class="flow-diagram">
+          <p style="font-weight:700;font-size:14px;margin:0 0 14px;">工业级 LLM（如 GPT-4、LLaMA-3、Claude）的完整训练路径</p>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+            <div style="background:#dbeafe;border:2px solid #93c5fd;border-radius:12px;padding:14px;">
+              <div style="font-weight:800;color:#1e40af;font-size:15px;margin-bottom:6px;">① 预训练</div>
+              <div style="font-size:13px;color:#1e3a5f;">在海量无标注文本（数万亿 token）上做下一词预测<br><br><strong>目标：</strong>让模型学会语言规律、积累世界知识<br><br><strong>成本：</strong>极高（数百万~数千万美元 GPU 费用）<br><br><strong>产物：</strong>Base Model（基础模型）</div>
+            </div>
+            <div style="background:#dcfce7;border:2px solid #86efac;border-radius:12px;padding:14px;">
+              <div style="font-weight:800;color:#166534;font-size:15px;margin-bottom:6px;">② SFT 监督微调</div>
+              <div style="font-size:13px;color:#14532d;">用数万条人工标注的高质量「prompt → 回答」对进行微调<br><br><strong>目标：</strong>让模型学会「对话格式」和「回答指令」<br><br><strong>成本：</strong>中等（标注费用 + 几百 GPU 小时）<br><br><strong>产物：</strong>SFT Model（指令模型）</div>
+            </div>
+            <div style="background:#fef3c7;border:2px solid #fcd34d;border-radius:12px;padding:14px;">
+              <div style="font-weight:800;color:#92400e;font-size:15px;margin-bottom:6px;">③ 偏好对齐</div>
+              <div style="font-size:13px;color:#78350f;">用人类偏好数据进行强化学习对齐<br><br><strong>目标：</strong>让模型输出「有帮助、无害、诚实」的回答<br><br><strong>方法：</strong>RLHF+PPO / DPO / GRPO…（本文的主题！）<br><br><strong>产物：</strong>Aligned Model（对齐模型）</div>
+            </div>
+            <div style="background:#fae8ff;border:2px solid #e879f9;border-radius:12px;padding:14px;">
+              <div style="font-weight:800;color:#701a75;font-size:15px;margin-bottom:6px;">④ 持续迭代</div>
+              <div style="font-size:13px;color:#4a044e;">上线后持续收集用户反馈，周期性再做 SFT + 对齐<br><br><strong>目标：</strong>修复对齐失败的 case，扩展能力边界<br><br><strong>方法：</strong>Red teaming + RLHF 循环<br><br><strong>产物：</strong>v2, v3, v4…</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout-amber">
+          <strong>⚠️ 常见误区：「预训练完直接 RLHF 就够了吧？」</strong><br>
+          不够。跳过 SFT 直接做 RLHF 效果很差——因为 RLHF 的奖励模型需要「还过得去的回答」才能做比较，预训练模型的原始输出太随机，奖励模型无法有效区分好坏。SFT 是让模型先「达到及格线」，RLHF 再「从及格提升到优秀」。两者缺一不可。
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：GPT-4 的训练流水线（公开信息还原）</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>阶段</th><th>数据量</th><th>时间（估算）</th><th>主要产物</th></tr></thead>
+              <tbody>
+                <tr><td>① 预训练</td><td>&gt;13 万亿 token（网页/书/代码）</td><td>数月，数千张 A100</td><td>GPT-4 Base</td></tr>
+                <tr><td>② SFT</td><td>数万条人工标注对话</td><td>数天</td><td>GPT-4 SFT</td></tr>
+                <tr><td>③ 偏好对齐（RLHF+PPO）</td><td>数十万条人类排名数据</td><td>数周（含奖励模型训练）</td><td>GPT-4（对外版本）</td></tr>
+                <tr><td>④ 持续迭代</td><td>用户反馈 + red team 数据</td><td>持续进行</td><td>GPT-4 Turbo / 4o…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <h3 id="rlhf-vs-algo">0.2 先搞清楚：RLHF 是框架，PPO / DPO / GRPO 是算法</h3>
+
+        <p>这是本文最容易混淆的地方，先用一张表彻底厘清：</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>概念</th><th>类型</th><th>回答的问题</th><th>类比</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>RLHF</strong><br><small>Reinforcement Learning from Human Feedback</small></td>
+                <td>训练<strong>框架</strong>（范式）</td>
+                <td>「学习信号从哪里来？」→ 来自人类反馈</td>
+                <td>减肥方案（整体策略）</td>
+              </tr>
+              <tr>
+                <td><strong>PPO</strong><br><small>Proximal Policy Optimization</small></td>
+                <td>优化<strong>算法</strong></td>
+                <td>「拿到学习信号后，怎么安全地更新模型参数？」</td>
+                <td>有氧运动（具体手段）</td>
+              </tr>
+              <tr>
+                <td><strong>DPO</strong><br><small>Direct Preference Optimization</small></td>
+                <td>优化<strong>算法</strong>（也是范式变体）</td>
+                <td>「能不能绕过 RL 循环，直接从偏好数据更新？」</td>
+                <td>力量训练（另一种手段）</td>
+              </tr>
+              <tr>
+                <td><strong>GRPO</strong><br><small>Group Relative Policy Optimization</small></td>
+                <td>优化<strong>算法</strong></td>
+                <td>「能不能去掉 Critic，靠组内对比估计优势？」</td>
+                <td>间歇训练（改良版有氧）</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="big-concept">
+          <div class="big-concept-title">🔑 关键关系：RLHF 包含 PPO，但不等于 PPO</div>
+          <div class="flow-diagram" style="margin:10px 0 0;">
+            <div style="font-size:13px;line-height:1.8;">
+              <strong>RLHF 框架 = </strong>
+              <span style="background:#dbeafe;border:1px solid #93c5fd;border-radius:6px;padding:3px 8px;">阶段 1：SFT（监督学习）</span>
+              &nbsp;+&nbsp;
+              <span style="background:#dcfce7;border:1px solid #86efac;border-radius:6px;padding:3px 8px;">阶段 2：训练奖励模型（对比学习）</span>
+              &nbsp;+&nbsp;
+              <span style="background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:3px 8px;">阶段 3：RL 优化（可以用 PPO，也可以换其他算法）</span>
+            </div>
+          </div>
+          <p style="margin-top:12px;font-size:14px;">
+            当有人说「用 RLHF 训练的模型」，他们通常指的是走了这个三阶段框架。<br>
+            当有人说「用 PPO 训练的模型」，他们在描述第三阶段用了 PPO 这个具体算法。<br>
+            这两句话不矛盾，大部分时候同时成立。<strong>DPO 则是把三个阶段简化为两个阶段</strong>（SFT + 直接偏好优化，跳过了奖励模型和 RL 循环）。
+          </p>
+        </div>
+
+        <div class="callout-green">
+          <strong>本文的定位：</strong>从 §1 开始，我们先讲「为什么需要对齐」，然后详细讲「RLHF 三阶段」，再深入每个算法（PPO / DPO / GRPO）。读完后你会清楚：整个流水线的每一步在干什么，以及每种算法解决了哪个具体问题。
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!--  §0 大模型完整训练流水线                                       -->
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <section class="section" id="pipeline">
+        <div class="section-title">
+          <div class="icon" style="background:#ecfeff;">🗺️</div>
+          §0 大模型完整训练流水线——不只是「预训练 + RLHF」
+        </div>
+
+        <p>很多人以为大模型的训练就是「先预训练，然后 RLHF 一下就完事了」。实际上这是一个<strong>四阶段流水线</strong>，每个阶段解决不同的问题，缺一不可。</p>
+
+        <h3 id="pipeline-overview">0.1 完整四阶段流水线</h3>
+
+        <div class="flow-diagram">
+          <p style="font-weight:700;font-size:14px;margin:0 0 14px;">工业级 LLM（如 GPT-4、LLaMA-3、Claude）的完整训练路径</p>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+            <div style="background:#dbeafe;border:2px solid #93c5fd;border-radius:12px;padding:14px;">
+              <div style="font-weight:800;color:#1e40af;font-size:15px;margin-bottom:6px;">① 预训练</div>
+              <div style="font-size:13px;color:#1e3a5f;">在海量无标注文本（数万亿 token）上做下一词预测<br><br><strong>目标：</strong>学会语言规律、积累世界知识<br><br><strong>成本：</strong>极高（数百万~数千万美元 GPU 费用）<br><br><strong>产物：</strong>Base Model（基础模型）</div>
+            </div>
+            <div style="background:#dcfce7;border:2px solid #86efac;border-radius:12px;padding:14px;">
+              <div style="font-weight:800;color:#166534;font-size:15px;margin-bottom:6px;">② SFT 监督微调</div>
+              <div style="font-size:13px;color:#14532d;">用数万条人工标注的高质量「prompt → 回答」对进行微调<br><br><strong>目标：</strong>让模型学会「对话格式」和「回答指令」<br><br><strong>成本：</strong>中等（标注费用 + 几百 GPU 小时）<br><br><strong>产物：</strong>SFT Model（指令模型）</div>
+            </div>
+            <div style="background:#fef3c7;border:2px solid #fcd34d;border-radius:12px;padding:14px;">
+              <div style="font-weight:800;color:#92400e;font-size:15px;margin-bottom:6px;">③ 偏好对齐</div>
+              <div style="font-size:13px;color:#78350f;">用人类偏好数据进行强化学习对齐<br><br><strong>目标：</strong>让模型输出「有帮助、无害、诚实」的回答<br><br><strong>方法：</strong>RLHF+PPO / DPO / GRPO…（本文的主题！）<br><br><strong>产物：</strong>Aligned Model（对齐模型）</div>
+            </div>
+            <div style="background:#fae8ff;border:2px solid #e879f9;border-radius:12px;padding:14px;">
+              <div style="font-weight:800;color:#701a75;font-size:15px;margin-bottom:6px;">④ 持续迭代</div>
+              <div style="font-size:13px;color:#4a044e;">上线后持续收集用户反馈，周期性再做 SFT + 对齐<br><br><strong>目标：</strong>修复对齐失败的 case，扩展能力边界<br><br><strong>方法：</strong>Red teaming + RLHF 循环<br><br><strong>产物：</strong>v2, v3, v4…</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout-amber">
+          <strong>⚠️ 常见误区：「预训练完直接 RLHF 就够了吧？」</strong><br>
+          不够。跳过 SFT 直接做 RLHF 效果很差——因为 RLHF 的奖励模型需要「还过得去的回答」才能做比较，预训练模型的原始输出太随机，奖励模型无法有效区分好坏。SFT 是让模型先「达到及格线」，RLHF 再「从及格提升到优秀」。两者缺一不可。
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：GPT-4 的训练流水线（公开信息还原）</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>阶段</th><th>数据量</th><th>时间（估算）</th><th>主要产物</th></tr></thead>
+              <tbody>
+                <tr><td>① 预训练</td><td>&gt;13 万亿 token（网页/书/代码）</td><td>数月，数千张 A100</td><td>GPT-4 Base</td></tr>
+                <tr><td>② SFT</td><td>数万条人工标注对话</td><td>数天</td><td>GPT-4 SFT</td></tr>
+                <tr><td>③ 偏好对齐（RLHF+PPO）</td><td>数十万条人类排序数据</td><td>数周（含奖励模型训练）</td><td>GPT-4（对外版本）</td></tr>
+                <tr><td>④ 持续迭代</td><td>用户反馈 + red team 数据</td><td>持续进行</td><td>GPT-4 Turbo / 4o…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <h3 id="rlhf-vs-algo">0.2 先搞清楚：RLHF 是框架，PPO / DPO / GRPO 是算法</h3>
+
+        <p>这是本文最容易混淆的地方，用一张表彻底厘清：</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>概念</th><th>类型</th><th>回答的问题</th><th>类比</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>RLHF</strong><br><small>Reinforcement Learning from Human Feedback</small></td>
+                <td>训练<strong>框架</strong>（范式）</td>
+                <td>「学习信号从哪里来？」→ 来自人类反馈</td>
+                <td>减肥方案（整体策略）</td>
+              </tr>
+              <tr>
+                <td><strong>PPO</strong><br><small>Proximal Policy Optimization</small></td>
+                <td>优化<strong>算法</strong></td>
+                <td>「拿到学习信号后，怎么安全地更新模型参数？」</td>
+                <td>有氧运动（具体手段）</td>
+              </tr>
+              <tr>
+                <td><strong>DPO</strong><br><small>Direct Preference Optimization</small></td>
+                <td>优化<strong>算法</strong>（也是范式变体）</td>
+                <td>「能不能绕过 RL 循环，直接从偏好数据更新？」</td>
+                <td>力量训练（另一种手段）</td>
+              </tr>
+              <tr>
+                <td><strong>GRPO</strong><br><small>Group Relative Policy Optimization</small></td>
+                <td>优化<strong>算法</strong></td>
+                <td>「能不能去掉 Critic，靠组内对比估计优势？」</td>
+                <td>间歇训练（改良版有氧）</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="big-concept">
+          <div class="big-concept-title">🔑 关键关系：RLHF 包含 PPO，但不等于 PPO</div>
+          <div style="margin:12px 0 6px;font-size:14px;line-height:2;">
+            <strong>RLHF 框架 = </strong>
+            <span style="background:#dbeafe;border:1px solid #93c5fd;border-radius:6px;padding:3px 10px;">阶段 1：SFT（监督学习）</span>
+            &nbsp;+&nbsp;
+            <span style="background:#dcfce7;border:1px solid #86efac;border-radius:6px;padding:3px 10px;">阶段 2：训练奖励模型（对比学习）</span>
+            &nbsp;+&nbsp;
+            <span style="background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:3px 10px;">阶段 3：RL 优化（可用 PPO，也可换其他算法）</span>
+          </div>
+          <p style="margin-top:10px;font-size:14px;">
+            当有人说「用 RLHF 训练的模型」，他们通常指的是走了这个三阶段框架。<br>
+            当有人说「用 PPO 训练的模型」，他们在描述第三阶段用了 PPO 这个具体算法。<br>
+            这两句话不矛盾，大部分时候同时成立。<strong>DPO 则是把三个阶段简化为两个阶段</strong>（SFT + 直接偏好优化，跳过了奖励模型和 RL 循环）。
+          </p>
+        </div>
+
+        <div class="callout-green">
+          <strong>本文的定位：</strong>从 §1 开始，我们先讲「为什么需要对齐」，然后详细讲「RLHF 三阶段」，再深入每个算法（PPO / DPO / GRPO）。读完后你会清楚：整个流水线的每一步在干什么，以及每种算法解决了哪个具体问题。
+        </div>
       </section>
 
       <!-- ═══════════════════════════════════════════════════════════ -->
