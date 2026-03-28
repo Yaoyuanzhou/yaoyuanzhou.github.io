@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SIDE：Semantic ID 扩展到序列与交叉特征，Meta Instagram 全排序栈实践</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body,{
+      delimiters:[
+        {left:'$$',right:'$$',display:true},
+        {left:'\\[',right:'\\]',display:true},
+        {left:'$',right:'$',display:false},
+        {left:'\\(',right:'\\)',display:false}
+      ],
+      throwOnError:false
+    })"></script>
+  <style>
+    :root{
+      --bg:#f5f7fb;--card:#ffffff;--text:#1f2937;--muted:#667085;
+      --line:#e5e7eb;--primary:#2563eb;--primary-soft:#eff6ff;
+      --accent:#7c3aed;--accent-soft:rgba(124,58,237,0.06);
+      --shadow:0 10px 30px rgba(15,23,42,0.08);--radius:18px;--max:1120px;
+    }
+    *{box-sizing:border-box;}
+    html{scroll-behavior:smooth;}
+    body{margin:0;background:linear-gradient(180deg,#f8fbff 0%,var(--bg) 240px);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;line-height:1.8;}
+    a{color:var(--primary);text-decoration:none;}
+    a:hover{text-decoration:underline;}
+    .page{max-width:var(--max);margin:0 auto;padding:32px 20px 80px;}
+    .back-link{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:14px;margin-bottom:18px;}
+    .back-link:hover{color:var(--primary);text-decoration:none;}
+    .hero{background:radial-gradient(circle at top right,rgba(168,85,247,0.12),transparent 30%),radial-gradient(circle at left bottom,rgba(139,92,246,0.08),transparent 24%),var(--card);border:1px solid rgba(168,85,247,0.1);border-radius:24px;box-shadow:var(--shadow);padding:34px 34px 28px;margin-bottom:22px;}
+    .eyebrow{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:#faf5ff;color:#7e22ce;font-size:13px;font-weight:600;margin-bottom:16px;}
+    h1{margin:0 0 10px;font-size:32px;line-height:1.25;letter-spacing:-0.02em;}
+    .subtitle{margin:0;color:var(--muted);font-size:15px;}
+    .meta-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:24px;}
+    .meta-card{background:#fbfdff;border:1px solid #e7eefb;border-radius:16px;padding:14px 16px;}
+    .meta-label{color:var(--muted);font-size:12px;margin-bottom:4px;}
+    .meta-value{font-size:14px;font-weight:600;word-break:break-word;}
+    .layout{display:grid;grid-template-columns:260px minmax(0,1fr);gap:22px;align-items:start;}
+    .toc{position:sticky;top:20px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;}
+    .toc h2{margin:0 0 12px;font-size:15px;}
+    .toc-list{list-style:none;margin:0;padding:0;}
+    .toc-list a{display:block;padding:5px 8px;border-radius:8px;color:var(--muted);font-size:13px;transition:all 0.15s;}
+    .toc-list a:hover{color:var(--primary);background:#f0f6ff;text-decoration:none;}
+    .toc-sub{list-style:none;padding-left:12px;margin:0;}
+    .toc-sub a{font-size:12px;padding:3px 8px;}
+    .content{display:flex;flex-direction:column;gap:18px;}
+    .section{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:26px 28px;}
+    .section-title{display:flex;align-items:center;gap:12px;margin:0 0 20px;font-size:20px;font-weight:700;}
+    .icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+    h3{margin:24px 0 12px;font-size:17px;color:#111827;}
+    h4{margin:18px 0 8px;font-size:15px;color:#374151;}
+    p{margin:10px 0;}
+    .paper-info{background:#fafbff;border-left:4px solid var(--primary);border-radius:12px;padding:14px 16px;margin:16px 0;color:#334155;}
+    .paper-info p{margin:4px 0;font-size:14px;}
+    .callout-blue{background:#eff6ff;border:1px solid #bfdbfe;border-radius:14px;padding:14px 16px;margin:14px 0;}
+    .callout-amber{background:#fffbeb;border:1px solid #fde68a;border-radius:14px;padding:14px 16px;margin:14px 0;}
+    .callout-green{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;padding:14px 16px;margin:14px 0;}
+    .callout-purple{background:#faf5ff;border:1px solid #e9d5ff;border-radius:14px;padding:14px 16px;margin:14px 0;}
+    .example-box{background:#f0fdf4;border:1px solid #86efac;border-radius:14px;padding:16px 18px;margin:16px 0;}
+    .ex-title{font-weight:700;color:#166534;margin-bottom:8px;font-size:14px;}
+    .formula-block{margin:16px 0 4px;overflow-x:auto;}
+    .formula-vars{background:#f8faff;border:1px solid #dbeafe;border-radius:12px;padding:12px 16px;margin:4px 0 16px;font-size:14px;color:#374151;}
+    .formula-vars .var-title{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;}
+    .formula-vars ul{margin:0;padding-left:18px;}
+    .formula-vars li{margin:4px 0;}
+    .flow-diagram{border:1px solid #bfdbfe;border-radius:14px;padding:16px;margin:16px 0;background:#f8fbff;}
+    .flow-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0;}
+    .flow-box{background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:6px 12px;font-size:13px;font-weight:600;}
+    .flow-arrow{color:#60a5fa;font-weight:700;font-size:16px;}
+    .two-col{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;}
+    .mini-card{border:1px solid var(--line);border-radius:14px;padding:14px 16px;background:#fff;}
+    .mini-card h4{margin-top:0;font-size:14px;}
+    .table-wrap{overflow-x:auto;margin:16px 0;}
+    table{width:100%;border-collapse:collapse;font-size:14px;}
+    thead th{background:#f3f6fb;color:#334155;text-align:left;font-weight:700;padding:10px 14px;border-bottom:1px solid var(--line);}
+    td{padding:10px 14px;border-bottom:1px solid #eef2f7;vertical-align:top;}
+    tbody tr:nth-child(even){background:#fcfdff;}
+    figure{margin:20px 0;background:#fbfdff;border:1px solid #e8edf5;border-radius:16px;padding:14px;}
+    figure img{width:100%;display:block;border-radius:12px;background:#fff;}
+    .fig-placeholder{background:#f3f4f6;border-radius:12px;padding:28px;text-align:center;color:#6b7280;font-size:14px;}
+    figcaption{margin-top:10px;font-size:13px;color:var(--muted);}
+    blockquote{margin:16px 0;padding:14px 18px;border-left:4px solid var(--accent);background:rgba(124,58,237,0.05);border-radius:0 12px 12px 0;color:#3f3f46;}
+    ul,ol{padding-left:22px;}
+    li+li{margin-top:6px;}
+    .katex-display{overflow-x:auto;padding:6px 0;}
+    footer{margin-top:32px;text-align:center;color:var(--muted);font-size:13px;}
+    @media(max-width:920px){.layout{grid-template-columns:1fr;}.toc{position:static;}.meta-grid,.two-col{grid-template-columns:1fr 1fr;}}
+    @media(max-width:640px){.page{padding:18px 12px 56px;}.hero,.section{padding:20px 18px;}h1{font-size:26px;}.meta-grid,.two-col{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+<div class="page">
+  <a class="back-link" href="index.html">← 返回论文列表</a>
+
+  <header class="hero">
+    <div class="eyebrow">💜 Meta Instagram · SIDE · 排序全栈</div>
+    <h1>SIDE：Semantic ID 扩展到序列与交叉特征，覆盖 Instagram 排序全链路</h1>
+    <p class="subtitle">SIDE: Semantic ID Embedding for Effective Learning from Sequences</p>
+    <div class="meta-grid">
+      <div class="meta-card"><div class="meta-label">作者</div><div class="meta-value">Meta Instagram Ranking 团队</div></div>
+      <div class="meta-card"><div class="meta-label">年份</div><div class="meta-value">2025</div></div>
+      <div class="meta-card"><div class="meta-label">来源</div><div class="meta-value">arXiv 2506.16698</div></div>
+      <div class="meta-card"><div class="meta-label">核心成果</div><div class="meta-value">序列+交叉特征覆盖全排序栈 · 冷启动显著改善 · 生产验证</div></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="toc">
+      <h2>目录</h2>
+      <ul class="toc-list">
+        <li><a href="#background">§1 背景与动机</a></li>
+        <li><a href="#method">§2 方法详解</a>
+          <ul class="toc-sub">
+            <li><a href="#sid-review">2.1 Prefix-Ngram SID 回顾</a></li>
+            <li><a href="#fusion-ae">2.2 Fusion AutoEncoder</a></li>
+            <li><a href="#seq-feature">2.3 序列历史特征</a></li>
+            <li><a href="#cross-feature">2.4 交叉计数特征</a></li>
+            <li><a href="#fsq">2.5 FSQ 量化方案</a></li>
+          </ul>
+        </li>
+        <li><a href="#experiments">§3 实验结果</a></li>
+        <li><a href="#summary">§4 一句话总结</a></li>
+      </ul>
+    </aside>
+
+    <main class="content">
+
+      <!-- 一句话总结 -->
+      <section class="section" id="tldr">
+        <div class="section-title">
+          <div class="icon" style="background:#faf5ff;">💬</div>
+          一句话总结
+        </div>
+        <blockquote>
+          SIDE 在 Prefix-Ngram SID 点特征基础上，通过 Fusion AutoEncoder 融合 CF 信号改进 SID 生成质量，并新增 SIDE-Seq（历史序列 SID 嵌入）和 SIDE-Cross（多粒度 SID 前缀匹配计数）两类特征，将语义 ID 覆盖到排序模型的序列建模和交叉特征两大维度，在 Meta Instagram Feed 和 Ads 生产系统上实现整体正向收益，冷启动场景收益尤为显著。
+        </blockquote>
+      </section>
+
+      <!-- §1 背景 -->
+      <section class="section" id="background">
+        <div class="section-title">
+          <div class="icon" style="background:#faf5ff;">🎯</div>
+          §1 背景与动机
+        </div>
+
+        <div class="paper-info">
+          <p><strong>论文：</strong>SIDE: Semantic ID Embedding for Effective Learning from Sequences</p>
+          <p><strong>机构：</strong>Meta，Instagram Ranking 团队</p>
+          <p><strong>链接：</strong><a href="https://arxiv.org/abs/2506.16698" target="_blank">arxiv.org/abs/2506.16698</a></p>
+          <p><strong>与前作关系：</strong>在 Prefix-Ngram SID（arXiv 2504.02137）基础上，将 SID 扩展到序列历史特征和交叉计数特征，覆盖排序全链路</p>
+        </div>
+
+        <h3>1.1 Prefix-Ngram SID 的局限：只是点特征</h3>
+        <p>前作 Prefix-Ngram SID 解决了<strong>候选 item 侧</strong>的 ID 表征问题——把当前候选广告的随机哈希 ID 替换为语义化的 Prefix-Ngram 嵌入，并在 Meta 生产中验证了有效性。但推荐排序模型的特征空间远不止于此：</p>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>问题 1：序列特征里还在用随机哈希 ID</h4>
+            <p>现代排序模型（如 Target Attention、SIM、DIEN 等）的核心组件是<strong>用户历史行为序列</strong>：把用户过去点击/购买的 item 序列用来预测当前候选的相关性。</p>
+            <p>但这些历史序列里的 item ID 用的还是随机哈希 ID——同样面临冷启动问题：一个尾部 item 在历史序列里出现极少，对应的嵌入噪声大，Target Attention 的计算质量就差。</p>
+          </div>
+          <div class="mini-card">
+            <h4>问题 2：交叉特征缺乏语义信号</h4>
+            <p>排序模型另一类重要特征是<strong>交叉特征</strong>：例如"用户历史上看过多少次与候选广告属于同一类别的广告"——这类计数特征传统上用随机哈希 ID 统计类别。</p>
+            <p>如果改用 SID 的层次化前缀作为类别标签，统计的粒度会更加语义化，同类广告自然聚集，计数特征的信噪比更高。</p>
+          </div>
+        </div>
+
+        <h3>1.2 SIDE 的核心贡献：让 SID 进入序列与交叉</h3>
+        <p>SIDE（Semantic ID Embedding）在 Prefix-Ngram SID 基础上，提出两个新的特征构造方法，将 SID 扩展到排序模型的<strong>序列建模</strong>和<strong>交叉特征</strong>两个维度：</p>
+
+        <div class="flow-diagram">
+          <p style="font-weight:700;margin:0 0 10px;font-size:14px;">SIDE 扩展的三类特征（在 Prefix-Ngram 点特征基础上）</p>
+          <div class="flow-row">
+            <div class="flow-box" style="background:#f0fdf4;border-color:#86efac;">① 候选 item 的<br>Prefix-Ngram 点特征<br>（前作已有）</div>
+            <div class="flow-arrow">+</div>
+            <div class="flow-box" style="background:#faf5ff;border-color:#e9d5ff;">② 用户历史序列的<br>SID 序列特征（新）<br>"用户看过哪些 SID"</div>
+            <div class="flow-arrow">+</div>
+            <div class="flow-box" style="background:#fffbeb;border-color:#fde68a;">③ 候选 item SID 与<br>历史序列 SID 的<br>交叉计数特征（新）</div>
+          </div>
+        </div>
+
+        <div class="callout-purple">
+          <strong>为什么序列特征对 SID 的收益更大？</strong>研究发现，用 SID 替换序列里的随机哈希 ID 后，Target Attention 的效果<strong>显著提升</strong>，而对于没有 Target Attention 的简单模型提升较小。这说明：SID 的层次化语义信息特别适合注意力机制——注意力在计算相似度时，语义相似的 item（共享前缀）自然会有更高的注意力权重，而随机哈希 ID 完全无法做到这一点。
+        </div>
+      </section>
+
+      <!-- §2 方法 -->
+      <section class="section" id="method">
+        <div class="section-title">
+          <div class="icon" style="background:#faf5ff;">⚙️</div>
+          §2 方法详解
+        </div>
+
+        <h3 id="sid-review">2.1 SID 生成回顾：Fusion AutoEncoder</h3>
+        <p>SIDE 在 Prefix-Ngram SID 的 RQ-VAE 基础上，引入 <strong>Fusion AutoEncoder</strong> 改进 SID 的生成质量。</p>
+
+        <figure>
+          <img src="https://arxiv.org/html/2506.16698v1/extracted/6556718/fusion_autoencoder.png"
+               alt="Figure 1: Fusion AutoEncoder 架构"
+               onerror="this.onerror=null;this.parentElement.innerHTML='<div class=\'fig-placeholder\'><b>Figure 1：Fusion AutoEncoder</b><br><br>左侧：Encoder 接收多模态内容特征（图文视频）输出稠密嵌入；中间：RQ-VAE 量化为 SID；右侧：Decoder 接收 SID 的重建嵌入，同时拼接 Collaborative Filtering 嵌入（来自用户-物品交互矩阵）作为辅助监督信号，使 SID 在保持语义的同时也包含协同过滤信号。</div>'" />
+          <figcaption><strong>Figure 1（论文原图）：</strong>Fusion AutoEncoder 架构。在标准 RQ-VAE 基础上，Decoder 端融合 CF（Collaborative Filtering）嵌入作为辅助重建目标，使量化得到的 SID 既保留多模态语义，又包含协同过滤信号。</figcaption>
+        </figure>
+
+        <p>Fusion AutoEncoder 的改进点在于：传统 RQ-VAE 只重建内容嵌入（语义向量），导致 SID 对用户行为信号（谁喜欢这个 item）不敏感。SIDE 在 Decoder 端<strong>同时重建内容嵌入和 CF 嵌入</strong>：</p>
+
+        <div class="formula-block">
+$$\mathcal{L}_{\text{Fusion}} = \underbrace{\|\mathbf{e}_{\text{content}} - \hat{\mathbf{e}}_{\text{content}}\|_2^2}_{\text{内容重建}} + \lambda \underbrace{\|\mathbf{e}_{\text{CF}} - \hat{\mathbf{e}}_{\text{CF}}\|_2^2}_{\text{CF 嵌入重建}}$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\mathbf{e}_{\text{content}}$：多模态内容模型输出的语义嵌入（图文视频融合）</li>
+            <li>$\mathbf{e}_{\text{CF}}$：协同过滤嵌入，来自用户-物品交互矩阵的矩阵分解或图神经网络</li>
+            <li>$\hat{\mathbf{e}}_{\text{content}}, \hat{\mathbf{e}}_{\text{CF}}$：Decoder 基于 SID 的重建输出</li>
+            <li>$\lambda$：平衡两种重建损失的权重超参数</li>
+            <li>通过同时拟合两种信号，SID 量化空间同时捕获"内容语义相似"和"用户行为相似"两个维度</li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：Fusion AutoEncoder 的直觉</div>
+          <p>考虑两个 item：</p>
+          <ul>
+            <li>Item A：外观是"白色运动鞋"（内容相似），但主要被 25 岁男性购买</li>
+            <li>Item B：外观是"白色运动鞋"（内容相似），但主要被 50 岁女性购买</li>
+          </ul>
+          <p><strong>纯内容 SID（前作）：</strong>A 和 B 内容几乎一样 → SID 相同 → 这两类用户的行为信号被混淆，造成"语义相同但用户群不同"的 confusion。</p>
+          <p><strong>Fusion SID（SIDE）：</strong>A 的 CF 嵌入（男性用户群）和 B 的 CF 嵌入（女性用户群）差异明显 → Decoder 需要同时重建两者 → 量化时 A 和 B 被分配到不同的 SID（或不同的后几层 code） → 用户行为差异被保留在 SID 中。</p>
+          <p>这使得序列特征中的 SID 能更好地反映"哪类用户喜欢这类 item"，而不仅仅是"这个 item 外观是什么"。</p>
+        </div>
+
+        <h3 id="seq-feature">2.3 序列历史特征：SIDE-Seq</h3>
+        <p>这是 SIDE 最核心的贡献之一。思路是把用户历史行为序列中每个 item 的随机哈希 ID 替换为 SID 的 Prefix-Ngram 嵌入。</p>
+
+        <figure>
+          <img src="https://arxiv.org/html/2506.16698v1/extracted/6556718/SIDE_no_emb_table.png"
+               alt="Figure 2: SIDE 序列特征示意"
+               onerror="this.onerror=null;this.parentElement.innerHTML='<div class=\'fig-placeholder\'><b>Figure 2：SIDE 序列特征示意</b><br><br>左侧：传统方案，用户历史序列中每个 item 查随机哈希 ID 嵌入表，进入 Target Attention；右侧：SIDE 方案，每个历史 item 查 SID Prefix-Ngram 嵌入（求和后），再进入 Target Attention。候选 item 也用 SID 嵌入，attention 计算时语义相似的历史 item 自然获得更高权重。</div>'" />
+          <figcaption><strong>Figure 2（论文原图）：</strong>SIDE 序列特征（SIDE-Seq）示意。历史序列中每个 item 从查随机哈希 ID 改为查 SID Prefix-Ngram 嵌入（求和），与候选 item 的 SID 嵌入做 Target Attention。语义相似的历史 item 自然得到更高的注意力权重。</figcaption>
+        </figure>
+
+        <p>具体来说，设用户历史行为序列为 $\mathcal{H} = \{h_1, h_2, \ldots, h_T\}$，候选 item 为 $q$：</p>
+
+        <p><strong>传统方案</strong>（随机哈希 ID）：</p>
+        <div class="formula-block">
+$$\text{score}(q, h_t) = \mathrm{Softmax}\bigl(\mathbf{v}_q^{\top} \mathbf{v}_{h_t}\bigr)$$
+        </div>
+        <p>其中 $\mathbf{v}_q, \mathbf{v}_{h_t}$ 均从随机哈希 ID 嵌入表查得，两个语义相似 item 的嵌入没有任何关联。</p>
+
+        <p><strong>SIDE 方案</strong>（SID 嵌入）：</p>
+        <div class="formula-block">
+$$\mathbf{v}_x^{\mathrm{SID}} = \sum_{l=1}^{L} \text{Lookup}_l\bigl((c_1^x, \ldots, c_l^x)\bigr), \quad x \in \{q\} \cup \mathcal{H}$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\mathbf{v}_x^{\mathrm{SID}}$：item $x$ 的 SID Prefix-Ngram 嵌入（$L$ 层前缀嵌入求和）</li>
+            <li>$(c_1^x, \ldots, c_L^x)$：item $x$ 的 Semantic ID，由 Fusion AutoEncoder 离线生成</li>
+            <li>候选 item $q$ 和历史 item $h_t$ 使用<strong>同一套 SID 嵌入表</strong>，因此 attention score 直接反映语义相似度</li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：SIDE-Seq 如何改善 Target Attention</div>
+          <p>假设候选广告是"耐克红色跑步鞋"，SID 前缀 $(c_1=47, c_2=132)$。</p>
+          <p>用户历史序列：</p>
+          <ul>
+            <li>$h_1$：耐克蓝色跑步鞋，SID 前缀 $(47, 132, 15,\ldots)$ → 与候选共享前两层前缀</li>
+            <li>$h_2$：阿迪达斯跑步鞋，SID 前缀 $(47, 203, 8,\ldots)$ → 只共享第一层（同属"运动鞋"）</li>
+            <li>$h_3$：女装连衣裙，SID 前缀 $(12, 56, 3,\ldots)$ → 完全不共享前缀</li>
+          </ul>
+          <p><strong>随机哈希 ID 方案：</strong>$h_1, h_2, h_3$ 的嵌入与候选无语义关联，attention 权重几乎随机。</p>
+          <p><strong>SIDE 方案：</strong>$h_1$ 的 SID 嵌入与候选共享 $(47)$ 和 $(47,132)$ 两个前缀的嵌入向量，内积自然更高 → attention 权重更高 → 模型正确聚焦于"用户历史中与候选语义最相关的行为"。</p>
+          <p>对于冷启动 item（历史极少的长尾广告），SID 嵌入因为共享前缀而质量更好，attention 计算不再退化为噪声。</p>
+        </div>
+
+        <h3 id="cross-feature">2.4 交叉计数特征：SIDE-Cross</h3>
+        <p>除序列特征外，SIDE 还将 SID 用于构造<strong>交叉计数特征</strong>。</p>
+
+        <figure>
+          <img src="https://arxiv.org/html/2506.16698v1/extracted/6556718/RankerArch.png"
+               alt="Figure 3: 完整排序模型架构"
+               onerror="this.onerror=null;this.parentElement.innerHTML='<div class=\'fig-placeholder\'><b>Figure 3：完整排序模型架构</b><br><br>展示 SIDE 特征如何接入完整排序模型：候选 item 的 Prefix-Ngram 点特征、用户历史序列的 SID 序列特征（SIDE-Seq）、候选与历史序列的交叉计数特征（SIDE-Cross）三者拼接后输入排序 MLP。</div>'" />
+          <figcaption><strong>Figure 3（论文原图）：</strong>接入完整排序模型的 SIDE 特征架构。三类 SID 特征（点特征 + 序列特征 + 交叉特征）拼接后输入排序网络，覆盖了排序模型的核心特征空间。</figcaption>
+        </figure>
+
+        <p>交叉计数特征的构造逻辑：对于候选 item $q$（SID $= (c_1^q, c_2^q, \ldots)$）和用户历史序列 $\mathcal{H}$，统计历史序列中与 $q$ 在不同 SID 前缀粒度上"匹配"的 item 数量：</p>
+
+        <div class="formula-block">
+$$\text{cnt}_l(q, \mathcal{H}) = \left|\bigl\{h \in \mathcal{H} : (c_1^h, \ldots, c_l^h) = (c_1^q, \ldots, c_l^q)\bigr\}\right|$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\text{cnt}_l(q, \mathcal{H})$：历史序列中与候选 item $q$ 在前 $l$ 层 SID 完全匹配的 item 个数</li>
+            <li>$l = 1$：粗粒度统计（大类匹配数，如"运动鞋"类的历史行为总数）</li>
+            <li>$l = 2$：中等粒度（子类匹配数，如"耐克跑步鞋"类）</li>
+            <li>$l = 3,4,5$：细粒度（越来越接近 item 唯一级别的匹配数）</li>
+            <li>最终将 $l = 1 \sim L$ 的计数拼接为多粒度交叉特征向量，输入排序网络</li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：SIDE-Cross 多粒度交叉特征</div>
+          <p>候选广告：耐克 Air Max 跑步鞋，SID = $(47, 132, 8, 5, 21)$</p>
+          <p>用户最近 100 条历史行为中：</p>
+          <ul>
+            <li>30 条与候选匹配 $l=1$（都是"运动鞋"大类，$c_1=47$）</li>
+            <li>12 条与候选匹配 $l=2$（都是"耐克跑步鞋"中类，$(c_1=47, c_2=132)$）</li>
+            <li>3 条与候选匹配 $l=3$（细粒度，$(47, 132, 8)$）</li>
+            <li>1 条与候选匹配 $l=4, l=5$（几乎就是同一款鞋）</li>
+          </ul>
+          <p>则 SIDE-Cross 交叉特征 = $[30, 12, 3, 1, 1]$（归一化后），模型直接看到"用户对这个层次的 item 历史兴趣强度"。</p>
+          <p><strong>与传统交叉特征的对比：</strong>传统方案用随机哈希 ID 计算交叉，只能统计"完全相同 item 的历史次数"（很少），无法统计"同类 item 的历史次数"。SIDE-Cross 通过多粒度前缀匹配，即使候选是全新广告，也能从粗粒度统计中看到用户的类别兴趣，有效解决冷启动。</p>
+        </div>
+
+        <h3 id="fsq">2.5 FSQ：更简洁的量化方案</h3>
+
+        <figure>
+          <img src="https://arxiv.org/html/2506.16698v1/extracted/6556718/FSQ_Image_6.png"
+               alt="Figure 4: FSQ vs RQ-VAE 对比"
+               onerror="this.onerror=null;this.parentElement.innerHTML='<div class=\'fig-placeholder\'><b>Figure 4：FSQ vs RQ-VAE 对比</b><br><br>左侧：RQ-VAE 需要显式维护 codebook，训练时有 codebook collapse 问题，需要 FLOPs 正则化；右侧：FSQ（Finite Scalar Quantization）直接将连续值 tanh 压缩后做逐维度四舍五入，无需显式 codebook，天然避免 collapse 问题，且训练更稳定。</div>'" />
+          <figcaption><strong>Figure 4（论文原图）：</strong>FSQ（Finite Scalar Quantization）与 RQ-VAE 对比。FSQ 通过对每个维度独立进行离散化，无需显式 codebook，避免了 codebook collapse，训练更稳定。</figcaption>
+        </figure>
+
+        <p>SIDE 探索了 <strong>FSQ（Finite Scalar Quantization）</strong>作为 RQ-VAE 的替代量化方案。FSQ 的核心思路是：不维护显式 codebook，而是直接对嵌入向量的每个维度做离散化。</p>
+
+        <p>FSQ 的量化步骤：</p>
+        <ol>
+          <li>将内容嵌入通过线性层投影到 $d$ 维</li>
+          <li>对每个维度 $j$，用 $\tanh$ 压缩到 $(-1, 1)$ 后做四舍五入到 $L_j$ 个离散值（如 $L_j = 8$ 即取 $\{-1, -5/7, -3/7, -1/7, 1/7, 3/7, 5/7, 1\}$ 的最近值）</li>
+          <li>总码本大小 $= \prod_j L_j$，通过选择 $d$ 和 $L_j$ 控制总 code 数量</li>
+        </ol>
+
+        <div class="callout-blue">
+          <strong>FSQ vs RQ-VAE 对比：</strong>
+          <ul>
+            <li><strong>codebook collapse：</strong>RQ-VAE 需要 FLOPs 正则化来避免 collapse；FSQ 每个维度独立离散化，天然无 collapse 问题</li>
+            <li><strong>训练稳定性：</strong>FSQ 梯度估计更简单（STE 直通估计器），收敛更稳定</li>
+            <li><strong>灵活性：</strong>FSQ 通过调整维度数 $d$ 和每维离散值 $L_j$ 控制码本大小，比 RQ-VAE 的 $K \times L$ 设计更灵活</li>
+            <li><strong>语义保真度：</strong>实验表明两者在下游任务上性能相近，FSQ 在工程上更简洁</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- §3 实验 -->
+      <section class="section" id="experiments">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">📊</div>
+          §3 实验结果
+        </div>
+
+        <h3>3.1 不同特征类型的消融（离线 NE 指标）</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>方案</th><th>新增特征类型</th><th>NE 提升（相对基线）</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>基线（随机哈希 ID）</td><td>—</td><td>0</td></tr>
+              <tr><td>+ Prefix-Ngram 点特征（前作）</td><td>候选 item 的 SID 嵌入</td><td>-0.28%</td></tr>
+              <tr><td>+ SIDE-Seq（无 Target Attn）</td><td>序列中 item 的 SID 嵌入</td><td>小幅提升</td></tr>
+              <tr><td>+ SIDE-Seq（有 Target Attn）</td><td>序列 SID + Target Attention</td><td><strong>显著提升</strong></td></tr>
+              <tr><td>+ SIDE-Cross</td><td>多粒度交叉计数特征</td><td>额外提升</td></tr>
+              <tr><td>全量 SIDE（Seq + Cross）</td><td>序列 + 交叉全覆盖</td><td><strong>最优</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout-green">
+          <strong>关键消融发现：</strong>SIDE-Seq 的收益在有 Target Attention 的模型上<strong>显著大于</strong>无 Target Attention 的模型。这验证了核心假设：SID 的语义相似性与注意力机制天然契合——语义相似历史 item 自动获得更高 attention 权重，而随机哈希 ID 完全无法做到这点。
+        </div>
+
+        <h3>3.2 冷启动 item 的专项收益</h3>
+        <p>SIDE 在冷启动场景的收益比整体更显著：</p>
+        <ul>
+          <li>新 item（上线不足 N 天）的 NE 提升明显高于整体均值</li>
+          <li>尾部 item（历史展示极少）的 NE 提升也明显高于整体</li>
+          <li>SIDE-Cross 交叉特征在冷启动场景贡献尤其大——即使是全新 item，粗粒度 SID 前缀匹配仍能统计出用户的大类兴趣</li>
+        </ul>
+
+        <h3>3.3 FSQ vs RQ-VAE 量化方案对比</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>量化方案</th><th>训练稳定性</th><th>codebook 利用率</th><th>下游 NE</th><th>工程复杂度</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>RQ-VAE（无 FLOPs 正则）</td><td>较差（易 collapse）</td><td>低</td><td>次优</td><td>需要额外正则化</td></tr>
+              <tr><td>RQ-VAE（有 FLOPs 正则）</td><td>较好</td><td>高</td><td>较好</td><td>有额外超参</td></tr>
+              <tr><td><strong>FSQ</strong></td><td><strong>最稳定</strong></td><td>天然均匀</td><td><strong>与 RQ-VAE 相近</strong></td><td><strong>最简洁</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>3.4 在线 A/B 测试</h3>
+        <div class="callout-green">
+          <strong>Meta Instagram 在线 A/B 测试结果：</strong>
+          <ul>
+            <li>SIDE 全量特征（Seq + Cross）整体指标正向提升（具体数值未公开，论文描述为"significant online gains"）</li>
+            <li>冷启动 item 的在线收益明显高于整体，与离线实验结论一致</li>
+            <li>已在 Meta Instagram Feed Ranking 和 Instagram Ads Ranking 两个场景生产部署</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- §4 总结 -->
+      <section class="section" id="summary">
+        <div class="section-title">
+          <div class="icon" style="background:#faf5ff;">💬</div>
+          §4 一句话总结
+        </div>
+
+        <blockquote>
+          SIDE 在 Prefix-Ngram SID 点特征基础上，通过 Fusion AutoEncoder 融合 CF 信号改进 SID 生成质量，并新增 SIDE-Seq（历史序列 SID 嵌入）和 SIDE-Cross（多粒度 SID 前缀匹配计数）两类特征，将语义 ID 覆盖到排序模型的序列建模和交叉特征两大维度，在 Meta Instagram Feed 和 Ads 生产系统上实现整体正向收益，冷启动场景收益尤为显著。
+        </blockquote>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>✅ 主要亮点</h4>
+            <ul>
+              <li>Fusion AutoEncoder：将 CF 信号融入 SID 生成，使 SID 同时捕获内容语义和用户行为偏好</li>
+              <li>SIDE-Seq 与 Target Attention 天然契合：语义相似历史 item 自动获得更高注意力权重</li>
+              <li>SIDE-Cross 多粒度交叉特征：即使是全新冷启动 item，粗粒度前缀仍能统计出用户大类兴趣</li>
+              <li>FSQ 量化方案：无 codebook collapse 问题，工程更简洁，性能与 RQ-VAE 相近</li>
+              <li>覆盖排序全链路（点特征 + 序列特征 + 交叉特征），是 SID 在排序侧应用的最完整方案</li>
+            </ul>
+          </div>
+          <div class="mini-card">
+            <h4>⚠️ 局限与注意</h4>
+            <ul>
+              <li>在线 A/B 具体数字未公开，外部难以判断量级</li>
+              <li>Fusion AutoEncoder 需要维护额外的 CF 嵌入训练流水线，工程成本增加</li>
+              <li>SIDE-Cross 计算需要对历史序列做前缀匹配，实时场景下需要高效实现（预计算或近似）</li>
+              <li>FSQ 的层次性不如 RQ-VAE 直观，对于需要明确"第 1 层代表大类、第 2 层代表子类"的应用场景，FSQ 的可解释性较差</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <footer>
+    <a href="index.html" class="back-link">← 返回论文列表</a>
+    <p>Generated by paper-reader · arXiv 2506.16698 · Meta Instagram</p>
+  </footer>
+</div>
+</body>
+</html>

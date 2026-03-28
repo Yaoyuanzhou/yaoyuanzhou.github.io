@@ -177,14 +177,15 @@
 
   <!-- ── Hero ──────────────────────────────────────────── -->
   <div class="hero">
-    <div class="hero-badge">📄 论文解读</div>
-    <h1>论文阅读笔记</h1>
-    <p>推荐 · 搜索 · NLP · 工业落地</p>
+    <div class="hero-badge">📚 论文 · 笔记</div>
+    <h1>学习笔记 &amp; 论文解读</h1>
+    <p>推荐 · 搜索 · LLM · NLP · 工业落地</p>
     <div class="stats">
-      <div class="stat-pill">共 <strong>9</strong> 篇</div>
-      <div class="stat-pill">Semantic ID <strong>7</strong></div>
+      <div class="stat-pill">论文 <strong>15</strong> 篇</div>
+      <div class="stat-pill">学习笔记 <strong>2</strong> 篇</div>
+      <div class="stat-pill">Semantic ID <strong>12</strong></div>
       <div class="stat-pill">生成式推荐 <strong>7</strong></div>
-      <div class="stat-pill">排序 Scaling <strong>2</strong></div>
+      <div class="stat-pill">排序 Scaling <strong>5</strong></div>
     </div>
   </div>
 
@@ -192,11 +193,15 @@
   <div class="tabs-wrap">
     <div class="tabs">
       <button class="tab-btn active" onclick="switchTab('all',this)">
-        全部 <span class="tab-count">9</span>
+        全部 <span class="tab-count">15</span>
+      </button>
+      <button class="tab-btn" onclick="switchTab('notes',this)">
+        <span class="tab-dot" style="background:#0891b2"></span>
+        📝 学习笔记 <span class="tab-count">2</span>
       </button>
       <button class="tab-btn" onclick="switchTab('sid',this)">
         <span class="tab-dot" style="background:#c2410c"></span>
-        Semantic ID &amp; 表征 <span class="tab-count">7</span>
+        Semantic ID &amp; 表征 <span class="tab-count">12</span>
       </button>
       <button class="tab-btn" onclick="switchTab('gen',this)">
         <span class="tab-dot" style="background:#1d4ed8"></span>
@@ -204,7 +209,7 @@
       </button>
       <button class="tab-btn" onclick="switchTab('rank',this)">
         <span class="tab-dot" style="background:#065f46"></span>
-        排序模型 Scaling <span class="tab-count">2</span>
+        排序模型 Scaling <span class="tab-count">5</span>
       </button>
       <button class="tab-btn" onclick="switchTab('seq',this)">
         <span class="tab-dot" style="background:#7e22ce"></span>
@@ -232,6 +237,121 @@
   <!-- 全部 -->
   <div id="panel-all" class="panel visible">
     <div class="paper-list">
+
+      <!-- SID 融入排序模型综述 -->
+      <a class="paper-card" href="sid-for-ranking.html" style="border-left: 4px solid #7c3aed; background: linear-gradient(135deg, rgba(124,58,237,0.03), #fff);">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#ede9fe;color:#5b21b6;">📋 综述</span>
+            <span class="tag tc-sid">Semantic ID × 排序</span>
+            <span class="tag tc-indus">7篇工业论文 · DLRM 落地方案</span>
+          </div>
+          <div class="card-title">SID 融入排序模型：工业实践综述与 DLRM 落地方案</div>
+          <div class="card-subtitle">Google · Meta × 2 · ByteDance · Alibaba · LinkedIn · 快手 · 7 篇论文横向对比 + 6 个落地 Idea + 推荐路线</div>
+          <div class="card-summary">系统梳理将 Semantic ID 引入 CTR/CVR 排序模型（DLRM 类）的 7 篇工业论文（SemID / Prefix-Ngram / SIDE / TRM / GPSD / LiGR / DAS），从特征接入方式、Embedding 参数化、训练目标扩充、冷启动处理四个维度横向对比，并面向 DLRM 架构提炼 6 个可直接落地的工程 Idea（从 Embedding 替换到 CF Debias + 多视角对比对齐）。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- GPSD 2025 KDD -->
+      <a class="paper-card" href="gpsd.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">KDD 2025 · arXiv 2506.03699</span>
+            <span class="tag tc-rank">排序 Scaling</span>
+            <span class="tag tc-sid">生成预训练</span>
+            <span class="tag tc-indus">阿里 AliExpress</span>
+          </div>
+          <div class="card-title">GPSD：生成式预训练 + 稀疏参数冻结，解锁 Transformer 判别排序 Scaling Law</div>
+          <div class="card-subtitle">Scaling Transformers for Discriminative Recommendation via Generative Pretraining · Qijiong Liu et al. · Alibaba / AliExpress · KDD 2025</div>
+          <div class="card-summary">判别推荐模型存在单轮次/轮次内双过拟合，制约 Scaling；GPSD 用生成预训练稀疏参数初始化判别模型后冻结（ST&SF），使密集参数从 13K 扩展到 0.3B 时遵循幂律 Scaling，跨架构（HSTU/Wukong）均有效，AliExpress 生产 CTR/CVR 双提升。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- LiGR 2025 KDD -->
+      <a class="paper-card" href="ligr.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">KDD 2025 · arXiv 2502.03417</span>
+            <span class="tag tc-rank">排序 Scaling</span>
+            <span class="tag tc-sid">Semantic ID</span>
+            <span class="tag tc-indus">LinkedIn DAU +0.27%</span>
+          </div>
+          <div class="card-title">LiGR：用 7 个特征超越数百特征，LinkedIn 生成式排序的工业实践</div>
+          <div class="card-subtitle">From Features to Transformers: Redefining Ranking for Scalable Impact · Fedor Borisyuk et al. · LinkedIn · KDD 2025</div>
+          <div class="card-summary">LiGR 将 HSTU 风格生成式推荐引入 LinkedIn Feed 排序，7 个特征超越数百特征的 DLRM 基线；Gated skip-connection 解决大模型训练稳定性；Setwise Attention 替代规则多样性；SID concat pooling 将参数量从 5.4B→1.3B；生产 A/B：DAU +0.27%，Feed 时长 +0.28%。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- OneSearch 2025 快手 -->
+      <a class="paper-card" href="onesearch.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">arXiv 2509.03236</span>
+            <span class="tag tc-sid">端到端生成式搜索</span>
+            <span class="tag tc-indus">快手 CTR +1.67%</span>
+          </div>
+          <div class="card-title">OneSearch：第一个工业部署的电商搜索端到端生成式框架</div>
+          <div class="card-subtitle">OneSearch: A Unified End-to-End Generative Framework for E-commerce Search · 快手电商搜索团队</div>
+          <div class="card-summary">RQ-OPQ 混合量化（层次语义+独特属性残差）+ 三视图用户行为序列注入（User ID / 显式短序列 / 隐式长序列 QFormer 压缩）+ 三阶段 SFT（语义对齐→共现同步→个性化）+ 自适应奖励 DPO，将 MCA 召回-精排统一为单一 BART encoder-decoder，快手商城 A/B：商品 CTR +1.67%、订单量 +3.22%、OPEX -75.40%、MFU 3.26%→27.32%。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- DAS 2025 快手 -->
+      <a class="paper-card" href="das.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">arXiv 2508.10584</span>
+            <span class="tag tc-sid">双对齐 SID</span>
+            <span class="tag tc-indus">快手 eCPM +3.48%</span>
+          </div>
+          <div class="card-title">DAS：一阶段双对齐 Semantic ID，解决协同信号缺失的快手广告落地</div>
+          <div class="card-subtitle">DAS: Dual-Aligned Semantic IDs Empowered Industrial Recommender System · 快手广告算法团队</div>
+          <div class="card-summary">传统两阶段 SID 对齐（先 CF 后量化）存在信息损失；DAS 一阶段联合优化 UISM（双侧 RQ-VAE）+ ICDM（CF 去偏）+ MDAM（三种多视图对比对齐），四类特征接入判别式和生成式 RS，快手 4 亿日活 A/B：eCPM +3.48%，冷启动 +8.98%。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- Prefix-Ngram 2025 Meta -->
+      <a class="paper-card" href="prefix-ngram.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">arXiv 2504.02137</span>
+            <span class="tag tc-rank">排序 Scaling</span>
+            <span class="tag tc-sid">Prefix-Ngram SID</span>
+            <span class="tag tc-indus">Meta 广告</span>
+          </div>
+          <div class="card-title">Prefix-Ngram SID：Meta 广告排序的层次化语义 ID 工业实践</div>
+          <div class="card-subtitle">Semantic IDs for Large-Scale Recommendation Systems · Meta Ads</div>
+          <div class="card-summary">Meta 在广告排序系统中将 RQ-VAE 生成的 SID 以 Prefix-Ngram 方式展开为层次化稀疏特征，并接入 DLRM 嵌入表；提出 FLOPs 正则化防止 codebook 坍缩，实现冷启动提升和整体 CTR 正向增益，工业部署简洁高效。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- SIDE 2025 Meta -->
+      <a class="paper-card" href="side.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">arXiv 2506.16698</span>
+            <span class="tag tc-rank">排序 SID 扩展</span>
+            <span class="tag tc-sid">SIDE</span>
+            <span class="tag tc-indus">Meta Instagram</span>
+          </div>
+          <div class="card-title">SIDE：Meta 将 SID 推广到全排序栈，序列 + 交叉特征全覆盖</div>
+          <div class="card-subtitle">Scaling Item Representations via Semantic IDs · Meta Instagram</div>
+          <div class="card-summary">在 Prefix-Ngram 基础上，SIDE 将 SID 进一步扩展为序列历史特征（用户历史 SID 序列）和交叉计数特征（候选 SID 与历史序列匹配数），覆盖 CTR/CVR 排序全链路，Meta Instagram 生产验证整体正向，显著改善冷启动场景。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
 
       <!-- TRM 2026 -->
       <a class="paper-card" href="trm.html">
@@ -390,6 +510,81 @@
       <span class="cat-desc">如何为 item 生成有语义的离散 token（RQ-VAE、RK-Means、协同感知量化、端到端 tokenizer 等）</span>
     </div>
     <div class="paper-list">
+
+      <!-- GPSD 2025 -->
+      <a class="paper-card" href="gpsd.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">KDD 2025</span>
+            <span class="tag tc-rank">排序 Scaling · 稀疏冻结</span>
+          </div>
+          <div class="card-title">GPSD：生成预训练稀疏参数 → 冻结 → 判别微调，消除双过拟合</div>
+          <div class="card-subtitle">Alibaba / AliExpress</div>
+          <div class="card-summary">ST&SF（稀疏迁移 + 冻结）策略将生成预训练的高质量稀疏参数迁移到判别模型，冻结后消除两类过拟合，实现 13K→0.3B 密集参数的 Scaling Law，跨架构（HSTU/Wukong）均有效。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- LiGR 2025 -->
+      <a class="paper-card" href="ligr.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">KDD 2025</span>
+            <span class="tag tc-sid">SID concat pooling</span>
+          </div>
+          <div class="card-title">LiGR：SID concat pooling 替代 Post ID，参数量压缩 4×</div>
+          <div class="card-subtitle">LinkedIn</div>
+          <div class="card-summary">RQ-VAE 生成 3 层 SID，Prefix-Ngram concat（而非 sum）聚合各层 embedding，替代 Post ID（词汇量亿级）使参数量从 5.4B→1.3B，Long Dwell AUC +0.40%（vs Post ID），冷启动显著改善。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- DAS 2025 -->
+      <a class="paper-card" href="das.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">arXiv 2508.10584</span>
+            <span class="tag tc-sid">双对齐 · 去偏 CF · 快手</span>
+          </div>
+          <div class="card-title">DAS：一阶段双侧 RQ-VAE + CF 去偏 + 多视图对比对齐</div>
+          <div class="card-subtitle">快手广告团队</div>
+          <div class="card-summary">UISM 双侧量化 + ICDM 流行度/从众偏差去除 + MDAM 三种对比对齐（u2i/u2u-i2i/co-occurrence），联合训练最大化 SID 与 CF 信号互信息，eCPM +3.48%，冷启动 +8.98%。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- Prefix-Ngram 2025 -->
+      <a class="paper-card" href="prefix-ngram.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">arXiv 2504.02137</span>
+            <span class="tag tc-sid">Prefix-Ngram · FLOPs 正则</span>
+          </div>
+          <div class="card-title">Prefix-Ngram：Meta 广告 RQ-VAE + FLOPs 正则 + 层次稀疏特征</div>
+          <div class="card-subtitle">Meta Ads</div>
+          <div class="card-summary">FLOPs Regularizer（基于 codebook 使用频次）防止 codebook collapse，SID 以 1/2/3-gram 前缀展开为层次化稀疏特征接入 DLRM，冷启动 + 整体 CTR 双正向。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- SIDE 2025 -->
+      <a class="paper-card" href="side.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">arXiv 2506.16698</span>
+            <span class="tag tc-sid">序列 + 交叉特征 · Meta Instagram</span>
+          </div>
+          <div class="card-title">SIDE：SID 序列历史 + 交叉匹配计数，全链路排序覆盖</div>
+          <div class="card-subtitle">Meta Instagram</div>
+          <div class="card-summary">在 Prefix-Ngram 基础上增加用户 SID 历史序列特征和 SID 交叉计数特征，覆盖排序全链路；冷启动场景收益最显著，Instagram 生产验证正向，工程实现简洁。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
 
       <!-- TRM 2026 -->
       <a class="paper-card" href="trm.html">
@@ -627,6 +822,66 @@
     </div>
     <div class="paper-list">
 
+      <!-- GPSD 2025 -->
+      <a class="paper-card" href="gpsd.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">KDD 2025 · arXiv 2506.03699</span>
+            <span class="tag tc-rank">大排序 Scaling · 稀疏冻结</span>
+          </div>
+          <div class="card-title">GPSD：生成式预训练 + 稀疏冻结，解锁判别排序 Scaling Law</div>
+          <div class="card-subtitle">Scaling Discriminative Recommendation via Generative Pretraining · Alibaba KDD 2025</div>
+          <div class="card-summary">首次在工业规模验证判别排序 Scaling Law（13K→0.3B 密集参数）；ST&SF（稀疏迁移+冻结）根本消除两类过拟合；跨架构迁移有效（Transformer→HSTU/Wukong）；AliExpress 生产 CTR/CVR 双提升。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- LiGR 2025 -->
+      <a class="paper-card" href="ligr.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">KDD 2025 · arXiv 2502.03417</span>
+            <span class="tag tc-rank">生成式排序 · Setwise</span>
+          </div>
+          <div class="card-title">LiGR：7 特征超越数百特征，LinkedIn Transformer 排序实践</div>
+          <div class="card-subtitle">From Features to Transformers · LinkedIn KDD 2025</div>
+          <div class="card-summary">Gated skip-connection 解决大模型训练稳定性；Setwise Attention 替代规则多样性；序列长度/层数/嵌入维度同步扩展验证 Scaling Law；DAU +0.27%，Feed 时长 +0.28%。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- Prefix-Ngram 2025 -->
+      <a class="paper-card" href="prefix-ngram.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">arXiv 2504.02137</span>
+            <span class="tag tc-rank">排序侧 SID · Meta</span>
+          </div>
+          <div class="card-title">Prefix-Ngram：Meta 广告排序层次化 SID 特征方案</div>
+          <div class="card-subtitle">Semantic IDs for Large-Scale Recommendation Systems · Meta Ads</div>
+          <div class="card-summary">FLOPs Regularizer 防止 codebook collapse；Prefix-Ngram 层次化特征 + DLRM 嵌入；冷启动 + 整体 CTR 双提升，Meta 广告生产验证。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- SIDE 2025 -->
+      <a class="paper-card" href="side.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">arXiv 2506.16698</span>
+            <span class="tag tc-rank">排序全链路 · Instagram</span>
+          </div>
+          <div class="card-title">SIDE：SID 推广到排序全栈，序列 + 交叉特征全覆盖</div>
+          <div class="card-subtitle">Scaling Item Representations via Semantic IDs · Meta Instagram</div>
+          <div class="card-summary">用户 SID 历史序列特征 + 候选 SID 交叉计数特征，覆盖 CTR/CVR 全链路，冷启动收益最显著，Instagram 生产正向。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
       <!-- TRM 2026 -->
       <a class="paper-card" href="trm.html">
         <div>
@@ -712,8 +967,52 @@
     <div class="empty">暂无解读，敬请期待</div>
   </div>
 
+  <!-- ═══════════════════════════════════════════════════
+       学习笔记板块
+       ═══════════════════════════════════════════════════ -->
+  <div id="panel-notes" class="panel">
+    <div class="cat-header">
+      <span class="tab-dot" style="background:#0891b2;width:9px;height:9px;border-radius:50%;display:inline-block"></span>
+      <h2>学习笔记</h2>
+      <span class="cat-desc">LLM 基础技术专题精讲 · 结合实例深度解析</span>
+    </div>
+    <div class="paper-list">
+
+      <!-- Tokenizer -->
+      <a class="paper-card" href="notes-tokenizer.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#e0f7fa;color:#006064;">📝 学习笔记</span>
+            <span class="tag ty">LLM 基础</span>
+            <span class="tag tc-nlp">Tokenizer</span>
+          </div>
+          <div class="card-title">LLM Tokenizer 方法总结：BPE / WordPiece / Unigram / SentencePiece</div>
+          <div class="card-subtitle">从字符到 Token 的完整演化路径，含每种方法的算法细节、对比与工业应用</div>
+          <div class="card-summary">覆盖 BPE（GPT 系列）、WordPiece（BERT）、Unigram Language Model（T5/XLNet）、SentencePiece（统一框架）、Byte-level BPE（GPT-2/LLaMA）、tiktoken 等主流方案。每种方法都有具体示例演示词表构建过程，并附 vocab size 选择、多语言处理、OOV 等工程实践经验。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- RL in LLM -->
+      <a class="paper-card" href="notes-rl.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#e0f7fa;color:#006064;">📝 学习笔记</span>
+            <span class="tag ty">LLM 基础</span>
+            <span class="tag tc-llm">强化学习</span>
+          </div>
+          <div class="card-title">LLM 中的强化学习方法：RLHF / PPO / DPO / GRPO / RLAIF 全面解析</div>
+          <div class="card-subtitle">从 InstructGPT 到 DeepSeek-R1，覆盖 LLM 对齐训练的所有主流 RL 范式</div>
+          <div class="card-summary">从 MDP 基础讲起，详解 RLHF 三阶段流程，PPO 裁剪目标与 KL 惩罚，再到无需参考模型的 DPO / IPO，以及 GRPO（用于 CoT 推理的群体相对策略优化），全程结合「帮我写邮件」「做数学题」等真实例子，每个算法都有直觉理解 + 公式 + 例子三合一。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+    </div>
+  </div>
+
   <div class="footer">
-    © 2025 · 推荐系统论文笔记
+    © 2025 · 学习笔记 &amp; 推荐系统论文解读
   </div>
 </div>
 
