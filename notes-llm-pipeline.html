@@ -301,119 +301,182 @@
       <section class="section" id="sft">
         <div class="section-title">
           <div class="icon" style="background:#dcfce7;">🎓</div>
-          §2 SFT 监督微调：教模型「说人话」
+          §2 SFT 监督微调：完整训练流程深度解析
         </div>
 
-        <h3 id="sft-what">2.1 SFT 的本质——「看示范，学格式」</h3>
+        <h3 id="sft-what">2.1 SFT 到底在做什么——从数据到参数更新的完整过程</h3>
 
-        <p>SFT（Supervised Fine-Tuning，监督微调）的训练数据格式是：</p>
+        <p>SFT（Supervised Fine-Tuning）本质上是一个普通的监督学习，但有几个关键细节决定了它的效果。我们从头到尾完整走一遍：</p>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0;">
+        <div class="big-concept">
+          <div class="big-concept-title">🗺️ SFT 完整流程一览</div>
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:12px 0;">
+            <div style="background:#dbeafe;border-radius:10px;padding:10px;text-align:center;font-size:13px;"><strong>① 准备数据</strong><br><span style="color:#475569;">(prompt, response) 对</span></div>
+            <div style="background:#e0f2fe;border-radius:10px;padding:10px;text-align:center;font-size:13px;"><strong>② 应用模板</strong><br><span style="color:#475569;">ChatML 格式化</span></div>
+            <div style="background:#dcfce7;border-radius:10px;padding:10px;text-align:center;font-size:13px;"><strong>③ 设 Loss Mask</strong><br><span style="color:#475569;">只对回答计算 loss</span></div>
+            <div style="background:#fef3c7;border-radius:10px;padding:10px;text-align:center;font-size:13px;"><strong>④ 前向传播</strong><br><span style="color:#475569;">计算 cross-entropy</span></div>
+            <div style="background:#fae8ff;border-radius:10px;padding:10px;text-align:center;font-size:13px;"><strong>⑤ 反向传播</strong><br><span style="color:#475569;">更新参数（全量或 LoRA）</span></div>
+          </div>
+        </div>
+
+        <h3 id="sft-data-format">2.2 Step 1&2：数据格式——ChatML 模板详解</h3>
+
+        <p>SFT 的原始数据是一批 <code>(prompt, response)</code> 对，比如：</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0;">
           <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:14px;">
-            <div style="font-weight:700;color:#1d4ed8;margin-bottom:8px;">输入（Prompt）</div>
-            <div style="font-size:14px;">「请帮我写一封请假邮件，我明天要去看病」</div>
+            <div style="font-weight:700;color:#1d4ed8;margin-bottom:8px;">prompt（由人类或模板生成）</div>
+            <div style="font-size:13px;">「请用简单语言解释什么是递归」</div>
           </div>
           <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:12px;padding:14px;">
-            <div style="font-weight:700;color:#166534;margin-bottom:8px;">期望输出（Response，由人类标注）</div>
-            <div style="font-size:14px;">「主题：请假申请……尊敬的领导，您好！我因身体不适，明天需要请假……」</div>
+            <div style="font-weight:700;color:#166534;margin-bottom:8px;">response（由人类标注员撰写）</div>
+            <div style="font-size:13px;">「递归就像一面镜子对着另一面镜子……（高质量解释）」</div>
           </div>
         </div>
 
-        <p>用成千上万个这样的 (prompt, response) 对，在 Base Model 上做监督学习：</p>
+        <p>喂给模型之前，必须先套上<strong>对话模板（Chat Template）</strong>，把数据整理成模型能理解的格式。以 ChatML 格式（OpenAI、Qwen 等使用）为例：</p>
+
+        <pre style="background:#1e293b;color:#e2e8f0;border-radius:12px;padding:18px 22px;font-size:13px;line-height:1.9;overflow-x:auto;"><span style="color:#94a3b8;"># ─────────────────────────────────────────────────────────────
+# 送入模型的完整 token 序列（已经过 tokenizer 编码）
+# 每一行对应一段原始文本，右边注释说明 loss_mask 状态
+# ─────────────────────────────────────────────────────────────</span>
+<span style="color:#86efac;">&lt;|im_start|&gt;</span><span style="color:#fde68a;">system</span><span style="color:#94a3b8;">\n</span>
+你是一个有帮助的 AI 助手。<span style="color:#86efac;">&lt;|im_end|&gt;</span><span style="color:#94a3b8;">\n</span>        <span style="color:#f87171;">← loss_mask = 0，不计算 loss</span>
+
+<span style="color:#86efac;">&lt;|im_start|&gt;</span><span style="color:#fde68a;">user</span><span style="color:#94a3b8;">\n</span>
+请用简单语言解释什么是递归<span style="color:#86efac;">&lt;|im_end|&gt;</span><span style="color:#94a3b8;">\n</span>     <span style="color:#f87171;">← loss_mask = 0，不计算 loss</span>
+
+<span style="color:#86efac;">&lt;|im_start|&gt;</span><span style="color:#fde68a;">assistant</span><span style="color:#94a3b8;">\n</span>
+递归就像一面镜子对着另一面镜子，<span style="color:#94a3b8;">\n</span>        <span style="color:#86efac;">← loss_mask = 1，计算 loss ✓</span>
+你能看到无限层叠的反射。...<span style="color:#86efac;">&lt;|im_end|&gt;</span><span style="color:#94a3b8;">\n</span>  <span style="color:#86efac;">← loss_mask = 1，计算 loss ✓</span></pre>
+
+        <div class="callout-blue">
+          <strong>为什么 prompt 部分 loss_mask = 0？</strong><br>
+          因为 SFT 的目标是教模型「如何回答」，不是教它「如何提问」。如果对 prompt 也计算 loss，模型会浪费容量去记忆 prompt 的写法，反而影响对 response 的学习质量。<br>
+          具体实现：在构造训练 batch 时，把 prompt token 对应的 label 全部设为 <code>-100</code>（PyTorch CrossEntropyLoss 的 ignore_index），这样这些位置不会产生梯度。
+        </div>
+
+        <h3 id="sft-loss">2.3 Step 3&4：Loss 函数——只计算 response 的 Cross-Entropy</h3>
+
+        <p>设 response 部分共有 $T$ 个 token，SFT 的 loss 就是对这 $T$ 个位置做 next-token prediction 的交叉熵：</p>
 
         <div class="formula-block">
-          $$\mathcal{L}_{SFT} = -\sum_{t=1}^{T} \log P_\theta(y_t \mid x, y_1, \ldots, y_{t-1})$$
+          $$\mathcal{L}_{SFT} = -\frac{1}{T} \sum_{t=1}^{T} \log P_\theta\!\left(y_t \;\middle|\; \underbrace{x}_{\text{prompt}} ,\, y_1, \ldots, y_{t-1}\right)$$
         </div>
 
         <div class="formula-vars">
-          <div class="var-title">和预训练损失的区别</div>
+          <div class="var-title">逐项理解</div>
           <ul>
-            <li>$x$：prompt（输入指令，固定，<strong>只用于提供上下文，不计入损失</strong>）</li>
-            <li>$y_1, \ldots, y_T$：期望的回答（<strong>只对回答部分计算损失</strong>）</li>
-            <li>预训练：对整段文本的每个 token 都计算损失</li>
-            <li>SFT：只对「回答」部分计算损失，不对「prompt」部分计算——只学如何回答，不学如何提问</li>
+            <li>$x$：prompt（system + user 部分），只提供上下文，<strong>不产生 loss</strong></li>
+            <li>$y_t$：response 中第 $t$ 个 token 的真实标签</li>
+            <li>$P_\theta(y_t \mid \cdot)$：模型预测第 $t$ 个位置是 $y_t$ 的概率</li>
+            <li>整体目标：让模型在看到 prompt 和前面已生成 token 的条件下，尽量准确预测 response 的每一个后续 token</li>
+            <li>和预训练 loss 唯一的区别：<strong>加了 loss mask，排除了 prompt 的贡献</strong></li>
           </ul>
         </div>
 
-        <div class="analogy-box">
-          <div class="analogy-title">🎓 类比：新员工培训</div>
-          <p>假设你招了一个读了很多书但没工作经验的应届生（= Base Model）。</p>
-          <p>SFT 就像给他/她做岗前培训：「当客户问你 A，你应该这样回答……当客户问 B，你应该这样回答……」展示几千个具体的 QA 示例，让他/她学会工作格式和风格。</p>
-          <p><strong>关键限制：</strong>培训案例的数量和质量有上限（标注员写不了无穷多个高质量示例），所以 SFT 只能让模型学会"及格"，但不能让模型变得"真正优秀"。而且 SFT 很难教会模型什么是好的回答、什么是坏的回答——它只能模仿示例。</p>
+        <div class="example-box">
+          <div class="ex-title">💡 一条数据的 loss 计算过程（简化版）</div>
+          <p>假设 response 是「好的」（被 tokenizer 分成 3 个 token：「好」「的」「&lt;|im_end|&gt;」）：</p>
+          <div style="font-size:13px;font-family:monospace;background:#f8fafc;border-radius:8px;padding:12px;margin:8px 0;line-height:2;">
+            t=1：模型看到 prompt，预测下一个词 → P(「好」) = 0.72 → loss₁ = -log(0.72) = 0.329<br>
+            t=2：模型看到 prompt + 「好」，预测 → P(「的」) = 0.88 → loss₂ = -log(0.88) = 0.128<br>
+            t=3：模型看到前两步，预测结束符 → P(「&lt;im_end&gt;」) = 0.91 → loss₃ = -log(0.91) = 0.094<br>
+            <strong>total loss = (0.329 + 0.128 + 0.094) / 3 = 0.184</strong>
+          </div>
+          <p>反向传播：梯度只来自这 3 个位置，prompt 部分对梯度无贡献。</p>
         </div>
 
-        <h3 id="sft-data">2.2 SFT 数据的关键性——质量远比数量重要</h3>
+        <h3 id="sft-lora">2.4 Step 5：参数更新——全量微调 vs LoRA</h3>
 
-        <p>InstructGPT 论文里有一个著名的结论：</p>
+        <p>Base Model 通常有 7B～405B 参数。SFT 时更新参数有两种策略：</p>
 
-        <blockquote>用 13,000 条高质量标注数据训练的 1.3B SFT 模型，在人类评估中胜过了直接在 100B 参数 GPT-3 上 prompted 的版本。</blockquote>
+        <div class="two-col" style="margin:14px 0;">
+          <div class="mini-card" style="border:2px solid #bfdbfe;">
+            <h4 style="color:#1e40af;">全量微调（Full Fine-tuning）</h4>
+            <p>更新模型的所有参数。一个 7B 模型用 bf16 存储需要 14GB，加上梯度和优化器状态（Adam 需要 3x 参数量），训练时需要约 <strong>7×4 = 56GB</strong> 显存。</p>
+            <p style="color:#dc2626;font-size:13px;">⚠️ 对于 70B 以上的模型，单机根本跑不了，需要模型并行（ZeRO-3）。</p>
+            <p>适用场景：你有充足 GPU，想要最好的效果。</p>
+          </div>
+          <div class="mini-card" style="border:2px solid #86efac;">
+            <h4 style="color:#166534;">LoRA（参数高效微调）</h4>
+            <p>LoRA 的核心思想：大模型的参数更新矩阵 $\Delta W$ 可以用两个低秩矩阵近似：</p>
+            <div class="formula-block" style="margin:8px 0;font-size:13px;">$$\Delta W = B \cdot A, \quad B \in \mathbb{R}^{d \times r},\; A \in \mathbb{R}^{r \times k},\; r \ll \min(d, k)$$</div>
+            <p>只训练 $A$ 和 $B$，冻结原始权重 $W_0$。前向传播时：$h = W_0 x + \Delta W x = W_0 x + BAx$</p>
+            <p>如果 $r=16$，$d=k=4096$（LLaMA-7B 的 attention 维度），则 $\Delta W$ 有 $4096^2 \approx 16M$ 参数，但 $A+B$ 只有 $2 \times 4096 \times 16 = 131K$ 参数，<strong>压缩约 120 倍</strong>。</p>
+            <p style="color:#166534;font-size:13px;">✅ 7B 模型用 LoRA 只需 10~16GB 显存，一张 4090 就能跑。</p>
+          </div>
+        </div>
 
-        <p>为什么质量比数量重要？</p>
+        <div class="callout-blue">
+          <strong>LoRA 挂载在哪些层？</strong><br>
+          通常挂在 Transformer 的 Self-Attention 层，具体是 Q、K、V 三个投影矩阵（有时也加 O 矩阵和 FFN 层）。Embedding 和 LayerNorm 一般不加 LoRA。<br>
+          <strong>关键超参：</strong>rank（秩 $r$，常用 8/16/32/64）和 lora_alpha（缩放系数，通常 = rank 或 2×rank），以及 target_modules（指定挂哪些层）。
+        </div>
+
+        <h3 id="sft-multiturn">2.5 多轮对话的 SFT 处理</h3>
+
+        <p>实际场景中 SFT 数据往往是多轮对话。多轮对话的 loss mask 有两种策略：</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>策略</th><th>loss mask 设置</th><th>优缺点</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>只算最后一轮</strong></td>
+                <td>只对最后一个 assistant 回合计算 loss，前面的 user/assistant 均 mask 掉</td>
+                <td>实现简单，但浪费了前几轮对话中 assistant 的监督信号</td>
+              </tr>
+              <tr>
+                <td><strong>所有 assistant 轮都算</strong>（推荐）</td>
+                <td>每个 assistant 回合的 token 都计算 loss，user/system 的 token 全部 mask</td>
+                <td>充分利用标注数据，训练更高效。目前大多数开源方案默认这种</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <pre style="background:#1e293b;color:#e2e8f0;border-radius:12px;padding:18px 22px;font-size:13px;line-height:1.9;overflow-x:auto;"><span style="color:#94a3b8;"># 多轮对话的完整 token 序列示例（assistant 回合都计算 loss）</span>
+&lt;|im_start|&gt;system\n你是助手。&lt;|im_end|&gt;\n              <span style="color:#f87171;">← mask</span>
+&lt;|im_start|&gt;user\n你好&lt;|im_end|&gt;\n                   <span style="color:#f87171;">← mask</span>
+&lt;|im_start|&gt;assistant\n你好！有什么可以帮你？&lt;|im_end|&gt;\n  <span style="color:#86efac;">← loss ✓</span>
+&lt;|im_start|&gt;user\n解释递归&lt;|im_end|&gt;\n               <span style="color:#f87171;">← mask</span>
+&lt;|im_start|&gt;assistant\n递归是...&lt;|im_end|&gt;\n         <span style="color:#86efac;">← loss ✓</span></pre>
+
+        <h3 id="sft-data">2.6 SFT 数据质量——「垃圾进，垃圾出」的典型案例</h3>
+
+        <p>SFT 的学习信号完全来自人类标注，标注质量决定了模型上限。</p>
+
+        <blockquote>InstructGPT 的著名结论：<strong>13,000 条高质量数据训练的 1.3B 模型</strong>，人类偏好胜过没有 SFT 的 <strong>175B GPT-3</strong>。数据质量 >> 数据量 >> 模型大小。</blockquote>
 
         <div class="three-col">
           <div class="mini-card">
             <h4>🎯 格式一致性</h4>
-            <p>所有示例需要遵循统一的对话格式（system prompt 风格、回答结构、拒绝方式），混乱的格式会让模型困惑。</p>
+            <p>所有数据必须使用同一套 Chat Template，system prompt 风格、回答结构、拒绝格式保持统一。格式混乱会让模型在两种格式之间反复摇摆，两边都学不好。</p>
           </div>
           <div class="mini-card">
-            <h4>📏 回答质量</h4>
-            <p>示例回答必须是真正高质量的——如果标注员写了一个平庸的回答，模型就学到了平庸。<strong>"垃圾进，垃圾出"</strong>在 SFT 里极其明显。</p>
+            <h4>📏 回答质量决定天花板</h4>
+            <p>模型只能学到标注员能写出来的水平。如果 50% 的标注是平庸的，模型就会学到平庸。要求标注员按「专家水平」而非「及格水平」来写示例。</p>
           </div>
           <div class="mini-card">
-            <h4>🌐 覆盖多样性</h4>
-            <p>要覆盖各种类型的请求（写作/代码/知识问答/对话/安全拒绝……），避免模型只会回答某些类型的问题。</p>
+            <h4>🌐 任务覆盖多样性</h4>
+            <p>数据需要覆盖：写作/代码/数学/知识问答/对话/分析/角色扮演/安全拒绝……如果某类任务数据很少，模型在这类任务上就会表现差（分布外问题）。</p>
           </div>
         </div>
 
-        <div class="example-box">
-          <div class="ex-title">💡 不同质量标注数据对 SFT 效果的影响</div>
-          <p><strong>低质量标注（会导致模型学到什么）：</strong></p>
-          <div style="background:#fee2e2;padding:10px;border-radius:8px;font-size:13px;margin:8px 0;">
-            Prompt: 「解释一下什么是黑洞」<br>
-            Response: 「黑洞是宇宙中的一种天体，引力很强，连光都无法逃脱。」（过于简短，没有解释，没有结构）
-          </div>
-          <p><strong>高质量标注（InstructGPT 标准）：</strong></p>
-          <div style="background:#dcfce7;padding:10px;border-radius:8px;font-size:13px;margin:8px 0;">
-            Prompt: 「解释一下什么是黑洞」<br>
-            Response: 「黑洞是时空中引力强到极致的区域。当足够大的恒星在生命末期塌缩时，物质被压缩到极小的空间，形成一个"事件视界"——一旦越过这个边界，任何物质甚至光都无法逃脱。<br>
-            可以这样理解：想象把太阳压缩到一个高尔夫球大小的空间里。引力会变得如此强大，以至于……（继续展开解释，有类比，有结构）」
-          </div>
-        </div>
-
-        <h3 id="sft-loss">2.3 SFT 的训练细节</h3>
-
-        <h4>模板格式（ChatML 为例）</h4>
-        <pre style="background:#1e293b;color:#e2e8f0;border-radius:12px;padding:16px 20px;font-size:13px;line-height:1.7;overflow-x:auto;"><span style="color:#94a3b8;"># SFT 训练时，文本被组织成如下格式，每个 token 都有标记</span>
-<span style="color:#86efac;">&lt;|im_start|&gt;</span><span style="color:#fde68a;">system</span>
-你是一个有帮助的 AI 助手。<span style="color:#86efac;">&lt;|im_end|&gt;</span>    <span style="color:#94a3b8;">← system prompt，不参与损失计算</span>
-<span style="color:#86efac;">&lt;|im_start|&gt;</span><span style="color:#fde68a;">user</span>
-请帮我写一封请假邮件。<span style="color:#86efac;">&lt;|im_end|&gt;</span>       <span style="color:#94a3b8;">← user input，不参与损失计算</span>
-<span style="color:#86efac;">&lt;|im_start|&gt;</span><span style="color:#fde68a;">assistant</span>
-当然！这是一封请假邮件：...  <span style="color:#86efac;">&lt;|im_end|&gt;</span>  <span style="color:#94a3b8;">← 这部分参与损失计算！模型只学这里</span>
-</pre>
-
-        <h4>微调策略</h4>
-        <div class="two-col">
-          <div class="mini-card">
-            <h4>全量微调（Full Fine-tuning）</h4>
-            <p>更新所有参数，效果最好但成本极高。只有大公司预训练自己的模型时才用。</p>
-          </div>
-          <div class="mini-card">
-            <h4>LoRA / QLoRA（参数高效微调）</h4>
-            <p>只训练少量低秩矩阵，成本低 100x，效果接近全量微调。开源社区 99% 的 SFT 都用 LoRA。</p>
-          </div>
-        </div>
-
-        <h3 id="sft-limit">2.4 SFT 的根本局限——为什么还需要 RLHF</h3>
+        <h3 id="sft-limit">2.7 SFT 的根本局限——为什么还需要 RLHF</h3>
 
         <div class="callout-red">
-          <strong>SFT 的两大根本问题：</strong>
+          <strong>SFT 存在的两大根本问题：</strong>
           <ol>
-            <li><strong>「模仿」而非「理解好坏」：</strong>SFT 让模型学习模仿标注员的示例，但标注员写的示例质量有上限，而且模型没有学会判断「哪种回答更好」的能力。</li>
-            <li><strong>无法覆盖所有情况：</strong>即使有 10 万条 SFT 数据，真实用户会问出无数种模型从未见过的问题。SFT 无法给出「见过类似问题时该怎么推广」的泛化能力。</li>
+            <li>
+              <strong>只会「模仿」，不理解「好坏」：</strong>损失函数告诉模型「你要输出 token A」，但从不告诉模型「为什么 A 比 B 好」。模型没有形成对质量的判断能力，只是在记忆和泛化标注员的写作风格。
+              <br>后果：遇到没见过的 prompt，模型不知道什么样的回答才算好，只能「随机漫步」。
+            </li>
+            <li>
+              <strong>标注示例质量有上限：</strong>人类标注员无法对每一种可能的 prompt 都写出「最优」回答，只能写出「还不错」的示例。SFT 把模型训练到「接近标注员水平」，但无法超越。
+            </li>
           </ol>
-          <p><strong>核心矛盾：</strong>我们真正想要的是「模型能判断哪种回答更好」——但 SFT 的损失函数只告诉模型「模仿这个示例」，从来没有告诉模型「为什么这样回答比那样好」。</p>
-          <p>RLHF 的出现，就是为了直接教给模型「什么是好、什么是坏」的判断能力。</p>
+          <p><strong>RLHF 的解法：</strong>不再问「模型应该输出什么」，而是问「模型的输出够不够好」——通过大量尝试 + 奖励模型评分 + 强化学习更新，让模型自己摸索出超越标注员示例的策略。</p>
         </div>
       </section>
 
@@ -465,6 +528,70 @@
             </div>
             <p style="font-size:13px;margin:8px 0 0;">其中 $r_\theta(x, y)$ 是奖励模型对 (prompt $x$, 回答 $y$) 的打分，$\sigma$ 是 sigmoid 函数。这个损失让 $r(x, y_w) > r(x, y_l)$，即好回答的分数更高。</p>
           </div>
+        </div>
+
+        <!-- Bradley-Terry 展开讲解 -->
+        <div class="big-concept" style="margin-top:18px;">
+          <div class="big-concept-title">🔬 Bradley-Terry 模型详解——为什么这个损失函数有效？</div>
+
+          <h4 style="margin:14px 0 8px;color:#1e40af;">① 原始 Bradley-Terry 假设</h4>
+          <p style="font-size:14px;">Bradley-Terry（1952）是一个用于<strong>成对比较（Pairwise Comparison）</strong>的概率模型。它假设每个「选手」有一个潜在能力值（strength）$s_i$，两者之间的胜负概率为：</p>
+          <div class="formula-block" style="font-size:14px;">
+            $$P(i \text{ 胜过 } j) = \frac{s_i}{s_i + s_j}$$
+          </div>
+          <p style="font-size:14px;">对应到奖励模型，我们把打分 $r_\theta(x, y)$ 当作「能力值」，令 $s = e^{r}$（保证正数），则：</p>
+          <div class="formula-block" style="font-size:14px;">
+            $$P(y_w \succ y_l \mid x) = \frac{e^{r_\theta(x,\,y_w)}}{e^{r_\theta(x,\,y_w)} + e^{r_\theta(x,\,y_l)}} = \sigma\!\left(r_\theta(x, y_w) - r_\theta(x, y_l)\right)$$
+          </div>
+          <p style="font-size:14px;">最后一步用了 sigmoid 的等价变形：$\frac{e^a}{e^a+e^b} = \frac{1}{1+e^{b-a}} = \sigma(a-b)$。</p>
+          <p style="font-size:14px;color:#374151;background:#f0fdf4;border-radius:8px;padding:10px 14px;border:1px solid #86efac;margin-top:6px;">
+            <strong>直觉：</strong>$\sigma(r_w - r_l)$ 就是「奖励模型认为 $y_w$ 更好的概率」。当 $r_w \gg r_l$ 时这个概率接近 1；当两者相等时为 0.5；当 $r_w \ll r_l$ 时接近 0。
+          </p>
+
+          <h4 style="margin:18px 0 8px;color:#1e40af;">② 从最大似然到损失函数</h4>
+          <p style="font-size:14px;">我们希望奖励模型「尽量正确地复现人类的偏好判断」，即最大化人类标注数据上的对数似然：</p>
+          <div class="formula-block" style="font-size:14px;">
+            $$\max_\theta \;\mathbb{E}_{(x,\,y_w,\,y_l)}\!\left[\log P_\theta(y_w \succ y_l \mid x)\right] = \max_\theta \;\mathbb{E}\!\left[\log \sigma\!\left(r_\theta(x,y_w) - r_\theta(x,y_l)\right)\right]$$
+          </div>
+          <p style="font-size:14px;">取负号变成最小化损失，就得到我们看到的 $\mathcal{L}_{RM}$：</p>
+          <div class="formula-block" style="font-size:14px;">
+            $$\mathcal{L}_{RM} = -\mathbb{E}\!\left[\log \sigma\!\left(r_\theta(x,y_w) - r_\theta(x,y_l)\right)\right]$$
+          </div>
+          <p style="font-size:14px;color:#374151;background:#eff6ff;border-radius:8px;padding:10px 14px;border:1px solid #bfdbfe;margin-top:6px;">
+            <strong>本质：</strong>这和二分类的交叉熵完全等价——把「$y_w$ 比 $y_l$ 好」当作正例（label=1），用 sigmoid 输出预测概率，做 Binary Cross-Entropy。唯一特别之处是输入不是单个样本的 logit，而是<strong>两个得分的差值</strong>。
+          </p>
+
+          <h4 style="margin:18px 0 8px;color:#1e40af;">③ 梯度方向——参数怎么更新</h4>
+          <p style="font-size:14px;">对 $r_\theta(x, y_w)$ 求偏导（令 $\Delta = r_w - r_l$）：</p>
+          <div class="formula-block" style="font-size:14px;">
+            $$\frac{\partial \mathcal{L}_{RM}}{\partial r_w} = -\frac{\partial}{\partial r_w}\log\sigma(\Delta) = -(1 - \sigma(\Delta)) = \sigma(\Delta) - 1 \leq 0$$
+          </div>
+          <p style="font-size:14px;">梯度为负 → 梯度下降时 $r_w$ 增大（好回答分数涨）。<br>
+          对 $r_l$ 求导同理得 $\sigma(\Delta) \geq 0$，即 $r_l$ 减小（差回答分数跌）。</p>
+          <div class="table-wrap" style="margin:10px 0 0;">
+            <table style="font-size:13px;">
+              <thead><tr><th>当前情况</th><th>$\sigma(\Delta)$</th><th>梯度幅度</th><th>更新力度</th></tr></thead>
+              <tbody>
+                <tr><td>$r_w \gg r_l$（模型已判断正确）</td><td>≈ 1</td><td>≈ 0</td><td>几乎不更新（已经很确信）</td></tr>
+                <tr><td>$r_w \approx r_l$（模型举棋不定）</td><td>≈ 0.5</td><td>≈ 0.5</td><td>较大更新（最需要学习的地方）</td></tr>
+                <tr><td>$r_w \ll r_l$（判断错了）</td><td>≈ 0</td><td>≈ 1</td><td>最大更新（强力纠错）</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p style="font-size:14px;margin-top:10px;">这个自适应的更新幅度是 BT 损失的优雅之处——<strong>越难的样本（模型判断不确定或判断错误）得到越大的学习信号</strong>，和人类考试时「错题重点复习」的直觉完全一致。</p>
+
+          <h4 style="margin:18px 0 8px;color:#1e40af;">④ 具体数值示例</h4>
+          <p style="font-size:14px;">假设当前奖励模型对上文「天空为什么是蓝色」例子的打分是：$r(B)=2.1,\; r(D)=1.3,\; r(A)=0.8,\; r(C)=-0.5$</p>
+          <p style="font-size:14px;">对训练对 (B, D)（B 应该比 D 好）：</p>
+          <div class="formula-block" style="font-size:13px;">
+            $$\sigma(r_B - r_D) = \sigma(2.1 - 1.3) = \sigma(0.8) = \frac{1}{1+e^{-0.8}} \approx 0.69$$
+          </div>
+          <p style="font-size:14px;">loss = $-\log(0.69) \approx 0.37$，梯度幅度 = $1 - 0.69 = 0.31$，模型需要进一步拉大 B 和 D 的差距。</p>
+          <p style="font-size:14px;">对训练对 (B, C)（B 应该比 C 好）：</p>
+          <div class="formula-block" style="font-size:13px;">
+            $$\sigma(r_B - r_C) = \sigma(2.1 - (-0.5)) = \sigma(2.6) \approx 0.93$$
+          </div>
+          <p style="font-size:14px;">loss = $-\log(0.93) \approx 0.07$，梯度幅度 = $1 - 0.93 = 0.07$，模型已经很确信 B > C，几乎不更新——<strong>把宝贵的学习机会留给更难区分的对</strong>。</p>
         </div>
 
         <div class="example-box">
