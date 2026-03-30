@@ -56,6 +56,7 @@
     .analogy-box{background:#faf5ff;border:1px solid #c4b5fd;border-radius:14px;padding:18px 20px;margin:18px 0;}
     .analogy-title{font-weight:700;color:#5b21b6;margin-bottom:10px;font-size:14px;}
     .formula-block{background:#1e293b;color:#e2e8f0;border-radius:12px;padding:16px 20px;margin:14px 0;overflow-x:auto;text-align:center;font-size:15px;}
+    .formula-light{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px 20px;margin:14px 0;overflow-x:auto;text-align:center;font-size:15px;color:#1e293b;}
     .formula-vars{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px 18px;margin:8px 0 16px;}
     .formula-vars .var-title{font-weight:700;color:#475569;font-size:13px;margin-bottom:8px;}
     .derivation{background:#1e293b;color:#e2e8f0;border-radius:12px;padding:18px 24px;margin:14px 0;font-size:14px;line-height:2.2;}
@@ -144,7 +145,7 @@
 
         <p>在 Bradley-Terry 奖励模型、逻辑回归、神经网络输出层里，我们反复看到一个变形：</p>
 
-        <div class="formula-block">
+        <div class="formula-light">
           $$\frac{e^a}{e^a + e^b} = \sigma(a - b)$$
         </div>
 
@@ -153,7 +154,7 @@
         <h3 id="sigmoid-derive">1.1 完整推导步骤</h3>
 
         <p>先回忆 sigmoid 函数的定义：</p>
-        <div class="formula-block">
+        <div class="formula-light">
           $$\sigma(x) \;=\; \frac{1}{1 + e^{-x}}$$
         </div>
 
@@ -191,13 +192,13 @@
 
         <p>Bradley-Terry 假设每个选手有潜在能力值 $s_i$，且令 $s = e^r$（保证正数），则胜率为：</p>
 
-        <div class="formula-block">
+        <div class="formula-light">
           $$P(y_w \succ y_l) = \frac{s_w}{s_w + s_l} = \frac{e^{r_w}}{e^{r_w} + e^{r_l}}$$
         </div>
 
         <p>直接套用上面的等价变形（令 $a = r_w,\; b = r_l$）：</p>
 
-        <div class="formula-block">
+        <div class="formula-light">
           $$P(y_w \succ y_l) = \frac{e^{r_w}}{e^{r_w} + e^{r_l}} = \sigma(r_w - r_l)$$
         </div>
 
@@ -231,7 +232,7 @@
         </div>
 
         <p>Bradley-Terry 损失函数为（对单个样本）：</p>
-        <div class="formula-block">
+        <div class="formula-light">
           $$\mathcal{L} = -\log \sigma(r_w - r_l) = -\log \sigma(\Delta), \quad \Delta = r_w - r_l$$
         </div>
 
@@ -353,11 +354,11 @@
         </div>
 
         <p>形式化定义：似然函数（Likelihood）是参数 $\theta$ 的函数：</p>
-        <div class="formula-block">
+        <div class="formula-light">
           $$\mathcal{L}(\theta) = P_\theta(\mathcal{D}) = \prod_{i=1}^{N} P_\theta(x_i)$$
         </div>
         <p>（假设数据独立同分布）最大似然估计就是找让似然最大的参数：</p>
-        <div class="formula-block">
+        <div class="formula-light">
           $$\hat{\theta}_{MLE} = \arg\max_\theta \; \mathcal{L}(\theta) = \arg\max_\theta \prod_{i=1}^{N} P_\theta(x_i)$$
         </div>
 
@@ -367,7 +368,7 @@
 
         <p>由于 $\log$ 是单调递增函数，最大化 $\mathcal{L}(\theta)$ 等价于最大化 $\log \mathcal{L}(\theta)$：</p>
 
-        <div class="formula-block">
+        <div class="formula-light">
           $$\log \mathcal{L}(\theta) = \log \prod_{i=1}^N P_\theta(x_i) = \sum_{i=1}^N \log P_\theta(x_i)$$
         </div>
 
@@ -395,7 +396,7 @@
 
         <p>最大化 $\sum \log P_\theta(x_i)$ 等价于最小化它的负数，再除以 $N$ 取平均（方便梯度稳定）：</p>
 
-        <div class="formula-block">
+        <div class="formula-light">
           $$\mathcal{L}_{NLL}(\theta) = -\frac{1}{N}\sum_{i=1}^N \log P_\theta(x_i)$$
         </div>
 
@@ -459,7 +460,7 @@
 
         <p>对于离散分布 $P$ 和 $Q$，从 $Q$ 到 $P$ 的 KL 散度为：</p>
 
-        <div class="formula-block">
+        <div class="formula-light">
           $$D_{KL}(P \| Q) = \sum_x P(x) \log \frac{P(x)}{Q(x)}$$
         </div>
 
@@ -502,13 +503,13 @@
 
         <p>RLHF 的优化目标中有这一项：</p>
 
-        <div class="formula-block">
+        <div class="formula-light">
           $$-\beta \cdot D_{KL}\!\left[\pi_\theta(\cdot|x) \| \pi_\text{ref}(\cdot|x)\right]$$
         </div>
 
         <p>展开来看，对一条回答 $y$ 中每个 token $y_t$，KL 项等于：</p>
 
-        <div class="formula-block">
+        <div class="formula-light">
           $$D_{KL} = \sum_t \pi_\theta(y_t|x, y_{&lt;t}) \log \frac{\pi_\theta(y_t|x, y_{&lt;t})}{\pi_\text{ref}(y_t|x, y_{&lt;t})}$$
         </div>
 
@@ -533,7 +534,7 @@
 
         <p>信息熵衡量一个分布的「不确定性」：</p>
 
-        <div class="formula-block">
+        <div class="formula-light">
           $$H(P) = -\sum_x P(x) \log P(x) = \mathbb{E}_P[-\log P(x)]$$
         </div>
 
@@ -558,7 +559,7 @@
 
         <p>交叉熵衡量「用分布 $Q$ 来预测真实分布 $P$ 时的平均编码代价」：</p>
 
-        <div class="formula-block">
+        <div class="formula-light">
           $$H(P, Q) = -\sum_x P(x) \log Q(x) = \mathbb{E}_P[-\log Q(x)]$$
         </div>
 
@@ -568,7 +569,7 @@
 
         <div class="big-concept">
           <div class="big-concept-title">🔑 交叉熵 = 信息熵 + KL 散度</div>
-          <div class="formula-block" style="font-size:16px;">
+          <div class="formula-light" style="font-size:16px;font-weight:600;background:#eff6ff;border-color:#93c5fd;">
             $$H(P, Q) = H(P) + D_{KL}(P \| Q)$$
           </div>
           <p style="font-size:14px;margin:10px 0 6px;"><strong>推导（一行）：</strong></p>
@@ -585,7 +586,7 @@
 
         <p>预训练 loss 写作：</p>
 
-        <div class="formula-block">
+        <div class="formula-light">
           $$\mathcal{L}_{PT} = -\sum_t \log P_\theta(x_t \mid x_{&lt;t})$$
         </div>
 
@@ -614,7 +615,7 @@
 
         <h3>6.1 Softmax 定义</h3>
 
-        <div class="formula-block">
+        <div class="formula-light">
           $$\text{softmax}(\mathbf{z})_i = \frac{e^{z_i}}{\sum_j e^{z_j}}$$
         </div>
 
@@ -636,7 +637,7 @@
 
         <p>引入温度系数 $T$：</p>
 
-        <div class="formula-block">
+        <div class="formula-light">
           $$\text{softmax}_T(\mathbf{z})_i = \frac{e^{z_i / T}}{\sum_j e^{z_j / T}}$$
         </div>
 
