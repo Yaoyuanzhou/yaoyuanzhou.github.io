@@ -239,27 +239,120 @@
 
         <h3 id="gradient-derive">2.1 对 $r_w$ 和 $r_l$ 分别求偏导</h3>
 
-        <p>先推导一个常用引理：$\dfrac{d}{dx}\log\sigma(x) = 1 - \sigma(x)$</p>
+        <!-- 前置知识：导数 / 链式法则 / sigmoid 导数 -->
+        <details style="margin:0 0 20px;">
+          <summary style="cursor:pointer;font-weight:600;color:#1e40af;font-size:14px;padding:10px 14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;list-style:none;display:flex;align-items:center;gap:8px;">
+            <span style="font-size:16px;">📖</span> 前置知识回顾：导数 · 链式法则 · Sigmoid 求导
+            <span style="margin-left:auto;font-size:12px;color:#6b7280;">点击展开</span>
+          </summary>
+
+          <div style="padding:16px 18px;border:1px solid #bfdbfe;border-top:none;border-radius:0 0 10px 10px;background:#f8fbff;">
+
+            <h4 style="margin:0 0 10px;color:#1e40af;">① 导数是什么——「变化率」</h4>
+            <p style="font-size:14px;">导数 $f'(x)$ 表示函数 $f$ 在 $x$ 处的<strong>瞬时变化率</strong>：$x$ 变化一点点 $\Delta x$，$f$ 会跟着变多少。</p>
+            <p style="font-size:14px;">形式化定义：$f'(x) = \lim_{\Delta x \to 0} \dfrac{f(x+\Delta x) - f(x)}{\Delta x}$，但实际做题直接套公式，不需要算极限。</p>
+
+            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 16px;margin:10px 0;font-size:14px;">
+              <strong>你需要记住的 3 个基础导数公式：</strong>
+              <div style="margin:8px 0;">
+                <span style="display:inline-block;width:220px;">$\dfrac{d}{dx} e^x = e^x$</span>
+                <span style="color:#6b7280;">（指数函数，导数等于自身）</span>
+              </div>
+              <div style="margin:8px 0;">
+                <span style="display:inline-block;width:220px;">$\dfrac{d}{dx} \ln x = \dfrac{1}{x}$</span>
+                <span style="color:#6b7280;">（自然对数，导数是倒数）</span>
+              </div>
+              <div style="margin:8px 0;">
+                <span style="display:inline-block;width:220px;">$\dfrac{d}{dx} x^n = n x^{n-1}$</span>
+                <span style="color:#6b7280;">（幂函数，指数提前来，原指数减一）</span>
+              </div>
+            </div>
+
+            <h4 style="margin:16px 0 10px;color:#1e40af;">② 链式法则——「复合函数的导数」</h4>
+            <p style="font-size:14px;">如果 $y = f(g(x))$，即先算 $u = g(x)$，再算 $y = f(u)$，那么：</p>
+            <div class="formula-light" style="margin:8px 0;font-size:14px;">
+              $$\frac{dy}{dx} = \frac{dy}{du} \cdot \frac{du}{dx} = f'(g(x)) \cdot g'(x)$$
+            </div>
+            <p style="font-size:14px;"><strong>口诀：外层导数 × 内层导数。</strong></p>
+
+            <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px 16px;margin:10px 0;font-size:13px;">
+              <strong>具体例子 1：</strong>$y = \ln(\sigma(x))$，这里外层是 $\ln$，内层是 $\sigma(x)$<br>
+              $\dfrac{dy}{dx} = \underbrace{\dfrac{1}{\sigma(x)}}_{\text{外层导数 }\frac{d\ln u}{du}=\frac{1}{u}} \cdot \underbrace{\sigma'(x)}_{\text{内层导数}}$<br><br>
+              <strong>具体例子 2：</strong>$y = e^{-x}$，外层是 $e^u$，内层是 $u = -x$<br>
+              $\dfrac{dy}{dx} = e^{-x} \cdot (-1) = -e^{-x}$
+            </div>
+
+            <h4 style="margin:16px 0 10px;color:#1e40af;">③ Sigmoid 的导数——完整推导</h4>
+            <p style="font-size:14px;">$\sigma(x) = \dfrac{1}{1+e^{-x}}$，用链式法则一步步推：</p>
+
+            <div class="derivation" style="font-size:13px;line-height:2.0;">
+              <div>
+                <span class="step-label">改写</span>
+                <span>把 $\sigma(x)$ 写成幂函数形式，方便求导：</span>
+                <span class="highlight">$\sigma(x) = (1+e^{-x})^{-1}$</span>
+              </div>
+              <div>
+                <span class="step-label">Step 1</span>
+                <span>对幂函数 $u^{-1}$ 用幂函数导数公式，外层导数 $= -u^{-2} = -\dfrac{1}{(1+e^{-x})^2}$</span>
+              </div>
+              <div>
+                <span class="step-label">Step 2</span>
+                <span>内层 $u = 1 + e^{-x}$ 对 $x$ 求导：$u' = 0 + (-e^{-x}) = -e^{-x}$</span>
+              </div>
+              <div>
+                <span class="step-label">Step 3</span>
+                <span>链式法则合并：</span>
+                <span class="highlight">$\sigma'(x) = -\dfrac{1}{(1+e^{-x})^2} \cdot (-e^{-x}) = \dfrac{e^{-x}}{(1+e^{-x})^2}$</span>
+              </div>
+              <div>
+                <span class="step-label">Step 4</span>
+                <span>把结果凑成 $\sigma \cdot (1-\sigma)$ 的形式，注意 $\sigma = \dfrac{1}{1+e^{-x}}$，所以 $1 - \sigma = \dfrac{e^{-x}}{1+e^{-x}}$：</span>
+              </div>
+              <div>
+                <span class="highlight">$\sigma'(x) = \dfrac{1}{1+e^{-x}} \cdot \dfrac{e^{-x}}{1+e^{-x}} = \sigma(x) \cdot (1-\sigma(x))$</span>
+                <span class="comment">// 最终结果</span>
+              </div>
+            </div>
+
+            <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:10px 14px;margin:10px 0;font-size:13px;">
+              <strong>记忆口诀：</strong>sigmoid 的导数 = 自身 × (1 - 自身)，即 $\sigma'= \sigma(1-\sigma)$。<br>
+              <strong>数值感觉：</strong>当 $\sigma(x) = 0.5$（$x=0$），导数最大为 $0.5 \times 0.5 = 0.25$；当 $\sigma(x) \to 0$ 或 $1$（饱和区），导数趋近于 $0$（梯度消失！）。
+            </div>
+
+            <h4 style="margin:16px 0 10px;color:#1e40af;">④ 偏导数——多变量的导数</h4>
+            <p style="font-size:14px;">当函数有多个变量（如 $\mathcal{L}(r_w, r_l)$ 同时依赖 $r_w$ 和 $r_l$），对某个变量的<strong>偏导数</strong>是：把其他变量当作常数，只对这一个变量求导。</p>
+            <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px 16px;margin:10px 0;font-size:13px;">
+              <strong>例子：</strong>$\Delta = r_w - r_l$<br>
+              $\dfrac{\partial \Delta}{\partial r_w} = 1$（把 $r_l$ 当常数，对 $r_w$ 求导，$r_w$ 的系数是 1）<br>
+              $\dfrac{\partial \Delta}{\partial r_l} = -1$（把 $r_w$ 当常数，对 $r_l$ 求导，$r_l$ 的系数是 $-1$）
+            </div>
+            <p style="font-size:14px;">符号区别：普通导数用 $\dfrac{d}{dx}$，偏导数用 $\dfrac{\partial}{\partial x}$（∂ 读作「偏」或「curly d」），含义相似，只是强调「多变量里只动这一个」。</p>
+
+          </div>
+        </details>
+
+        <p>有了上面的工具，来推导一个在 §2 全程都要用到的引理：$\dfrac{d}{dx}\log\sigma(x) = 1 - \sigma(x)$</p>
 
         <div class="derivation">
           <div style="margin:6px 0;">
             <span class="step-label">引理</span>
             <span>$\dfrac{d}{dx}\log\sigma(x)$</span>
+            <span class="comment">// 外层是 log，内层是 σ(x)</span>
           </div>
           <div style="margin:6px 0;">
             <span class="step-label">Step 1</span>
+            <span>用链式法则：外层 $\dfrac{d}{du}\log u = \dfrac{1}{u}$，内层导数为 $\sigma'(x)$：</span>
             <span class="highlight">$= \dfrac{1}{\sigma(x)} \cdot \sigma'(x)$</span>
-            <span class="comment">// 链式法则</span>
           </div>
           <div style="margin:6px 0;">
             <span class="step-label">Step 2</span>
-            <span>已知 $\sigma'(x) = \sigma(x)(1-\sigma(x))$，代入：</span>
-            <span class="highlight">$= \dfrac{\sigma(x)(1-\sigma(x))}{\sigma(x)} = 1 - \sigma(x)$</span>
+            <span>代入 $\sigma'(x) = \sigma(x)(1-\sigma(x))$（前置知识③推导的结论）：</span>
+            <span class="highlight">$= \dfrac{\sigma(x)(1-\sigma(x))}{\sigma(x)} = 1 - \sigma(x)$ ✓</span>
           </div>
         </div>
 
         <div class="callout-blue" style="margin-bottom:18px;">
-          <strong>sigmoid 导数的记忆方法：</strong>$\sigma'(x) = \sigma(x)(1 - \sigma(x))$，即「自身乘以补数」。可以从定义直接推：$\sigma(x) = (1+e^{-x})^{-1}$，对 $e^{-x}$ 用链式法则即得。
+          <strong>直觉：</strong>$\dfrac{d}{dx}\log\sigma(x) = 1 - \sigma(x)$，这个值在 $[0, 1]$ 之间。当 $x$ 很大（$\sigma(x) \approx 1$），导数接近 $0$——也就是 sigmoid 已经「饱和」了，log 不再有什么变化；当 $x = 0$（$\sigma(x) = 0.5$），导数为 $0.5$，变化最明显。
         </div>
 
         <p>现在对 $\mathcal{L} = -\log\sigma(\Delta)$ 求偏导，注意 $\Delta = r_w - r_l$：</p>
