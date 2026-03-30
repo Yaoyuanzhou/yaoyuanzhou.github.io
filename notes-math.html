@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LLM 背后的数学原理：从 Sigmoid 到 KL 散度</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]})"></script>
+  <style>
+    :root {
+      --bg:#f5f7fb; --card:#ffffff; --text:#1f2937; --muted:#667085;
+      --line:#e5e7eb; --primary:#2563eb; --shadow:0 10px 30px rgba(15,23,42,0.08);
+      --radius:18px; --max:1120px;
+    }
+    *{box-sizing:border-box;}
+    html{scroll-behavior:smooth;}
+    body{margin:0;background:linear-gradient(180deg,#eff6ff 0%,var(--bg) 200px);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;line-height:1.85;}
+    a{color:var(--primary);text-decoration:none;}
+    a:hover{text-decoration:underline;}
+    .page{max-width:var(--max);margin:0 auto;padding:32px 20px 80px;}
+    .back-link{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:14px;margin-bottom:18px;}
+    .back-link:hover{color:var(--primary);text-decoration:none;}
+    .hero{background:radial-gradient(circle at top right,rgba(37,99,235,0.12),transparent 30%),radial-gradient(circle at left bottom,rgba(139,92,246,0.08),transparent 24%),var(--card);border:1px solid rgba(37,99,235,0.15);border-radius:24px;box-shadow:var(--shadow);padding:34px 34px 28px;margin-bottom:22px;}
+    .eyebrow{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-size:13px;font-weight:600;margin-bottom:16px;}
+    h1{margin:0 0 10px;font-size:32px;line-height:1.25;letter-spacing:-0.02em;}
+    .subtitle{margin:0;color:var(--muted);font-size:15px;}
+    .meta-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:24px;}
+    .meta-card{background:#eff6ff;border:1px solid #bfdbfe;border-radius:16px;padding:14px 16px;}
+    .meta-label{color:var(--muted);font-size:12px;margin-bottom:4px;}
+    .meta-value{font-size:14px;font-weight:600;word-break:break-word;}
+    .layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:22px;align-items:start;}
+    .toc{position:sticky;top:20px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;max-height:calc(100vh - 40px);overflow-y:auto;}
+    .toc h2{margin:0 0 12px;font-size:15px;color:var(--text);}
+    .toc-list{list-style:none;margin:0;padding:0;}
+    .toc-list li{margin:0;}
+    .toc-list a{display:block;padding:5px 8px;border-radius:8px;color:var(--muted);font-size:13px;transition:all 0.15s;}
+    .toc-list a:hover{color:var(--primary);background:#eff6ff;text-decoration:none;}
+    .toc-sub{list-style:none;padding-left:12px;margin:0;}
+    .toc-sub a{font-size:12px;padding:3px 8px;}
+    .content{display:flex;flex-direction:column;gap:18px;}
+    .section{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:26px 28px;}
+    .section-title{display:flex;align-items:center;gap:12px;margin:0 0 20px;font-size:20px;font-weight:700;}
+    .icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+    h3{margin:28px 0 12px;font-size:17px;color:#111827;border-left:3px solid #bfdbfe;padding-left:10px;}
+    h4{margin:20px 0 8px;font-size:15px;color:#374151;font-weight:700;}
+    p{margin:0 0 12px;}
+    .callout-blue{background:#eff6ff;border:1px solid #bfdbfe;border-radius:14px;padding:16px 18px;margin:14px 0;}
+    .callout-green{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;padding:16px 18px;margin:14px 0;}
+    .callout-amber{background:#fffbeb;border:1px solid #fde68a;border-radius:14px;padding:16px 18px;margin:14px 0;}
+    .callout-purple{background:#faf5ff;border:1px solid #e9d5ff;border-radius:14px;padding:16px 18px;margin:14px 0;}
+    .callout-red{background:#fff1f2;border:1px solid #fda4af;border-radius:14px;padding:16px 18px;margin:14px 0;}
+    .example-box{background:#f0fdf4;border:1px solid #86efac;border-radius:14px;padding:18px 20px;margin:18px 0;}
+    .ex-title{font-weight:700;color:#166534;margin-bottom:10px;font-size:14px;}
+    .analogy-box{background:#faf5ff;border:1px solid #c4b5fd;border-radius:14px;padding:18px 20px;margin:18px 0;}
+    .analogy-title{font-weight:700;color:#5b21b6;margin-bottom:10px;font-size:14px;}
+    .formula-block{background:#1e293b;color:#e2e8f0;border-radius:12px;padding:16px 20px;margin:14px 0;overflow-x:auto;text-align:center;font-size:15px;}
+    .formula-vars{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px 18px;margin:8px 0 16px;}
+    .formula-vars .var-title{font-weight:700;color:#475569;font-size:13px;margin-bottom:8px;}
+    .derivation{background:#1e293b;color:#e2e8f0;border-radius:12px;padding:18px 24px;margin:14px 0;font-size:14px;line-height:2.2;}
+    .derivation .step-label{color:#94a3b8;font-size:12px;margin-right:8px;}
+    .derivation .highlight{color:#86efac;font-weight:700;}
+    .derivation .comment{color:#64748b;font-style:italic;margin-left:12px;font-size:12px;}
+    .two-col{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:14px 0;}
+    .three-col{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:14px 0;}
+    .mini-card{border:1px solid var(--line);border-radius:14px;padding:16px 18px;background:#fff;}
+    .mini-card h4{margin-top:0;font-size:14px;}
+    .mini-card p,.mini-card li{font-size:14px;}
+    .table-wrap{overflow-x:auto;margin:16px 0;}
+    table{width:100%;border-collapse:collapse;font-size:14px;}
+    thead th{background:#eff6ff;color:#1e40af;text-align:left;font-weight:700;padding:10px 14px;border-bottom:2px solid #bfdbfe;}
+    td{padding:10px 14px;border-bottom:1px solid #eef2f7;vertical-align:top;}
+    tbody tr:nth-child(even){background:#f8fbff;}
+    blockquote{margin:16px 0;padding:14px 18px;border-left:4px solid var(--primary);background:rgba(37,99,235,0.05);border-radius:0 12px 12px 0;color:#3f3f46;font-size:15px;}
+    ul,ol{padding-left:24px;margin:8px 0 12px;}
+    li{margin:6px 0;}
+    code{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:2px 7px;font-family:"SF Mono",Consolas,Monaco,monospace;font-size:13px;color:#2563eb;}
+    .big-concept{background:linear-gradient(135deg,#eff6ff 0%,#f0fdf4 100%);border:2px solid #93c5fd;border-radius:16px;padding:20px 24px;margin:20px 0;}
+    .big-concept-title{font-size:18px;font-weight:800;color:#1e40af;margin-bottom:10px;}
+    .step-row{display:flex;align-items:flex-start;gap:12px;margin:10px 0;padding:12px 14px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;}
+    .step-eq{flex:1;font-size:14px;}
+    .step-why{color:#64748b;font-size:13px;padding-top:3px;}
+    footer{margin-top:32px;text-align:center;color:var(--muted);font-size:13px;}
+    @media(max-width:920px){.layout{grid-template-columns:1fr;}.toc{position:static;}.meta-grid,.two-col,.three-col{grid-template-columns:1fr 1fr;}}
+    @media(max-width:640px){.page{padding:18px 12px 56px;}.hero,.section{padding:20px 18px;}h1{font-size:26px;}.meta-grid,.two-col,.three-col{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+<div class="page">
+  <a class="back-link" href="index.html">← 返回笔记列表</a>
+
+  <header class="hero">
+    <div class="eyebrow">📐 数学原理笔记</div>
+    <h1>LLM 背后的数学原理</h1>
+    <p class="subtitle">理解 LLM 训练中反复出现的数学工具：Sigmoid / 最大似然 / KL 散度 / 交叉熵 / Softmax，每个概念都有完整推导 + 直觉解释 + 在 LLM 中的应用。</p>
+    <div class="meta-grid">
+      <div class="meta-card"><div class="meta-label">核心问题</div><div class="meta-value">这些公式为什么长这样？背后的直觉是什么？</div></div>
+      <div class="meta-card"><div class="meta-label">覆盖内容</div><div class="meta-value">Sigmoid · MLE · KL 散度 · 交叉熵 · Softmax</div></div>
+      <div class="meta-card"><div class="meta-label">关联文档</div><div class="meta-value">notes-llm-pipeline · notes-rl</div></div>
+      <div class="meta-card"><div class="meta-label">持续更新</div><div class="meta-value">每次遇到新数学概念就加进来</div></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="toc">
+      <h2>目录</h2>
+      <ul class="toc-list">
+        <li><a href="#sigmoid">§1 Sigmoid 等价变形</a>
+          <ul class="toc-sub">
+            <li><a href="#sigmoid-derive">1.1 完整推导步骤</a></li>
+            <li><a href="#sigmoid-bt">1.2 在 Bradley-Terry 中的应用</a></li>
+            <li><a href="#sigmoid-intuition">1.3 直觉理解</a></li>
+          </ul>
+        </li>
+        <li><a href="#gradient">§2 梯度求导——BT 损失函数</a>
+          <ul class="toc-sub">
+            <li><a href="#gradient-derive">2.1 对 $r_w$ 和 $r_l$ 求偏导</a></li>
+            <li><a href="#gradient-adaptive">2.2 自适应更新的直觉</a></li>
+          </ul>
+        </li>
+        <li><a href="#mle">§3 最大似然估计（MLE）</a>
+          <ul class="toc-sub">
+            <li><a href="#mle-intuition">3.1 直觉：「哪组参数让数据最可能出现？」</a></li>
+            <li><a href="#mle-log">3.2 为什么取对数</a></li>
+            <li><a href="#mle-nll">3.3 从 MLE 到负对数似然损失</a></li>
+            <li><a href="#mle-llm">3.4 MLE 在 LLM 中的统一视角</a></li>
+          </ul>
+        </li>
+        <li><a href="#kl">§4 KL 散度</a></li>
+        <li><a href="#entropy">§5 交叉熵与信息熵</a></li>
+        <li><a href="#softmax">§6 Softmax 与温度系数</a></li>
+      </ul>
+    </aside>
+
+    <main class="content">
+
+      <!-- ═══ §1 Sigmoid ═══ -->
+      <section class="section" id="sigmoid">
+        <div class="section-title">
+          <div class="icon" style="background:#eff6ff;">σ</div>
+          §1 Sigmoid 等价变形
+        </div>
+
+        <p>在 Bradley-Terry 奖励模型、逻辑回归、神经网络输出层里，我们反复看到一个变形：</p>
+
+        <div class="formula-block">
+          $$\frac{e^a}{e^a + e^b} = \sigma(a - b)$$
+        </div>
+
+        <p>很多教材直接写出结论，但不展示推导。这里完整走一遍。</p>
+
+        <h3 id="sigmoid-derive">1.1 完整推导步骤</h3>
+
+        <p>先回忆 sigmoid 函数的定义：</p>
+        <div class="formula-block">
+          $$\sigma(x) \;=\; \frac{1}{1 + e^{-x}}$$
+        </div>
+
+        <p>现在推导 $\dfrac{e^a}{e^a + e^b} = \sigma(a-b)$，每一步都列出来：</p>
+
+        <div class="derivation">
+          <div style="margin:6px 0;">
+            <span class="step-label">起点</span>
+            <span class="highlight">$\dfrac{e^a}{e^a + e^b}$</span>
+          </div>
+          <div style="margin:6px 0;">
+            <span class="step-label">Step 1</span>
+            <span>分子分母同除以 $e^a$：</span>
+            <span class="highlight"> $= \dfrac{1}{1 + e^{b-a}}$</span>
+            <span class="comment">// $e^a / e^a = 1$，$e^b / e^a = e^{b-a}$</span>
+          </div>
+          <div style="margin:6px 0;">
+            <span class="step-label">Step 2</span>
+            <span>把指数改写为负号形式：</span>
+            <span class="highlight"> $= \dfrac{1}{1 + e^{-(a-b)}}$</span>
+            <span class="comment">// $b - a = -(a - b)$</span>
+          </div>
+          <div style="margin:6px 0;">
+            <span class="step-label">Step 3</span>
+            <span>对比 sigmoid 定义 $\sigma(x) = \dfrac{1}{1+e^{-x}}$，令 $x = a - b$：</span>
+            <span class="highlight"> $= \sigma(a - b)$ ✓</span>
+          </div>
+        </div>
+
+        <div class="callout-green">
+          <strong>一句话总结：</strong> $\dfrac{e^a}{e^a+e^b} = \sigma(a-b)$，本质是「归一化指数差」。分子分母同除以分子，把加法变成减法放进指数，恰好符合 sigmoid 的定义。
+        </div>
+
+        <h3 id="sigmoid-bt">1.2 在 Bradley-Terry 模型中的应用</h3>
+
+        <p>Bradley-Terry 假设每个选手有潜在能力值 $s_i$，且令 $s = e^r$（保证正数），则胜率为：</p>
+
+        <div class="formula-block">
+          $$P(y_w \succ y_l) = \frac{s_w}{s_w + s_l} = \frac{e^{r_w}}{e^{r_w} + e^{r_l}}$$
+        </div>
+
+        <p>直接套用上面的等价变形（令 $a = r_w,\; b = r_l$）：</p>
+
+        <div class="formula-block">
+          $$P(y_w \succ y_l) = \frac{e^{r_w}}{e^{r_w} + e^{r_l}} = \sigma(r_w - r_l)$$
+        </div>
+
+        <p>这意味着：<strong>好回答的得分减去差回答的得分，直接输入 sigmoid，就是奖励模型「认为好回答更好」的概率。</strong></p>
+
+        <h3 id="sigmoid-intuition">1.3 直觉核验</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>得分差 $r_w - r_l$</th><th>$\sigma(\cdot)$ 值</th><th>含义</th></tr></thead>
+            <tbody>
+              <tr><td>$+\infty$</td><td>→ 1</td><td>模型极度确信好回答更好</td></tr>
+              <tr><td>$+2$</td><td>≈ 0.88</td><td>88% 概率认为好回答更好</td></tr>
+              <tr><td>$0$</td><td>= 0.5</td><td>两者得分相等，完全不确定</td></tr>
+              <tr><td>$-2$</td><td>≈ 0.12</td><td>判断反了！差回答反而得分高</td></tr>
+              <tr><td>$-\infty$</td><td>→ 0</td><td>模型完全判断错误</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout-blue">
+          <strong>和 softmax 的关系：</strong>这其实是二元 softmax。当只有两个类别时，$\text{softmax}([a, b])_{\text{第一项}} = \dfrac{e^a}{e^a + e^b} = \sigma(a - b)$。sigmoid 是 softmax 在二分类场景的特殊情况。
+        </div>
+      </section>
+
+      <!-- ═══ §2 梯度求导 ═══ -->
+      <section class="section" id="gradient">
+        <div class="section-title">
+          <div class="icon" style="background:#dcfce7;">∂</div>
+          §2 梯度求导——BT 损失函数
+        </div>
+
+        <p>Bradley-Terry 损失函数为（对单个样本）：</p>
+        <div class="formula-block">
+          $$\mathcal{L} = -\log \sigma(r_w - r_l) = -\log \sigma(\Delta), \quad \Delta = r_w - r_l$$
+        </div>
+
+        <h3 id="gradient-derive">2.1 对 $r_w$ 和 $r_l$ 分别求偏导</h3>
+
+        <p>先推导一个常用引理：$\dfrac{d}{dx}\log\sigma(x) = 1 - \sigma(x)$</p>
+
+        <div class="derivation">
+          <div style="margin:6px 0;">
+            <span class="step-label">引理</span>
+            <span>$\dfrac{d}{dx}\log\sigma(x)$</span>
+          </div>
+          <div style="margin:6px 0;">
+            <span class="step-label">Step 1</span>
+            <span class="highlight">$= \dfrac{1}{\sigma(x)} \cdot \sigma'(x)$</span>
+            <span class="comment">// 链式法则</span>
+          </div>
+          <div style="margin:6px 0;">
+            <span class="step-label">Step 2</span>
+            <span>已知 $\sigma'(x) = \sigma(x)(1-\sigma(x))$，代入：</span>
+            <span class="highlight">$= \dfrac{\sigma(x)(1-\sigma(x))}{\sigma(x)} = 1 - \sigma(x)$</span>
+          </div>
+        </div>
+
+        <div class="callout-blue" style="margin-bottom:18px;">
+          <strong>sigmoid 导数的记忆方法：</strong>$\sigma'(x) = \sigma(x)(1 - \sigma(x))$，即「自身乘以补数」。可以从定义直接推：$\sigma(x) = (1+e^{-x})^{-1}$，对 $e^{-x}$ 用链式法则即得。
+        </div>
+
+        <p>现在对 $\mathcal{L} = -\log\sigma(\Delta)$ 求偏导，注意 $\Delta = r_w - r_l$：</p>
+
+        <div class="two-col">
+          <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:14px;padding:18px;">
+            <h4 style="color:#1e40af;margin-top:0;">对 $r_w$ 求偏导</h4>
+            <div class="derivation" style="margin:0;">
+              <div>$\dfrac{\partial \mathcal{L}}{\partial r_w}$</div>
+              <div>$= -\dfrac{d}{d\Delta}\log\sigma(\Delta) \cdot \dfrac{\partial \Delta}{\partial r_w}$</div>
+              <div>$= -(1 - \sigma(\Delta)) \cdot 1$</div>
+              <div><span class="highlight">$= \sigma(\Delta) - 1 \;\leq\; 0$</span></div>
+            </div>
+            <p style="font-size:13px;margin:8px 0 0;color:#1e40af;">梯度为负 → 梯度下降时 $r_w$ <strong>增大</strong>（好回答分数涨 ↑）</p>
+          </div>
+          <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:14px;padding:18px;">
+            <h4 style="color:#166534;margin-top:0;">对 $r_l$ 求偏导</h4>
+            <div class="derivation" style="margin:0;">
+              <div>$\dfrac{\partial \mathcal{L}}{\partial r_l}$</div>
+              <div>$= -\dfrac{d}{d\Delta}\log\sigma(\Delta) \cdot \dfrac{\partial \Delta}{\partial r_l}$</div>
+              <div>$= -(1 - \sigma(\Delta)) \cdot (-1)$</div>
+              <div><span class="highlight">$= 1 - \sigma(\Delta) \;\geq\; 0$</span></div>
+            </div>
+            <p style="font-size:13px;margin:8px 0 0;color:#166534;">梯度为正 → 梯度下降时 $r_l$ <strong>减小</strong>（差回答分数跌 ↓）</p>
+          </div>
+        </div>
+
+        <h3 id="gradient-adaptive">2.2 自适应更新强度——梯度的优雅之处</h3>
+
+        <p>梯度幅度 $= |1 - \sigma(\Delta)|$，它随着得分差 $\Delta$ 自动调整：</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>场景</th><th>$\Delta = r_w - r_l$</th><th>$\sigma(\Delta)$</th><th>梯度幅度</th><th>更新力度</th></tr></thead>
+            <tbody>
+              <tr><td>已判断正确且很确信</td><td>$\Delta \gg 0$（如 +4）</td><td>≈ 0.98</td><td>≈ 0.02</td><td>极小，几乎不更新</td></tr>
+              <tr><td>判断正确但不确定</td><td>$\Delta$ 小正数（如 +0.5）</td><td>≈ 0.62</td><td>≈ 0.38</td><td>中等，继续拉大差距</td></tr>
+              <tr style="background:#fffbeb;"><td><strong>举棋不定</strong></td><td>$\Delta \approx 0$</td><td>≈ 0.5</td><td>≈ 0.5</td><td><strong>最大，重点学习</strong></td></tr>
+              <tr style="background:#fff1f2;"><td><strong>判断错误</strong></td><td>$\Delta < 0$（如 -2）</td><td>≈ 0.12</td><td>≈ 0.88</td><td><strong>很大，强力纠错</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="analogy-box">
+          <div class="analogy-title">📚 类比：刷题复习策略</div>
+          <p>这个自适应机制和「智能刷题」完全一致：</p>
+          <ul>
+            <li>已经会的题（模型判断正确且很确信）→ 快速掠过，不浪费时间</li>
+            <li>模棱两可的题（举棋不定）→ 重点强化，花最多时间</li>
+            <li>做错的题（判断反了）→ 强力纠错，立刻重做</li>
+          </ul>
+          <p>这不是人为设计的规则，而是从 BT 损失函数自然涌现的性质——<strong>数学自动帮你分配了学习优先级</strong>。</p>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 数值验证：天空为什么是蓝色——四个回答 B>D>A>C</div>
+          <p>假设当前奖励模型打分：$r(B)=2.1,\; r(D)=1.3,\; r(A)=0.8,\; r(C)=-0.5$</p>
+          <div class="table-wrap" style="margin:8px 0 0;">
+            <table style="font-size:13px;">
+              <thead><tr><th>训练对</th><th>$\Delta$</th><th>$\sigma(\Delta)$</th><th>Loss</th><th>梯度幅度</th></tr></thead>
+              <tbody>
+                <tr><td>(B, D)：B 应该 &gt; D，差距不大</td><td>2.1−1.3 = 0.8</td><td>0.69</td><td>0.37</td><td>0.31（需继续学）</td></tr>
+                <tr><td>(B, A)：B 应该 &gt; A，差距较大</td><td>2.1−0.8 = 1.3</td><td>0.79</td><td>0.24</td><td>0.21</td></tr>
+                <tr><td>(B, C)：B 应该 &gt; C，差距很大</td><td>2.1−(−0.5) = 2.6</td><td>0.93</td><td>0.07</td><td>0.07（几乎不更新）</td></tr>
+                <tr style="background:#fffbeb;"><td>(D, A)：D 应该 &gt; A，差距最小</td><td>1.3−0.8 = 0.5</td><td>0.62</td><td>0.48</td><td><strong>0.38（最需要学）</strong></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p style="margin-top:10px;font-size:13px;">结论：(D, A) 对学习信号最强，因为当前模型对「D 比 A 好」还不够确信。(B, C) 几乎没有学习信号，因为模型已经非常确定 B 比 C 好。</p>
+        </div>
+      </section>
+
+      <!-- ═══ §3 MLE ═══ -->
+      <section class="section" id="mle">
+        <div class="section-title">
+          <div class="icon" style="background:#fef3c7;">🎯</div>
+          §3 最大似然估计（MLE）
+        </div>
+
+        <h3 id="mle-intuition">3.1 直觉：「哪组参数让这批数据最可能出现？」</h3>
+
+        <p>我们有一批观测数据 $\mathcal{D} = \{x_1, x_2, \ldots, x_N\}$，有一个含参数 $\theta$ 的概率模型 $P_\theta(x)$。</p>
+        <p><strong>最大似然的问题：</strong>哪个 $\theta$ 使得「看到这批数据」的概率最大？</p>
+
+        <div class="analogy-box">
+          <div class="analogy-title">🎲 类比：抛硬币猜偏斜度</div>
+          <p>你捡到一枚硬币，抛了 10 次，结果是 7 正 3 反。</p>
+          <p>问：这枚硬币正面朝上的概率 $p$ 最可能是多少？</p>
+          <p>如果 $p=0.7$，看到「7正3反」的概率 = $\binom{10}{7} (0.7)^7 (0.3)^3 \approx 0.267$</p>
+          <p>如果 $p=0.5$，看到「7正3反」的概率 = $\binom{10}{7} (0.5)^{10} \approx 0.117$</p>
+          <p>如果 $p=0.9$，看到「7正3反」的概率 = $\binom{10}{7} (0.9)^7 (0.1)^3 \approx 0.057$</p>
+          <p><strong>结论：$p=0.7$ 使数据出现概率最大 → 最大似然估计 $\hat{p} = 0.7$（正好等于样本频率）</strong></p>
+        </div>
+
+        <p>形式化定义：似然函数（Likelihood）是参数 $\theta$ 的函数：</p>
+        <div class="formula-block">
+          $$\mathcal{L}(\theta) = P_\theta(\mathcal{D}) = \prod_{i=1}^{N} P_\theta(x_i)$$
+        </div>
+        <p>（假设数据独立同分布）最大似然估计就是找让似然最大的参数：</p>
+        <div class="formula-block">
+          $$\hat{\theta}_{MLE} = \arg\max_\theta \; \mathcal{L}(\theta) = \arg\max_\theta \prod_{i=1}^{N} P_\theta(x_i)$$
+        </div>
+
+        <h3 id="mle-log">3.2 为什么取对数——对数似然（Log-Likelihood）</h3>
+
+        <p>直接对 $\prod P_\theta(x_i)$ 求导非常麻烦（连乘积），而且当 $N$ 很大时，连乘会导致数值下溢（概率都是小数，乘很多次会变成 $10^{-300}$，浮点数无法表示）。</p>
+
+        <p>由于 $\log$ 是单调递增函数，最大化 $\mathcal{L}(\theta)$ 等价于最大化 $\log \mathcal{L}(\theta)$：</p>
+
+        <div class="formula-block">
+          $$\log \mathcal{L}(\theta) = \log \prod_{i=1}^N P_\theta(x_i) = \sum_{i=1}^N \log P_\theta(x_i)$$
+        </div>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>✅ 取对数的好处</h4>
+            <ul>
+              <li>连乘变连加，求导更简单</li>
+              <li>数值稳定，不会下溢</li>
+              <li>$\log P$ 和 $P$ 有相同的极值点（最大值在同一个 $\theta$ 处）</li>
+            </ul>
+          </div>
+          <div class="mini-card">
+            <h4>⚠️ 常见混淆</h4>
+            <p>「似然 $\mathcal{L}(\theta)$」和「损失函数 loss」方向相反：</p>
+            <ul>
+              <li>优化目标：<strong>最大化</strong>似然</li>
+              <li>训练操作：<strong>最小化</strong>损失</li>
+              <li>转换：loss = $-\log \mathcal{L}(\theta)$（取负号）</li>
+            </ul>
+          </div>
+        </div>
+
+        <h3 id="mle-nll">3.3 从 MLE 到负对数似然损失（NLL Loss）</h3>
+
+        <p>最大化 $\sum \log P_\theta(x_i)$ 等价于最小化它的负数，再除以 $N$ 取平均（方便梯度稳定）：</p>
+
+        <div class="formula-block">
+          $$\mathcal{L}_{NLL}(\theta) = -\frac{1}{N}\sum_{i=1}^N \log P_\theta(x_i)$$
+        </div>
+
+        <p>这就是<strong>负对数似然损失（Negative Log-Likelihood，NLL）</strong>，它和交叉熵损失在独立同分布假设下完全等价（见 §5）。</p>
+
+        <div class="big-concept">
+          <div class="big-concept-title">🔑 MLE 在 LLM 训练中的统一视角</div>
+          <div class="table-wrap" style="margin:10px 0 0;">
+            <table style="font-size:14px;">
+              <thead><tr><th>训练阶段</th><th>数据 $\mathcal{D}$</th><th>$P_\theta(x)$ 的含义</th><th>MLE 目标</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>预训练</strong></td>
+                  <td>互联网文本 token 序列</td>
+                  <td>$P(x_t \mid x_{&lt;t})$：下一个词的概率</td>
+                  <td>最大化每个位置的下一词预测概率</td>
+                </tr>
+                <tr>
+                  <td><strong>SFT</strong></td>
+                  <td>(prompt, response) 对中的 response token</td>
+                  <td>$P(y_t \mid x, y_{&lt;t})$：在 prompt 条件下的回答概率</td>
+                  <td>最大化 response 部分每个 token 的预测概率</td>
+                </tr>
+                <tr>
+                  <td><strong>奖励模型</strong></td>
+                  <td>偏好对 $(y_w, y_l)$</td>
+                  <td>$P(y_w \succ y_l) = \sigma(r_w - r_l)$：好回答更好的概率</td>
+                  <td>最大化「人类偏好被正确预测」的概率</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p style="font-size:14px;margin-top:12px;">三个阶段的损失函数<strong>本质都是同一件事</strong>：最大化模型对观测数据的似然，只是数据和概率的定义不同。</p>
+        </div>
+
+        <h3 id="mle-llm">3.4 为什么 MLE 是合理的训练目标</h3>
+
+        <div class="callout-amber">
+          <strong>MLE 的一个重要性质：一致性（Consistency）</strong><br>
+          当数据量 $N \to \infty$ 时，MLE 估计量会收敛到真实参数 $\theta^*$（在一定正则性条件下）。<br>
+          对 LLM 的启示：<strong>数据越多，模型越接近真实的语言分布</strong>。这也解释了为什么大家都在争抢更多更高质量的预训练数据。
+        </div>
+
+        <div class="callout-blue">
+          <strong>MLE 的局限：为什么需要 RLHF</strong><br>
+          MLE 最大化「数据出现的概率」，但训练数据（互联网文本）不等于「我们想要的回答」。互联网上有大量有害、低质量的文本，MLE 会让模型原封不动地学习这些分布。<br>
+          RLHF 引入了一个额外的目标：最大化「人类认为好的回答」的概率，纠正了 MLE 在对齐方面的不足。
+        </div>
+      </section>
+
+      <!-- ═══ §4 KL 散度 ═══ -->
+      <section class="section" id="kl">
+        <div class="section-title">
+          <div class="icon" style="background:#fae8ff;">📏</div>
+          §4 KL 散度——衡量两个分布有多不同
+        </div>
+
+        <p>KL 散度（Kullback-Leibler Divergence）在 RLHF 里无处不在：PPO 的 KL 惩罚、DPO 的推导都用到它。但它到底在量什么？</p>
+
+        <h3>4.1 定义</h3>
+
+        <p>对于离散分布 $P$ 和 $Q$，从 $Q$ 到 $P$ 的 KL 散度为：</p>
+
+        <div class="formula-block">
+          $$D_{KL}(P \| Q) = \sum_x P(x) \log \frac{P(x)}{Q(x)}$$
+        </div>
+
+        <div class="formula-vars">
+          <div class="var-title">符号含义</div>
+          <ul>
+            <li>$P$：「真实」分布（或我们关心的目标分布）</li>
+            <li>$Q$：「近似」分布（用来近似 $P$ 的）</li>
+            <li>$D_{KL}(P \| Q)$：用 $Q$ 来近似 $P$ 时产生的「额外代价」</li>
+            <li><strong>注意：$D_{KL}(P\|Q) \neq D_{KL}(Q\|P)$，KL 散度不对称！</strong></li>
+          </ul>
+        </div>
+
+        <h3>4.2 直觉理解——「用错了码本的代价」</h3>
+
+        <div class="analogy-box">
+          <div class="analogy-title">📦 类比：压缩编码</div>
+          <p>假设你要传输一段文字，最优编码方案应该根据字符的真实频率 $P$ 设计（常见字符用短编码）。</p>
+          <p>但如果你用的是基于 $Q$ 设计的码本（以为某些字符更常见），那么平均编码长度会变长。</p>
+          <p><strong>$D_{KL}(P\|Q)$ = 用 $Q$ 的码本而非最优 $P$ 的码本时，每个符号多花的比特数</strong>（单位是 nats，若用 $\log_2$ 则为 bits）。</p>
+          <p>当 $P = Q$ 时，码本最优，$D_{KL} = 0$；$P$ 和 $Q$ 差异越大，KL 散度越大。</p>
+        </div>
+
+        <h3>4.3 重要性质</h3>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>✅ 非负性</h4>
+            <p>$D_{KL}(P \| Q) \geq 0$，当且仅当 $P = Q$ 时取等。</p>
+            <p>证明：由 Jensen 不等式，对凸函数 $-\log$ 有 $\mathbb{E}[-\log \frac{Q}{P}] \geq -\log \mathbb{E}[\frac{Q}{P}] = 0$。</p>
+          </div>
+          <div class="mini-card">
+            <h4>⚠️ 不对称性</h4>
+            <p>$D_{KL}(P\|Q) \neq D_{KL}(Q\|P)$，因此不是「距离」（违反对称公理）。</p>
+            <p>两个方向有不同的含义：「前向 KL」vs「反向 KL」在机器学习中表现非常不同。</p>
+          </div>
+        </div>
+
+        <h3>4.4 在 RLHF 中的作用</h3>
+
+        <p>RLHF 的优化目标中有这一项：</p>
+
+        <div class="formula-block">
+          $$-\beta \cdot D_{KL}\!\left[\pi_\theta(\cdot|x) \| \pi_\text{ref}(\cdot|x)\right]$$
+        </div>
+
+        <p>展开来看，对一条回答 $y$ 中每个 token $y_t$，KL 项等于：</p>
+
+        <div class="formula-block">
+          $$D_{KL} = \sum_t \pi_\theta(y_t|x, y_{&lt;t}) \log \frac{\pi_\theta(y_t|x, y_{&lt;t})}{\pi_\text{ref}(y_t|x, y_{&lt;t})}$$
+        </div>
+
+        <p>这个惩罚项确保当前策略 $\pi_\theta$ 不要偏离 SFT 参考模型 $\pi_\text{ref}$ 太远，防止模型通过「钻奖励模型漏洞」（Reward Hacking）来刷高分。</p>
+
+        <div class="callout-amber">
+          <strong>为什么是 $D_{KL}(\pi_\theta \| \pi_\text{ref})$ 而不是反过来？</strong><br>
+          「前向 KL」$D_{KL}(\pi_\theta \| \pi_\text{ref})$ 惩罚的是：当前策略在参考模型认为「不可能」的地方赋予了概率。这正是我们想防止的——模型不应该输出 SFT 模型从未见过的奇怪文本。
+        </div>
+      </section>
+
+      <!-- ═══ §5 交叉熵 ═══ -->
+      <section class="section" id="entropy">
+        <div class="section-title">
+          <div class="icon" style="background:#ecfeff;">H</div>
+          §5 信息熵 · 交叉熵 · KL 散度的关系
+        </div>
+
+        <p>这三个概念经常同时出现，但教材往往割裂讲。这里把它们放在一起，看清楚关系。</p>
+
+        <h3>5.1 信息熵（Shannon Entropy）</h3>
+
+        <p>信息熵衡量一个分布的「不确定性」：</p>
+
+        <div class="formula-block">
+          $$H(P) = -\sum_x P(x) \log P(x) = \mathbb{E}_P[-\log P(x)]$$
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 直觉：公平硬币 vs 偏斜硬币</div>
+          <div class="two-col" style="margin:8px 0 0;">
+            <div>
+              <strong>公平硬币</strong>（$P(\text{正})=P(\text{反})=0.5$）：<br>
+              $H = -0.5\log 0.5 - 0.5\log 0.5 = \log 2 \approx 0.693$ nats<br>
+              <span style="color:#166534;">不确定性最大，熵最高</span>
+            </div>
+            <div>
+              <strong>偏斜硬币</strong>（$P(\text{正})=0.9, P(\text{反})=0.1$）：<br>
+              $H = -0.9\log 0.9 - 0.1\log 0.1 \approx 0.325$ nats<br>
+              <span style="color:#1e40af;">基本知道结果，熵较低</span>
+            </div>
+          </div>
+          <p style="margin-top:10px;">极端情况：$P(\text{正})=1$，$H=0$——完全确定，无不确定性，熵为零。</p>
+        </div>
+
+        <h3>5.2 交叉熵（Cross-Entropy）</h3>
+
+        <p>交叉熵衡量「用分布 $Q$ 来预测真实分布 $P$ 时的平均编码代价」：</p>
+
+        <div class="formula-block">
+          $$H(P, Q) = -\sum_x P(x) \log Q(x) = \mathbb{E}_P[-\log Q(x)]$$
+        </div>
+
+        <p>和信息熵的区别：$H(P)$ 用 $P$ 自己编码，$H(P, Q)$ 用 $Q$ 编码真实分布 $P$。</p>
+
+        <h3>5.3 三者的统一关系</h3>
+
+        <div class="big-concept">
+          <div class="big-concept-title">🔑 交叉熵 = 信息熵 + KL 散度</div>
+          <div class="formula-block" style="font-size:16px;">
+            $$H(P, Q) = H(P) + D_{KL}(P \| Q)$$
+          </div>
+          <p style="font-size:14px;margin:10px 0 6px;"><strong>推导（一行）：</strong></p>
+          <div class="derivation" style="font-size:13px;">
+            $H(P,Q) = -\sum P(x)\log Q(x)$
+            $= -\sum P(x)\log P(x) + \sum P(x)\log\frac{P(x)}{Q(x)}$
+            $= H(P) + D_{KL}(P\|Q)$
+          </div>
+          <p style="font-size:14px;margin-top:12px;"><strong>含义：</strong>用 $Q$ 近似 $P$ 的总编码代价 = $P$ 自身的不确定性（无法压缩的部分）+ 用错码本的额外代价（KL 散度）。</p>
+          <p style="font-size:14px;">训练时 $P$（真实标签分布）是固定的，所以最小化交叉熵 $H(P,Q)$ 等价于最小化 $D_{KL}(P\|Q)$——<strong>这就是为什么分类损失用交叉熵时，本质是在让模型分布逼近真实分布</strong>。</p>
+        </div>
+
+        <h3>5.4 LLM 预训练 loss 就是交叉熵</h3>
+
+        <p>预训练 loss 写作：</p>
+
+        <div class="formula-block">
+          $$\mathcal{L}_{PT} = -\sum_t \log P_\theta(x_t \mid x_{&lt;t})$$
+        </div>
+
+        <p>这正是以真实 token 序列 $x_t$（one-hot 分布 $P$）为目标，让模型预测分布 $P_\theta$ 去拟合，即 $H(P_{\text{data}}, P_\theta)$ 的样本估计。</p>
+
+        <div class="callout-green">
+          <strong>统一视角：</strong>
+          <ul style="margin:6px 0;">
+            <li>预训练 loss = 交叉熵 = NLL = 负对数似然 → 最小化分布差异</li>
+            <li>SFT loss = 同上，只是 mask 掉了 prompt 部分</li>
+            <li>奖励模型 loss = BT 损失 = 二元交叉熵（输入是得分差）</li>
+            <li>RLHF KL 惩罚 = 直接最小化 KL 散度防止偏离 SFT 模型</li>
+          </ul>
+          <strong>LLM 训练中所有的 loss 都是「让某个模型分布更接近某个目标分布」的不同表现形式。</strong>
+        </div>
+      </section>
+
+      <!-- ═══ §6 Softmax ═══ -->
+      <section class="section" id="softmax">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">🌡️</div>
+          §6 Softmax 与温度系数
+        </div>
+
+        <p>语言模型生成下一个词时，输出的是所有词汇表位置的 logit（原始分数），Softmax 把它们转换成概率分布，再进行采样。</p>
+
+        <h3>6.1 Softmax 定义</h3>
+
+        <div class="formula-block">
+          $$\text{softmax}(\mathbf{z})_i = \frac{e^{z_i}}{\sum_j e^{z_j}}$$
+        </div>
+
+        <div class="formula-vars">
+          <div class="var-title">符号</div>
+          <ul>
+            <li>$\mathbf{z} = (z_1, z_2, \ldots, z_V)$：模型输出的 logit 向量，$V$ 是词汇表大小（通常 3～15 万）</li>
+            <li>输出是归一化的概率分布：所有 $\text{softmax}_i \in (0,1)$，且 $\sum_i \text{softmax}_i = 1$</li>
+          </ul>
+        </div>
+
+        <div class="callout-blue">
+          <strong>和 sigmoid 的关系：</strong>当词汇表大小 $V=2$ 时，softmax 退化为 sigmoid。更准确地说，$\text{softmax}([a, b])_{\text{第一项}} = \sigma(a-b)$——这解释了为什么 §1 里说「sigmoid 是二元 softmax」。
+        </div>
+
+        <h3>6.2 温度系数（Temperature）</h3>
+
+        <p>标准 softmax 对模型 confidence 非常敏感：如果某个词的 logit 远高于其他，softmax 后这个词的概率会接近 1，模型变得「贪婪」。</p>
+
+        <p>引入温度系数 $T$：</p>
+
+        <div class="formula-block">
+          $$\text{softmax}_T(\mathbf{z})_i = \frac{e^{z_i / T}}{\sum_j e^{z_j / T}}$$
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>温度 $T$</th><th>效果</th><th>适用场景</th></tr></thead>
+            <tbody>
+              <tr><td>$T \to 0$</td><td>概率集中在 logit 最大的词上（等价于 argmax，贪心解码）</td><td>确定性任务（代码、数学）</td></tr>
+              <tr><td>$T = 1$</td><td>标准 softmax，不做任何调整</td><td>默认设置</td></tr>
+              <tr><td>$T > 1$（如 1.5）</td><td>分布更均匀，增加随机性，生成更多样</td><td>创意写作、头脑风暴</td></tr>
+              <tr><td>$T \to \infty$</td><td>均匀分布，完全随机采样</td><td>（实际不用，太随机）</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="analogy-box">
+          <div class="analogy-title">🌡️ 类比：物理温度</div>
+          <p>统计物理里，粒子的能量分布也有类似的 Boltzmann 分布：$P_i \propto e^{-E_i / (kT)}$，高温时粒子分布更均匀，低温时更集中在低能态。</p>
+          <p>语言模型的「温度」直接借用了这个概念：<strong>高温 = 更多随机探索，低温 = 更确定地走已知的好路</strong>。</p>
+        </div>
+
+        <h3>6.3 采样策略：top-k 和 top-p（nucleus sampling）</h3>
+
+        <p>温度控制分布形状，但实际采样时通常还要配合截断策略，防止出现概率极低但仍可能被采到的「意外词」：</p>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>Top-k 采样</h4>
+            <p>只保留概率最高的 $k$ 个词，其余概率设为 0，然后在 $k$ 个词上归一化后采样。</p>
+            <p><strong>问题：</strong>$k$ 是固定的，有时候「合理词」只有 3 个但 $k=50$ 会引入噪声，有时候「合理词」有 200 个但 $k=50$ 会过度截断。</p>
+          </div>
+          <div class="mini-card">
+            <h4>Top-p（Nucleus）采样</h4>
+            <p>按概率从高到低排列，累计到概率和 $\geq p$（如 $p=0.9$）为止，只在这个「核」里采样。</p>
+            <p><strong>优点：</strong>自适应词数——分布尖锐时核小（保守），分布平缓时核大（多样），更符合直觉。</p>
+          </div>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：「今天天气真___」的采样</div>
+          <div class="table-wrap" style="margin:8px 0 0;">
+            <table style="font-size:13px;">
+              <thead><tr><th>词</th><th>logit</th><th>原始 softmax 概率</th><th>top-p=0.9 是否纳入</th></tr></thead>
+              <tbody>
+                <tr><td>好</td><td>4.2</td><td>55%</td><td>✅（累计 55%）</td></tr>
+                <tr><td>棒</td><td>3.1</td><td>20%</td><td>✅（累计 75%）</td></tr>
+                <tr><td>差</td><td>2.4</td><td>10%</td><td>✅（累计 85%）</td></tr>
+                <tr><td>热</td><td>1.9</td><td>6%</td><td>✅（累计 91% ≥ 0.9，纳入后停止）</td></tr>
+                <tr><td>糟糕</td><td>0.5</td><td>1.5%</td><td>❌（累计已超过 0.9，截断）</td></tr>
+                <tr><td>（其他 3 万个词）</td><td>&lt;0</td><td>&lt;0.1%</td><td>❌</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p style="margin-top:8px;font-size:13px;">最终从「好、棒、差、热」这 4 个词中按归一化概率采样，既保证了多样性，又避免了低概率的奇怪词出现。</p>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <footer>
+    <a href="index.html" class="back-link">← 返回笔记列表</a>
+    <p>数学原理笔记 · LLM 背后的数学工具</p>
+  </footer>
+</div>
+</body>
+</html>
