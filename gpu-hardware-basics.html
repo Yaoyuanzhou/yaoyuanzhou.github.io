@@ -75,6 +75,7 @@
     <nav class="toc">
       <h2>目录</h2>
       <ul class="toc-list">
+        <li><a href="#zero">零、从零开始：程序、CPU、线程是什么？</a></li>
         <li><a href="#overview">一、整体架构全景</a></li>
         <li><a href="#mem-hierarchy">二、五层存储层级</a></li>
         <li><a href="#gpu-internal">三、GPU 内部结构</a></li>
@@ -88,6 +89,191 @@
 
     <!-- 主内容 -->
     <div class="content">
+
+      <!-- § 0 从零开始 -->
+      <section class="section" id="zero" style="background:linear-gradient(135deg,#f0fdf4 0%,#eff6ff 100%);border:1.5px solid #86efac;">
+        <div class="section-title">
+          <div class="icon" style="background:#fff;">🌱</div>
+          零、从零开始：程序、CPU、线程是什么？
+        </div>
+        <p style="color:#374151;font-size:13.5px;">读 FlashAttention、KV Cache 这类文章，你会反复碰到「线程」「核心」「寄存器」「内存」。这一节从头讲清楚这些概念，不需要任何硬件背景。</p>
+
+        <h3>1. 程序是怎么运行的？</h3>
+        <p>你写了一行 Python：<code>c = a * b</code>，计算机到底做了什么？</p>
+
+        <!-- 图1：一条指令的执行路径 -->
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin:12px 0;">
+          <div style="font-size:12px;color:#6b7280;text-align:center;margin-bottom:8px;font-weight:600;">图1：一条指令 c = a × b 的执行路径</div>
+          <svg viewBox="0 0 660 130" style="width:100%;max-width:660px;display:block;margin:0 auto;" xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="4" width="652" height="122" rx="10" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+            <!-- 步骤1：内存 -->
+            <rect x="20" y="30" width="110" height="68" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+            <text x="75" y="56" text-anchor="middle" font-size="11" font-weight="700" fill="#1d4ed8">① 内存</text>
+            <text x="75" y="74" text-anchor="middle" font-size="10" fill="#374151">a = 3.14</text>
+            <text x="75" y="90" text-anchor="middle" font-size="10" fill="#374151">b = 2.71</text>
+            <!-- 箭头1 -->
+            <line x1="130" y1="64" x2="168" y2="64" stroke="#2563eb" stroke-width="1.8" marker-end="url(#z1)"/>
+            <text x="149" y="58" text-anchor="middle" font-size="9" fill="#2563eb">取数</text>
+            <!-- 步骤2：寄存器 -->
+            <rect x="172" y="20" width="130" height="88" rx="8" fill="#fef9c3" stroke="#f59e0b" stroke-width="1.8"/>
+            <text x="237" y="44" text-anchor="middle" font-size="11" font-weight="700" fill="#92400e">② 寄存器</text>
+            <text x="237" y="62" text-anchor="middle" font-size="10" fill="#374151">R1 = 3.14</text>
+            <text x="237" y="78" text-anchor="middle" font-size="10" fill="#374151">R2 = 2.71</text>
+            <text x="237" y="98" text-anchor="middle" font-size="9" fill="#6b7280">（紧挨运算器的格子）</text>
+            <!-- 箭头2 -->
+            <line x1="302" y1="64" x2="340" y2="64" stroke="#f59e0b" stroke-width="1.8" marker-end="url(#z2)"/>
+            <text x="321" y="58" text-anchor="middle" font-size="9" fill="#b45309">运算</text>
+            <!-- 步骤3：运算单元 -->
+            <rect x="344" y="30" width="110" height="68" rx="8" fill="#fde68a" stroke="#d97706" stroke-width="2"/>
+            <text x="399" y="56" text-anchor="middle" font-size="11" font-weight="700" fill="#92400e">③ 运算单元</text>
+            <text x="399" y="76" text-anchor="middle" font-size="14" fill="#92400e">R1 × R2</text>
+            <text x="399" y="92" text-anchor="middle" font-size="9" fill="#6b7280">纯电路，1 cycle</text>
+            <!-- 箭头3 -->
+            <line x1="454" y1="64" x2="492" y2="64" stroke="#16a34a" stroke-width="1.8" marker-end="url(#z3)"/>
+            <text x="473" y="58" text-anchor="middle" font-size="9" fill="#16a34a">写回</text>
+            <!-- 步骤4：结果 -->
+            <rect x="496" y="30" width="140" height="68" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+            <text x="566" y="56" text-anchor="middle" font-size="11" font-weight="700" fill="#166534">④ 结果</text>
+            <text x="566" y="74" text-anchor="middle" font-size="10" fill="#374151">R3 = 8.51</text>
+            <text x="566" y="90" text-anchor="middle" font-size="9" fill="#6b7280">（留在寄存器或写回内存）</text>
+            <defs>
+              <marker id="z1" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#2563eb"/></marker>
+              <marker id="z2" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#f59e0b"/></marker>
+              <marker id="z3" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#16a34a"/></marker>
+            </defs>
+          </svg>
+        </div>
+        <p style="font-size:13px;color:#374151;">所以「内存→寄存器→运算→结果」是所有计算的基本流程。<b>寄存器就是运算单元手边的小格子</b>，数字在里面才能被运算器直接操作。</p>
+
+        <h3>2. CPU 是什么？</h3>
+        <p>CPU（Central Processing Unit，中央处理器）就是一块能按顺序执行指令的芯片。你可以把它理解为：</p>
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px 16px;margin:10px 0;font-size:13px;line-height:2;">
+          🧑‍🍳 <b>CPU = 一个或几个聪明的厨师</b><br>
+          每个「核心」（Core）相当于一个厨师，能处理复杂的任务（条件判断、循环、函数调用…），<br>
+          现代 CPU 有 4–128 个核，每个核一次只做一件事，但做得非常快、非常灵活。
+        </div>
+        <p style="font-size:13px;color:#374151;">CPU 很快的原因之一是有很大的「L1/L2/L3 Cache」（缓存），这和 GPU 的 SRAM 是类似的概念——把最近用过的数据缓存在芯片上，减少去内存取数的次数。</p>
+
+        <h3>3. 线程是什么？</h3>
+        <p>「线程」（Thread）是<b>程序执行的最小单位</b>——你可以把它理解为：</p>
+        <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:12px 16px;margin:10px 0;font-size:13px;line-height:2;">
+          👷 <b>线程 = 一个独立的工人</b><br>
+          每个线程有自己的「当前在执行哪行代码」（程序计数器）和「私有变量」（寄存器/栈）。<br>
+          多个线程可以同时运行——比如浏览器打开网页时，一个线程下载 HTML，另一个线程渲染页面，互不干扰。
+        </div>
+
+        <!-- 图2：CPU 线程 vs GPU 线程 -->
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin:12px 0;">
+          <div style="font-size:12px;color:#6b7280;text-align:center;margin-bottom:10px;font-weight:600;">图2：CPU 核心 vs GPU 线程数量对比（A100）</div>
+          <svg viewBox="0 0 640 200" style="width:100%;max-width:640px;display:block;margin:0 auto;" xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="4" width="632" height="192" rx="10" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+
+            <!-- CPU 区 -->
+            <rect x="20" y="20" width="240" height="160" rx="10" fill="#fff" stroke="#6366f1" stroke-width="1.5"/>
+            <text x="140" y="44" text-anchor="middle" font-size="12" font-weight="700" fill="#3730a3">CPU（如 Intel Xeon）</text>
+            <!-- 4 个核 -->
+            <rect x="36" y="56" width="88" height="52" rx="6" fill="#eef2ff" stroke="#6366f1" stroke-width="1"/>
+            <text x="80" y="80" text-anchor="middle" font-size="10" font-weight="700" fill="#3730a3">核心 1</text>
+            <text x="80" y="98" text-anchor="middle" font-size="9" fill="#6b7280">复杂逻辑</text>
+            <rect x="136" y="56" width="88" height="52" rx="6" fill="#eef2ff" stroke="#6366f1" stroke-width="1"/>
+            <text x="180" y="80" text-anchor="middle" font-size="10" font-weight="700" fill="#3730a3">核心 2</text>
+            <text x="180" y="98" text-anchor="middle" font-size="9" fill="#6b7280">复杂逻辑</text>
+            <rect x="36" y="118" width="88" height="52" rx="6" fill="#eef2ff" stroke="#6366f1" stroke-width="1"/>
+            <text x="80" y="142" text-anchor="middle" font-size="10" font-weight="700" fill="#3730a3">核心 3</text>
+            <text x="80" y="160" text-anchor="middle" font-size="9" fill="#6b7280">复杂逻辑</text>
+            <rect x="136" y="118" width="88" height="52" rx="6" fill="#eef2ff" stroke="#6366f1" stroke-width="1"/>
+            <text x="180" y="142" text-anchor="middle" font-size="10" font-weight="700" fill="#3730a3">核心 4</text>
+            <text x="180" y="160" text-anchor="middle" font-size="9" fill="#6b7280">复杂逻辑</text>
+
+            <!-- GPU 区 -->
+            <rect x="300" y="20" width="330" height="160" rx="10" fill="#fff" stroke="#dc2626" stroke-width="1.5"/>
+            <text x="465" y="44" text-anchor="middle" font-size="12" font-weight="700" fill="#dc2626">GPU（A100：6912 个 CUDA Core）</text>
+            <!-- 画一堆小格子代表 CUDA core，用颜色渐变表示大量 -->
+            <text x="465" y="108" text-anchor="middle" font-size="42" fill="#fca5a5">⋯</text>
+            <text x="465" y="138" text-anchor="middle" font-size="11" fill="#374151">每个小格子 = 1 个简单运算单元</text>
+            <text x="465" y="158" text-anchor="middle" font-size="11" font-weight="700" fill="#dc2626">6912 个，同时干同一件事</text>
+
+            <!-- 标注 -->
+            <text x="140" y="190" text-anchor="middle" font-size="10" fill="#6b7280">4 核 · 每核灵活复杂</text>
+            <text x="465" y="190" text-anchor="middle" font-size="10" fill="#6b7280">6912 核 · 每核简单，靠数量取胜</text>
+          </svg>
+        </div>
+
+        <h3>4. GPU 的线程怎么组织的？</h3>
+        <p>GPU 里线程是分级管理的，从小到大依次是：</p>
+
+        <!-- 图3：线程三层组织 -->
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin:12px 0;">
+          <div style="font-size:12px;color:#6b7280;text-align:center;margin-bottom:10px;font-weight:600;">图3：GPU 线程三层组织结构</div>
+          <svg viewBox="0 0 640 210" style="width:100%;max-width:640px;display:block;margin:0 auto;" xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="4" width="632" height="202" rx="10" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+
+            <!-- Grid 大框 -->
+            <rect x="16" y="18" width="608" height="174" rx="10" fill="#faf5ff" stroke="#a855f7" stroke-width="1.5"/>
+            <text x="320" y="38" text-anchor="middle" font-size="11" font-weight="700" fill="#6b21a8">Grid（一次 kernel 启动的所有线程）</text>
+
+            <!-- Block 1 -->
+            <rect x="30" y="48" width="268" height="130" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+            <text x="164" y="68" text-anchor="middle" font-size="10.5" font-weight="700" fill="#1d4ed8">Block（线程块，共享 SRAM）</text>
+
+            <!-- Warp 1 in Block 1 -->
+            <rect x="44" y="78" width="110" height="88" rx="6" fill="#fef9c3" stroke="#f59e0b" stroke-width="1"/>
+            <text x="99" y="96" text-anchor="middle" font-size="9.5" font-weight="700" fill="#92400e">Warp（32 线程）</text>
+            <text x="99" y="112" text-anchor="middle" font-size="9" fill="#374151">t0 t1 t2 t3 …</text>
+            <text x="99" y="128" text-anchor="middle" font-size="9" fill="#374151">t28 t29 t30 t31</text>
+            <text x="99" y="148" text-anchor="middle" font-size="8.5" fill="#6b7280">同时执行同一条指令</text>
+
+            <!-- Warp 2 in Block 1 -->
+            <rect x="164" y="78" width="110" height="88" rx="6" fill="#fef9c3" stroke="#f59e0b" stroke-width="1"/>
+            <text x="219" y="96" text-anchor="middle" font-size="9.5" font-weight="700" fill="#92400e">Warp（32 线程）</text>
+            <text x="219" y="112" text-anchor="middle" font-size="9" fill="#374151">t32 t33 … t63</text>
+            <text x="219" y="148" text-anchor="middle" font-size="8.5" fill="#6b7280">同时执行同一条指令</text>
+
+            <!-- Block 2 -->
+            <rect x="322" y="48" width="268" height="130" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+            <text x="456" y="68" text-anchor="middle" font-size="10.5" font-weight="700" fill="#1d4ed8">Block（另一个线程块）</text>
+            <rect x="336" y="78" width="110" height="88" rx="6" fill="#fef9c3" stroke="#f59e0b" stroke-width="1"/>
+            <text x="391" y="96" text-anchor="middle" font-size="9.5" font-weight="700" fill="#92400e">Warp（32 线程）</text>
+            <text x="391" y="130" text-anchor="middle" font-size="9" fill="#374151">各自私有寄存器</text>
+            <rect x="456" y="78" width="110" height="88" rx="6" fill="#fef9c3" stroke="#f59e0b" stroke-width="1"/>
+            <text x="511" y="96" text-anchor="middle" font-size="9.5" font-weight="700" fill="#92400e">Warp（32 线程）</text>
+            <text x="511" y="130" text-anchor="middle" font-size="9" fill="#374151">各自私有寄存器</text>
+
+            <!-- 说明文字 -->
+            <text x="320" y="196" text-anchor="middle" font-size="9.5" fill="#6b7280">同一 Block 内的线程共享 SRAM；同一 Warp 内的线程强制同步执行同一条指令</text>
+          </svg>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:10px 0;font-size:13px;">
+          <div style="background:#fef9c3;border:1px solid #f59e0b;border-radius:8px;padding:10px 12px;">
+            <div style="font-weight:700;color:#92400e;margin-bottom:4px;">🧵 线程（Thread）</div>
+            <div style="color:#374151;line-height:1.8;">最小执行单元。有自己的寄存器（私有变量）。GPU 上可以有几十万个。</div>
+          </div>
+          <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 12px;">
+            <div style="font-weight:700;color:#c2410c;margin-bottom:4px;">🔗 Warp（线程束）</div>
+            <div style="color:#374151;line-height:1.8;">32 个线程捆绑在一起，<b>强制同步</b>——同一时刻必须执行同一条指令，是 GPU 调度的最小单位。</div>
+          </div>
+          <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;">
+            <div style="font-weight:700;color:#1d4ed8;margin-bottom:4px;">📦 Block（线程块）</div>
+            <div style="color:#374151;line-height:1.8;">多个 Warp 组成一个 Block。同一 Block 内的线程<b>共享 SRAM</b>，可以通过 SRAM 交换数据。</div>
+          </div>
+        </div>
+
+        <h3>5. 为什么 GPU 需要这么多线程？</h3>
+        <div class="callout callout-amber">
+          <strong>核心原因：隐藏内存延迟</strong><br>
+          从 HBM 取一个数需要 ~600 cycle（相当于 CPU 等 600 个时钟周期什么都不做）。
+          GPU 的解法是：准备几千个 Warp，当 Warp A 在等内存时，调度器立刻切换去执行 Warp B、C、D……
+          等 A 的数据到了，再切回来继续。<b>靠「轮流等待、从不空闲」来填满这 600 cycle 的空档。</b>
+        </div>
+
+        <div class="callout callout-indigo">
+          <strong>一句话总结：</strong>
+          CPU 是赛车手（少量、高速、灵活），GPU 是运动会（大量、同步、简单重复）。
+          LLM 矩阵运算的特点正好是「大量简单重复」——把同一个乘法做几百亿次——所以 GPU 天然适合。
+          后面所有的优化（FlashAttention、KV Cache、量化）都是在「怎么更好地喂饱这几千个运算单元」这个问题上做文章。
+        </div>
+      </section>
 
       <!-- § 1 整体架构全景 -->
       <section class="section" id="overview">
