@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GPU 硬件基础：CPU / GPU / 寄存器 / SRAM / HBM / PCIe</title>
+  <style>
+    :root {
+      --bg:#f5f7fb; --card:#ffffff; --text:#1f2937; --muted:#667085;
+      --line:#e5e7eb; --primary:#2563eb; --shadow:0 10px 30px rgba(15,23,42,0.08);
+      --radius:18px; --max:1100px;
+    }
+    *{box-sizing:border-box;}
+    html{scroll-behavior:smooth;}
+    body{margin:0;background:linear-gradient(180deg,#eef2ff 0%,var(--bg) 200px);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;line-height:1.85;}
+    a{color:var(--primary);text-decoration:none;}
+    a:hover{text-decoration:underline;}
+    .page{max-width:var(--max);margin:0 auto;padding:32px 20px 80px;}
+    .back-link{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:14px;margin-bottom:18px;}
+    .back-link:hover{color:var(--primary);text-decoration:none;}
+    .hero{background:radial-gradient(circle at top right,rgba(99,102,241,0.12),transparent 30%),radial-gradient(circle at left bottom,rgba(37,99,235,0.08),transparent 24%),var(--card);border:1px solid rgba(99,102,241,0.2);border-radius:24px;box-shadow:var(--shadow);padding:34px 34px 28px;margin-bottom:22px;}
+    .eyebrow{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:#eef2ff;color:#3730a3;font-size:13px;font-weight:600;margin-bottom:16px;}
+    h1{margin:0 0 10px;font-size:30px;line-height:1.25;letter-spacing:-0.02em;}
+    .subtitle{margin:0;color:var(--muted);font-size:15px;}
+    .layout{display:grid;grid-template-columns:200px minmax(0,1fr);gap:22px;align-items:start;}
+    .toc{position:sticky;top:20px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;max-height:calc(100vh - 40px);overflow-y:auto;}
+    .toc h2{margin:0 0 12px;font-size:15px;}
+    .toc-list{list-style:none;margin:0;padding:0;}
+    .toc-list li{margin:0;}
+    .toc-list a{display:block;padding:5px 8px;border-radius:8px;color:var(--muted);font-size:13px;transition:all 0.15s;}
+    .toc-list a:hover{color:var(--primary);background:#eef2ff;text-decoration:none;}
+    .content{display:flex;flex-direction:column;gap:18px;min-width:0;}
+    .section{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:26px 28px;overflow:hidden;}
+    .section-title{display:flex;align-items:center;gap:12px;margin:0 0 20px;font-size:20px;font-weight:700;}
+    .icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+    h3{margin:26px 0 12px;font-size:17px;color:#111827;border-left:3px solid #a5b4fc;padding-left:10px;}
+    h4{margin:18px 0 8px;font-size:15px;color:#374151;font-weight:700;}
+    p{margin:0 0 12px;}
+    pre{background:#1e293b;color:#e2e8f0;border-radius:12px;padding:16px 20px;overflow-x:auto;font-size:13px;line-height:1.7;margin:14px 0;}
+    code{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:2px 7px;font-family:"SF Mono",Consolas,Monaco,monospace;font-size:13px;color:#2563eb;}
+    table{width:100%;border-collapse:collapse;font-size:13.5px;margin:14px 0;}
+    thead th{background:#eef2ff;color:#3730a3;text-align:left;font-weight:700;padding:10px 14px;border-bottom:2px solid #c7d2fe;}
+    td{padding:10px 14px;border-bottom:1px solid #eef2f7;vertical-align:top;}
+    tbody tr:nth-child(even){background:#f8f9ff;}
+    .callout{border-radius:14px;padding:16px 18px;margin:14px 0;}
+    .callout-blue{background:#eff6ff;border:1px solid #bfdbfe;}
+    .callout-green{background:#f0fdf4;border:1px solid #bbf7d0;}
+    .callout-amber{background:#fffbeb;border:1px solid #fde68a;}
+    .callout-purple{background:#faf5ff;border:1px solid #e9d5ff;}
+    .callout-red{background:#fef2f2;border:1px solid #fecaca;}
+    .callout-indigo{background:#eef2ff;border:1px solid #c7d2fe;}
+    .example-box{background:#f0fdf4;border:1px solid #86efac;border-radius:14px;padding:18px 20px;margin:18px 0;}
+    .ex-title{font-weight:700;color:#166534;margin-bottom:10px;font-size:14px;}
+    ul,ol{padding-left:24px;margin:8px 0 12px;}
+    li{margin:6px 0;}
+    .tag{display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;background:#e0e7ff;color:#3730a3;}
+    footer{margin-top:32px;text-align:center;color:var(--muted);font-size:13px;}
+    @media(max-width:860px){.layout{grid-template-columns:1fr;}.toc{position:static;}}
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <a class="back-link" href="index.html">← 返回笔记列表</a>
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="eyebrow">🖥️ 硬件基础</div>
+    <h1>GPU 硬件基础：从零理解 CPU / GPU / 寄存器 / SRAM / HBM / PCIe</h1>
+    <p class="subtitle">FlashAttention、TurboQuant 等 LLM 优化论文的硬件基础 · 用图和具体数字把每层讲清楚</p>
+  </div>
+
+  <div class="layout">
+    <!-- 左侧 TOC -->
+    <nav class="toc">
+      <h2>目录</h2>
+      <ul class="toc-list">
+        <li><a href="#overview">一、整体架构全景</a></li>
+        <li><a href="#mem-hierarchy">二、五层存储层级</a></li>
+        <li><a href="#gpu-internal">三、GPU 内部结构</a></li>
+        <li><a href="#warp">四、Warp 与并行原理</a></li>
+        <li><a href="#mem-wall">五、内存墙</a></li>
+        <li><a href="#register">六、寄存器与计算</a></li>
+        <li><a href="#pcie">七、PCIe 与多 GPU</a></li>
+        <li><a href="#numbers">八、关键数字速查</a></li>
+      </ul>
+    </nav>
+
+    <!-- 主内容 -->
+    <div class="content">
+
+      <!-- § 1 整体架构全景 -->
+      <section class="section" id="overview">
+        <div class="section-title">
+          <div class="icon" style="background:#eef2ff;">🗺️</div>
+          一、整体架构全景
+        </div>
+        <p>理解 LLM 推理优化（FlashAttention、KV Cache 量化等）首先需要搞清楚一件事：<strong>数据存在哪里，如何到达计算单元</strong>。</p>
+
+        <!-- SVG 全景图 -->
+        <svg viewBox="0 0 780 420" style="width:100%;max-width:780px;display:block;margin:0 auto;" xmlns="http://www.w3.org/2000/svg">
+          <!-- CPU 侧 -->
+          <rect x="10" y="20" width="180" height="380" rx="12" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+          <text x="100" y="46" text-anchor="middle" font-size="13" font-weight="700" fill="#475569">主机（CPU 侧）</text>
+          <rect x="28" y="60" width="144" height="52" rx="8" fill="#e2e8f0" stroke="#64748b" stroke-width="1.5"/>
+          <text x="100" y="83" text-anchor="middle" font-size="12" font-weight="700" fill="#1e293b">CPU</text>
+          <text x="100" y="100" text-anchor="middle" font-size="10" fill="#64748b">控制逻辑 · PyTorch 主程序</text>
+          <rect x="28" y="126" width="144" height="38" rx="6" fill="#fff" stroke="#94a3b8" stroke-dasharray="4,3"/>
+          <text x="100" y="143" text-anchor="middle" font-size="11" font-weight="600" fill="#374151">L1/L2/L3 Cache</text>
+          <text x="100" y="157" text-anchor="middle" font-size="10" fill="#6b7280">MB 级 · CPU 片上</text>
+          <rect x="28" y="178" width="144" height="52" rx="6" fill="#fef9c3" stroke="#ca8a04" stroke-width="1.5"/>
+          <text x="100" y="200" text-anchor="middle" font-size="11" font-weight="700" fill="#854d0e">主机内存（DRAM）</text>
+          <text x="100" y="215" text-anchor="middle" font-size="10" fill="#854d0e">16–512 GB · 50–100 GB/s</text>
+          <text x="100" y="261" text-anchor="middle" font-size="10" fill="#6b7280">模型文件先存这里</text>
+          <text x="100" y="277" text-anchor="middle" font-size="10" fill="#6b7280">训练前 .to('cuda') 复制到 GPU</text>
+          <text x="100" y="330" text-anchor="middle" font-size="10" fill="#9ca3af">操作系统、Python、</text>
+          <text x="100" y="346" text-anchor="middle" font-size="10" fill="#9ca3af">用户数据均在此</text>
+
+          <!-- PCIe -->
+          <line x1="192" y1="204" x2="250" y2="204" stroke="#6b7280" stroke-width="2" stroke-dasharray="5,3"/>
+          <polygon points="250,200 258,204 250,208" fill="#6b7280"/>
+          <line x1="258" y1="214" x2="192" y2="214" stroke="#6b7280" stroke-width="2" stroke-dasharray="5,3"/>
+          <polygon points="192,210 184,214 192,218" fill="#6b7280"/>
+          <text x="221" y="199" text-anchor="middle" font-size="10" fill="#6b7280">PCIe</text>
+          <text x="221" y="233" text-anchor="middle" font-size="10" fill="#dc2626">~32 GB/s</text>
+          <text x="221" y="247" text-anchor="middle" font-size="9.5" fill="#dc2626">最慢环节！</text>
+
+          <!-- GPU 大框 -->
+          <rect x="260" y="20" width="510" height="380" rx="12" fill="#eef2ff" stroke="#6366f1" stroke-width="2"/>
+          <text x="515" y="46" text-anchor="middle" font-size="14" font-weight="700" fill="#3730a3">GPU（如 NVIDIA A100 / H100）</text>
+
+          <!-- HBM -->
+          <rect x="278" y="62" width="160" height="318" rx="10" fill="#fef2f2" stroke="#ef4444" stroke-width="2"/>
+          <text x="358" y="87" text-anchor="middle" font-size="12" font-weight="700" fill="#dc2626">HBM（显存）</text>
+          <text x="358" y="103" text-anchor="middle" font-size="10" fill="#ef4444">High Bandwidth Memory</text>
+          <text x="358" y="121" text-anchor="middle" font-size="13" font-weight="700" fill="#b91c1c">40–80 GB</text>
+          <text x="358" y="137" text-anchor="middle" font-size="11" fill="#b91c1c">带宽 ~2 TB/s</text>
+          <rect x="292" y="152" width="132" height="30" rx="4" fill="#fff" stroke="#fca5a5"/>
+          <text x="358" y="170" text-anchor="middle" font-size="10.5" fill="#374151">模型权重</text>
+          <rect x="292" y="190" width="132" height="30" rx="4" fill="#fff" stroke="#fca5a5"/>
+          <text x="358" y="208" text-anchor="middle" font-size="10.5" fill="#374151">KV Cache</text>
+          <rect x="292" y="228" width="132" height="30" rx="4" fill="#fff" stroke="#fca5a5"/>
+          <text x="358" y="246" text-anchor="middle" font-size="10.5" fill="#374151">激活值 / 中间结果</text>
+          <rect x="292" y="266" width="132" height="30" rx="4" fill="#fff" stroke="#fca5a5"/>
+          <text x="358" y="284" text-anchor="middle" font-size="10.5" fill="#374151">梯度（训练时）</text>
+          <text x="358" y="332" text-anchor="middle" font-size="9.5" fill="#dc2626">⚠ 离计算单元有距离</text>
+          <text x="358" y="348" text-anchor="middle" font-size="9.5" fill="#dc2626">读写有延迟，是主要瓶颈</text>
+
+          <!-- HBM ↔ SM 双向箭头 -->
+          <line x1="440" y1="210" x2="490" y2="210" stroke="#ef4444" stroke-width="2"/>
+          <polygon points="490,206 498,210 490,214" fill="#ef4444"/>
+          <line x1="490" y1="220" x2="440" y2="220" stroke="#6366f1" stroke-width="2"/>
+          <polygon points="440,216 432,220 440,224" fill="#6366f1"/>
+          <text x="464" y="204" text-anchor="middle" font-size="9" fill="#dc2626">读 →</text>
+          <text x="464" y="234" text-anchor="middle" font-size="9" fill="#6366f1">← 写</text>
+
+          <!-- SM 大框 -->
+          <rect x="500" y="62" width="252" height="318" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="2"/>
+          <text x="626" y="87" text-anchor="middle" font-size="12" font-weight="700" fill="#166534">SM（流式多处理器）</text>
+          <text x="626" y="103" text-anchor="middle" font-size="10" fill="#4b7c59">A100: 108 个 SM · H100: 132 个</text>
+
+          <!-- SRAM -->
+          <rect x="514" y="116" width="224" height="92" rx="8" fill="#dcfce7" stroke="#22c55e" stroke-width="2"/>
+          <text x="626" y="137" text-anchor="middle" font-size="11.5" font-weight="700" fill="#166534">SRAM（片上缓存）</text>
+          <text x="626" y="153" text-anchor="middle" font-size="10.5" fill="#15803d">L1 Cache + Shared Memory</text>
+          <text x="626" y="170" text-anchor="middle" font-size="12" font-weight="600" fill="#166534">每 SM ~256 KB · 全 GPU ~20 MB</text>
+          <text x="626" y="186" text-anchor="middle" font-size="10.5" fill="#15803d">带宽 ~10–20 TB/s ⚡</text>
+          <text x="626" y="200" text-anchor="middle" font-size="9.5" fill="#4b7c59">容量小，但极快，是 FlashAttn 的关键</text>
+
+          <!-- 寄存器 -->
+          <rect x="514" y="220" width="100" height="70" rx="6" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+          <text x="564" y="243" text-anchor="middle" font-size="10.5" font-weight="700" fill="#92400e">寄存器</text>
+          <text x="564" y="259" text-anchor="middle" font-size="9.5" fill="#78350f">每线程私有</text>
+          <text x="564" y="273" text-anchor="middle" font-size="9.5" fill="#78350f">~256 个 32-bit</text>
+          <text x="564" y="287" text-anchor="middle" font-size="9.5" fill="#92400e">最快！直接接运算器</text>
+
+          <!-- Tensor Core -->
+          <rect x="626" y="220" width="100" height="32" rx="6" fill="#e0f2fe" stroke="#0284c7" stroke-width="1.5"/>
+          <text x="676" y="238" text-anchor="middle" font-size="10.5" font-weight="700" fill="#075985">Tensor Core（矩阵乘）</text>
+
+          <!-- CUDA Core -->
+          <rect x="626" y="260" width="100" height="32" rx="6" fill="#fdf4ff" stroke="#a855f7" stroke-width="1.5"/>
+          <text x="676" y="278" text-anchor="middle" font-size="10.5" font-weight="700" fill="#6b21a8">CUDA Core（通用运算）</text>
+
+          <!-- 注释 -->
+          <text x="626" y="322" text-anchor="middle" font-size="9.5" fill="#166534">FlashAttention：让 S/P 只在 SRAM</text>
+          <text x="626" y="337" text-anchor="middle" font-size="9.5" fill="#166534">和寄存器中生存，永不写 HBM</text>
+          <text x="626" y="355" text-anchor="middle" font-size="9.5" fill="#16a34a">→ HBM IO 减少 5–10×</text>
+
+          <!-- 箭头标记定义 -->
+          <defs>
+            <marker id="arrowG" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+              <polygon points="0 0, 7 3.5, 0 7" fill="#16a34a"/>
+            </marker>
+          </defs>
+          <!-- SRAM → 寄存器/Cores -->
+          <line x1="564" y1="208" x2="564" y2="220" stroke="#f59e0b" stroke-width="1.5" marker-end="url(#arrowG)"/>
+          <line x1="676" y1="208" x2="676" y2="220" stroke="#16a34a" stroke-width="1.5" marker-end="url(#arrowG)"/>
+        </svg>
+
+        <div class="callout callout-indigo" style="margin-top:14px;">
+          <strong>一句话总览：</strong>GPU 是一台专门做矩阵运算的小型计算机，有自己的「CPU」（叫 SM）、自己的「L1 Cache」（叫 SRAM）、自己的「内存」（叫 HBM），通过 PCIe 连接到主机 CPU。LLM 推理的所有优化，核心都是「减少慢速 HBM 的读写次数，让运算尽量在快速 SRAM 和寄存器里完成」。
+        </div>
+      </section>
+
+      <!-- § 2 五层存储层级 -->
+      <section class="section" id="mem-hierarchy">
+        <div class="section-title">
+          <div class="icon" style="background:#eef2ff;">📦</div>
+          二、五层存储层级（从最快到最慢）
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>层级</th>
+              <th>名称</th>
+              <th>容量</th>
+              <th>带宽 / 延迟</th>
+              <th>位置</th>
+              <th>类比</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="background:#fef9c3;">
+              <td><strong style="color:#b45309;">① 寄存器</strong></td>
+              <td>Register File</td>
+              <td>每线程 ~256 个 32-bit</td>
+              <td><strong style="color:#16a34a;">无限快（直接接运算器）</strong></td>
+              <td>SM 内部，每线程私有</td>
+              <td>手里正拿着的东西</td>
+            </tr>
+            <tr style="background:#f0fdf4;">
+              <td><strong style="color:#16a34a;">② SRAM</strong></td>
+              <td>片上 L1 Cache / Shared Memory</td>
+              <td>每 SM ~256 KB；全 GPU ~20 MB</td>
+              <td><strong style="color:#16a34a;">10–20 TB/s · &lt;5 ns</strong></td>
+              <td>SM 内部，同 SM 线程共享</td>
+              <td>工作台</td>
+            </tr>
+            <tr style="background:#fffbeb;">
+              <td><strong style="color:#b45309;">③ HBM</strong></td>
+              <td>High Bandwidth Memory（显存）</td>
+              <td>40–80 GB</td>
+              <td><strong style="color:#b45309;">~2 TB/s · ~100 ns</strong></td>
+              <td>GPU 封装内，所有 SM 共享</td>
+              <td>GPU 的仓库</td>
+            </tr>
+            <tr>
+              <td><strong style="color:#6b7280;">④ 主机内存</strong></td>
+              <td>DRAM / RAM</td>
+              <td>16–512 GB</td>
+              <td>50–100 GB/s · ~100 ns</td>
+              <td>CPU 主板上</td>
+              <td>CPU 的仓库</td>
+            </tr>
+            <tr style="background:#f8fafc;">
+              <td><strong style="color:#475569;">⑤ 磁盘</strong></td>
+              <td>SSD / NVMe</td>
+              <td>TB 级</td>
+              <td>2–10 GB/s · ~100 μs</td>
+              <td>独立存储设备</td>
+              <td>档案室</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- 容量 vs 速度示意图（SVG横条） -->
+        <div style="margin:16px 0;">
+          <div style="font-weight:700;font-size:13px;color:#374151;margin-bottom:10px;">带宽可视化（对数比例）</div>
+          <div style="display:flex;flex-direction:column;gap:7px;font-size:12.5px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="width:90px;color:#6b7280;text-align:right;flex-shrink:0;">寄存器</div>
+              <div style="flex:1;background:#fef9c3;border-radius:4px;overflow:hidden;">
+                <div style="width:100%;background:linear-gradient(90deg,#f59e0b,#fbbf24);height:22px;border-radius:4px;display:flex;align-items:center;padding:0 10px;color:#fff;font-weight:700;font-size:11px;">近似无限（电路直连）</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="width:90px;color:#6b7280;text-align:right;flex-shrink:0;">SRAM</div>
+              <div style="flex:1;background:#f0fdf4;border-radius:4px;overflow:hidden;">
+                <div style="width:90%;background:linear-gradient(90deg,#16a34a,#22c55e);height:22px;border-radius:4px;display:flex;align-items:center;padding:0 10px;color:#fff;font-weight:700;font-size:11px;">10–20 TB/s</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="width:90px;color:#6b7280;text-align:right;flex-shrink:0;">HBM</div>
+              <div style="flex:1;background:#fffbeb;border-radius:4px;overflow:hidden;">
+                <div style="width:60%;background:linear-gradient(90deg,#b45309,#f59e0b);height:22px;border-radius:4px;display:flex;align-items:center;padding:0 10px;color:#fff;font-weight:700;font-size:11px;">~2 TB/s</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="width:90px;color:#6b7280;text-align:right;flex-shrink:0;">主机内存</div>
+              <div style="flex:1;background:#f8fafc;border-radius:4px;overflow:hidden;">
+                <div style="width:15%;background:linear-gradient(90deg,#6b7280,#9ca3af);height:22px;border-radius:4px;display:flex;align-items:center;padding:0 10px;color:#fff;font-weight:700;font-size:11px;">50–100 GB/s</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="width:90px;color:#6b7280;text-align:right;flex-shrink:0;">PCIe</div>
+              <div style="flex:1;background:#fef2f2;border-radius:4px;overflow:hidden;">
+                <div style="width:5%;background:linear-gradient(90deg,#dc2626,#ef4444);height:22px;border-radius:4px;display:flex;align-items:center;padding:0 10px;color:#fff;font-weight:700;font-size:11px;">~32 GB/s</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 为什么 HBM 明明有 2 TB/s 带宽，还会是瓶颈？</div>
+          <p>因为 Tensor Core 算力达到 <strong>312 TFLOPS</strong>（A100，fp16），即每秒 312 万亿次运算。假设每次运算消耗 2 bytes 数据（fp16），理论上需要 <strong>312×2 = 624 TB/s</strong> 的带宽才能喂饱算力——但 HBM 只有 2 TB/s，相差 <strong>312 倍</strong>。</p>
+          <p style="margin:0;">所以 GPU 大量时间在空转等待读数据，而非真正在算。这就是「<strong>内存墙（Memory Wall）</strong>」。FlashAttention 的本质就是减少无谓的 HBM 读写，让 Tensor Core 少等待。</p>
+        </div>
+      </section>
+
+      <!-- § 3 GPU 内部结构 -->
+      <section class="section" id="gpu-internal">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">⚙️</div>
+          三、GPU 内部结构：SM / CUDA Core / Tensor Core
+        </div>
+
+        <p>一块 GPU 不是一个单一的大型计算器，而是由数百个独立的「小型计算单元」组成，每个叫 <strong>SM（Streaming Multiprocessor，流式多处理器）</strong>。</p>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin:14px 0;font-size:13px;">
+          <div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:10px;padding:14px 16px;">
+            <div style="font-weight:700;color:#1d4ed8;margin-bottom:8px;">SM（流式多处理器）</div>
+            GPU 的基本计算单元，类比 CPU 的一个核。A100 有 <strong>108 个 SM</strong>，H100 有 132 个。每个 SM 包含：
+            <ul style="margin:8px 0 0;font-size:12.5px;">
+              <li>若干 CUDA Core（通用运算）</li>
+              <li>若干 Tensor Core（矩阵加速）</li>
+              <li>专属 SRAM（L1 Cache + Shared Memory）</li>
+              <li>寄存器文件（每个线程私有）</li>
+            </ul>
+          </div>
+          <div style="background:#e0f2fe;border:1px solid #7dd3fc;border-radius:10px;padding:14px 16px;">
+            <div style="font-weight:700;color:#0369a1;margin-bottom:8px;">CUDA Core</div>
+            通用浮点/整数运算单元，可以做：
+            <ul style="margin:8px 0 0;font-size:12.5px;">
+              <li>加减乘除（标量运算）</li>
+              <li>softmax、激活函数（逐元素）</li>
+              <li>条件判断、数据类型转换</li>
+            </ul>
+            <div style="margin-top:8px;font-size:12px;color:#0369a1;">A100 每个 SM 有 64 个 FP32 CUDA Core（共 6912 个）</div>
+          </div>
+          <div style="background:#fdf4ff;border:1px solid #d8b4fe;border-radius:10px;padding:14px 16px;">
+            <div style="font-weight:700;color:#7c3aed;margin-bottom:8px;">Tensor Core</div>
+            专门为矩阵乘法设计的硬件单元，一次指令可完成 <strong>4×4×4 的矩阵乘加</strong>（MMA），比 CUDA Core 快约 8 倍。
+            <ul style="margin:8px 0 0;font-size:12.5px;">
+              <li>矩阵乘法 Q@K.T → Tensor Core</li>
+              <li>线性层 X@W → Tensor Core</li>
+              <li>softmax、ReLU → CUDA Core</li>
+            </ul>
+          </div>
+        </div>
+
+        <h3>GPU vs CPU 的根本差异</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px;">
+          <div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;padding:14px 16px;">
+            <div style="font-weight:700;color:#dc2626;margin-bottom:6px;">CPU — 少量强大核心</div>
+            A modern server CPU 有 32–128 个大型核心，每个核有复杂的分支预测、乱序执行、深度流水线。<br><br>
+            <strong>适合</strong>：复杂的控制流（if/else/while），单线程延迟敏感任务，不规则数据访问。
+          </div>
+          <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:14px 16px;">
+            <div style="font-weight:700;color:#166534;margin-bottom:6px;">GPU — 大量简单核心</div>
+            GPU 有 6000–18000 个简单 CUDA Core，每个核极其简单，但靠数量取胜。<br><br>
+            <strong>适合</strong>：所有线程做完全相同的操作（如矩阵乘法），数据规则、分支极少的大规模并行计算。
+          </div>
+        </div>
+      </section>
+
+      <!-- § 4 Warp -->
+      <section class="section" id="warp">
+        <div class="section-title">
+          <div class="icon" style="background:#fff7ed;">🧵</div>
+          四、Warp：GPU 的最小调度单位
+        </div>
+
+        <p>GPU 里的线程不是单独调度的，而是以 <strong>32 个线程为一组</strong>，称为一个 <strong>Warp</strong>。同一个 Warp 里的所有线程在任意时刻都执行 <strong>同一条指令</strong>（SIMT：Single Instruction Multiple Threads）。</p>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0;font-size:13px;">
+          <div class="callout callout-green">
+            <strong style="color:#166534;">✅ 理想情况：所有线程执行相同操作</strong><br>
+            如矩阵乘法，每个线程计算输出矩阵的一个元素，操作完全相同。32 个线程同时发出同一条乘加指令，Tensor Core 以最高吞吐量运行。
+            <div style="margin-top:8px;font-size:12.5px;font-family:monospace;background:#dcfce7;border-radius:6px;padding:8px;">
+              线程 0: C[0] += A[0] * B[0]<br>
+              线程 1: C[1] += A[1] * B[1]<br>
+              ……（32线程同时执行同一指令）
+            </div>
+          </div>
+          <div class="callout callout-red">
+            <strong style="color:#dc2626;">❌ Warp Divergence：线程走不同分支</strong><br>
+            如果 32 个线程里有些走 if、有些走 else，GPU 只能串行处理：
+            <div style="margin-top:8px;font-size:12.5px;font-family:monospace;background:#fee2e2;border-radius:6px;padding:8px;">
+              if (x &gt; 0):  ← 部分线程走这里<br>
+              &nbsp;&nbsp;result = sqrt(x)<br>
+              else:         ← 其余线程等待<br>
+              &nbsp;&nbsp;result = 0<br>
+              ↓ 先跑 if 分支，else 线程等待<br>
+              ↓ 再跑 else 分支，if 线程等待<br>
+              → 总时间 = if时间 + else时间
+            </div>
+            这叫 <strong>Warp Divergence</strong>，有效吞吐量骤降。
+          </div>
+        </div>
+
+        <div class="callout callout-amber">
+          <strong>这就是 RabitQ 在 GPU 上慢 174 万倍的根本原因</strong><br>
+          RabitQ 的格点搜索需要 binary search + recursive subdivision，充满条件分支。大量 Warp Divergence 让 GPU 变成「串行执行器」。而 FlashAttention / TurboQuant 的量化/矩阵乘法几乎没有分支，所有线程做完全相同的操作，GPU 满负荷并行。
+        </div>
+      </section>
+
+      <!-- § 5 内存墙 -->
+      <section class="section" id="mem-wall">
+        <div class="section-title">
+          <div class="icon" style="background:#fef2f2;">🧱</div>
+          五、内存墙（Memory Wall）：为什么带宽是瓶颈
+        </div>
+
+        <p>计算机体系结构中，「内存墙」是指 CPU/GPU 的算力增长速度远快于内存带宽的增长速度，导致处理器大量时间在等待数据，而非真正在计算。</p>
+
+        <h3>具体数字（A100）</h3>
+        <table>
+          <thead>
+            <tr><th>指标</th><th>数值</th><th>含义</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Tensor Core 算力（fp16）</td><td><strong>312 TFLOPS</strong></td><td>每秒 3120 亿次 fp16 乘加</td></tr>
+            <tr><td>HBM 带宽</td><td><strong>2 TB/s</strong></td><td>每秒最多读 2 TB 数据</td></tr>
+            <tr><td>喂饱算力需要的带宽</td><td>~624 TB/s</td><td>312T ops × 2B = 624 TB</td></tr>
+            <tr style="background:#fef2f2;"><td>差距</td><td><strong>~312 倍</strong></td><td>算力是带宽的 312 倍</td></tr>
+          </tbody>
+        </table>
+
+        <div class="example-box">
+          <div class="ex-title">💡 矩阵乘法的算术强度（Arithmetic Intensity）</div>
+          <p>「算术强度」= 计算量（FLOPs） / 数据量（Bytes），单位是 FLOP/Byte。</p>
+          <p>A100 的「峰值算术强度」（roofline 拐点）约为：312 TFLOPS / 2 TB/s = <strong>156 FLOP/Byte</strong>。</p>
+          <ul>
+            <li><strong>大矩阵乘法</strong>（如 m=n=k=4096）：算术强度 ≈ 2×4096 = 8192 FLOP/Byte → <strong>远超 156，Tensor Core 是瓶颈</strong>，内存足够</li>
+            <li><strong>向量加法</strong>（C = A + B）：算术强度 = 1 FLOP / 6 Byte ≈ 0.17 → <strong>远低于 156，带宽是瓶颈</strong></li>
+            <li><strong>标准 Attention</strong>（n=4096）：S 矩阵 32 MB，O 矩阵 1 MB，反复读写 HBM → <strong>带宽密集型，是瓶颈</strong></li>
+          </ul>
+          <p style="margin:0;">FlashAttention 通过 Tiling 把 Attention 变成「计算密集型」操作，让 Tensor Core 不再等带宽。</p>
+        </div>
+      </section>
+
+      <!-- § 6 寄存器与计算 -->
+      <section class="section" id="register">
+        <div class="section-title">
+          <div class="icon" style="background:#fef9c3;">🔢</div>
+          六、寄存器：GPU 里最快的存储是什么？
+        </div>
+
+        <h3>寄存器是什么？</h3>
+        <p>
+          寄存器（Register）是 GPU 里<strong>离运算单元最近、速度最快的存储</strong>——事实上它根本不是「内存」，
+          而是运算电路本身的一部分，是直接连在加法器/乘法器旁边的几个「小格子」，
+          用来临时存放当前正在参与运算的数字。
+        </p>
+
+        <!-- 图1：寄存器 vs SRAM vs HBM 位置关系 -->
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin:16px 0;">
+          <div style="font-size:12px;color:#6b7280;text-align:center;margin-bottom:8px;font-weight:600;">图1：一个 CUDA 线程视角下的存储层级</div>
+          <svg viewBox="0 0 700 200" style="width:100%;max-width:700px;display:block;margin:0 auto;" xmlns="http://www.w3.org/2000/svg">
+            <!-- 背景 -->
+            <rect x="4" y="4" width="692" height="192" rx="12" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+
+            <!-- 标注：从左到右速度递减 -->
+            <text x="354" y="22" text-anchor="middle" font-size="10" fill="#9ca3af">← 越往左越快、越贵、越小</text>
+
+            <!-- 寄存器 -->
+            <rect x="20" y="36" width="120" height="130" rx="8" fill="#fef9c3" stroke="#f59e0b" stroke-width="2"/>
+            <text x="80" y="58" text-anchor="middle" font-size="11.5" font-weight="700" fill="#92400e">🔢 寄存器</text>
+            <text x="80" y="76" text-anchor="middle" font-size="10" fill="#78350f">每线程私有</text>
+            <text x="80" y="96" text-anchor="middle" font-size="10" fill="#92400e" font-weight="600">~255 个/线程</text>
+            <text x="80" y="112" text-anchor="middle" font-size="10" fill="#78350f">总量 ~16 MB/SM</text>
+            <text x="80" y="130" text-anchor="middle" font-size="9.5" fill="#b45309">延迟：~1 cycle</text>
+            <text x="80" y="148" text-anchor="middle" font-size="9" fill="#6b7280">在运算电路内部</text>
+
+            <!-- 箭头 Reg→SRAM -->
+            <line x1="140" y1="101" x2="176" y2="101" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#arr1)"/>
+            <text x="158" y="95" text-anchor="middle" font-size="8.5" fill="#94a3b8">溢出</text>
+
+            <!-- SRAM / Shared Memory -->
+            <rect x="180" y="36" width="140" height="130" rx="8" fill="#f0fdf4" stroke="#16a34a" stroke-width="2"/>
+            <text x="250" y="58" text-anchor="middle" font-size="11.5" font-weight="700" fill="#166534">🟢 SRAM</text>
+            <text x="250" y="76" text-anchor="middle" font-size="10" fill="#166534">L1 Cache + Shared Mem</text>
+            <text x="250" y="96" text-anchor="middle" font-size="10" fill="#166534" font-weight="600">192 KB/SM（A100）</text>
+            <text x="250" y="112" text-anchor="middle" font-size="10" fill="#374151">所有线程共享</text>
+            <text x="250" y="130" text-anchor="middle" font-size="9.5" fill="#166534">延迟：~20-30 cycle</text>
+            <text x="250" y="148" text-anchor="middle" font-size="9" fill="#6b7280">在 SM 芯片上</text>
+
+            <!-- 箭头 SRAM→HBM -->
+            <line x1="320" y1="101" x2="356" y2="101" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#arr1)"/>
+            <text x="338" y="95" text-anchor="middle" font-size="8.5" fill="#94a3b8">溢出</text>
+
+            <!-- HBM -->
+            <rect x="360" y="36" width="150" height="130" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+            <text x="435" y="58" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1d4ed8">🔵 HBM（显存）</text>
+            <text x="435" y="76" text-anchor="middle" font-size="10" fill="#1d4ed8">GPU 全局内存</text>
+            <text x="435" y="96" text-anchor="middle" font-size="10" fill="#1d4ed8" font-weight="600">80 GB（A100）</text>
+            <text x="435" y="112" text-anchor="middle" font-size="10" fill="#374151">所有 SM 共享</text>
+            <text x="435" y="130" text-anchor="middle" font-size="9.5" fill="#1d4ed8">延迟：~600-700 cycle</text>
+            <text x="435" y="148" text-anchor="middle" font-size="9" fill="#6b7280">在 GPU 封装上（HBM 芯片）</text>
+
+            <!-- 箭头 HBM→CPU RAM -->
+            <line x1="510" y1="101" x2="546" y2="101" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#arr1)"/>
+            <text x="528" y="95" text-anchor="middle" font-size="8.5" fill="#94a3b8">PCIe</text>
+
+            <!-- CPU RAM -->
+            <rect x="550" y="56" width="130" height="90" rx="8" fill="#faf5ff" stroke="#a855f7" stroke-width="1.5"/>
+            <text x="615" y="80" text-anchor="middle" font-size="11.5" font-weight="700" fill="#6b21a8">🟣 CPU 内存</text>
+            <text x="615" y="98" text-anchor="middle" font-size="10" fill="#6b21a8">DRAM</text>
+            <text x="615" y="116" text-anchor="middle" font-size="9.5" fill="#6b21a8">延迟：~μs 级</text>
+            <text x="615" y="134" text-anchor="middle" font-size="9" fill="#6b7280">不在 GPU 上</text>
+
+            <defs>
+              <marker id="arr1" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L7,3 z" fill="#94a3b8"/>
+              </marker>
+            </defs>
+          </svg>
+        </div>
+
+        <h3>寄存器和 SRAM 有什么区别？</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:10px 0 16px;font-size:13px;">
+          <div style="background:#fef9c3;border:1px solid #f59e0b;border-radius:10px;padding:12px 14px;">
+            <div style="font-weight:700;color:#92400e;margin-bottom:6px;">🔢 寄存器</div>
+            <ul style="margin:0;padding-left:16px;line-height:2;color:#374151;">
+              <li><b>每个线程私有</b>，别的线程看不到</li>
+              <li>存放「这个线程正在算的中间值」</li>
+              <li>就在乘法器旁边，<b>0 延迟传输</b></li>
+              <li>A100 每个 SM 约 256KB 寄存器文件</li>
+              <li>每线程最多 255 个（超出则 spill 到 SRAM）</li>
+            </ul>
+          </div>
+          <div style="background:#f0fdf4;border:1px solid #16a34a;border-radius:10px;padding:12px 14px;">
+            <div style="font-weight:700;color:#166534;margin-bottom:6px;">🟢 SRAM（Shared Memory）</div>
+            <ul style="margin:0;padding-left:16px;line-height:2;color:#374151;">
+              <li><b>同一 SM 内所有线程共享</b></li>
+              <li>存放「这批线程都要用的数据块」（如 Q/K tile）</li>
+              <li>需要显式加载（__shared__ 变量）</li>
+              <li>A100 每个 SM 最大 192 KB</li>
+              <li>比寄存器慢一点，但远快于 HBM</li>
+            </ul>
+          </div>
+        </div>
+
+        <h3>图2：一次矩阵乘法里，寄存器在哪里工作？</h3>
+
+        <!-- 图2：数据流向 -->
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin:10px 0 16px;">
+          <div style="font-size:12px;color:#6b7280;text-align:center;margin-bottom:10px;font-weight:600;">图2：计算 c = a × b 的完整数据流</div>
+          <svg viewBox="0 0 680 240" style="width:100%;max-width:680px;display:block;margin:0 auto;" xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="4" width="672" height="232" rx="12" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+
+            <!-- HBM（左边，数据来源） -->
+            <rect x="18" y="60" width="100" height="120" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+            <text x="68" y="88" text-anchor="middle" font-size="11" font-weight="700" fill="#1d4ed8">HBM</text>
+            <text x="68" y="108" text-anchor="middle" font-size="10" fill="#374151">a = 3.14</text>
+            <text x="68" y="126" text-anchor="middle" font-size="10" fill="#374151">b = 2.71</text>
+            <text x="68" y="148" text-anchor="middle" font-size="9" fill="#6b7280">（全部权重/激活）</text>
+
+            <!-- 箭头1：HBM → SRAM -->
+            <line x1="118" y1="120" x2="168" y2="120" stroke="#2563eb" stroke-width="2" marker-end="url(#arr2)"/>
+            <text x="143" y="112" text-anchor="middle" font-size="9" fill="#2563eb">① 读入</text>
+            <text x="143" y="136" text-anchor="middle" font-size="8.5" fill="#6b7280">~600 cycle</text>
+
+            <!-- SRAM（中间） -->
+            <rect x="172" y="50" width="130" height="140" rx="8" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+            <text x="237" y="76" text-anchor="middle" font-size="11" font-weight="700" fill="#166534">SRAM</text>
+            <text x="237" y="96" text-anchor="middle" font-size="10" fill="#374151">缓存 a, b 的 tile</text>
+            <text x="237" y="116" text-anchor="middle" font-size="9.5" fill="#6b7280">（FlashAttention 里</text>
+            <text x="237" y="132" text-anchor="middle" font-size="9.5" fill="#6b7280">Q tile / K tile</text>
+            <text x="237" y="148" text-anchor="middle" font-size="9.5" fill="#6b7280">就在这里）</text>
+            <text x="237" y="175" text-anchor="middle" font-size="9" fill="#9ca3af">A100: 192 KB/SM</text>
+
+            <!-- 箭头2：SRAM → 寄存器 -->
+            <line x1="302" y1="120" x2="352" y2="120" stroke="#16a34a" stroke-width="2" marker-end="url(#arr2g)"/>
+            <text x="327" y="112" text-anchor="middle" font-size="9" fill="#16a34a">② 装入</text>
+            <text x="327" y="136" text-anchor="middle" font-size="8.5" fill="#6b7280">~20 cycle</text>
+
+            <!-- 寄存器区（右侧，含运算器） -->
+            <rect x="356" y="30" width="290" height="180" rx="10" fill="#fef9c3" stroke="#f59e0b" stroke-width="2"/>
+            <text x="501" y="52" text-anchor="middle" font-size="11" font-weight="700" fill="#92400e">SM 内部：寄存器 + 运算器</text>
+
+            <!-- R1 -->
+            <rect x="374" y="66" width="70" height="36" rx="6" fill="#fff" stroke="#f59e0b" stroke-width="1.5"/>
+            <text x="409" y="81" text-anchor="middle" font-size="10" font-weight="700" fill="#92400e">R1</text>
+            <text x="409" y="96" text-anchor="middle" font-size="10" fill="#374151">a = 3.14</text>
+
+            <!-- R2 -->
+            <rect x="374" y="118" width="70" height="36" rx="6" fill="#fff" stroke="#f59e0b" stroke-width="1.5"/>
+            <text x="409" y="133" text-anchor="middle" font-size="10" font-weight="700" fill="#92400e">R2</text>
+            <text x="409" y="148" text-anchor="middle" font-size="10" fill="#374151">b = 2.71</text>
+
+            <!-- 乘法器 -->
+            <rect x="464" y="84" width="72" height="52" rx="8" fill="#fde68a" stroke="#d97706" stroke-width="2"/>
+            <text x="500" y="107" text-anchor="middle" font-size="13" font-weight="700" fill="#92400e">×</text>
+            <text x="500" y="126" text-anchor="middle" font-size="9" fill="#78350f">纯电路，0延迟</text>
+
+            <!-- 箭头 R1→乘法器 -->
+            <line x1="444" y1="84" x2="464" y2="100" stroke="#d97706" stroke-width="1.5" marker-end="url(#arr2o)"/>
+            <!-- 箭头 R2→乘法器 -->
+            <line x1="444" y1="136" x2="464" y2="120" stroke="#d97706" stroke-width="1.5" marker-end="url(#arr2o)"/>
+
+            <!-- R3（结果） -->
+            <rect x="556" y="92" width="70" height="36" rx="6" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+            <text x="591" y="107" text-anchor="middle" font-size="10" font-weight="700" fill="#166534">R3</text>
+            <text x="591" y="122" text-anchor="middle" font-size="10" fill="#374151">c = 8.51</text>
+
+            <!-- 箭头 乘法器→R3 -->
+            <line x1="536" y1="110" x2="556" y2="110" stroke="#16a34a" stroke-width="1.5" marker-end="url(#arr2g)"/>
+
+            <!-- 步骤3标注 -->
+            <text x="500" y="160" text-anchor="middle" font-size="9" fill="#92400e" font-weight="600">③ 运算在寄存器间完成，不触碰任何存储！</text>
+
+            <!-- 回写箭头（向下到 SRAM/HBM） -->
+            <path d="M591 128 Q591 210 400 210 Q250 210 237 190" stroke="#6b7280" stroke-width="1.5" fill="none" stroke-dasharray="4,3" marker-end="url(#arr2gray)"/>
+            <text x="420" y="222" text-anchor="middle" font-size="9" fill="#6b7280">④ 如果结果要持久化，才写回 SRAM 或 HBM</text>
+
+            <defs>
+              <marker id="arr2" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L7,3 z" fill="#2563eb"/>
+              </marker>
+              <marker id="arr2g" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L7,3 z" fill="#16a34a"/>
+              </marker>
+              <marker id="arr2o" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L7,3 z" fill="#d97706"/>
+              </marker>
+              <marker id="arr2gray" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L7,3 z" fill="#6b7280"/>
+              </marker>
+            </defs>
+          </svg>
+        </div>
+
+        <div class="callout callout-green">
+          <strong>关键理解：第③步（乘法本身）完全不碰内存</strong><br>
+          乘法电路只操作寄存器里的值——寄存器就在乘法器旁边，相当于「随手一摸就到」。
+          真正慢的是第①步（从 HBM 把数据搬来），这需要 600+ cycle；
+          第③步只需要 1 个 cycle，快 600 倍。<br>
+          所以「优化 GPU 计算」的本质就是：<strong>减少去 HBM 取数据的次数</strong>。
+        </div>
+
+        <h3>寄存器溢出（Register Spilling）是什么？</h3>
+        <p>每个线程最多用 255 个寄存器。如果一个线程需要的中间变量太多，放不下，就会「溢出」到 SRAM（更慢），SRAM 也放不下则溢出到 HBM（更更慢）。这叫 <strong>register spilling</strong>，会显著拖慢 kernel 速度。</p>
+
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin:12px 0;">
+          <div style="font-size:12px;color:#6b7280;text-align:center;margin-bottom:8px;font-weight:600;">图3：寄存器溢出的代价</div>
+          <div style="display:flex;align-items:center;gap:0;font-size:12px;">
+            <!-- 正常 -->
+            <div style="flex:1;text-align:center;padding:10px;background:#fef9c3;border-radius:8px 0 0 8px;border:1px solid #f59e0b;">
+              <div style="font-weight:700;color:#92400e;">正常情况</div>
+              <div style="font-size:18px;margin:6px 0;">🔢→✖️→🔢</div>
+              <div style="color:#374151;">寄存器间运算<br><b>~1 cycle</b></div>
+            </div>
+            <div style="padding:0 6px;color:#9ca3af;font-size:18px;">›</div>
+            <!-- 溢出到 SRAM -->
+            <div style="flex:1;text-align:center;padding:10px;background:#f0fdf4;border:1px solid #86efac;">
+              <div style="font-weight:700;color:#166534;">溢出到 SRAM</div>
+              <div style="font-size:18px;margin:6px 0;">🔢→🟢→🔢</div>
+              <div style="color:#374151;">多一次 SRAM 读写<br><b>~20 cycle</b></div>
+            </div>
+            <div style="padding:0 6px;color:#9ca3af;font-size:18px;">›</div>
+            <!-- 溢出到 HBM -->
+            <div style="flex:1;text-align:center;padding:10px;background:#fff1f2;border-radius:0 8px 8px 0;border:1px solid #fca5a5;">
+              <div style="font-weight:700;color:#dc2626;">溢出到 HBM</div>
+              <div style="font-size:18px;margin:6px 0;">🔢→🔵→🔢</div>
+              <div style="color:#374151;">多一次 HBM 读写<br><b>~600 cycle</b></div>
+            </div>
+          </div>
+        </div>
+
+        <h3>跟 FlashAttention 的关系</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:10px 0;font-size:13px;">
+          <div class="callout callout-green">
+            <strong style="color:#166534;">✅ FlashAttention：结果小 → 留在寄存器</strong><br>
+            每次只算一个 tile（如 64×64），tile 内的 S_tile、P_tile 结果只有几 KB，寄存器 + SRAM 放得下，
+            计算完直接继续，<strong>永不写 HBM</strong>。
+          </div>
+          <div class="callout callout-red">
+            <strong style="color:#dc2626;">❌ 标准 Attention：结果大 → 必须写 HBM</strong><br>
+            S 矩阵是 4096×4096 fp16 = 32 MB，寄存器和 SRAM 根本装不下，
+            必须写到 HBM，下次 softmax 时再从 HBM 读回——往返 2 次，这才是瓶颈。
+          </div>
+        </div>
+
+        <div class="callout callout-indigo">
+          <strong>一句话总结：寄存器是「运算员手里的草稿纸」</strong><br>
+          HBM 是书架（大但远），SRAM 是桌上的便签本（小但近），寄存器是手里拿着的那张纸（最小但随手就用）。
+          GPU 优化的终极目标：<strong>让运算员尽量只用手里的草稿纸，少去书架取书</strong>。
+        </div>
+      </section>
+
+      <!-- § 7 PCIe 与多 GPU -->
+      <section class="section" id="pcie">
+        <div class="section-title">
+          <div class="icon" style="background:#fef2f2;">🔌</div>
+          七、PCIe 与多 GPU 通信
+        </div>
+
+        <p>CPU（主机）和 GPU（设备）通过 <strong>PCIe（Peripheral Component Interconnect Express）总线</strong> 连接。</p>
+
+        <table>
+          <thead>
+            <tr><th>通信链路</th><th>带宽</th><th>典型场景</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>PCIe 4.0 × 16（CPU ↔ GPU）</td><td>~32 GB/s 双向</td><td>模型权重上传、推理结果下载</td></tr>
+            <tr><td>PCIe 5.0 × 16（新平台）</td><td>~64 GB/s 双向</td><td>下一代服务器</td></tr>
+            <tr><td>NVLink（GPU ↔ GPU，A100）</td><td>~600 GB/s 双向</td><td>多 GPU All-Reduce 梯度同步</td></tr>
+            <tr><td>NVLink（H100）</td><td>~900 GB/s 双向</td><td>超大模型张量并行</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout callout-amber">
+          <strong>PyTorch 中 .to('cuda') / .cuda() 就是触发 PCIe 传输</strong><br>
+          把一个 7B 参数模型（fp16，~14 GB）从 CPU 内存上传到 GPU 显存，通过 PCIe 4.0 至少需要 14 GB / 32 GB/s = <strong>~0.44 秒</strong>。这就是为什么模型一般只在启动时加载一次，推理期间权重常驻 GPU。
+        </div>
+
+        <h3>多 GPU 训练为什么需要 NVLink？</h3>
+        <p>以 8 块 A100 训练一个大模型，每次反向传播需要同步所有 GPU 的梯度（All-Reduce）。假设梯度数据量 14 GB：</p>
+        <ul>
+          <li><strong>走 PCIe</strong>：14 GB / 32 GB/s × 8 = <strong>3.5 秒</strong>（严重拖慢训练）</li>
+          <li><strong>走 NVLink</strong>：14 GB / 600 GB/s × 8 = <strong>0.19 秒</strong>（可接受）</li>
+        </ul>
+        <p>NVLink 让多 GPU 之间的通信带宽接近单 GPU 内部的 HBM 带宽，这是大模型训练能 Scale 到千卡的关键基础设施。</p>
+      </section>
+
+      <!-- § 8 关键数字速查 -->
+      <section class="section" id="numbers">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">📊</div>
+          八、关键数字速查表（A100 SXM4 80GB）
+        </div>
+
+        <table>
+          <thead>
+            <tr><th>指标</th><th>数值</th><th>备注</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Tensor Core 算力（fp16）</td><td><strong>312 TFLOPS</strong></td><td>矩阵乘法峰值</td></tr>
+            <tr><td>HBM 容量</td><td><strong>80 GB</strong></td><td>存模型权重、KV Cache 等</td></tr>
+            <tr><td>HBM 带宽</td><td><strong>2 TB/s</strong></td><td>实际利用率约 70–80%</td></tr>
+            <tr><td>SRAM 总量</td><td><strong>~40 MB</strong></td><td>108 SM × ~256 KB（含 L2 Cache ~40 MB）</td></tr>
+            <tr><td>SRAM 带宽</td><td><strong>~10–20 TB/s</strong></td><td>HBM 的 5–10 倍</td></tr>
+            <tr><td>SM 数量</td><td><strong>108</strong></td><td>每 SM 64 FP32 CUDA Core + 4 Tensor Core</td></tr>
+            <tr><td>线程总数（最大）</td><td><strong>221,184</strong></td><td>108 SM × 2048 线程/SM</td></tr>
+            <tr><td>Warp 大小</td><td><strong>32 线程</strong></td><td>固定，所有 NVIDIA GPU 相同</td></tr>
+            <tr><td>PCIe 带宽</td><td><strong>~64 GB/s</strong></td><td>PCIe 4.0 × 16，双向</td></tr>
+            <tr><td>NVLink 带宽</td><td><strong>600 GB/s</strong></td><td>双向，多 GPU 互联</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout callout-indigo" style="margin-top:16px;">
+          <strong>推荐阅读：这些知识在笔记中的应用</strong>
+          <ul style="margin:8px 0 0;">
+            <li><a href="notes-inference.html">LLM 推理优化笔记</a> — FlashAttention 如何利用 SRAM Tiling，TurboQuant 量化如何降低 HBM 带宽压力</li>
+          </ul>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <footer>GPU 硬件基础笔记 · <a href="index.html">← 返回列表</a></footer>
+</div>
+</body>
+</html>
