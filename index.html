@@ -181,8 +181,8 @@
     <h1>学习笔记 &amp; 论文解读</h1>
     <p>推荐 · 搜索 · LLM · NLP · 工业落地</p>
     <div class="stats">
-      <div class="stat-pill">论文 <strong>15</strong> 篇</div>
-      <div class="stat-pill">学习笔记 <strong>5</strong> 篇</div>
+      <div class="stat-pill">论文 <strong>17</strong> 篇</div>
+      <div class="stat-pill">学习笔记 <strong>7</strong> 篇</div>
       <div class="stat-pill">Semantic ID <strong>12</strong></div>
       <div class="stat-pill">生成式推荐 <strong>7</strong></div>
       <div class="stat-pill">排序 Scaling <strong>5</strong></div>
@@ -193,11 +193,11 @@
   <div class="tabs-wrap">
     <div class="tabs">
       <button class="tab-btn active" onclick="switchTab('all',this)">
-        全部 <span class="tab-count">20</span>
+        全部 <span class="tab-count">19</span>
       </button>
       <button class="tab-btn" onclick="switchTab('notes',this)">
         <span class="tab-dot" style="background:#0891b2"></span>
-        📝 学习笔记 <span class="tab-count">5</span>
+        📝 学习笔记 <span class="tab-count">7</span>
       </button>
       <button class="tab-btn" onclick="switchTab('sid',this)">
         <span class="tab-dot" style="background:#c2410c"></span>
@@ -229,7 +229,7 @@
       </button>
       <button class="tab-btn" onclick="switchTab('infra',this)">
         <span class="tab-dot" style="background:#475569"></span>
-        系统与工程 <span class="tab-count">0</span>
+        系统与工程 <span class="tab-count">1</span>
       </button>
     </div>
   </div>
@@ -237,6 +237,21 @@
   <!-- 全部 -->
   <div id="panel-all" class="panel visible">
     <div class="paper-list">
+
+      <!-- DIET 2026 快手+中科大 -->
+      <a class="paper-card" href="diet.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2026</span>
+            <span class="tag tv">arXiv 2603.24958</span>
+            <span class="tag tc-rank">流式数据集蒸馏 · 快手+中科大</span>
+          </div>
+          <div class="card-title">DIET：用 1-2% 数据复现全量训练效果，推荐系统模型迭代成本降低 60×</div>
+          <div class="card-subtitle">DIET: Learning to Distill Dataset Continually for Recommender Systems · Jiaqing Zhang, Hao Wang et al. · 中科大 + 快手 · arXiv 2026.03</div>
+          <div class="card-summary">将「数据集蒸馏」引入持续学习推荐场景，维护一个随流式数据持续演化的紧凑合成记忆集（仅 1-2% 数据量）。Phase 1 用 label-conditioned EL2N 选出决策边界样本，融合历史对齐记忆；Phase 2 通过影响力引导双向寻址 + bi-level 优化精细调整合成数据。下游架构只需在合成数据上热身 + 继承参考模型 embedding，无需访问全量历史，模型迭代成本最多降低 60×，跨架构泛化（DCN→WuKong/RankMixer）均有效。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
 
       <!-- SID 融入排序模型综述 -->
       <a class="paper-card" href="sid-for-ranking.html" style="border-left: 4px solid #7c3aed; background: linear-gradient(135deg, rgba(124,58,237,0.03), #fff);">
@@ -495,6 +510,36 @@
           <div class="card-title">TIGER：用生成式检索重构推荐系统召回阶段</div>
           <div class="card-subtitle">Recommender Systems with Generative Retrieval · Rajput, Mehta et al. · Google DeepMind</div>
           <div class="card-summary">首次将生成式检索（Generative Retrieval）引入推荐系统：用 RQ-VAE 为 item 生成层级 Semantic ID，Transformer Encoder-Decoder 自回归预测下一个 item 的 Semantic ID。在 Amazon 三数据集全面超越 SASRec/BERT4Rec，原生支持冷启动和多样性调节。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- GPU 硬件基础 -->
+      <a class="paper-card" href="gpu-hardware-basics.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#eef2ff;color:#3730a3;">🖥️ 硬件基础</span>
+            <span class="tag ty">背景知识</span>
+            <span class="tag" style="background:#f0fdf4;color:#166534;">GPU 体系结构</span>
+          </div>
+          <div class="card-title">GPU 硬件基础：CPU / GPU / 寄存器 / SRAM / HBM / PCIe 从零讲清楚</div>
+          <div class="card-subtitle">FlashAttention、KV Cache 量化等 LLM 优化论文的硬件基础 · 五层存储层级 · Warp & 内存墙 · A100 关键数字速查</div>
+          <div class="card-summary">从零搭建 GPU 硬件认知：五层存储层级（寄存器/SRAM/HBM/DRAM/SSD）的容量与带宽对比；SM/CUDA Core/Tensor Core 各自职责；Warp 是什么，warp divergence 为何让 RabitQ 慢 174 万倍；内存墙：312 TFLOPS 算力 vs 2 TB/s 带宽的差距；PCIe/NVLink 通信带宽与多 GPU 训练；以及「计算本身不消耗内存」的真正含义。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- LLM 推理优化 -->
+      <a class="paper-card" href="notes-inference.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#f0fdf4;color:#166534;">⚡ 推理优化</span>
+            <span class="tag ty">LLM 基础</span>
+            <span class="tag tc-llm">推理效率</span>
+          </div>
+          <div class="card-title">LLM 推理优化：KV Cache · vLLM · TurboQuant · Flash Attention</div>
+          <div class="card-subtitle">让大模型跑得更快、占更少内存的四项核心技术，每个都有具体数字 + 局限性分析</div>
+          <div class="card-summary">持续更新的推理优化笔记。KV Cache：为什么缓存 K/V 而不是 Q，MQA/GQA 如何压缩显存；vLLM/PagedAttention：分页虚拟内存消灭碎片，利用率 20%→90%+；TurboQuant：随机旋转 + 向量量化把 K/V 压到 2/4 bit；FlashAttention v1/v2/v3：Tiling + Online Softmax，HBM IO 从 O(N²) 降到 O(N)，训练推理均可用。四项技术可同时叠加。</div>
         </div>
         <div class="card-arrow">→</div>
       </a>
@@ -964,7 +1009,21 @@
       <h2>系统与工程</h2>
       <span class="cat-desc">训练系统、serving 优化、异构计算、在线学习等工程实践</span>
     </div>
-    <div class="empty">暂无解读，敬请期待</div>
+    <div class="paper-list">
+      <a class="paper-card" href="gpu-hardware-basics.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#eef2ff;color:#3730a3;">🖥️ 硬件基础</span>
+            <span class="tag ty">背景知识</span>
+            <span class="tag" style="background:#f0fdf4;color:#166534;">GPU 体系结构</span>
+          </div>
+          <div class="card-title">GPU 硬件基础：CPU / GPU / 寄存器 / SRAM / HBM / PCIe 从零讲清楚</div>
+          <div class="card-subtitle">FlashAttention、KV Cache 量化等 LLM 优化论文的硬件基础 · 五层存储层级 · Warp &amp; 内存墙 · A100 关键数字速查</div>
+          <div class="card-summary">从零搭建 GPU 硬件认知：五层存储层级（寄存器/SRAM/HBM/DRAM/SSD）的容量与带宽对比；SM/CUDA Core/Tensor Core 各自职责；Warp 是什么，warp divergence 为何让 RabitQ 慢 174 万倍；内存墙：312 TFLOPS 算力 vs 2 TB/s 带宽的差距；PCIe/NVLink 通信带宽与多 GPU 训练；以及「计算本身不消耗内存」的真正含义。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+    </div>
   </div>
 
   <!-- ═══════════════════════════════════════════════════
@@ -977,6 +1036,36 @@
       <span class="cat-desc">LLM 基础技术专题精讲 · 结合实例深度解析</span>
     </div>
     <div class="paper-list">
+
+      <!-- GPU 硬件基础 -->
+      <a class="paper-card" href="gpu-hardware-basics.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#eef2ff;color:#3730a3;">🖥️ 硬件基础</span>
+            <span class="tag ty">背景知识</span>
+            <span class="tag" style="background:#f0fdf4;color:#166534;">GPU 体系结构</span>
+          </div>
+          <div class="card-title">GPU 硬件基础：CPU / GPU / 寄存器 / SRAM / HBM / PCIe 从零讲清楚</div>
+          <div class="card-subtitle">FlashAttention、KV Cache 量化等 LLM 优化论文的硬件基础 · 五层存储层级 · Warp &amp; 内存墙 · A100 关键数字速查</div>
+          <div class="card-summary">从零搭建 GPU 硬件认知：五层存储层级；SM/CUDA Core/Tensor Core；Warp divergence；内存墙；PCIe/NVLink；寄存器与计算的关系。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- 推理优化 -->
+      <a class="paper-card" href="notes-inference.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#f0fdf4;color:#166534;">⚡ 推理优化</span>
+            <span class="tag ty">LLM 基础</span>
+            <span class="tag tc-llm">推理效率</span>
+          </div>
+          <div class="card-title">LLM 推理优化：KV Cache · Flash Attention · 量化</div>
+          <div class="card-subtitle">让大模型跑得更快、占更少内存的核心技术，每个都有具体数字 + 局限性分析</div>
+          <div class="card-summary">持续更新的推理优化笔记。KV Cache：为什么缓存 K/V 而不是 Q，MQA / GQA 如何压缩显存（LLaMA-2 70B 案例）；Flash Attention：标准 Attention 的 HBM IO 瓶颈，Tiling + Online Softmax 原理，v1/v2/v3 各版本改进，为什么训练时显存节省 10-20×；后续会继续加量化（INT8/INT4/FP8）、投机解码、PagedAttention 等内容。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
 
       <!-- Tokenizer -->
       <a class="paper-card" href="notes-tokenizer.html">
