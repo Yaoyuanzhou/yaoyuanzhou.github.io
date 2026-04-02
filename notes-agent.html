@@ -673,6 +673,39 @@
           </div>
         </div>
 
+        <div class="callout callout-blue" style="margin-top:12px;">
+          <strong>「写入记忆」在工程上是什么？</strong><br>
+          这里的「记忆」不是什么特殊系统，就是<b>普通的文本存储</b>，下次重试时读出来拼进 Prompt。常见实现方式：
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0 4px;">
+            <div style="background:#fff;border:1px solid #bfdbfe;border-radius:8px;padding:10px;text-align:center;">
+              <div style="font-weight:700;color:#1d4ed8;font-size:12px;margin-bottom:4px;">变量 list</div>
+              <div style="font-size:11px;color:#6b7280;">最简单<br>进程结束即消失</div>
+            </div>
+            <div style="background:#fff;border:1px solid #bfdbfe;border-radius:8px;padding:10px;text-align:center;">
+              <div style="font-weight:700;color:#1d4ed8;font-size:12px;margin-bottom:4px;">JSON 文件</div>
+              <div style="font-size:11px;color:#6b7280;">跨次重试持久化<br>下次启动读进来</div>
+            </div>
+            <div style="background:#fff;border:1px solid #bfdbfe;border-radius:8px;padding:10px;text-align:center;">
+              <div style="font-weight:700;color:#1d4ed8;font-size:12px;margin-bottom:4px;">数据库</div>
+              <div style="font-size:11px;color:#6b7280;">SQLite / Redis<br>多用户共享</div>
+            </div>
+            <div style="background:#fff;border:1px solid #bfdbfe;border-radius:8px;padding:10px;text-align:center;">
+              <div style="font-weight:700;color:#1d4ed8;font-size:12px;margin-bottom:4px;">向量库</div>
+              <div style="font-size:11px;color:#6b7280;">反思很多时<br>语义检索相关记录</div>
+            </div>
+          </div>
+          <div style="background:#1e293b;border-radius:8px;padding:10px 14px;font-size:12px;color:#e2e8f0;line-height:1.9;margin-top:8px;">
+            <span style="color:#94a3b8;"># Reflexion 核心循环（最简实现）</span><br>
+            memory: list[str] = []  <span style="color:#94a3b8;"># 「记忆」就是这个列表</span><br>
+            <span style="color:#fbbf24;">for</span> attempt <span style="color:#fbbf24;">in</span> range(max_retries):<br>
+            &nbsp;&nbsp;prompt = f"历史反思：{chr(10).join(memory)}\n\n任务：{task}"<br>
+            &nbsp;&nbsp;result = llm.generate(prompt)<br>
+            &nbsp;&nbsp;<span style="color:#fbbf24;">if</span> evaluate(result): <span style="color:#fbbf24;">break</span>  <span style="color:#94a3b8;"># 成功</span><br>
+            &nbsp;&nbsp;reflection = llm.generate(f"任务失败：{result}，请反思原因和改进方向")<br>
+            &nbsp;&nbsp;memory.append(reflection)  <span style="color:#94a3b8;"># ← 这就是「写入记忆」</span>
+          </div>
+        </div>
+
         <h3>2. Evaluator-Optimizer 模式</h3>
         <p>另一种常见的反思模式：<b>一个 LLM 生成内容，另一个 LLM 评估并给出改进意见</b>，循环迭代直到质量达标。</p>
         <div style="display:flex;align-items:center;gap:10px;margin:12px 0;flex-wrap:wrap;">
@@ -786,6 +819,53 @@
           1. <b>突破上下文限制</b>：一个 Agent 处理整个代码仓库会超 token，拆成多个 Agent 每个只看一部分文件。<br>
           2. <b>专业化分工</b>：搜索 Agent 专门优化搜索策略，写作 Agent 专门优化文风，比一个通才 Agent 效果好。<br>
           3. <b>并行加速</b>：原本串行的步骤变成并行，大幅缩短完成时间。
+        </div>
+
+        <h3>3. Agent 之间怎么传递信息？</h3>
+        <p style="font-size:13px;">多 Agent 拆分后，Worker A 看完 <code>/utils</code> 目录，Worker B 看完 <code>/models</code> 目录，它们的分析结果怎么传给协调者或其他 Agent？<b>不是直接传源代码（会超 token），而是传「压缩后的结构化摘要」</b>。常见三种方式：</p>
+
+        <table>
+          <thead><tr><th>通信方式</th><th>做法</th><th>适用场景</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><b>符号表摘要</b></td>
+              <td>Worker 输出函数签名 + 一句话描述，不传代码体<br><span style="font-size:11px;color:#6b7280;"><code>{"name": "embed_text", "sig": "(str) → np.ndarray[1536]", "desc": "L2归一化向量"}</code></span></td>
+              <td>代码仓库分析、接口理解、依赖图构建</td>
+            </tr>
+            <tr>
+              <td><b>自然语言摘要</b></td>
+              <td>Worker 用 LLM 把读到的内容总结成 3~5 句话，传给协调者</td>
+              <td>文档分析、非结构化内容（设计稿、需求文档）</td>
+            </tr>
+            <tr style="background:#f0fdf4;">
+              <td><b>共享黑板 ⭐</b></td>
+              <td>所有 Agent 共享一个状态字典，边读边写，协调者最后读全量</td>
+              <td>多 Agent 需要互相参考对方发现时（如 Bug 溯源）</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="background:#1e293b;border-radius:10px;padding:14px 18px;font-size:12.5px;color:#e2e8f0;line-height:1.9;margin:12px 0;">
+          <span style="color:#94a3b8;"># 共享黑板（Shared Scratchpad）示例</span><br>
+          blackboard = {<br>
+          &nbsp;&nbsp;"<span style="color:#34d399;">interfaces</span>": {},   <span style="color:#94a3b8;"># 各模块暴露的函数签名</span><br>
+          &nbsp;&nbsp;"<span style="color:#34d399;">issues</span>": [],        <span style="color:#94a3b8;"># 任何 Agent 发现的 bug/问题</span><br>
+          &nbsp;&nbsp;"<span style="color:#34d399;">dependencies</span>": {}  <span style="color:#94a3b8;"># 模块间依赖关系</span><br>
+          }<br><br>
+          <span style="color:#94a3b8;"># Worker-A 分析完 /utils 后写入</span><br>
+          blackboard["interfaces"]["utils"] = {<br>
+          &nbsp;&nbsp;"embed_text": "(str, model='bge') → ndarray[1536]，L2归一化",<br>
+          &nbsp;&nbsp;"batch_embed": "(List[str]) → ndarray，自动分批，无副作用"<br>
+          }<br><br>
+          <span style="color:#94a3b8;"># Worker-B 分析 /models 时可以读 Worker-A 的结果</span><br>
+          utils_api = blackboard["interfaces"].get("utils", {})<br>
+          <span style="color:#94a3b8;"># 知道 embed_text 的签名后，就能判断 models 里的调用是否正确</span><br><br>
+          <span style="color:#94a3b8;"># 协调者最后读全量黑板，汇总分析报告</span>
+        </div>
+
+        <div class="callout callout-green">
+          <strong>关键原则：传「接口合约」而非「实现细节」</strong><br>
+          Worker Agent 输出时应该想「<b>下游 Agent 需要知道什么才能完成它的工作？</b>」——通常是函数签名、副作用说明、关键约束，而不是完整的实现代码。一个好的摘要应该让下游 Agent 不看源码也能正确调用。
         </div>
       </section>
 
