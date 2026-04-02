@@ -182,7 +182,7 @@
     <p>推荐 · 搜索 · LLM · NLP · 工业落地</p>
     <div class="stats">
       <div class="stat-pill">论文 <strong>17</strong> 篇</div>
-      <div class="stat-pill">学习笔记 <strong>7</strong> 篇</div>
+      <div class="stat-pill">学习笔记 <strong>11</strong> 篇</div>
       <div class="stat-pill">Semantic ID <strong>12</strong></div>
       <div class="stat-pill">生成式推荐 <strong>7</strong></div>
       <div class="stat-pill">排序 Scaling <strong>5</strong></div>
@@ -510,6 +510,66 @@
           <div class="card-title">TIGER：用生成式检索重构推荐系统召回阶段</div>
           <div class="card-subtitle">Recommender Systems with Generative Retrieval · Rajput, Mehta et al. · Google DeepMind</div>
           <div class="card-summary">首次将生成式检索（Generative Retrieval）引入推荐系统：用 RQ-VAE 为 item 生成层级 Semantic ID，Transformer Encoder-Decoder 自回归预测下一个 item 的 Semantic ID。在 Amazon 三数据集全面超越 SASRec/BERT4Rec，原生支持冷启动和多样性调节。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- AI Agent 关键技术 -->
+      <a class="paper-card" href="notes-agent.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#ecfdf5;color:#065f46;">🤖 AI 系统</span>
+            <span class="tag ty">Agent 技术</span>
+            <span class="tag" style="background:#ede9fe;color:#5b21b6;">规划/记忆/工具</span>
+          </div>
+          <div class="card-title">AI Agent 关键技术全景：规划 / 记忆 / 工具 / 反思 / 多 Agent</div>
+          <div class="card-subtitle">从「LLM 作为大脑」到自主完成复杂任务 · ReAct · RAG · MCP · Multi-Agent 协作 · 2025 现状</div>
+          <div class="card-summary">全面梳理 AI Agent 核心技术栈：规划（CoT/ToT/ReAct/Prompt Chaining）；记忆（短期 Context Window、长期 RAG 向量数据库、结构化存储）；工具调用（Function Calling/MCP/Computer Use）；反思机制（Reflexion/Evaluator-Optimizer）；多 Agent 协作（Orchestrator-Workers/Routing/Parallelization）；以及 2025 年新技术 MCP 协议和 Computer Use 能力详解。附挑战与落地建议。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- RAG 检索增强生成 -->
+      <a class="paper-card" href="notes-rag.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#ecfdf5;color:#065f46;">🔍 RAG</span>
+            <span class="tag ty">Agent 技术</span>
+            <span class="tag" style="background:#f0fdf4;color:#166534;">检索增强</span>
+          </div>
+          <div class="card-title">RAG 检索增强生成：从离线向量化到在线检索全链路</div>
+          <div class="card-subtitle">Embedding · FAISS/HNSW · Dense/Sparse/Hybrid 检索 · Reranker · Chunking 策略 · 完整工程实践</div>
+          <div class="card-summary">完整的 RAG 技术链路：Embedding 模型原理与选型（BGE/text-embedding-3）；五种 Chunking 策略对比（固定/重叠/语义/Parent-Child）；IVF 和 HNSW 向量索引原理图解；Dense/Sparse/Hybrid 三种检索策略 + RRF 合并；Reranker 两阶段架构（Bi-Encoder vs Cross-Encoder）；完整在线离线工程代码；进阶技巧 HyDE/Multi-Query/Self-RAG；RAGAS 评估框架。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- ReAct 推理框架 -->
+      <a class="paper-card" href="notes-react.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#faf5ff;color:#5b21b6;">🧠 推理</span>
+            <span class="tag ty">Agent 技术</span>
+            <span class="tag" style="background:#ede9fe;color:#7c3aed;">ReAct / CoT</span>
+          </div>
+          <div class="card-title">ReAct / Agent 推理框架：从 CoT 到 ReAct 到 Tree-of-Thought</div>
+          <div class="card-subtitle">CoT · ReAct 三原语 · Reflexion · Plan-Execute · ToT · 完整 Prompt 模板 · 框架选型</div>
+          <div class="card-summary">推理框架全景：CoT（Standard/Zero-Shot）的局限性分析；ReAct 的 Thought/Action/Observation 三原语 + 完整生产 Prompt 模板 + 代码循环实现；Reflexion 失败反思记忆；Plan-Execute 两阶段架构；LATS 蒙特卡洛树搜索；Tree-of-Thought 四组件（分解/生成/评估/搜索）；六种框架对比选型表；工程实现（防止无限循环/上下文压缩/解析鲁棒性）。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- Function Calling & MCP -->
+      <a class="paper-card" href="notes-tool-calling.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#ecfeff;color:#0e7490;">🔧 工具调用</span>
+            <span class="tag ty">Agent 技术</span>
+            <span class="tag" style="background:#cffafe;color:#0891b2;">MCP 协议</span>
+          </div>
+          <div class="card-title">Function Calling &amp; MCP：工具调用底层机制全解</div>
+          <div class="card-subtitle">JSON Schema 工具定义 · 并行调用 · 错误处理 · MCP 三层架构 · stdio/SSE Transport · 安全防御</div>
+          <div class="card-summary">工具调用完整技术栈：JSON Schema 工具定义规范与 Description 写法技巧；Function Calling 四轮对话全流程图解；并行工具调用（asyncio 并发执行）；三种错误类型处理；MCP 协议定位（USB-C 类比）；Host/Client/Server 三层架构图；MCP 三类能力（Tools/Resources/Prompts）；stdio vs SSE Transport 对比；JSON-RPC 2.0 消息格式；Prompt Injection 防御机制；Function Calling vs MCP 选型建议。</div>
         </div>
         <div class="card-arrow">→</div>
       </a>
@@ -1010,6 +1070,21 @@
       <span class="cat-desc">训练系统、serving 优化、异构计算、在线学习等工程实践</span>
     </div>
     <div class="paper-list">
+      <!-- AI Agent 关键技术 -->
+      <a class="paper-card" href="notes-agent.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#ecfdf5;color:#065f46;">🤖 AI 系统</span>
+            <span class="tag ty">Agent 技术</span>
+            <span class="tag" style="background:#ede9fe;color:#5b21b6;">规划/记忆/工具</span>
+          </div>
+          <div class="card-title">AI Agent 关键技术全景：规划 / 记忆 / 工具 / 反思 / 多 Agent</div>
+          <div class="card-subtitle">从「LLM 作为大脑」到自主完成复杂任务 · ReAct · RAG · MCP · Multi-Agent 协作 · 2025 现状</div>
+          <div class="card-summary">全面梳理 AI Agent 核心技术栈：规划（CoT/ToT/ReAct/Prompt Chaining）；记忆（短期 Context Window、长期 RAG 向量数据库、结构化存储）；工具调用（Function Calling/MCP/Computer Use）；反思机制（Reflexion/Evaluator-Optimizer）；多 Agent 协作（Orchestrator-Workers/Routing/Parallelization）；以及 2025 年新技术 MCP 协议和 Computer Use 能力详解。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
       <a class="paper-card" href="gpu-hardware-basics.html">
         <div>
           <div class="card-meta">
@@ -1036,6 +1111,66 @@
       <span class="cat-desc">LLM 基础技术专题精讲 · 结合实例深度解析</span>
     </div>
     <div class="paper-list">
+
+      <!-- AI Agent 关键技术 -->
+      <a class="paper-card" href="notes-agent.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#ecfdf5;color:#065f46;">🤖 AI 系统</span>
+            <span class="tag ty">Agent 技术</span>
+            <span class="tag" style="background:#ede9fe;color:#5b21b6;">规划/记忆/工具</span>
+          </div>
+          <div class="card-title">AI Agent 关键技术全景：规划 / 记忆 / 工具 / 反思 / 多 Agent</div>
+          <div class="card-subtitle">从「LLM 作为大脑」到自主完成复杂任务 · ReAct · RAG · MCP · Multi-Agent 协作 · 2025 现状</div>
+          <div class="card-summary">全面梳理 AI Agent 核心技术栈：规划（CoT/ToT/ReAct/Prompt Chaining）；记忆（短期 Context Window、长期 RAG 向量数据库、结构化存储）；工具调用（Function Calling/MCP/Computer Use）；反思机制（Reflexion/Evaluator-Optimizer）；多 Agent 协作（Orchestrator-Workers/Routing/Parallelization）；以及 2025 年新技术 MCP 协议和 Computer Use 能力详解。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- RAG 检索增强生成 -->
+      <a class="paper-card" href="notes-rag.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#ecfdf5;color:#065f46;">🔍 RAG</span>
+            <span class="tag ty">Agent 技术</span>
+            <span class="tag" style="background:#f0fdf4;color:#166534;">检索增强</span>
+          </div>
+          <div class="card-title">RAG 检索增强生成：从离线向量化到在线检索全链路</div>
+          <div class="card-subtitle">Embedding · FAISS/HNSW · Dense/Sparse/Hybrid 检索 · Reranker · Chunking 策略 · 完整工程实践</div>
+          <div class="card-summary">完整的 RAG 技术链路：Embedding 模型原理与选型；五种 Chunking 策略对比；IVF 和 HNSW 向量索引原理图解；Dense/Sparse/Hybrid 检索 + RRF 合并；Reranker 两阶段精排；完整工程代码；进阶技巧 HyDE/Multi-Query；RAGAS 评估框架。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- ReAct 推理框架 -->
+      <a class="paper-card" href="notes-react.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#faf5ff;color:#5b21b6;">🧠 推理</span>
+            <span class="tag ty">Agent 技术</span>
+            <span class="tag" style="background:#ede9fe;color:#7c3aed;">ReAct / CoT</span>
+          </div>
+          <div class="card-title">ReAct / Agent 推理框架：从 CoT 到 ReAct 到 Tree-of-Thought</div>
+          <div class="card-subtitle">CoT · ReAct 三原语 · Reflexion · Plan-Execute · ToT · 完整 Prompt 模板 · 框架选型</div>
+          <div class="card-summary">推理框架全景：CoT 局限性；ReAct 三原语 + 生产 Prompt 模板；Reflexion 失败反思；Plan-Execute 两阶段架构；Tree-of-Thought 四组件；六种框架对比选型表；防无限循环等工程实现要点。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- Function Calling & MCP -->
+      <a class="paper-card" href="notes-tool-calling.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#ecfeff;color:#0e7490;">🔧 工具调用</span>
+            <span class="tag ty">Agent 技术</span>
+            <span class="tag" style="background:#cffafe;color:#0891b2;">MCP 协议</span>
+          </div>
+          <div class="card-title">Function Calling &amp; MCP：工具调用底层机制全解</div>
+          <div class="card-subtitle">JSON Schema 工具定义 · 并行调用 · 错误处理 · MCP 三层架构 · stdio/SSE Transport · 安全防御</div>
+          <div class="card-summary">工具调用完整技术栈：JSON Schema 规范；Function Calling 四轮对话流程；并行调用处理；MCP 协议定位（USB-C 类比）；Host/Client/Server 三层架构；Tools/Resources/Prompts 三类能力；stdio vs SSE 对比；Prompt Injection 防御；选型建议。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
 
       <!-- GPU 硬件基础 -->
       <a class="paper-card" href="gpu-hardware-basics.html">

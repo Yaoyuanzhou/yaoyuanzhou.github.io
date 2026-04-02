@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ReAct / Agent 推理框架：从 CoT 到 ReAct 到 Tree-of-Thought</title>
+  <style>
+    :root {
+      --bg:#f5f7fb; --card:#ffffff; --text:#1f2937; --muted:#667085;
+      --line:#e5e7eb; --primary:#7c3aed; --shadow:0 10px 30px rgba(15,23,42,0.08);
+      --radius:18px; --max:1100px;
+    }
+    *{box-sizing:border-box;}
+    html{scroll-behavior:smooth;}
+    body{margin:0;background:linear-gradient(180deg,#faf5ff 0%,var(--bg) 200px);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;line-height:1.85;}
+    a{color:var(--primary);text-decoration:none;}
+    a:hover{text-decoration:underline;}
+    .page{max-width:var(--max);margin:0 auto;padding:32px 20px 80px;}
+    .back-link{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:14px;margin-bottom:18px;}
+    .back-link:hover{color:var(--primary);text-decoration:none;}
+    .hero{background:radial-gradient(circle at top right,rgba(124,58,237,0.12),transparent 30%),radial-gradient(circle at left bottom,rgba(139,92,246,0.08),transparent 24%),var(--card);border:1px solid rgba(124,58,237,0.25);border-radius:24px;box-shadow:var(--shadow);padding:34px 34px 28px;margin-bottom:22px;}
+    .eyebrow{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:#faf5ff;color:#5b21b6;font-size:13px;font-weight:600;margin-bottom:16px;}
+    h1{margin:0 0 10px;font-size:30px;line-height:1.25;letter-spacing:-0.02em;}
+    .subtitle{margin:0;color:var(--muted);font-size:15px;}
+    .layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:22px;align-items:start;}
+    .toc{position:sticky;top:20px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;max-height:calc(100vh - 40px);overflow-y:auto;}
+    .toc h2{margin:0 0 12px;font-size:15px;}
+    .toc-list{list-style:none;margin:0;padding:0;}
+    .toc-list li{margin:0;}
+    .toc-list a{display:block;padding:5px 8px;border-radius:8px;color:var(--muted);font-size:13px;transition:all 0.15s;}
+    .toc-list a:hover{color:var(--primary);background:#faf5ff;text-decoration:none;}
+    .content{display:flex;flex-direction:column;gap:18px;min-width:0;}
+    .section{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:26px 28px;overflow:hidden;}
+    .section-title{display:flex;align-items:center;gap:12px;margin:0 0 20px;font-size:20px;font-weight:700;}
+    .icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+    h3{margin:26px 0 12px;font-size:17px;color:#111827;border-left:3px solid #c4b5fd;padding-left:10px;}
+    h4{margin:18px 0 8px;font-size:15px;color:#374151;font-weight:700;}
+    p{margin:0 0 12px;}
+    pre{background:#1e293b;color:#e2e8f0;border-radius:12px;padding:16px 20px;overflow-x:auto;font-size:13px;line-height:1.7;margin:14px 0;}
+    code{background:#f5f3ff;border:1px solid #e9d5ff;border-radius:6px;padding:2px 7px;font-family:"SF Mono",Consolas,Monaco,monospace;font-size:13px;color:#7c3aed;}
+    table{width:100%;border-collapse:collapse;font-size:13.5px;margin:14px 0;}
+    thead th{background:#faf5ff;color:#5b21b6;text-align:left;font-weight:700;padding:10px 14px;border-bottom:2px solid #c4b5fd;}
+    td{padding:10px 14px;border-bottom:1px solid #eef2f7;vertical-align:top;}
+    tbody tr:nth-child(even){background:#fdfbff;}
+    .callout{border-radius:14px;padding:16px 18px;margin:14px 0;}
+    .callout-blue{background:#eff6ff;border:1px solid #bfdbfe;}
+    .callout-green{background:#f0fdf4;border:1px solid #bbf7d0;}
+    .callout-amber{background:#fffbeb;border:1px solid #fde68a;}
+    .callout-purple{background:#faf5ff;border:1px solid #e9d5ff;}
+    .callout-red{background:#fef2f2;border:1px solid #fecaca;}
+    ul,ol{padding-left:24px;margin:8px 0 12px;}
+    li{margin:6px 0;}
+    footer{margin-top:32px;text-align:center;color:var(--muted);font-size:13px;}
+    @media(max-width:860px){.layout{grid-template-columns:1fr;}.toc{position:static;}}
+  </style>
+</head>
+<body>
+<div class="page">
+  <a class="back-link" href="notes-agent.html">← 返回 Agent 技术总览</a>
+
+  <div class="hero">
+    <div class="eyebrow">🧠 推理框架系列</div>
+    <h1>ReAct / Agent 推理框架：从 CoT 到 ReAct 到 Tree-of-Thought</h1>
+    <p class="subtitle">CoT · ReAct · ReAct-Step · ToT · GoT · 实际 Prompt 格式 · 对比测评 · 框架选择指南</p>
+  </div>
+
+  <div class="layout">
+    <nav class="toc">
+      <h2>目录</h2>
+      <ul class="toc-list">
+        <li><a href="#cot">一、CoT 思维链</a></li>
+        <li><a href="#react">二、ReAct 框架（核心）</a></li>
+        <li><a href="#react-prompt">三、ReAct Prompt 完整格式</a></li>
+        <li><a href="#variants">四、ReAct 变体</a></li>
+        <li><a href="#tot">五、Tree-of-Thought</a></li>
+        <li><a href="#got">六、Graph-of-Thought</a></li>
+        <li><a href="#compare">七、框架对比与选型</a></li>
+        <li><a href="#impl">八、工程实现要点</a></li>
+      </ul>
+    </nav>
+
+    <div class="content">
+
+      <!-- § 一 CoT -->
+      <section class="section" id="cot" style="background:linear-gradient(135deg,#faf5ff 0%,#eff6ff 100%);border:1.5px solid #c4b5fd;">
+        <div class="section-title">
+          <div class="icon" style="background:#fff;">💭</div>
+          一、CoT 思维链——Agent 推理的起点
+        </div>
+        <p>所有 Agent 推理框架的共同祖先是 <b>Chain-of-Thought（思维链）</b>。Wei et al. 2022 年发现：让模型在给出答案前先写出推理过程，准确率大幅提升。这个发现开启了「让 LLM 慢思考」的研究方向。</p>
+
+        <h3>1. Standard CoT vs Zero-Shot CoT</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0 16px;">
+          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:14px;">
+            <div style="font-weight:700;color:#374151;font-size:13px;margin-bottom:8px;">Standard CoT（Few-Shot）</div>
+            <div style="font-size:12px;color:#374151;line-height:1.9;background:#f8fafc;border-radius:6px;padding:10px;">
+              <span style="color:#6b7280;">示例：</span><br>
+              Q: 小明有 3 个苹果，又买了 2 袋苹果，每袋 4 个，共几个？<br>
+              A: 先算购买量：2袋×4=8个。再加原有：3+8=11个。<b>答：11个。</b><br><br>
+              <span style="color:#6b7280;">新问题：</span><br>
+              Q: 小红有 5 个橙子，买了 3 袋...
+            </div>
+            <div style="font-size:11.5px;color:#6b7280;margin-top:6px;">需要提供示例，但效果最好</div>
+          </div>
+          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:14px;">
+            <div style="font-weight:700;color:#374151;font-size:13px;margin-bottom:8px;">Zero-Shot CoT</div>
+            <div style="font-size:12px;color:#374151;line-height:1.9;background:#f8fafc;border-radius:6px;padding:10px;">
+              <span style="color:#6b7280;">Prompt 末尾只加一句话：</span><br><br>
+              「Q: 小明有 3 个苹果...<br>
+              <b style="color:#7c3aed;">Let's think step by step.</b>」<br><br>
+              模型就会自动展开推理过程
+            </div>
+            <div style="font-size:11.5px;color:#6b7280;margin-top:6px;">不需要示例，适合快速部署</div>
+          </div>
+        </div>
+
+        <h3>2. CoT 的局限性（为什么需要 ReAct）</h3>
+        <ul style="font-size:13px;">
+          <li><b>无法获取实时信息</b>：CoT 只在 LLM 的参数知识范围内推理，不能搜索、不能查数据库</li>
+          <li><b>事实性错误无法自纠</b>：推理链里如果某步用了错误的知识，后续步骤会在错误基础上继续推</li>
+          <li><b>单次输出</b>：只能生成文字，不能执行代码、调用 API 等行动</li>
+        </ul>
+        <p style="font-size:13px;"><b>ReAct 的诞生</b>就是为了解决这三个问题——让推理（Reasoning）和行动（Acting）交替进行。</p>
+      </section>
+
+      <!-- § 二 ReAct -->
+      <section class="section" id="react">
+        <div class="section-title">
+          <div class="icon" style="background:#faf5ff;">⚡</div>
+          二、ReAct 框架——推理与行动的闭环
+        </div>
+        <p>ReAct（Yao et al., 2022）把 LLM 的工作方式从「一次性输出」变成<b>「推理 → 行动 → 观察」的循环</b>，每次行动的结果成为下次推理的输入。</p>
+
+        <h3>1. ReAct 的三个原语</h3>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0 16px;">
+          <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:14px;">
+            <div style="font-size:22px;margin-bottom:6px;text-align:center;">💭</div>
+            <div style="font-weight:700;color:#1d4ed8;font-size:13px;text-align:center;margin-bottom:6px;">Thought（思考）</div>
+            <div style="font-size:12px;color:#374151;">LLM 内部的推理过程，对用户可见（增加可解释性）。<br>「我现在需要搜索 X，因为...」</div>
+          </div>
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px;">
+            <div style="font-size:22px;margin-bottom:6px;text-align:center;">🔧</div>
+            <div style="font-weight:700;color:#166534;font-size:13px;text-align:center;margin-bottom:6px;">Action（行动）</div>
+            <div style="font-size:12px;color:#374151;">调用工具或输出结果。格式化为可解析的结构（工具名 + 参数）。<br><code>search("关键词")</code></div>
+          </div>
+          <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:14px;">
+            <div style="font-size:22px;margin-bottom:6px;text-align:center;">👀</div>
+            <div style="font-weight:700;color:#b45309;font-size:13px;text-align:center;margin-bottom:6px;">Observation（观察）</div>
+            <div style="font-size:12px;color:#374151;">工具执行结果，作为新的上下文追加到对话中。<br>「搜索结果：...」</div>
+          </div>
+        </div>
+
+        <h3>2. ReAct vs 普通 CoT 的核心区别</h3>
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin:12px 0 16px;">
+          <div style="font-size:12px;color:#6b7280;text-align:center;margin-bottom:10px;font-weight:600;">图1：CoT vs ReAct 数据流对比</div>
+          <svg viewBox="0 0 620 200" style="width:100%;max-width:620px;display:block;margin:0 auto;" xmlns="http://www.w3.org/2000/svg">
+            <rect x="0" y="0" width="620" height="200" rx="10" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+            <!-- CoT 左侧 -->
+            <text x="130" y="22" text-anchor="middle" font-size="11" font-weight="700" fill="#7c3aed">CoT（单次推理）</text>
+            <rect x="50" y="32" width="160" height="30" rx="6" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+            <text x="130" y="51" text-anchor="middle" font-size="10" fill="#374151">用户问题 + 推理指令</text>
+            <line x1="130" y1="62" x2="130" y2="82" stroke="#7c3aed" stroke-width="1.5" marker-end="url(#ar1)"/>
+            <rect x="50" y="84" width="160" height="50" rx="6" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+            <text x="130" y="104" text-anchor="middle" font-size="10" fill="#374151">LLM 一次性推理</text>
+            <text x="130" y="120" text-anchor="middle" font-size="9.5" fill="#6b7280">（无法获取外部信息）</text>
+            <line x1="130" y1="134" x2="130" y2="154" stroke="#7c3aed" stroke-width="1.5" marker-end="url(#ar1)"/>
+            <rect x="50" y="156" width="160" height="30" rx="6" fill="#c4b5fd" stroke="#7c3aed" stroke-width="1.5"/>
+            <text x="130" y="175" text-anchor="middle" font-size="10" font-weight="700" fill="#fff">最终答案（可能有幻觉）</text>
+
+            <!-- 分割线 -->
+            <line x1="310" y1="10" x2="310" y2="190" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="4,3"/>
+
+            <!-- ReAct 右侧 -->
+            <text x="470" y="22" text-anchor="middle" font-size="11" font-weight="700" fill="#166534">ReAct（循环推理+行动）</text>
+            <rect x="380" y="32" width="160" height="26" rx="6" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+            <text x="460" y="49" text-anchor="middle" font-size="10" fill="#374151">用户问题</text>
+            <line x1="460" y1="58" x2="460" y2="72" stroke="#6b7280" stroke-width="1.5" marker-end="url(#ar2)"/>
+            <rect x="380" y="74" width="80" height="22" rx="5" fill="#ede9fe" stroke="#7c3aed" stroke-width="1"/>
+            <text x="420" y="89" text-anchor="middle" font-size="9" fill="#5b21b6">Thought</text>
+            <line x1="460" y1="96" x2="460" y2="108" stroke="#6b7280" stroke-width="1.2" marker-end="url(#ar2)"/>
+            <rect x="380" y="110" width="80" height="22" rx="5" fill="#dcfce7" stroke="#22c55e" stroke-width="1"/>
+            <text x="420" y="125" text-anchor="middle" font-size="9" fill="#166534">Action</text>
+            <line x1="460" y1="132" x2="460" y2="144" stroke="#6b7280" stroke-width="1.2" marker-end="url(#ar2)"/>
+            <rect x="380" y="146" width="80" height="22" rx="5" fill="#fef9c3" stroke="#f59e0b" stroke-width="1"/>
+            <text x="420" y="161" text-anchor="middle" font-size="9" fill="#b45309">Observation</text>
+            <!-- 循环箭头 -->
+            <path d="M 460 168 Q 560 168 560 89 Q 560 74 540 74 L 460 74" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#ar2)"/>
+            <text x="572" y="123" font-size="9" fill="#94a3b8">循环</text>
+            <!-- 终止 -->
+            <rect x="380" y="168" width="80" height="22" rx="5" fill="#22c55e"/>
+            <text x="420" y="183" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">Finish ✓</text>
+            <defs>
+              <marker id="ar1" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3 z" fill="#7c3aed"/></marker>
+              <marker id="ar2" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3 z" fill="#6b7280"/></marker>
+            </defs>
+          </svg>
+        </div>
+      </section>
+
+      <!-- § 三 ReAct Prompt 完整格式 -->
+      <section class="section" id="react-prompt">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">📝</div>
+          三、ReAct Prompt 完整格式（可直接用）
+        </div>
+        <p>一个生产可用的 ReAct System Prompt 包含：工具列表、输出格式规范、终止条件。</p>
+
+        <h3>1. System Prompt 模板</h3>
+        <div style="background:#1e293b;border-radius:10px;padding:14px 18px;font-size:12.5px;color:#e2e8f0;line-height:1.9;margin:12px 0;">
+          <span style="color:#94a3b8;">## System Prompt</span><br><br>
+          你是一个智能助手，可以使用以下工具完成任务：<br><br>
+          <span style="color:#34d399;">## 可用工具</span><br>
+          - <span style="color:#fbbf24;">search(query: str)</span>: 搜索互联网，返回相关信息片段<br>
+          - <span style="color:#fbbf24;">calculator(expr: str)</span>: 计算数学表达式，如 "2 * 3.14 * 5"<br>
+          - <span style="color:#fbbf24;">finish(answer: str)</span>: 当任务完成时调用，输出最终答案<br><br>
+          <span style="color:#34d399;">## 输出格式</span><br>
+          每次只输出以下格式之一：<br><br>
+          Thought: [你的推理过程，说明为什么要做下一步]<br>
+          Action: [工具名]([参数])<br><br>
+          或者当观察到结果后继续：<br><br>
+          Thought: [基于 Observation 的分析]<br>
+          Action: [下一步动作]<br><br>
+          <span style="color:#34d399;">## 重要规则</span><br>
+          - 每次只输出一个 Thought + 一个 Action，不要一次性规划所有步骤<br>
+          - Action 之后等待 Observation，不要自己编造 Observation<br>
+          - 信息足够时立刻调用 finish()
+        </div>
+
+        <h3>2. 完整对话示例（带 Observation 注入）</h3>
+        <div style="background:#1e293b;border-radius:10px;padding:14px 18px;font-size:12.5px;color:#e2e8f0;line-height:1.9;margin:12px 0;">
+          <span style="color:#94a3b8;">User: 2024 年奥运会游泳冠军是谁？他打破了哪些记录？</span><br><br>
+          <span style="color:#c4b5fd;font-weight:700;">Thought:</span> 这是关于 2024 年巴黎奥运会的实时信息，我的训练数据可能不完整，需要搜索。<br>
+          <span style="color:#86efac;font-weight:700;">Action:</span> search("2024 巴黎奥运会 游泳 冠军 世界纪录")<br><br>
+          <span style="color:#fbbf24;font-weight:700;">Observation:</span> [搜索结果] 潘展乐在 100 米自由泳以 46.40 秒打破世界纪录夺金...<br><br>
+          <span style="color:#c4b5fd;font-weight:700;">Thought:</span> 已获得主要冠军信息，但想确认是否有更多记录被打破，再查一次。<br>
+          <span style="color:#86efac;font-weight:700;">Action:</span> search("2024 奥运会 游泳 世界纪录 全部")<br><br>
+          <span style="color:#fbbf24;font-weight:700;">Observation:</span> [搜索结果] 本届共打破 2 项世界纪录：潘展乐 100m 自由泳 46.40s...<br><br>
+          <span style="color:#c4b5fd;font-weight:700;">Thought:</span> 信息已足够，可以回答。<br>
+          <span style="color:#86efac;font-weight:700;">Action:</span> finish("2024 巴黎奥运会，潘展乐在 100 米自由泳以 46.40 秒打破世界纪录夺冠。本届共打破 2 项游泳世界纪录。")
+        </div>
+
+        <h3>3. Observation 注入方式</h3>
+        <p style="font-size:13px;">当 LLM 输出 <code>Action: search("xxx")</code> 后，你的代码需要：① 解析出工具名和参数；② 执行工具调用；③ 把结果以 <code>Observation: ...</code> 的形式追加到对话历史；④ 再次调用 LLM。</p>
+        <div style="background:#1e293b;border-radius:10px;padding:14px 18px;font-size:12.5px;color:#e2e8f0;line-height:1.9;margin:12px 0;">
+          <span style="color:#94a3b8;"># 核心循环（伪代码）</span><br>
+          while not finished:<br>
+          &nbsp;&nbsp;response = llm.generate(messages)<br>
+          &nbsp;&nbsp;thought, action = <span style="color:#fbbf24;">parse_react_output</span>(response)<br>
+          &nbsp;&nbsp;<br>
+          &nbsp;&nbsp;if action.tool == "finish":<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;return action.args  <span style="color:#94a3b8;"># 任务完成</span><br>
+          &nbsp;&nbsp;<br>
+          &nbsp;&nbsp;result = <span style="color:#34d399;">execute_tool</span>(action.tool, action.args)<br>
+          &nbsp;&nbsp;messages.append({"role": "tool", "content": f"Observation: {result}"})<br>
+          &nbsp;&nbsp;steps += 1<br>
+          &nbsp;&nbsp;if steps > max_steps: break  <span style="color:#94a3b8;"># 防止无限循环</span>
+        </div>
+      </section>
+
+      <!-- § 四 ReAct 变体 -->
+      <section class="section" id="variants">
+        <div class="section-title">
+          <div class="icon" style="background:#faf5ff;">🔀</div>
+          四、ReAct 变体
+        </div>
+
+        <h3>1. Reflexion（带记忆的 ReAct）</h3>
+        <p style="font-size:13px;">在 ReAct 基础上加入「失败反思」：任务失败 → LLM 写一段反思（「哪里错了？为什么？」）→ 反思存入持久记忆 → 下次重试时先读取历史反思。相当于给 Agent 加了「从错误中学习」的能力。</p>
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin:10px 0;">
+          <div style="font-size:12px;color:#6b7280;margin-bottom:8px;font-weight:600;">Reflexion 新增的 Prompt 片段：</div>
+          <div style="background:#1e293b;border-radius:8px;padding:12px;font-size:12px;color:#e2e8f0;line-height:1.9;">
+            <span style="color:#94a3b8;">## 历史反思记录（每次失败后自动追加）</span><br>
+            <span style="color:#fca5a5;">[尝试1失败]</span> 反思：我直接搜索了太宽泛的关键词，下次应该先明确搜索范围再细化。<br>
+            <span style="color:#fca5a5;">[尝试2失败]</span> 反思：我错误地把百分比当绝对数值用了。
+          </div>
+        </div>
+
+        <h3>2. Plan-and-Execute（计划再执行）</h3>
+        <p style="font-size:13px;">标准 ReAct 是「边想边做」，步骤顺序不固定。Plan-and-Execute 把它分成两阶段：</p>
+        <div style="display:flex;align-items:center;gap:8px;margin:10px 0;flex-wrap:wrap;">
+          <div style="background:#dbeafe;border-radius:8px;padding:8px 14px;font-size:12.5px;font-weight:600;color:#1d4ed8;">① Planner LLM<br><span style="font-size:11px;font-weight:400;">生成完整步骤计划</span></div>
+          <span style="color:#6b7280;font-size:18px;">→</span>
+          <div style="background:#dcfce7;border-radius:8px;padding:8px 14px;font-size:12.5px;font-weight:600;color:#166534;">② Executor LLM<br><span style="font-size:11px;font-weight:400;">逐步执行，遇到意外可回到①</span></div>
+        </div>
+        <p style="font-size:13px;color:#374151;">优点：步骤可检查、可人工审核；缺点：初始计划可能不准确，灵活性不如标准 ReAct。</p>
+
+        <h3>3. LATS（Language Agent Tree Search）</h3>
+        <p style="font-size:13px;">把 ReAct 和 Monte Carlo Tree Search（MCTS）结合：在每个 Action 决策点，采样多个候选 Action，用 Value Model 评估哪条路最有希望，类似 AlphaGo 的搜索策略。效果最好但计算成本极高，适合离线任务。</p>
+
+        <h3>4. Structured ReAct（强制格式）</h3>
+        <p style="font-size:13px;">利用 LLM 的 JSON/结构化输出能力，强制 Action 输出为 JSON：</p>
+        <div style="background:#1e293b;border-radius:10px;padding:12px 16px;font-size:12.5px;color:#e2e8f0;line-height:1.9;margin:10px 0;">
+          <span style="color:#94a3b8;">// 替代自由文本 Action，用结构化 JSON</span><br>
+          {<br>
+          &nbsp;&nbsp;"thought": "需要搜索 2024 年奥运会游泳结果",<br>
+          &nbsp;&nbsp;"action": {<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;"tool": "search",<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;"parameters": {"query": "2024 Olympics swimming results"}<br>
+          &nbsp;&nbsp;}<br>
+          }
+        </div>
+        <p style="font-size:13px;color:#374151;">优点：解析稳定，不会因为 LLM 输出格式不规范而报错；缺点：token 消耗更多。</p>
+      </section>
+
+      <!-- § 五 Tree-of-Thought -->
+      <section class="section" id="tot">
+        <div class="section-title">
+          <div class="icon" style="background:#fff7ed;">🌳</div>
+          五、Tree-of-Thought（ToT）
+        </div>
+        <p>ToT（Yao et al., 2023）把单条推理链扩展成树形结构：<b>在每个推理步骤，生成多个候选续写，用 Value Model 评估每条分支的前景，选最优的继续搜索</b>。</p>
+
+        <h3>1. ToT 的四个组件</h3>
+        <table>
+          <thead><tr><th>组件</th><th>作用</th><th>实现方式</th></tr></thead>
+          <tbody>
+            <tr><td><b>Thought Decomposer</b></td><td>把问题分解成适合逐步探索的格式</td><td>Prompt 工程，让 LLM 输出「下一步可能性」</td></tr>
+            <tr><td><b>Thought Generator</b></td><td>在当前节点生成 k 个候选续写</td><td>采样 k 次（temperature > 0）或让 LLM 生成 k 个选项</td></tr>
+            <tr><td><b>State Evaluator</b></td><td>对每个候选节点打分（有希望/没希望）</td><td>Value Prompt 让 LLM 评分，或启发式规则</td></tr>
+            <tr><td><b>Search Algorithm</b></td><td>决定如何遍历树</td><td>BFS（广度优先）或 DFS（深度优先）</td></tr>
+          </tbody>
+        </table>
+
+        <h3>2. ToT 适合什么任务</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0;">
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px;">
+            <div style="font-weight:700;color:#166534;font-size:13px;margin-bottom:6px;">✅ 适合</div>
+            <ul style="font-size:12px;margin:0;padding-left:16px;">
+              <li>数学证明（多种证明路径）</li>
+              <li>代码规划（哪种架构方案）</li>
+              <li>创意写作（探索不同风格/情节走向）</li>
+              <li>谜题/游戏（24 点游戏、填字）</li>
+            </ul>
+          </div>
+          <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px;">
+            <div style="font-weight:700;color:#dc2626;font-size:13px;margin-bottom:6px;">❌ 不适合</div>
+            <ul style="font-size:12px;margin:0;padding-left:16px;">
+              <li>需要工具调用的任务（用 ReAct）</li>
+              <li>简单问答（CoT 就够了）</li>
+              <li>实时性要求高（ToT 比 ReAct 慢 5~20 倍）</li>
+              <li>预算有限的生产环境</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- § 六 GoT -->
+      <section class="section" id="got">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdfa;">🕸️</div>
+          六、Graph-of-Thought（GoT）——更进一步
+        </div>
+        <p>GoT（Besta et al., 2023）把 ToT 的树形结构进一步扩展成<b>有向无环图（DAG）</b>。树中每个节点只有一个父节点，而图中多个分支可以汇聚——允许把多条推理路径的结果<b>聚合合并</b>，再继续推理。</p>
+        <div style="display:flex;align-items:center;gap:16px;margin:12px 0;flex-wrap:wrap;justify-content:center;">
+          <div style="text-align:center;">
+            <div style="background:#ede9fe;border-radius:8px;padding:8px 16px;font-size:12.5px;font-weight:600;color:#5b21b6;">CoT</div>
+            <div style="font-size:11px;color:#6b7280;margin-top:4px;">一条链</div>
+          </div>
+          <span style="color:#94a3b8;">→</span>
+          <div style="text-align:center;">
+            <div style="background:#dcfce7;border-radius:8px;padding:8px 16px;font-size:12.5px;font-weight:600;color:#166534;">ToT</div>
+            <div style="font-size:11px;color:#6b7280;margin-top:4px;">树（分支不聚合）</div>
+          </div>
+          <span style="color:#94a3b8;">→</span>
+          <div style="text-align:center;">
+            <div style="background:#dbeafe;border-radius:8px;padding:8px 16px;font-size:12.5px;font-weight:600;color:#1d4ed8;">GoT</div>
+            <div style="font-size:11px;color:#6b7280;margin-top:4px;">图（分支可以聚合）</div>
+          </div>
+        </div>
+        <p style="font-size:13px;color:#374151;">GoT 目前主要在研究阶段，生产落地案例少。对于大多数工程场景，<b>ReAct 仍然是最实用的选择</b>。</p>
+      </section>
+
+      <!-- § 七 框架对比 -->
+      <section class="section" id="compare">
+        <div class="section-title">
+          <div class="icon" style="background:#fffbeb;">📊</div>
+          七、框架对比与选型指南
+        </div>
+        <table>
+          <thead><tr><th>框架</th><th>复杂度</th><th>速度</th><th>精度</th><th>工具调用</th><th>推荐使用场景</th></tr></thead>
+          <tbody>
+            <tr><td><b>CoT</b></td><td>⭐</td><td>⭐⭐⭐⭐⭐</td><td>⭐⭐⭐</td><td>❌</td><td>推理题、分析型任务</td></tr>
+            <tr><td><b>ReAct</b></td><td>⭐⭐</td><td>⭐⭐⭐⭐</td><td>⭐⭐⭐⭐</td><td>✅</td><td>需要工具的多步骤任务（首选）</td></tr>
+            <tr><td><b>Reflexion</b></td><td>⭐⭐⭐</td><td>⭐⭐⭐</td><td>⭐⭐⭐⭐⭐</td><td>✅</td><td>允许重试的任务（代码、搜索）</td></tr>
+            <tr><td><b>Plan-Execute</b></td><td>⭐⭐⭐</td><td>⭐⭐⭐</td><td>⭐⭐⭐⭐</td><td>✅</td><td>步骤可预期、需要人工审核的任务</td></tr>
+            <tr><td><b>ToT</b></td><td>⭐⭐⭐⭐</td><td>⭐⭐</td><td>⭐⭐⭐⭐⭐</td><td>❌/有限</td><td>探索性问题、离线批量任务</td></tr>
+            <tr><td><b>GoT</b></td><td>⭐⭐⭐⭐⭐</td><td>⭐</td><td>⭐⭐⭐⭐⭐</td><td>❌/有限</td><td>研究场景，暂不推荐生产</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout callout-purple" style="margin-top:16px;">
+          <strong>选型建议：</strong><br>
+          1. 先试 <b>CoT</b>，如果准确率够就不需要更复杂的框架<br>
+          2. 需要工具（搜索、代码、API）→ 用 <b>ReAct</b><br>
+          3. 任务允许多次重试，且有明确的失败信号 → 加 <b>Reflexion</b><br>
+          4. 任务需要探索多种方案且时间充裕 → 考虑 <b>ToT</b><br>
+          5. 对延迟敏感的生产环境 → <b>永远优先用最简单够用的框架</b>
+        </div>
+      </section>
+
+      <!-- § 八 工程实现要点 -->
+      <section class="section" id="impl" style="background:linear-gradient(135deg,#faf5ff 0%,#f0fdf4 100%);border:1.5px solid #c4b5fd;">
+        <div class="section-title">
+          <div class="icon" style="background:#fff;">⚙️</div>
+          八、工程实现要点
+        </div>
+
+        <h3>1. 防止无限循环</h3>
+        <p style="font-size:13px;">ReAct 循环没有自然终止条件，必须设置：</p>
+        <ul style="font-size:13px;">
+          <li><b>最大步骤数</b>（通常 10~20 步）：超过则强制停止并返回当前最优结果</li>
+          <li><b>最大 token 预算</b>：超过上下文窗口限制时截断早期对话历史</li>
+          <li><b>重复检测</b>：连续两步 Action 完全相同时中断（Agent 卡住了）</li>
+        </ul>
+
+        <h3>2. 上下文窗口管理</h3>
+        <p style="font-size:13px;">ReAct 每次循环都在往对话历史里追加内容，步骤多了会超出 token 限制。解决方案：</p>
+        <ul style="font-size:13px;">
+          <li>对 Observation 做<b>摘要压缩</b>（长搜索结果 → 只保留最相关的段落）</li>
+          <li>只保留最近 N 步的完整历史，早期步骤只保留摘要</li>
+        </ul>
+
+        <h3>3. 解析 Action 的鲁棒性</h3>
+        <p style="font-size:13px;">LLM 的输出不总是严格按照格式。工程上需要处理：</p>
+        <ul style="font-size:13px;">
+          <li>Action 里的工具名拼错 → 模糊匹配或提示 LLM 重试</li>
+          <li>JSON 格式不合法 → 用 JSON 修复库（如 <code>json_repair</code>）</li>
+          <li>没有 Action 只有 Thought → 判断是否已经是 finish 意图</li>
+        </ul>
+      </section>
+
+    </div><!-- /content -->
+  </div><!-- /layout -->
+
+  <footer>ReAct 推理框架笔记 · <a href="notes-agent.html">← 返回 Agent 总览</a></footer>
+</div>
+</body>
+</html>

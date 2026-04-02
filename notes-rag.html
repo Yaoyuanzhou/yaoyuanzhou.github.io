@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RAG 检索增强生成：从离线向量化到在线检索全链路</title>
+  <style>
+    :root {
+      --bg:#f5f7fb; --card:#ffffff; --text:#1f2937; --muted:#667085;
+      --line:#e5e7eb; --primary:#2563eb; --shadow:0 10px 30px rgba(15,23,42,0.08);
+      --radius:18px; --max:1100px;
+    }
+    *{box-sizing:border-box;}
+    html{scroll-behavior:smooth;}
+    body{margin:0;background:linear-gradient(180deg,#eff6ff 0%,var(--bg) 200px);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;line-height:1.85;}
+    a{color:var(--primary);text-decoration:none;}
+    a:hover{text-decoration:underline;}
+    .page{max-width:var(--max);margin:0 auto;padding:32px 20px 80px;}
+    .back-link{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:14px;margin-bottom:18px;}
+    .back-link:hover{color:var(--primary);text-decoration:none;}
+    .hero{background:radial-gradient(circle at top right,rgba(59,130,246,0.12),transparent 30%),radial-gradient(circle at left bottom,rgba(99,102,241,0.08),transparent 24%),var(--card);border:1px solid rgba(59,130,246,0.25);border-radius:24px;box-shadow:var(--shadow);padding:34px 34px 28px;margin-bottom:22px;}
+    .eyebrow{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:#eff6ff;color:#1e40af;font-size:13px;font-weight:600;margin-bottom:16px;}
+    h1{margin:0 0 10px;font-size:30px;line-height:1.25;letter-spacing:-0.02em;}
+    .subtitle{margin:0;color:var(--muted);font-size:15px;}
+    .layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:22px;align-items:start;}
+    .toc{position:sticky;top:20px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;max-height:calc(100vh - 40px);overflow-y:auto;}
+    .toc h2{margin:0 0 12px;font-size:15px;}
+    .toc-list{list-style:none;margin:0;padding:0;}
+    .toc-list li{margin:0;}
+    .toc-list a{display:block;padding:5px 8px;border-radius:8px;color:var(--muted);font-size:13px;transition:all 0.15s;}
+    .toc-list a:hover{color:var(--primary);background:#eff6ff;text-decoration:none;}
+    .content{display:flex;flex-direction:column;gap:18px;min-width:0;}
+    .section{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:26px 28px;overflow:hidden;}
+    .section-title{display:flex;align-items:center;gap:12px;margin:0 0 20px;font-size:20px;font-weight:700;}
+    .icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+    h3{margin:26px 0 12px;font-size:17px;color:#111827;border-left:3px solid #93c5fd;padding-left:10px;}
+    h4{margin:18px 0 8px;font-size:15px;color:#374151;font-weight:700;}
+    p{margin:0 0 12px;}
+    pre{background:#1e293b;color:#e2e8f0;border-radius:12px;padding:16px 20px;overflow-x:auto;font-size:13px;line-height:1.7;margin:14px 0;}
+    code{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:2px 7px;font-family:"SF Mono",Consolas,Monaco,monospace;font-size:13px;color:#2563eb;}
+    table{width:100%;border-collapse:collapse;font-size:13.5px;margin:14px 0;}
+    thead th{background:#eff6ff;color:#1e40af;text-align:left;font-weight:700;padding:10px 14px;border-bottom:2px solid #93c5fd;}
+    td{padding:10px 14px;border-bottom:1px solid #eef2f7;vertical-align:top;}
+    tbody tr:nth-child(even){background:#f8f9ff;}
+    .callout{border-radius:14px;padding:16px 18px;margin:14px 0;}
+    .callout-blue{background:#eff6ff;border:1px solid #bfdbfe;}
+    .callout-green{background:#f0fdf4;border:1px solid #bbf7d0;}
+    .callout-amber{background:#fffbeb;border:1px solid #fde68a;}
+    .callout-purple{background:#faf5ff;border:1px solid #e9d5ff;}
+    .callout-red{background:#fef2f2;border:1px solid #fecaca;}
+    .callout-indigo{background:#eef2ff;border:1px solid #c7d2fe;}
+    ul,ol{padding-left:24px;margin:8px 0 12px;}
+    li{margin:6px 0;}
+    .tag{display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;}
+    footer{margin-top:32px;text-align:center;color:var(--muted);font-size:13px;}
+    @media(max-width:860px){.layout{grid-template-columns:1fr;}.toc{position:static;}}
+  </style>
+</head>
+<body>
+<div class="page">
+  <a class="back-link" href="notes-agent.html">← 返回 Agent 技术总览</a>
+
+  <div class="hero">
+    <div class="eyebrow">🔍 RAG 系列</div>
+    <h1>RAG 检索增强生成：从离线向量化到在线检索全链路</h1>
+    <p class="subtitle">Embedding · FAISS · HNSW · Dense/Sparse/Hybrid 检索 · Reranker · Chunking 策略 · 完整工程实践</p>
+  </div>
+
+  <div class="layout">
+    <nav class="toc">
+      <h2>目录</h2>
+      <ul class="toc-list">
+        <li><a href="#what">零、为什么需要 RAG？</a></li>
+        <li><a href="#embedding">一、Embedding：把文字变成向量</a></li>
+        <li><a href="#chunking">二、Chunking：怎么切文档</a></li>
+        <li><a href="#index">三、向量索引：FAISS / HNSW</a></li>
+        <li><a href="#retrieval">四、检索策略：Dense / Sparse / Hybrid</a></li>
+        <li><a href="#reranker">五、Reranker：精排提升精度</a></li>
+        <li><a href="#pipeline">六、完整 RAG 流水线</a></li>
+        <li><a href="#advanced">七、进阶技巧</a></li>
+        <li><a href="#pitfalls">八、常见踩坑</a></li>
+      </ul>
+    </nav>
+
+    <div class="content">
+
+      <!-- § 零 为什么需要 RAG -->
+      <section class="section" id="what" style="background:linear-gradient(135deg,#eff6ff 0%,#eef2ff 100%);border:1.5px solid #93c5fd;">
+        <div class="section-title">
+          <div class="icon" style="background:#fff;">🌱</div>
+          零、为什么需要 RAG？
+        </div>
+        <p>LLM 有三个内生缺陷，RAG 是最主流的解法：</p>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0 16px;">
+          <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px;">
+            <div style="font-weight:700;color:#dc2626;font-size:13px;margin-bottom:6px;">❌ 知识截止日期</div>
+            <div style="font-size:12px;color:#374151;">训练数据有截止时间，无法回答「今天的新闻」「最新的 API 文档」</div>
+          </div>
+          <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px;">
+            <div style="font-weight:700;color:#dc2626;font-size:13px;margin-bottom:6px;">❌ 企业私有知识</div>
+            <div style="font-size:12px;color:#374151;">公司内部文档、代码库、历史对话，LLM 完全不知道</div>
+          </div>
+          <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px;">
+            <div style="font-weight:700;color:#dc2626;font-size:13px;margin-bottom:6px;">❌ 幻觉</div>
+            <div style="font-size:12px;color:#374151;">LLM 会自信地编造答案，有检索到的真实依据能有效抑制</div>
+          </div>
+        </div>
+        <p style="font-size:13.5px;">RAG 的核心思路：<b>不是让 LLM「记住」所有知识，而是「用时查阅」</b>。把知识存在外部数据库，用户提问时先检索最相关的片段，再把这些片段塞进 prompt 让 LLM 基于它们回答。</p>
+        <div class="callout callout-blue">
+          <strong>全链路一句话：</strong> 文档 → 切块（Chunk）→ 向量化（Embedding）→ 存入向量库 → 用户问题向量化 → ANN 检索 Top-K → 可选 Reranker 精排 → 拼接 Prompt → LLM 生成答案
+        </div>
+      </section>
+
+      <!-- § 一 Embedding -->
+      <section class="section" id="embedding">
+        <div class="section-title">
+          <div class="icon" style="background:#eff6ff;">🔢</div>
+          一、Embedding：把文字变成向量
+        </div>
+        <p>Embedding 模型把一段文字（句子、段落）映射成一个高维向量（如 1536 维），<b>语义相近的文字在向量空间里距离也近</b>。这是整个 RAG 的基础。</p>
+
+        <h3>1. 为什么向量能表达语义？</h3>
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin:12px 0 16px;">
+          <div style="font-size:12px;color:#6b7280;text-align:center;margin-bottom:10px;font-weight:600;">图1：向量空间里的语义关系</div>
+          <svg viewBox="0 0 580 180" style="width:100%;max-width:580px;display:block;margin:0 auto;" xmlns="http://www.w3.org/2000/svg">
+            <rect x="0" y="0" width="580" height="180" rx="10" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+            <!-- 坐标轴 -->
+            <line x1="40" y1="160" x2="40" y2="20" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ax1)"/>
+            <line x1="40" y1="160" x2="300" y2="160" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ax2)"/>
+            <text x="20" y="18" font-size="9" fill="#6b7280">维度2</text>
+            <text x="305" y="164" font-size="9" fill="#6b7280">维度1</text>
+            <!-- 点 -->
+            <circle cx="90" cy="60" r="5" fill="#3b82f6"/>
+            <text x="98" y="55" font-size="10" fill="#1d4ed8">「猫」</text>
+            <circle cx="110" cy="75" r="5" fill="#3b82f6"/>
+            <text x="118" y="80" font-size="10" fill="#1d4ed8">「小猫」</text>
+            <circle cx="80" cy="85" r="5" fill="#3b82f6"/>
+            <text x="56" y="90" font-size="10" fill="#1d4ed8">「kitty」</text>
+            <!-- 距离标注 -->
+            <line x1="90" y1="60" x2="110" y2="75" stroke="#93c5fd" stroke-width="1" stroke-dasharray="3,2"/>
+            <text x="112" y="62" font-size="9" fill="#3b82f6">距离近 → 语义相似</text>
+            <!-- 另一簇 -->
+            <circle cx="220" cy="110" r="5" fill="#22c55e"/>
+            <text x="228" y="108" font-size="10" fill="#166534">「汽车」</text>
+            <circle cx="245" cy="125" r="5" fill="#22c55e"/>
+            <text x="253" y="130" font-size="10" fill="#166534">「轿车」</text>
+            <circle cx="205" cy="130" r="5" fill="#22c55e"/>
+            <text x="175" y="140" font-size="10" fill="#166534">「vehicle」</text>
+            <!-- 两簇间距离 -->
+            <line x1="110" y1="75" x2="220" y2="110" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="4,3"/>
+            <text x="155" y="88" font-size="9" fill="#94a3b8">距离远 → 语义无关</text>
+            <!-- 右侧说明 -->
+            <rect x="320" y="20" width="240" height="140" rx="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1"/>
+            <text x="440" y="42" text-anchor="middle" font-size="11" font-weight="700" fill="#1d4ed8">Embedding 模型的训练目标</text>
+            <text x="440" y="62" text-anchor="middle" font-size="10" fill="#374151">• 相同语义 → 向量夹角小（相似度高）</text>
+            <text x="440" y="80" text-anchor="middle" font-size="10" fill="#374151">• 不同语义 → 向量夹角大（相似度低）</text>
+            <text x="440" y="100" text-anchor="middle" font-size="10" fill="#374151">• 用余弦相似度（cosine）衡量距离</text>
+            <text x="440" y="120" text-anchor="middle" font-size="10" fill="#6b7280">cos(A,B) = A·B / (|A|·|B|)</text>
+            <text x="440" y="140" text-anchor="middle" font-size="9.5" fill="#6b7280">值域 [-1, 1]，越接近 1 越相似</text>
+            <defs>
+              <marker id="ax1" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3 z" fill="#94a3b8"/></marker>
+              <marker id="ax2" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3 z" fill="#94a3b8"/></marker>
+            </defs>
+          </svg>
+        </div>
+
+        <h3>2. 常用 Embedding 模型</h3>
+        <table>
+          <thead><tr><th>模型</th><th>维度</th><th>特点</th><th>适合场景</th></tr></thead>
+          <tbody>
+            <tr><td><b>text-embedding-3-small</b><br><span style="font-size:11px;color:#6b7280;">OpenAI</span></td><td>1536</td><td>中英文均衡，API 直接调用</td><td>通用场景，快速上手</td></tr>
+            <tr><td><b>BGE-large-zh</b><br><span style="font-size:11px;color:#6b7280;">BAAI 开源</span></td><td>1024</td><td>中文最强之一，可本地部署</td><td>中文文档检索</td></tr>
+            <tr><td><b>Sentence-BERT</b><br><span style="font-size:11px;color:#6b7280;">HuggingFace</span></td><td>768</td><td>英文表现好，轻量</td><td>英文语料、低资源环境</td></tr>
+            <tr><td><b>M3E</b><br><span style="font-size:11px;color:#6b7280;">MokaAI 开源</span></td><td>768</td><td>中英双语，免费</td><td>中英混合文档</td></tr>
+          </tbody>
+        </table>
+
+        <h3>3. Embedding 的本质：对比学习训练</h3>
+        <p style="font-size:13px;">Embedding 模型通过<b>对比学习</b>训练：给定一对正样本（语义相似的句子对），让它们的向量靠近；给定负样本，让向量远离。训练完成后，模型就学会了把「语义」编码进向量距离。</p>
+        <div style="background:#1e293b;border-radius:10px;padding:14px 18px;font-size:12.5px;color:#e2e8f0;line-height:1.9;margin:12px 0;">
+          <span style="color:#94a3b8;"># 对比学习损失函数（InfoNCE Loss）</span><br>
+          <span style="color:#fbbf24;">正样本对：</span> (「今天天气如何？」, 「北京今天晴，25°C」) → 相似度最大化<br>
+          <span style="color:#f472b6;">负样本对：</span> (「今天天气如何？」, 「Python 如何排序列表？」) → 相似度最小化<br><br>
+          <span style="color:#94a3b8;"># 推理时：把查询和文档都变成向量，计算余弦相似度</span><br>
+          similarity = cosine(embed("用户问题"), embed("文档片段"))
+        </div>
+      </section>
+
+      <!-- § 二 Chunking -->
+      <section class="section" id="chunking">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">✂️</div>
+          二、Chunking：怎么切文档
+        </div>
+        <p>文档通常很长，直接向量化整篇文章有两个问题：<b>① 超出 Embedding 模型最大输入长度；② 一个向量混合了太多信息，检索精度下降</b>。Chunking 就是把文档切成合适大小的片段。</p>
+
+        <h3>1. 五种 Chunking 策略对比</h3>
+        <table>
+          <thead><tr><th>策略</th><th>方法</th><th>优点</th><th>缺点</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><b>固定长度切割</b></td>
+              <td>每 512 token 切一段</td>
+              <td>简单快速</td>
+              <td>可能从句子中间断开，语义不完整</td>
+            </tr>
+            <tr>
+              <td><b>重叠滑窗切割</b></td>
+              <td>512 token，重叠 64 token</td>
+              <td>缓解边界截断问题</td>
+              <td>重复存储，索引变大</td>
+            </tr>
+            <tr>
+              <td><b>句子/段落边界切割</b></td>
+              <td>按「。」「\n\n」等自然边界切</td>
+              <td>语义完整</td>
+              <td>长度不均匀</td>
+            </tr>
+            <tr>
+              <td><b>递归字符切割</b><br><span style="font-size:11px;color:#6b7280;">LangChain 默认</span></td>
+              <td>按 ['\n\n', '\n', '. ', ' '] 优先级递归切</td>
+              <td>兼顾长度和语义边界</td>
+              <td>实现略复杂</td>
+            </tr>
+            <tr style="background:#f0fdf4;">
+              <td><b>语义切割 ⭐</b></td>
+              <td>用 Embedding 相似度检测「语义断点」</td>
+              <td>最贴近自然段落</td>
+              <td>慢，需要额外计算</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>2. Chunk 大小的选择</h3>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0;">
+          <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px;text-align:center;">
+            <div style="font-weight:700;color:#b45309;font-size:13px;margin-bottom:4px;">太小（&lt;100 token）</div>
+            <div style="font-size:12px;color:#374151;">上下文不足，LLM 无法基于片段推理。<br>检索到的是孤立句子。</div>
+          </div>
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px;text-align:center;">
+            <div style="font-weight:700;color:#166534;font-size:13px;margin-bottom:4px;">推荐范围（256~512 token）</div>
+            <div style="font-size:12px;color:#374151;">语义完整，检索精度与上下文平衡。<br>大多数场景的最优区间。</div>
+          </div>
+          <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px;text-align:center;">
+            <div style="font-weight:700;color:#dc2626;font-size:13px;margin-bottom:4px;">太大（&gt;1000 token）</div>
+            <div style="font-size:12px;color:#374151;">向量语义模糊，检索精度下降。<br>塞入 prompt 占用太多 token。</div>
+          </div>
+        </div>
+
+        <h3>3. Parent-Child Chunk 策略（进阶）</h3>
+        <p style="font-size:13px;">存储时用小 chunk（128 token），检索时返回其对应的大 chunk（512 token）作为上下文。这样<b>检索精度高（小 chunk 语义纯净），LLM 上下文也充足（大 chunk 信息完整）</b>。</p>
+        <div style="display:flex;align-items:center;gap:8px;margin:10px 0;">
+          <div style="background:#dbeafe;border-radius:8px;padding:8px 14px;font-size:12.5px;font-weight:600;color:#1d4ed8;">大文档</div>
+          <span style="color:#6b7280;">→ 切为</span>
+          <div style="background:#fef9c3;border-radius:8px;padding:8px 14px;font-size:12.5px;font-weight:600;color:#b45309;">Parent Chunk（512 token）</div>
+          <span style="color:#6b7280;">→ 再切为</span>
+          <div style="background:#dcfce7;border-radius:8px;padding:8px 14px;font-size:12.5px;font-weight:600;color:#166534;">Child Chunk（128 token）入库</div>
+          <span style="color:#6b7280;">→ 检索命中 Child</span>
+          <span style="color:#6b7280;">→ 返回对应 Parent</span>
+        </div>
+      </section>
+
+      <!-- § 三 向量索引 FAISS/HNSW -->
+      <section class="section" id="index">
+        <div class="section-title">
+          <div class="icon" style="background:#faf5ff;">🗃️</div>
+          三、向量索引：FAISS / HNSW 原理
+        </div>
+        <p>数据库里存了几百万个向量，用户来一个查询向量，怎么<b>快速找到最相似的 Top-K 个</b>？暴力遍历太慢（O(N×D)），需要专门的近似最近邻（ANN）索引算法。</p>
+
+        <h3>1. 暴力搜索的瓶颈</h3>
+        <p style="font-size:13px;">100 万个 1536 维向量，暴力遍历每次需要计算 100 万次余弦相似度，延迟不可接受。ANN 算法用空间换时间，接受「可能漏掉极少数真正最近邻」来换取 10~100 倍加速。</p>
+
+        <h3>2. IVF（倒排文件索引）——FAISS 的核心</h3>
+        <p style="font-size:13px;">IVF 的思路：先用 K-means 把所有向量聚成 N 个簇，每个向量属于离它最近的簇。查询时：<b>先找查询向量所属的最近几个簇，只在这些簇里做暴力搜索</b>。</p>
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin:12px 0 16px;">
+          <div style="font-size:12px;color:#6b7280;text-align:center;margin-bottom:10px;font-weight:600;">图2：IVF 索引——先粗筛簇，再精搜</div>
+          <svg viewBox="0 0 580 160" style="width:100%;max-width:580px;display:block;margin:0 auto;" xmlns="http://www.w3.org/2000/svg">
+            <rect x="0" y="0" width="580" height="160" rx="10" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+            <!-- 簇1 -->
+            <ellipse cx="100" cy="80" rx="60" ry="50" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5" opacity="0.7"/>
+            <text x="100" y="40" text-anchor="middle" font-size="10" fill="#1d4ed8" font-weight="700">簇 1</text>
+            <circle cx="80" cy="70" r="3" fill="#3b82f6"/><circle cx="100" cy="65" r="3" fill="#3b82f6"/>
+            <circle cx="120" cy="80" r="3" fill="#3b82f6"/><circle cx="90" cy="90" r="3" fill="#3b82f6"/>
+            <circle cx="110" cy="100" r="3" fill="#3b82f6"/>
+            <!-- 簇2（命中） -->
+            <ellipse cx="290" cy="80" rx="65" ry="52" fill="#dcfce7" stroke="#22c55e" stroke-width="2.5" opacity="0.8"/>
+            <text x="290" y="36" text-anchor="middle" font-size="10" fill="#166534" font-weight="700">簇 2（命中）✓</text>
+            <circle cx="270" cy="70" r="3" fill="#22c55e"/><circle cx="295" cy="62" r="3" fill="#22c55e"/>
+            <circle cx="315" cy="78" r="3" fill="#22c55e"/><circle cx="280" cy="92" r="3" fill="#22c55e"/>
+            <circle cx="305" cy="98" r="3" fill="#22c55e"/>
+            <!-- 查询向量 -->
+            <circle cx="300" cy="72" r="7" fill="#ef4444" stroke="#fff" stroke-width="2"/>
+            <text x="300" y="56" text-anchor="middle" font-size="10" fill="#dc2626" font-weight="700">查询</text>
+            <!-- 簇3 -->
+            <ellipse cx="480" cy="80" rx="60" ry="50" fill="#fef9c3" stroke="#f59e0b" stroke-width="1.5" opacity="0.7"/>
+            <text x="480" y="40" text-anchor="middle" font-size="10" fill="#b45309" font-weight="700">簇 3</text>
+            <circle cx="460" cy="70" r="3" fill="#f59e0b"/><circle cx="490" cy="65" r="3" fill="#f59e0b"/>
+            <circle cx="500" cy="85" r="3" fill="#f59e0b"/><circle cx="470" cy="95" r="3" fill="#f59e0b"/>
+            <!-- 跳过标注 -->
+            <text x="100" y="145" text-anchor="middle" font-size="9.5" fill="#6b7280">跳过（不在近邻簇中）</text>
+            <text x="290" y="145" text-anchor="middle" font-size="9.5" fill="#166534">在此簇内暴力搜 Top-K</text>
+            <text x="480" y="145" text-anchor="middle" font-size="9.5" fill="#6b7280">跳过（不在近邻簇中）</text>
+          </svg>
+        </div>
+        <p style="font-size:13px;"><b>参数 nlist（簇数）</b>：越大精度越高但建索引越慢。<b>nprobe（查询时探索的簇数）</b>：越大召回越高但查询越慢。一般设 nlist=1024, nprobe=16~64。</p>
+
+        <h3>3. HNSW（分层可导航小世界图）——速度和精度最均衡</h3>
+        <p style="font-size:13px;">HNSW 把向量组织成一个多层图结构：上层是稀疏的「高速公路」，下层是密集的「普通道路」。查询时从上层快速定位大致区域，再逐层向下精确搜索。</p>
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin:12px 0 16px;">
+          <div style="font-size:12px;color:#6b7280;text-align:center;margin-bottom:10px;font-weight:600;">图3：HNSW 分层图结构</div>
+          <svg viewBox="0 0 580 180" style="width:100%;max-width:580px;display:block;margin:0 auto;" xmlns="http://www.w3.org/2000/svg">
+            <rect x="0" y="0" width="580" height="180" rx="10" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+            <!-- 层标签 -->
+            <text x="14" y="45" font-size="10" fill="#6b7280">Layer 2</text>
+            <text x="14" y="90" font-size="10" fill="#6b7280">Layer 1</text>
+            <text x="14" y="150" font-size="10" fill="#6b7280">Layer 0</text>
+            <!-- Layer 2：少量节点 -->
+            <circle cx="120" cy="40" r="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+            <circle cx="350" cy="40" r="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+            <circle cx="500" cy="40" r="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+            <line x1="128" y1="40" x2="342" y2="40" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="4,2"/>
+            <line x1="358" y1="40" x2="492" y2="40" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="4,2"/>
+            <!-- Layer 1：中等节点 -->
+            <circle cx="80" cy="88" r="7" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+            <circle cx="200" cy="88" r="7" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+            <circle cx="320" cy="88" r="7" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+            <circle cx="440" cy="88" r="7" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+            <circle cx="530" cy="88" r="7" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+            <line x1="87" y1="88" x2="193" y2="88" stroke="#3b82f6" stroke-width="1.2"/>
+            <line x1="207" y1="88" x2="313" y2="88" stroke="#3b82f6" stroke-width="1.2"/>
+            <line x1="327" y1="88" x2="433" y2="88" stroke="#3b82f6" stroke-width="1.2"/>
+            <line x1="447" y1="88" x2="523" y2="88" stroke="#3b82f6" stroke-width="1.2"/>
+            <!-- Layer 0：密集节点 -->
+            <circle cx="60" cy="148" r="5" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"/>
+            <circle cx="110" cy="148" r="5" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"/>
+            <circle cx="160" cy="148" r="5" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"/>
+            <circle cx="220" cy="148" r="5" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"/>
+            <circle cx="280" cy="148" r="5" fill="#dcfce7" stroke="#22c55e" stroke-width="2"/>
+            <circle cx="340" cy="148" r="5" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"/>
+            <circle cx="390" cy="148" r="5" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"/>
+            <circle cx="450" cy="148" r="5" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"/>
+            <circle cx="510" cy="148" r="5" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"/>
+            <line x1="65" y1="148" x2="105" y2="148" stroke="#94a3b8" stroke-width="0.8"/>
+            <line x1="115" y1="148" x2="155" y2="148" stroke="#94a3b8" stroke-width="0.8"/>
+            <line x1="165" y1="148" x2="215" y2="148" stroke="#94a3b8" stroke-width="0.8"/>
+            <line x1="225" y1="148" x2="275" y2="148" stroke="#22c55e" stroke-width="1.5"/>
+            <line x1="285" y1="148" x2="335" y2="148" stroke="#22c55e" stroke-width="1.5"/>
+            <line x1="345" y1="148" x2="385" y2="148" stroke="#94a3b8" stroke-width="0.8"/>
+            <text x="280" y="170" text-anchor="middle" font-size="9" fill="#166534">最终结果</text>
+            <!-- 查询路径（红色箭头）-->
+            <circle cx="350" cy="40" r="8" fill="#ef4444" stroke="#fff" stroke-width="2"/>
+            <text x="370" y="36" font-size="9.5" fill="#dc2626" font-weight="700">← 从入口节点开始</text>
+            <line x1="350" y1="48" x2="320" y2="81" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#ae1)"/>
+            <line x1="320" y1="95" x2="280" y2="143" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#ae1)"/>
+            <defs><marker id="ae1" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3 z" fill="#ef4444"/></marker></defs>
+          </svg>
+        </div>
+
+        <h3>4. 常用向量数据库对比</h3>
+        <table>
+          <thead><tr><th>工具</th><th>类型</th><th>优点</th><th>适合</th></tr></thead>
+          <tbody>
+            <tr><td><b>FAISS</b></td><td>本地库</td><td>速度极快，支持 GPU 加速，Meta 出品</td><td>研究、离线批量检索</td></tr>
+            <tr><td><b>Chroma</b></td><td>轻量 DB</td><td>零配置，内嵌 Python，开发友好</td><td>原型开发、小规模</td></tr>
+            <tr><td><b>Qdrant</b></td><td>向量 DB</td><td>Rust 实现，高性能，支持 payload 过滤</td><td>生产环境，中大规模</td></tr>
+            <tr><td><b>Milvus</b></td><td>分布式 DB</td><td>水平扩展，支持亿级向量</td><td>大规模生产部署</td></tr>
+            <tr><td><b>Pinecone</b></td><td>云服务</td><td>全托管，无需运维</td><td>快速上线，预算充足</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- § 四 检索策略 -->
+      <section class="section" id="retrieval">
+        <div class="section-title">
+          <div class="icon" style="background:#ecfdf5;">🔎</div>
+          四、检索策略：Dense / Sparse / Hybrid
+        </div>
+
+        <h3>1. Dense Retrieval（稠密检索）</h3>
+        <p style="font-size:13px;">就是上面讲的：用 Embedding 模型把查询和文档都变成向量，计算相似度。<b>擅长语义理解</b>，能处理换个说法但意思一样的情况。<b>弱点：对专有名词（如 SKU ID、型号）不敏感</b>——「iPhone 15 Pro Max」和「iPhone 15」的向量可能很近。</p>
+
+        <h3>2. Sparse Retrieval（稀疏检索）</h3>
+        <p style="font-size:13px;">以 BM25 为代表，基于词频统计（TF-IDF 思想）。<b>擅长精确词匹配</b>，对专有名词、型号、代码变量名很敏感。<b>弱点：不理解语义</b>——「汽车」和「轿车」是两个词，BM25 认为它们不相关。</p>
+
+        <div style="background:#1e293b;border-radius:10px;padding:14px 18px;font-size:12.5px;color:#e2e8f0;line-height:1.9;margin:12px 0;">
+          <span style="color:#94a3b8;"># BM25 打分公式（简化版）</span><br>
+          score(q, d) = Σ IDF(qi) × <span style="color:#34d399;">tf(qi, d) × (k1 + 1)</span> / <span style="color:#f472b6;">(tf(qi, d) + k1 × (1-b+b×|d|/avgdl))</span><br><br>
+          <span style="color:#94a3b8;"># IDF：词越稀有，权重越高</span><br>
+          <span style="color:#94a3b8;"># tf：词频，但用平滑处理避免词频过大的文档占优</span><br>
+          <span style="color:#94a3b8;"># |d|/avgdl：文档长度归一化</span>
+        </div>
+
+        <h3>3. Hybrid Retrieval（混合检索）⭐ 推荐</h3>
+        <p style="font-size:13px;">同时运行 Dense 和 Sparse，把两路结果合并。常用合并方式是 <b>RRF（Reciprocal Rank Fusion，倒数排名融合）</b>：</p>
+        <div style="background:#1e293b;border-radius:10px;padding:14px 18px;font-size:12.5px;color:#e2e8f0;line-height:1.9;margin:12px 0;">
+          <span style="color:#94a3b8;"># RRF 公式：把两路结果的排名倒数相加</span><br>
+          RRF_score(d) = <span style="color:#fbbf24;">1 / (rank_dense(d) + 60)</span> + <span style="color:#34d399;">1 / (rank_sparse(d) + 60)</span><br><br>
+          <span style="color:#94a3b8;"># 举例：</span><br>
+          文档A：Dense 排名第1, Sparse 排名第3 → 1/61 + 1/63 ≈ 0.0323<br>
+          文档B：Dense 排名第2, Sparse 排名第1 → 1/62 + 1/61 ≈ 0.0325<br>
+          <span style="color:#94a3b8;"># 文档B 综合得分更高</span>
+        </div>
+
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin:12px 0 16px;">
+          <div style="font-size:12px;color:#6b7280;text-align:center;margin-bottom:10px;font-weight:600;">图4：三种检索策略对比</div>
+          <svg viewBox="0 0 580 130" style="width:100%;max-width:580px;display:block;margin:0 auto;" xmlns="http://www.w3.org/2000/svg">
+            <rect x="0" y="0" width="580" height="130" rx="10" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+            <!-- Dense -->
+            <rect x="14" y="14" width="166" height="100" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+            <text x="97" y="34" text-anchor="middle" font-size="11" font-weight="700" fill="#1d4ed8">Dense（向量检索）</text>
+            <text x="97" y="52" text-anchor="middle" font-size="10" fill="#374151">✅ 语义理解强</text>
+            <text x="97" y="68" text-anchor="middle" font-size="10" fill="#374151">✅ 同义词/换说法</text>
+            <text x="97" y="84" text-anchor="middle" font-size="10" fill="#dc2626">❌ 专有名词弱</text>
+            <text x="97" y="100" text-anchor="middle" font-size="10" fill="#dc2626">❌ 需要 GPU 训练</text>
+            <!-- Sparse -->
+            <rect x="200" y="14" width="166" height="100" rx="8" fill="#fffbeb" stroke="#fde68a" stroke-width="1.5"/>
+            <text x="283" y="34" text-anchor="middle" font-size="11" font-weight="700" fill="#b45309">Sparse（BM25）</text>
+            <text x="283" y="52" text-anchor="middle" font-size="10" fill="#374151">✅ 精确词匹配强</text>
+            <text x="283" y="68" text-anchor="middle" font-size="10" fill="#374151">✅ 无需训练</text>
+            <text x="283" y="84" text-anchor="middle" font-size="10" fill="#dc2626">❌ 语义理解弱</text>
+            <text x="283" y="100" text-anchor="middle" font-size="10" fill="#dc2626">❌ 换个词就找不到</text>
+            <!-- Hybrid -->
+            <rect x="386" y="14" width="180" height="100" rx="8" fill="#f0fdf4" stroke="#6ee7b7" stroke-width="2"/>
+            <text x="476" y="34" text-anchor="middle" font-size="11" font-weight="700" fill="#166534">Hybrid（混合）⭐</text>
+            <text x="476" y="52" text-anchor="middle" font-size="10" fill="#374151">✅ 语义 + 精确</text>
+            <text x="476" y="68" text-anchor="middle" font-size="10" fill="#374151">✅ 召回率最高</text>
+            <text x="476" y="84" text-anchor="middle" font-size="10" fill="#374151">✅ 工程上成熟</text>
+            <text x="476" y="100" text-anchor="middle" font-size="9.5" fill="#6b7280">用 RRF 合并两路结果</text>
+          </svg>
+        </div>
+      </section>
+
+      <!-- § 五 Reranker -->
+      <section class="section" id="reranker">
+        <div class="section-title">
+          <div class="icon" style="background:#fdf2f8;">🎯</div>
+          五、Reranker：精排提升精度
+        </div>
+        <p>向量检索召回 Top-50，但真正相关的可能只有 3~5 篇。Reranker 对候选结果做<b>精排</b>，用更强的模型重新打分，确保最终传给 LLM 的文档质量最高。</p>
+
+        <h3>1. 为什么需要两阶段？</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0;">
+          <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:14px;">
+            <div style="font-weight:700;color:#b45309;font-size:13px;margin-bottom:6px;">阶段一：召回（Retrieval）</div>
+            <div style="font-size:12px;color:#374151;line-height:1.8;">
+              目标：<b>高召回</b>，不能漏掉真正相关的文档<br>
+              方法：向量检索，快（毫秒级），返回 Top-50~100<br>
+              缺点：精度不够，有噪声
+            </div>
+          </div>
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px;">
+            <div style="font-weight:700;color:#166534;font-size:13px;margin-bottom:6px;">阶段二：精排（Rerank）</div>
+            <div style="font-size:12px;color:#374151;line-height:1.8;">
+              目标：<b>高精度</b>，把最相关的排到最前面<br>
+              方法：Cross-Encoder 对每个(问题, 文档)对打分<br>
+              缺点：慢（对每对都要做推理），只适合对小候选集做
+            </div>
+          </div>
+        </div>
+
+        <h3>2. Cross-Encoder vs Bi-Encoder</h3>
+        <table>
+          <thead><tr><th></th><th>Bi-Encoder（向量检索用）</th><th>Cross-Encoder（Reranker 用）</th></tr></thead>
+          <tbody>
+            <tr><td><b>输入</b></td><td>问题和文档分别编码</td><td>问题 + 文档一起输入</td></tr>
+            <tr><td><b>速度</b></td><td>快（向量可预计算）</td><td>慢（每对都要推理）</td></tr>
+            <tr><td><b>精度</b></td><td>中等（无法建模交互）</td><td>高（能建模问题和文档的细粒度交互）</td></tr>
+            <tr><td><b>典型模型</b></td><td>BGE, text-embedding-3</td><td>BGE-Reranker, Cohere Rerank</td></tr>
+          </tbody>
+        </table>
+
+        <h3>3. Reranker 的工作流</h3>
+        <div style="display:flex;align-items:center;gap:8px;margin:12px 0;flex-wrap:wrap;">
+          <div style="background:#dbeafe;border-radius:8px;padding:8px 14px;font-size:12.5px;font-weight:600;color:#1d4ed8;">用户问题</div>
+          <span style="color:#6b7280;font-size:18px;">→</span>
+          <div style="background:#ede9fe;border-radius:8px;padding:8px 14px;font-size:12.5px;font-weight:600;color:#7c3aed;">向量检索 Top-50</div>
+          <span style="color:#6b7280;font-size:18px;">→</span>
+          <div style="background:#fef9c3;border-radius:8px;padding:8px 14px;font-size:12.5px;font-weight:600;color:#b45309;">Reranker 精排</div>
+          <span style="color:#6b7280;font-size:18px;">→</span>
+          <div style="background:#dcfce7;border-radius:8px;padding:8px 14px;font-size:12.5px;font-weight:600;color:#166534;">Top-5 传给 LLM</div>
+          <span style="color:#6b7280;font-size:18px;">→</span>
+          <div style="background:#f5f3ff;border-radius:8px;padding:8px 14px;font-size:12.5px;font-weight:600;color:#7c3aed;">LLM 生成答案</div>
+        </div>
+
+        <div class="callout callout-green">
+          <strong>实测效果：</strong> 加了 Reranker 后，Top-5 的精度通常能从 ~60% 提升到 ~85%+。代价是增加 50~200ms 延迟（对 50 个候选做 50 次推理）。对质量要求高的场景强烈推荐。
+        </div>
+      </section>
+
+      <!-- § 六 完整流水线 -->
+      <section class="section" id="pipeline">
+        <div class="section-title">
+          <div class="icon" style="background:#ecfdf5;">🔄</div>
+          六、完整 RAG 流水线
+        </div>
+
+        <h3>离线阶段（一次性）</h3>
+        <div style="background:#1e293b;border-radius:10px;padding:14px 18px;font-size:12.5px;color:#e2e8f0;line-height:2;margin:12px 0;">
+          <span style="color:#94a3b8;"># 1. 加载文档</span><br>
+          docs = load_documents("./knowledge_base/")  <span style="color:#94a3b8;"># PDF, Word, Markdown...</span><br><br>
+          <span style="color:#94a3b8;"># 2. 切块</span><br>
+          chunks = RecursiveCharacterTextSplitter(chunk_size=512, overlap=64).split(docs)<br><br>
+          <span style="color:#94a3b8;"># 3. 向量化</span><br>
+          embeddings = embed_model.encode([c.text for c in chunks])  <span style="color:#94a3b8;"># shape: (N, 1536)</span><br><br>
+          <span style="color:#94a3b8;"># 4. 存入向量库</span><br>
+          vector_db.upsert(ids=[c.id for c in chunks], vectors=embeddings, payloads=chunks)
+        </div>
+
+        <h3>在线阶段（每次查询）</h3>
+        <div style="background:#1e293b;border-radius:10px;padding:14px 18px;font-size:12.5px;color:#e2e8f0;line-height:2;margin:12px 0;">
+          <span style="color:#94a3b8;"># 1. 问题向量化</span><br>
+          query_vec = embed_model.encode(user_query)  <span style="color:#94a3b8;"># shape: (1536,)</span><br><br>
+          <span style="color:#94a3b8;"># 2. 向量检索（可选：加 BM25 混合）</span><br>
+          candidates = vector_db.search(query_vec, top_k=50)<br><br>
+          <span style="color:#94a3b8;"># 3. Reranker 精排</span><br>
+          reranked = reranker.rank(query=user_query, docs=candidates, top_k=5)<br><br>
+          <span style="color:#94a3b8;"># 4. 拼接 Prompt</span><br>
+          prompt = f"""基于以下文档回答问题：<br>
+          {'\n'.join([d.text for d in reranked])}<br>
+          问题：{user_query}"""<br><br>
+          <span style="color:#94a3b8;"># 5. LLM 生成</span><br>
+          answer = llm.generate(prompt)
+        </div>
+      </section>
+
+      <!-- § 七 进阶技巧 -->
+      <section class="section" id="advanced">
+        <div class="section-title">
+          <div class="icon" style="background:#fffbeb;">⚡</div>
+          七、进阶技巧
+        </div>
+
+        <h3>1. Query 改写（Query Rewriting）</h3>
+        <p style="font-size:13px;">用户问题有时很模糊，直接检索效果差。用 LLM 先把问题改写成更适合检索的形式：</p>
+        <table>
+          <thead><tr><th>技术</th><th>做法</th><th>效果</th></tr></thead>
+          <tbody>
+            <tr><td><b>HyDE</b><br><span style="font-size:11px;color:#6b7280;">假设文档嵌入</span></td><td>让 LLM 先生成一个假想答案，用假想答案的向量去检索</td><td>检索向量更接近文档空间</td></tr>
+            <tr><td><b>Multi-Query</b></td><td>让 LLM 把问题改写成 3~5 个变体，分别检索后合并</td><td>召回率显著提升</td></tr>
+            <tr><td><b>Step-Back Prompting</b></td><td>先让 LLM 提炼出「这个问题背后的抽象概念」，用抽象概念检索</td><td>对需要背景知识的问题效果好</td></tr>
+          </tbody>
+        </table>
+
+        <h3>2. 元数据过滤（Metadata Filtering）</h3>
+        <p style="font-size:13px;">给每个 chunk 打上元数据标签（作者、时间、文档类型、产品线），检索时先用 WHERE 条件过滤，再做向量搜索。大幅提升精准度，避免跨领域干扰。</p>
+        <div style="background:#1e293b;border-radius:10px;padding:14px 18px;font-size:12.5px;color:#e2e8f0;line-height:1.9;margin:12px 0;">
+          <span style="color:#94a3b8;"># 只在「产品手册」文档里检索 2024 年之后的内容</span><br>
+          results = vector_db.search(<br>
+          &nbsp;&nbsp;query_vec,<br>
+          &nbsp;&nbsp;filter={"<span style="color:#34d399;">doc_type</span>": "产品手册", "<span style="color:#fbbf24;">year</span>": {"$gte": 2024}},<br>
+          &nbsp;&nbsp;top_k=20<br>
+          )
+        </div>
+
+        <h3>3. Self-RAG（检索判断）</h3>
+        <p style="font-size:13px;">不是每个问题都需要检索。Self-RAG 让 LLM 先判断「这个问题需要外部知识吗？」，只有需要时才触发检索，减少不必要的延迟和噪声。</p>
+      </section>
+
+      <!-- § 八 常见踩坑 -->
+      <section class="section" id="pitfalls" style="background:linear-gradient(135deg,#eff6ff 0%,#f0fdf4 100%);border:1.5px solid #93c5fd;">
+        <div class="section-title">
+          <div class="icon" style="background:#fff;">⚠️</div>
+          八、常见踩坑
+        </div>
+        <table>
+          <thead><tr><th>问题</th><th>原因</th><th>解决方案</th></tr></thead>
+          <tbody>
+            <tr><td><b>检索到的文档不相关</b></td><td>Chunk 太大/太小，或问题太短</td><td>调整 chunk size；用 Query 改写扩充问题</td></tr>
+            <tr><td><b>答案正确但没引用来源</b></td><td>prompt 没要求 LLM 标注</td><td>在 prompt 里明确要求「请注明引用自第几段」</td></tr>
+            <tr><td><b>检索到正确文档但答案还是错</b></td><td>文档里的答案在 chunk 边界被截断</td><td>增加 chunk overlap；或用 Parent-Child 策略</td></tr>
+            <tr><td><b>同一知识库不同版本冲突</b></td><td>旧文档没及时更新</td><td>加 metadata 版本号 + 过滤旧版本</td></tr>
+            <tr><td><b>中文检索精度差</b></td><td>通用 Embedding 模型中文表现不好</td><td>换成 BGE-large-zh 或 M3E-large</td></tr>
+            <tr><td><b>第一次检索就没发现问题</b></td><td>没有评估指标</td><td>用 RAGAS 框架评估 Faithfulness、Answer Relevancy</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout callout-blue" style="margin-top:16px;">
+          <strong>RAG 评估工具推荐：RAGAS</strong><br>
+          自动化评估 RAG 系统质量，核心指标：<br>
+          • <b>Faithfulness</b>：答案是否只来自检索到的文档（防幻觉）<br>
+          • <b>Answer Relevancy</b>：答案是否回答了用户的问题<br>
+          • <b>Context Precision</b>：检索到的文档是否都相关<br>
+          • <b>Context Recall</b>：相关文档是否都被检索到了
+        </div>
+      </section>
+
+    </div><!-- /content -->
+  </div><!-- /layout -->
+
+  <footer>RAG 技术笔记 · <a href="notes-agent.html">← 返回 Agent 总览</a></footer>
+</div>
+</body>
+</html>
