@@ -827,6 +827,92 @@
           </div>
         </div>
 
+        <!-- ── Critic 深度解析 ───────────────────────────────────── -->
+        <div class="deep-dive-block" style="margin:24px 0;border:1.5px solid #93c5fd;border-radius:16px;overflow:hidden;">
+          <div style="background:#1e40af;color:#fff;padding:13px 20px;font-weight:700;font-size:15px;">
+            🔬 深入：Critic 价值模型——是什么、怎么训练、输入输出长什么样
+          </div>
+          <div style="padding:20px 22px;background:#f0f7ff;">
+
+            <h4 style="margin:0 0 10px;color:#1e3a8a;">为什么需要 Critic？</h4>
+            <p style="margin-bottom:12px;">Reward Model 只给整条回答一个总分（最终奖励是稀疏的）。但 PPO 需要知道<strong>每个 token 的"贡献"</strong>——第 237 个词的选择，到底好不好？这就需要 Critic 来估算每一步的"预期总收益"，作为基线（baseline）来计算优势值：</p>
+            <div class="formula-block" style="margin:0 0 14px;">
+              $$A(s_t, a_t) = \underbrace{Q(s_t, a_t)}_{\text{这一步的实际回报}} - \underbrace{V(s_t)}_{\text{Critic 预测的平均期望}} = \text{「比平均好多少？」}$$
+            </div>
+            <p style="margin-bottom:18px;color:#374151;">正的 Advantage → 这个词的选择比平均水平好，强化它；负的 Advantage → 比平均差，抑制它。<strong>没有 Critic，就无法分辨每个 token 的功过，训练信号极其嘈杂。</strong></p>
+
+            <h4 style="margin:0 0 10px;color:#1e3a8a;">输入 / 输出形式</h4>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;">
+              <div style="background:#fff;border:1px solid #bfdbfe;border-radius:10px;padding:14px;">
+                <div style="font-weight:700;color:#1d4ed8;margin-bottom:8px;">输入</div>
+                <p style="font-size:13px;margin:0;color:#374151;">完整的 token 序列（Prompt + 已生成的回答）：</p>
+                <div style="font-family:monospace;font-size:12px;background:#f1f5f9;border-radius:6px;padding:8px;margin-top:8px;color:#475569;">
+                  [Q: 解释量子纠缠<br>
+                  &nbsp;A: 量子纠缠是指<br>
+                  &nbsp;&nbsp;&nbsp;两个粒子…]<br>
+                  <span style="color:#94a3b8;">↑ 每个 token 都是输入</span>
+                </div>
+              </div>
+              <div style="background:#fff;border:1px solid #bfdbfe;border-radius:10px;padding:14px;">
+                <div style="font-weight:700;color:#1d4ed8;margin-bottom:8px;">输出</div>
+                <p style="font-size:13px;margin:0;color:#374151;">每个 token 位置对应一个标量 $V(s_t)$：</p>
+                <div style="font-family:monospace;font-size:12px;background:#f1f5f9;border-radius:6px;padding:8px;margin-top:8px;color:#475569;">
+                  [0.3, 0.3, 0.5, 0.7, 0.8, …]<br>
+                  <span style="color:#94a3b8;">↑ 每个位置：从这里</span><br>
+                  <span style="color:#94a3b8;">&nbsp;&nbsp; 往后预期能得多少分</span>
+                </div>
+              </div>
+            </div>
+            <div class="callout-blue" style="margin-bottom:18px;">
+              <strong>注意：</strong>只有 <strong>response 部分</strong>的 token 才计算 Advantage 并参与梯度更新，prompt 部分的 $V(s_t)$ 输出会被 mask 掉忽略。
+            </div>
+
+            <h4 style="margin:0 0 10px;color:#1e3a8a;">模型结构：Critic 长什么样</h4>
+            <p style="margin-bottom:10px;">Critic 和 Actor 共用 Transformer 主干，只替换最后的输出头：</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;">
+              <div style="background:#f5f3ff;border:1px solid #c4b5fd;border-radius:10px;padding:14px;">
+                <div style="font-weight:700;color:#4c1d95;margin-bottom:6px;">Actor（策略模型）</div>
+                <div style="font-family:monospace;font-size:12px;color:#374151;">
+                  Transformer 主干<br>
+                  → Linear(d_model → vocab_size)<br>
+                  → token 概率分布
+                </div>
+              </div>
+              <div style="background:#dbeafe;border:1px solid #93c5fd;border-radius:10px;padding:14px;">
+                <div style="font-weight:700;color:#1e40af;margin-bottom:6px;">Critic（价值模型）</div>
+                <div style="font-family:monospace;font-size:12px;color:#374151;">
+                  Transformer 主干（同 Actor）<br>
+                  → Linear(d_model → 1)<br>
+                  → 标量 V(s_t)
+                </div>
+              </div>
+            </div>
+            <p style="margin-bottom:18px;font-size:13.5px;">初始化时，Critic 主干从 <strong>SFT 模型</strong>（或直接从 Actor）复制权重；输出头 <code>nn.Linear(hidden_size, 1)</code> 随机初始化。主干参数可以和 Actor 共享（节省显存）或完全独立（训练更灵活）。</p>
+
+            <h4 style="margin:0 0 10px;color:#1e3a8a;">Critic 怎么训练：MSE 回归到目标价值</h4>
+            <p style="margin-bottom:10px;">Critic 的训练目标是：让 $V(s_t)$ 预测准确。用 <strong>MSE 均方误差</strong>回归到实际折扣累计回报 $\hat{R}_t$：</p>
+            <div class="formula-block" style="margin:0 0 10px;">
+              $$\mathcal{L}_{\text{critic}} = \mathbb{E}_t\left[\left(V_\theta(s_t) - \hat{R}_t\right)^2\right]$$
+            </div>
+            <p style="margin-bottom:14px;font-size:13.5px;">其中 $\hat{R}_t$ 是"目标价值"——由 Reward Model 的终态打分 + GAE 逐步反向传播计算得来。</p>
+
+            <div style="background:#fff;border:1px solid #bfdbfe;border-radius:10px;padding:16px;margin-bottom:8px;">
+              <div style="font-weight:700;margin-bottom:10px;color:#1e40af;">📋 每个 batch 的完整训练流程</div>
+              <ol style="font-size:13.5px;color:#374151;line-height:2;padding-left:20px;margin:0;">
+                <li><strong>Actor 生成</strong>一批回答（不计算梯度，纯推理）</li>
+                <li><strong>Reward Model 打分</strong>——每条回答只有最后一个 token 有分数（稀疏奖励）</li>
+                <li><strong>GAE 反向传播</strong>——把终态奖励传播到每个中间 token，得到目标价值 $\hat{R}_t$</li>
+                <li><strong>Critic 前向传播</strong>——输出每个 token 的 $V_\theta(s_t)$</li>
+                <li><strong>MSE 损失更新 Critic</strong>——让 $V_\theta(s_t) \rightarrow \hat{R}_t$</li>
+                <li><strong>计算 Advantage</strong>——$\hat{A}_t = \hat{R}_t - V_\theta(s_t)$（stop gradient，不传给 Critic）</li>
+                <li><strong>PPO 更新 Actor</strong>——用 $\hat{A}_t$ 做裁剪策略梯度更新</li>
+              </ol>
+            </div>
+
+          </div>
+        </div>
+        <!-- ── Critic 深度解析 END ───────────────────────────────── -->
+
         <div class="warn-box">
           <div class="warn-title">⚠️ 工程挑战：GPU 内存是最大瓶颈</div>
           <p>如果基础语言模型是 7B 参数，那么：</p>
