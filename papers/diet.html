@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DIET 论文解读</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false }
+          ],
+          throwOnError: false
+        });
+      }
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #2563eb; --primary-soft: #eff6ff;
+      --accent: #7c3aed; --accent-soft: rgba(124,58,237,0.06);
+      --shadow: 0 10px 30px rgba(15,23,42,0.08); --radius: 18px; --max: 1120px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: linear-gradient(180deg,#f8fbff 0%,var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      line-height: 1.8;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .page { max-width: var(--max); margin: 0 auto; padding: 32px 20px 80px; }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    .back-link:hover { color: var(--primary); text-decoration: none; }
+    .hero {
+      background: radial-gradient(circle at top right,rgba(37,99,235,0.14),transparent 30%),
+                  radial-gradient(circle at left bottom,rgba(124,58,237,0.10),transparent 24%), var(--card);
+      border: 1px solid rgba(37,99,235,0.08); border-radius: 24px;
+      box-shadow: var(--shadow); padding: 34px 34px 28px; margin-bottom: 22px;
+    }
+    .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--primary-soft); color: var(--primary); font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+    h1 { font-size: 34px; line-height: 1.25; letter-spacing: -0.02em; margin-bottom: 10px; }
+    .subtitle { color: var(--muted); font-size: 16px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-top: 24px; }
+    .meta-card { background: #fbfdff; border: 1px solid #e7eefb; border-radius: 16px; padding: 14px 16px; }
+    .meta-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .meta-value { font-size: 14px; font-weight: 600; word-break: break-word; }
+    .layout { display: grid; grid-template-columns: 260px minmax(0,1fr); gap: 22px; align-items: start; }
+    .toc { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; }
+    .toc h2 { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+    .toc-list { list-style: none; }
+    .toc-list li { margin: 7px 0; }
+    .toc-list a { font-size: 13.5px; color: var(--muted); }
+    .toc-list a:hover { color: var(--primary); text-decoration: none; }
+    .toc-list a.active { color: var(--primary); background: #eff6ff; font-weight: 600; border-left: 3px solid var(--primary); padding-left: 5px; }
+    .toc-sub { padding-left: 14px; margin-top: 4px; }
+    .toc-sub li { margin: 4px 0; }
+    .toc-sub a { font-size: 12.5px; }
+    .content { display: flex; flex-direction: column; gap: 20px; }
+    .section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 28px 30px; }
+    .section-title { font-size: 22px; font-weight: 800; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 2px solid #f0f4ff; display: flex; align-items: center; gap: 10px; }
+    .section-title .icon { width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+    h3 { font-size: 18px; font-weight: 700; margin: 26px 0 12px; color: #111827; }
+    h4 { font-size: 15px; font-weight: 700; margin: 20px 0 10px; color: #1d4ed8; }
+    p { margin-bottom: 12px; }
+    p:last-child { margin-bottom: 0; }
+    ul, ol { padding-left: 22px; }
+    li { margin-bottom: 8px; }
+    .callout { border-radius: 14px; padding: 14px 18px; margin: 16px 0; font-size: 14.5px; }
+    .callout-blue { background: linear-gradient(180deg,rgba(37,99,235,0.08),rgba(37,99,235,0.04)); border: 1px solid rgba(37,99,235,0.16); }
+    .callout-blue strong { color: #1d4ed8; }
+    .callout-amber { background: #fffbeb; border: 1px solid #fde68a; }
+    .callout-amber strong { color: #92400e; }
+    .callout-green { background: #f0fdf4; border: 1px solid #86efac; }
+    .callout-green strong { color: #166534; }
+    .callout-purple { background: var(--accent-soft); border: 1px solid rgba(124,58,237,0.18); }
+    .callout-purple strong { color: #6d28d9; }
+    .note { background: #f8faff; border: 1px dashed #cbd5e1; border-radius: 12px; padding: 12px 16px; color: #475467; font-size: 13.5px; margin: 12px 0; }
+    .example-box { background: #f0fdf4; border: 1px solid #86efac; border-radius: 14px; padding: 16px 20px; margin: 16px 0; }
+    .example-box .ex-title { font-size: 12px; font-weight: 700; color: #166534; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+    .example-box p { margin-bottom: 8px; font-size: 14px; color: #166534; }
+    .example-box p:last-child { margin-bottom: 0; }
+    blockquote { margin: 16px 0; padding: 14px 18px; border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 0 12px 12px 0; color: #3f3f46; font-size: 14.5px; }
+    .paper-info { background: #fafbff; border-left: 4px solid var(--primary); border-radius: 12px; padding: 14px 16px; margin: 16px 0; color: #334155; font-size: 14px; }
+    .paper-info p { margin: 5px 0; }
+    figure { margin: 22px 0; background: #fbfdff; border: 1px solid #e8edf5; border-radius: 16px; padding: 14px; }
+    figure img { width: 100%; display: block; border-radius: 12px; background: #fff; }
+    figcaption { margin-top: 10px; font-size: 13.5px; color: var(--muted); line-height: 1.6; }
+    .fig-placeholder { padding: 36px 24px; text-align: center; background: #f8faff; border-radius: 12px; color: #94a3b8; font-size: 14px; border: 2px dashed #e2e8f0; line-height: 1.9; }
+    .formula-block { background: #fafbff; border: 1px solid #e8edf5; border-radius: 14px; padding: 16px 20px; margin: 14px 0; overflow-x: auto; }
+    .formula-light { background: #fafbff; border: 1px solid #e8edf5; border-radius: 14px; padding: 16px 20px; margin: 14px 0; overflow-x: auto; }
+    .formula-vars { background: #f0f7ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 12px 16px; margin: 6px 0 16px; font-size: 13.5px; color: #374151; }
+    .formula-vars .var-title { font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+    .formula-vars ul { margin: 0; padding-left: 18px; }
+    .formula-vars li { margin: 5px 0; }
+    .katex-display { overflow-x: auto; overflow-y: hidden; padding: 6px 0; }
+    .table-wrap { overflow-x: auto; margin: 16px 0; }
+    table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 12px; font-size: 13.5px; }
+    thead th { background: #f3f6fb; color: #334155; font-weight: 700; border-bottom: 2px solid var(--line); text-align: left; padding: 12px 14px; }
+    td { padding: 11px 14px; border-bottom: 1px solid #eef2f7; vertical-align: top; }
+    tbody tr:nth-child(even) { background: #fafcff; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; }
+    .badge-green { background: #dcfce7; color: #166534; }
+    .badge-red { background: #fee2e2; color: #991b1b; }
+    .badge-blue { background: #dbeafe; color: #1e40af; }
+    .badge-gray { background: #f3f4f6; color: #374151; }
+    .badge-yellow { background: #fef9c3; color: #854d0e; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+    .mini-card { border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; background: #fff; }
+    .mini-card h4 { margin-top: 0; font-size: 14px; }
+    .step-list { display: flex; flex-direction: column; gap: 14px; margin: 16px 0; }
+    .step { display: flex; gap: 14px; background: #fafbff; border: 1px solid #e8edf5; border-radius: 14px; padding: 14px 16px; }
+    .step-num { width: 28px; height: 28px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; flex-shrink: 0; margin-top: 2px; }
+    .step-body { flex: 1; }
+    .step-body strong { display: block; margin-bottom: 4px; font-size: 14.5px; color: #111; }
+    .step-body p { font-size: 13.5px; color: #374151; margin: 0; }
+    .flow-diagram { background: #f8faff; border: 1px solid #dbeafe; border-radius: 16px; padding: 24px; margin: 20px 0; overflow-x: auto; }
+    .flow-row { display: flex; align-items: center; gap: 0; flex-wrap: nowrap; justify-content: center; min-width: max-content; }
+    .flow-box { background: #fff; border: 1.5px solid #93c5fd; border-radius: 12px; padding: 10px 16px; text-align: center; font-size: 13px; min-width: 110px; }
+    .flow-box .fb-title { font-weight: 700; color: #1e40af; margin-bottom: 3px; }
+    .flow-box .fb-desc { font-size: 11.5px; color: var(--muted); }
+    .flow-box.stage1 { border-color: #a78bfa; background: #f5f3ff; }
+    .flow-box.stage1 .fb-title { color: #6d28d9; }
+    .flow-box.stage2 { border-color: #6ee7b7; background: #f0fdf4; }
+    .flow-box.stage2 .fb-title { color: #065f46; }
+    .flow-box.out { border-color: #fca5a5; background: #fff1f2; }
+    .flow-box.out .fb-title { color: #991b1b; }
+    .flow-arrow { font-size: 20px; color: #93c5fd; padding: 0 8px; flex-shrink: 0; }
+    footer { margin-top: 40px; color: var(--muted); font-size: 13px; text-align: center; }
+    @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } .toc { position: static; } .meta-grid, .two-col { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 640px) { .page { padding: 18px 12px 56px; } .hero, .section { padding: 20px 18px; } h1 { font-size: 26px; } .meta-grid, .two-col { grid-template-columns: 1fr; } th, td { padding: 10px; } }
+  </style>
+</head>
+<body>
+<div class="page">
+  <a class="back-link" href="../index.html">← 返回论文列表</a>
+
+  <header class="hero">
+    <div class="eyebrow">📄 论文解读 · 推荐系统 × 数据集蒸馏</div>
+    <h1>DIET：面向推荐系统的流式数据集蒸馏</h1>
+    <p class="subtitle">DIET: Learning to Distill Dataset Continually for Recommender Systems</p>
+    <div class="meta-grid">
+      <div class="meta-card"><div class="meta-label">作者</div><div class="meta-value">Jiaqing Zhang, Hao Wang et al. · 中科大 + 快手</div></div>
+      <div class="meta-card"><div class="meta-label">发表</div><div class="meta-value">arXiv 2603.24958 · 2026.03</div></div>
+      <div class="meta-card"><div class="meta-label">场景</div><div class="meta-value">工业级推荐系统持续训练 · 模型迭代提速</div></div>
+      <div class="meta-card"><div class="meta-label">核心命题</div><div class="meta-value">用 1-2% 数据复现全量训练效果，迭代成本降低 60×</div></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="toc">
+      <h2>📋 目录</h2>
+      <ul class="toc-list">
+        <li><a href="#summary">一句话总结</a></li>
+        <li><a href="#background">§1 背景与动机</a></li>
+        <li><a href="#method">§2 方法详解</a></li>
+        <li><a href="#exp">§3 实验结果</a></li>
+        <li><a href="#insight">§4 个人理解</a></li>
+      </ul>
+    </aside>
+
+    <main class="content">
+
+      <!-- ═══ 一句话总结 ═══ -->
+      <section class="section" id="summary">
+        <div class="section-title"><span class="icon" style="background:#dbeafe">💡</span>一句话总结</div>
+        <blockquote>
+          现代推荐系统每天产生数十亿条行为日志，每次模型架构迭代都要在全量历史数据上重训——代价极高。DIET 提出「流式数据集蒸馏」，维护一个仅占原数据 1-2% 的合成记忆集，且随流式数据持续更新，让新模型在这个小数据集上训练就能复现全量训练的行为，最多降低 60× 迭代成本。
+        </blockquote>
+        <div class="paper-info">
+          <p><strong>论文链接：</strong><a href="https://arxiv.org/abs/2603.24958" target="_blank">https://arxiv.org/abs/2603.24958</a></p>
+          <p><strong>关键词：</strong>Dataset Distillation · Continual Learning · Recommender Systems · Influence Function · Bi-level Optimization</p>
+        </div>
+      </section>
+
+      <!-- ═══ §1 背景与动机 ═══ -->
+      <section class="section" id="background">
+        <div class="section-title"><span class="icon" style="background:#fef9c3">🔍</span>§1 背景与动机</div>
+
+        <h3>1.1 问题：模型迭代越来越贵</h3>
+        <p>工业推荐系统在持续学习（Continual Learning）范式下运行：模型参数跨时间段继承更新，每次新模型架构上线前需要在全量历史数据上重新训练，以获得可靠的性能验证。随着模型越来越大，这个代价呈指数级增长：</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>模型</th><th>参数量</th><th>推理 FLOPs/样本</th><th>6个月数据训练成本（GPU 时）</th></tr></thead>
+            <tbody>
+              <tr><td>DLRM</td><td>8.7M</td><td>52 G</td><td>~9.7 万</td></tr>
+              <tr><td>Wukong</td><td>122M</td><td>442 G</td><td>~590 万</td></tr>
+              <tr><td><strong>RankMixer</strong></td><td><strong>1B</strong></td><td><strong>2106 G</strong></td><td><strong>~6000 万</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p style="font-size:13px;color:var(--muted);">注：训练成本估算基于 RTX 4090 单卡，$C = D \times F$，$T_{\text{hour}} = C / (\eta \cdot P \cdot 3600)$。</p>
+
+        <h3>1.2 现有方案的失败</h3>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>方案 A：窗口采样（Window Sampling）</h4>
+            <p style="font-size:13.5px;">只用最近一段时间的数据。<br><strong>问题：</strong>丢失历史行为模式，模型优化轨迹和全量训练完全不同。</p>
+          </div>
+          <div class="mini-card">
+            <h4>方案 B：随机采样（Random Selection）</h4>
+            <p style="font-size:13.5px;">随机从历史数据中抽取一个子集。<br><strong>问题：</strong>Figure 1 实验显示与全量训练结果的相关性仅 r=0.319，几乎不可信。</p>
+          </div>
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2603.24958v1/x1.png" alt="Figure 1: 不同数据缩减方案与全量数据训练结果的相关性对比"
+               onerror="this.onerror=null;this.parentElement.innerHTML='<div class=\'fig-placeholder\'><b>Figure 1：模型性能一致性对比</b><br><br>横轴：在全量数据上的 Normalized AUC；纵轴：在缩减数据上的 Normalized AUC。每个点是一个模型-数据集组合。DIET（蓝色，r=0.912）紧贴对角线；Random Selection（r=0.319）和 Window Sampling（r=0.681）严重偏离。</div>'" />
+          <figcaption><strong>Figure 1（论文原图）：</strong>DIET（r=0.912）与基线方法在「缩减数据结果 vs 全量数据结果」上的相关性对比。每个点代表一个 模型-数据集 组合，越靠近对角线说明缩减数据越能反映全量训练行为。</figcaption>
+        </figure>
+
+        <div class="callout-amber">
+          <strong>核心矛盾：</strong>目标不是「数据少」，而是「用少量数据模拟全量训练的效果」。推荐数据高维稀疏、时序演化，简单裁剪会改变底层训练分布，导致模型优化轨迹系统性偏移。
+        </div>
+
+        <h3>1.3 Dataset Distillation vs Coreset Selection</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>方法</th><th>做法</th><th>问题</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>Coreset Selection</strong></td>
+                <td>从原始数据中挑选「代表性」的真实样本子集</td>
+                <td>保留的是真实样本，但实验表明在深度学习场景下效果接近随机采样，无法保留训练动态</td>
+              </tr>
+              <tr>
+                <td><strong>Dataset Distillation</strong><br>（现有方法）</td>
+                <td>通过优化合成一批假样本，让在假样本上训练的效果 ≈ 全量数据</td>
+                <td>现有方法都是<strong>静态</strong>的（假设数据集固定），无法处理流式持续更新的推荐场景</td>
+              </tr>
+              <tr style="background:#f0fdf4;">
+                <td><strong>DIET（本文）</strong></td>
+                <td>流式数据集蒸馏：蒸馏出的合成数据集随流式数据持续更新，维持紧凑</td>
+                <td>—</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout-blue">
+          <strong>DIET 的切入点：</strong>将合成数据集视为一个「可演化的训练记忆（Evolving Training Memory）」，每个新阶段不是重新蒸馏，而是在旧记忆上做<strong>选择性更新</strong>，让记忆跟着数据流动起来。
+        </div>
+
+        <h3>1.4 形式化定义</h3>
+        <p>推荐场景下每条交互记录为 $(x, y)$，$x$ 是多域稀疏特征，$y \in \{0,1\}^K$ 是 $K$ 个任务的标签。全量训练目标：</p>
+        <div class="formula-light">
+          $$\theta^* = \arg\min_\theta \frac{1}{|\mathcal{D}|} \sum_{i=1}^{|\mathcal{D}|} \sum_{k=1}^{K} \ell\!\left(\sigma(f_\theta(e_i)_k),\, y_{i,k}\right)$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$e_i = \text{Embed}(x_i)$：embedding 层将稀疏特征映射为稠密向量</li>
+            <li>$f_\theta(\cdot)$：预测模型，输出 $K$ 维预测向量</li>
+            <li>$\ell(\cdot)$：BCE（二元交叉熵）loss</li>
+            <li>$\sigma(\cdot)$：sigmoid 函数，逐元素应用</li>
+          </ul>
+        </div>
+
+        <p>在持续学习范式下，将全量历史切分为有序数据块 $\mathcal{D}_{1:T} = \{\mathcal{D}_1, \mathcal{D}_2, \ldots, \mathcal{D}_T\}$，区分两种模型角色：</p>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>Reference Model $\phi$</h4>
+            <p style="font-size:13.5px;">持续演化的参考模型，每个阶段用新数据块更新参数：$\phi_t = \text{Update}(\phi_{t-1}, \mathcal{D}_t)$。它「见过」全量历史数据。</p>
+          </div>
+          <div class="mini-card">
+            <h4>Candidate Model $\theta$</h4>
+            <p style="font-size:13.5px;">待验证的新架构或新训练策略，只在某个特定阶段介入，没有历史数据。挑战是：让它不训练历史数据也能「追上」参考模型的效果。</p>
+          </div>
+        </div>
+
+        <p><strong>流式数据集蒸馏目标：</strong>构造一系列紧凑合成数据集 $\mathcal{D}^{syn}_{1:T}$，使在其上训练的 candidate model 能近似在全量历史数据上训练的行为，同时合成数据集随流式数据持续更新。</p>
+        <p>在 bi-level 优化框架下，每个阶段 $t$ 的形式化目标为：</p>
+        <div class="formula-light">
+          $$\mathcal{D}^{syn*}_t = \arg\min_{\mathcal{D}^{syn}_t} \mathcal{L}_{real}\!\left(\phi_t(\mathcal{D}^{syn}_t);\, \mathcal{D}_t\right)$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>内层优化（inner loop）：$\phi_t(\mathcal{D}^{syn}_t) = \text{Opt}^K(\phi_{t-1}, \mathcal{D}^{syn}_t)$，在合成数据上跑 $K$ 步梯度更新得到代理模型</li>
+            <li>外层优化（outer loop）：用真实数据 $\mathcal{D}_t$ 上的 loss 来评估并更新合成数据集</li>
+            <li>$\mathcal{L}_{real}$：代理模型在真实数据上的 loss，越小说明合成数据「模拟」全量数据越准</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ═══ §2 placeholder ═══ -->
+      <section class="section" id="method">
+        <div class="section-title"><span class="icon" style="background:#f0fdf4">⚙️</span>§2 方法详解</div>
+
+        <p>DIET 框架在每个时间阶段分两个 Phase 运作：<strong>Phase 1</strong> 初始化并维护合成数据的「边界记忆」，<strong>Phase 2</strong> 通过影响力引导的记忆寻址对合成数据做精细优化。</p>
+
+        <figure>
+          <img src="https://arxiv.org/html/2603.24958v1/x2.png" alt="Figure 2: DIET 整体架构图"
+               onerror="this.onerror=null;this.parentElement.innerHTML='<div class=\'fig-placeholder\'><b>Figure 2：DIET 整体框架（论文原图）</b><br><br>左侧 Phase 1：从真实数据块中用 EL2N 选出边界样本，转为 embedding+soft label 形式，与历史合成记忆融合，得到更新后的合成记忆。右侧 Phase 2：用影响力双向寻址选出「难样本」和「活跃合成单元」，内层循环在活跃记忆上训练代理模型，外层循环用 meta-loss 更新合成数据，用 RaT-BPTT 加速反向传播。</div>'" />
+          <figcaption><strong>Figure 2（论文原图）：</strong>DIET 在持续学习范式下两阶段运作。Phase 1（左）构造边界记忆；Phase 2（右）通过影响力引导寻址 + RaT-BPTT 精细优化合成数据。</figcaption>
+        </figure>
+
+        <div class="flow-diagram">
+          <div class="flow-row">
+            <div class="flow-box stage1"><div class="fb-title">真实数据块 $\mathcal{D}_t$</div><div class="fb-desc">流式到来</div></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box stage1"><div class="fb-title">EL2N 选边界样本</div><div class="fb-desc">按 label 分组</div></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box"><div class="fb-title">记忆融合</div><div class="fb-desc">历史对齐 + 当前</div></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box stage2"><div class="fb-title">合成记忆 $\mathcal{D}^{syn}_t$</div><div class="fb-desc">embedding + soft label</div></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box stage2"><div class="fb-title">影响力寻址</div><div class="fb-desc">选难样本 + 活跃单元</div></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box out"><div class="fb-title">Bi-level 优化</div><div class="fb-desc">内层训代理，外层更新记忆</div></div>
+          </div>
+        </div>
+
+        <h3>2.1 Phase 1：边界记忆的初始化与维护</h3>
+
+        <h4>2.1.1 决策边界样本初始化（EL2N 选样）</h4>
+        <p>推荐系统的多任务数据中，不同标签组合（如「点击+购买」「仅点击」「均未点击」）对模型决策边界的影响力差异巨大，且高频行为会淹没低频但关键的样本。DIET 采用 <strong>label-conditioned EL2N 评分</strong>：对每个 label 配置 $\mathbf{c} \in \{0,1\}^K$，在其子集内单独排序，选出影响力居中偏高的样本（"upper-middle range"，避免极端噪声）：</p>
+
+        <div class="formula-light">
+          $$\text{EL2N}(x, y;\, \phi_t) = \|\sigma(f_{\phi_t}(\text{Embed}(x))) - y\|_2$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\phi_t$：当前阶段的参考模型（已见过 $\mathcal{D}_{1:t}$）</li>
+            <li>$\text{EL2N}$ 越大：模型对该样本的预测误差越大，说明该样本处于当前决策边界附近，训练影响力强</li>
+            <li>选 "upper-middle range"：不选最高分（可能是噪声样本），不选最低分（已学好，冗余）</li>
+          </ul>
+        </div>
+
+        <p>从所有 label 组合选出的样本汇聚为边界候选集 $\mathcal{S}_t = \bigcup_{\mathbf{c}} \mathcal{S}^{\mathbf{c}}_t$，确保跨行为类型的均衡覆盖。</p>
+
+        <p>关键设计：不直接存储原始样本 $(x, y)$，而是转为 <strong>embedding + soft label</strong> 形式：</p>
+        <div class="formula-light">
+          $$e = \text{Embed}_{\phi_t}(x), \quad \tilde{y} = f_{\phi_t}(e)$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">为什么转为 soft label？</div>
+          <ul>
+            <li>$\tilde{y}$ 是参考模型的输出 logit，包含比 one-hot 标签更丰富的「排名信息」（类似知识蒸馏的 soft target）</li>
+            <li>embedding $e$ 作为连续可微参数，后续可以被梯度更新优化，不再受原始离散特征约束</li>
+            <li>存储空间与原始稀疏特征维度无关，只和 embedding 维度 $d$ 相关</li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：多任务场景下的 label-conditioned 选样</div>
+          <p>假设有 3 个预测任务：点击（CTR）、点赞（Like）、关注（Follow），则 $K=3$，标签空间共 8 种组合，如 $(1,0,0)$（只点击）、$(1,1,0)$（点击+点赞）等。</p>
+          <p>直接从全量数据按 EL2N 排序选 1000 条，「只点击」这种高频行为会占据大部分名额，「点击+点赞+关注」这种稀有但高价值的行为几乎选不到。DIET 的做法是：对 8 种 label 组合分别独立排序，各自选 Top-K，保证每种行为模式都有代表——这些稀有样本对模型拟合「边界附近」的行为至关重要。</p>
+        </div>
+
+        <h4>2.1.2 持续合成记忆（历史对齐 + 融合）</h4>
+        <p>只用当前数据块初始化合成数据，会遗漏历史积累的决策边界信息。DIET 将合成数据建模为「持续演化的边界记忆」：对历史合成样本 $(e_i, \tilde{y}_i) \in \mathcal{D}^{syn}_{1:t-1}$，估计其与当前新选边界样本集 $\mathcal{S}_t$ 的对齐程度：</p>
+        <div class="formula-light">
+          $$\alpha_i = \mathcal{A}\!\left((e_i, \tilde{y}_i),\, \mathcal{S}_t\right)$$
+        </div>
+        <p>$\alpha_i$ 大的历史样本表示它依然与当前决策边界对齐（未「过时」），保留为 $\tilde{\mathcal{D}}^{syn}_{1:t-1}$。最终本阶段合成记忆由「当前新边界样本」和「对齐的历史记忆」融合而成：</p>
+        <div class="formula-light">
+          $$\mathcal{D}^{syn}_t = \mathcal{S}_t \cup \tilde{\mathcal{D}}^{syn}_{1:t-1}$$
+        </div>
+
+        <div class="callout-blue">
+          <strong>为什么不每次都从头初始化？</strong><br>
+          推荐系统的决策边界是随时间演化的——新阶段的用户行为是在历史基础上叠加的。若每次丢弃历史合成记忆，合成数据只能反映当前阶段的局部边界快照，而对「历史中的关键长尾用户」失去记忆。对齐估计函数 $\mathcal{A}$ 保证了只保留仍然有效的历史信息，不引入过时的噪声。
+        </div>
+
+        <h3>2.2 Phase 2：基于影响力寻址的合成数据优化</h3>
+        <p>光有好的初始化还不够，合成数据本身作为可微参数需要通过 bi-level 优化来精细调整。但如果对所有合成样本都做更新，会引入冗余甚至冲突的信号。DIET 引入<strong>影响力引导的双向记忆寻址</strong>，选择最值得更新的「合成-真实」配对。</p>
+
+        <h4>2.2.1 影响力评分</h4>
+        <p>对优化步骤 $t$（模型参数 $w_t$），用训练样本子集 $S$ 更新一步后在验证样本 $z$ 上的 loss 变化作为效用：</p>
+        <div class="formula-light">
+          $$U^{(t)}(S;\, z) \approx -\eta_t \sum_{x \in S} \langle \nabla_w \ell(w_t, z),\, \nabla_w \ell(w_t, x) \rangle$$
+        </div>
+        <p>经一阶 Taylor 展开化简后，每个样本的影响力（Shapley 值近似）正比于梯度内积，定义影响力评分为：</p>
+        <div class="formula-light">
+          $$\mathcal{A}_t(x, z) := \langle \nabla_w \ell(w_t, z),\, \nabla_w \ell(w_t, x) \rangle$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\mathcal{A}_t(x, z)$ 越大：用样本 $x$ 训练，在验证样本 $z$ 上 loss 下降越多，说明 $x$ 对 $z$ 有正向影响</li>
+            <li>这是对 Influence Function 的高效近似，避免了计算 Hessian 逆矩阵的高昂代价</li>
+          </ul>
+        </div>
+
+        <h4>2.2.2 双向记忆寻址</h4>
+        <p><strong>选难目标（Hard Real Targets $\mathcal{B}^{hard}_t$）</strong>：对每个真实训练样本 $z \in \mathcal{D}_t$，计算当前合成记忆对它的总对齐程度（Deficiency）：</p>
+        <div class="formula-light">
+          $$\text{Deficiency}(z) := \sum_{x \in \mathcal{D}^{syn}_t} \mathcal{A}_t(x, z)$$
+        </div>
+        <p>Deficiency 最小的样本是合成记忆「照顾最少」的难样本，选这些作为外层优化的锚点 $\mathcal{B}^{hard}_t$。</p>
+
+        <p><strong>选活跃合成单元（Active Memory $\mathcal{M}^{active}_t$）</strong>：对每个合成样本 $x \in \mathcal{D}^{syn}_t$，计算它对难样本集 $\mathcal{B}^{hard}_t$ 的更新责任（Responsibility）：</p>
+        <div class="formula-light">
+          $$\text{Resp}(x) := \sum_{z \in \mathcal{B}^{hard}_t} \mathcal{A}_t(x, z)$$
+        </div>
+        <p>Responsibility 最大的合成样本是最有潜力减小难样本 loss 的「活跃单元」，只对这些单元做更新，其他合成样本保持不动。</p>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：双向寻址如何配对「难样本」和「活跃合成单元」</div>
+          <p>假设合成记忆有 100 条样本，当前数据块有 1 万条真实样本。模型刚训练完第 2 阶段，对「三件套商品用户」的行为预测还很差（loss 高）。</p>
+          <p>Deficiency 选出：「三件套商品用户的交互」这批真实样本的梯度与现有合成记忆的梯度对齐最差——它们是 $\mathcal{B}^{hard}_t$。</p>
+          <p>Responsibility 选出：合成记忆中，「与三件套用户梯度方向最接近的那 20 条合成样本」——它们是 $\mathcal{M}^{active}_t$，只更新这 20 条，其他 80 条不动。这既保证了更新有针对性，也避免了修改已经学好的历史边界信息。</p>
+        </div>
+
+        <h4>2.2.3 Bi-level 优化框架（内层 + 外层 + RaT-BPTT）</h4>
+        <div class="step-list">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <strong>内层优化（Inner Loop）：代理模型模拟训练动态</strong>
+              <p>代理模型 $\theta$ 初始化自参考模型 $\phi_{t-1}$（$t=1$ 时随机初始化），在活跃合成记忆 $\mathcal{M}^{active}_t$ 上跑 $M$ 步梯度更新，得到模拟轨迹 $\{\theta^0, \ldots, \theta^M\}$：</p>
+              <div style="background:#f0f7ff;border-radius:8px;padding:10px 12px;font-size:13px;margin-top:6px;">
+                $\theta^m = \theta^{m-1} - \alpha \nabla_\theta \mathcal{L}_{syn}(\theta^{m-1};\, \mathcal{M}^{active}_t), \quad m=1,\ldots,M$
+              </div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <strong>外层优化（Outer Loop）：用真实数据评估合成数据质量</strong>
+              <p>用难样本集 $\mathcal{B}^{hard}_t$ 上的 loss 作为 meta 目标：$\mathcal{L}_{meta} = \mathcal{L}_{real}(\theta^M;\, \mathcal{B}^{hard}_t)$，通过内层轨迹反向传播来更新合成数据 $\mathcal{D}^{syn}_t$。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <strong>RaT-BPTT 加速：随机截断反向传播</strong>
+              <p>完整 $M$ 步展开的反向传播显存代价是 $O(M \cdot |\theta|)$，RaT-BPTT（Random Truncated BPTT）只保留 $K_{rat} \ll M$ 步的随机窗口做反向传播，大幅降低显存和计算量，同时实验表明对收敛质量影响有限。</p>
+            </div>
+          </div>
+        </div>
+
+        <h3>2.3 下游模型训练（Warmup-style）</h3>
+        <p>完成历史阶段蒸馏后，得到紧凑合成数据集 $\mathcal{D}^{syn}_{1:T}$。候选模型的训练分两步：</p>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>Step 1：Dense 参数从合成数据热身</h4>
+            <p style="font-size:13.5px;">用蒸馏数据训练候选模型的 dense 网络参数（MLP 层等），让其从合成数据中继承历史训练动态。</p>
+          </div>
+          <div class="mini-card">
+            <h4>Step 2：Embedding 直接继承参考模型</h4>
+            <p style="font-size:13.5px;">候选模型的 sparse embedding 参数直接从参考模型 $\phi_T$ 的 checkpoint 中拷贝，保留参考模型对用户和物品的表示知识，无需重训 embedding。</p>
+          </div>
+        </div>
+        <p style="font-size:13.5px;color:var(--muted);">随后在后续数据块上做正常的持续训练（fine-tune）即可。</p>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：整体流程走一遍</div>
+          <p><strong>场景：</strong>快手电商推荐，每天新增 1 亿条交互，已积累 3 个月历史（$T=3$ 个阶段），现在要验证一个新架构 WuKong。</p>
+          <p><strong>Phase 1：</strong>用现有 DCN 参考模型，对每天数据块用 EL2N 选出约 150 万条边界样本（约 1.5%），转为 embedding+soft label，与前两阶段保留的对齐历史记忆融合，得到 $\mathcal{D}^{syn}_t$（总共约 3×150万=450万，再经压缩约 50-100万条）。</p>
+          <p><strong>Phase 2：</strong>用影响力寻址找出最难真实样本 $\mathcal{B}^{hard}$ 和最活跃合成单元 $\mathcal{M}^{active}$，做 bi-level 优化 + RaT-BPTT，精细调整合成数据使其更好还原全量训练动态。</p>
+          <p><strong>验证新架构：</strong>WuKong 用上述 ~100 万条合成数据做 warmup（dense 参数），embedding 从参考模型 $\phi_3$ 继承，再在当天新数据上 fine-tune——全程不需要访问 3 个月全量历史！实验显示 WuKong 在 Tmall 上的 AUC 达 0.7617，接近全量训练的 0.7629。</p>
+        </div>
+      </section>
+
+      <!-- ═══ §3 实验结果 ═══ -->
+      <section class="section" id="exp">
+        <div class="section-title"><span class="icon" style="background:#fef9c3">📊</span>§3 实验结果</div>
+
+        <h3>3.1 实验设置</h3>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>数据集</h4>
+            <ul style="font-size:13.5px;padding-left:18px;">
+              <li><strong>KuaiRand</strong>：快手真实推荐数据，多任务（CTR + Like + Follow），约 1M 交互</li>
+              <li><strong>Tmall</strong>：阿里巴巴电商，点击 + 购买两任务</li>
+              <li><strong>Taobao</strong>：阿里大规模电商数据</li>
+            </ul>
+          </div>
+          <div class="mini-card">
+            <h4>评估协议</h4>
+            <ul style="font-size:13.5px;padding-left:18px;">
+              <li>按时间切分 $T$ 个连续阶段（模拟真实流式场景）</li>
+              <li>指标：AUC（越高越好），与全量数据训练结果的 Pearson 相关系数 $r$</li>
+              <li>Reference Model（教师）：DCN-v2</li>
+              <li>Candidate Models（下游验证）：DCN-v2、WuKong、RankMixer</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>方法</th><th>类型</th><th>KuaiRand 相关性 $r$</th><th>Tmall 相关性 $r$</th><th>说明</th></tr></thead>
+            <tbody>
+              <tr><td>Random Selection</td><td>子集选择</td><td>0.319</td><td>0.287</td><td>与全量训练几乎不相关</td></tr>
+              <tr><td>Window Sampling</td><td>时间窗口</td><td>0.681</td><td>0.598</td><td>有改善但偏差仍大</td></tr>
+              <tr><td>K-Means Selection</td><td>聚类子集</td><td>0.721</td><td>0.644</td><td>代表性更好但静态</td></tr>
+              <tr><td>EL2N Selection</td><td>重要性子集</td><td>0.743</td><td>0.672</td><td>边界感知但无蒸馏</td></tr>
+              <tr style="background:#f0fdf4;"><td><strong>DIET（本文）</strong></td><td>流式数据集蒸馏</td><td><strong>0.912</strong></td><td><strong>0.887</strong></td><td>大幅领先所有基线</td></tr>
+              <tr style="background:#fafcff;"><td>Full Data（上界）</td><td>全量训练</td><td>1.000</td><td>1.000</td><td>理论上界</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout-green">
+          <strong>结论 1：跨方法一致领先。</strong>在相同压缩比（1-2% 数据）下，DIET 的相关性 r 约为 0.91，其他方法不超过 0.75。这说明流式蒸馏带来的「边界记忆」质量远优于朴素子集选择。
+        </div>
+
+        <h3>3.2 跨架构泛化</h3>
+        <p>用 DCN-v2 作为 Reference Model 蒸馏出的合成数据，是否能有效训练<strong>不同架构</strong>的 Candidate Model？论文分别在 WuKong 和 RankMixer 上验证：</p>
+
+        <figure>
+          <img src="https://arxiv.org/html/2603.24958v1/x3.png" alt="Figure 3: 不同压缩比下 WuKong 模型的性能对比"
+               onerror="this.onerror=null;this.parentElement.innerHTML='<div class=\'fig-placeholder\'><b>Figure 3：压缩比 vs 性能（KuaiRand + Tmall）</b><br><br>横轴：数据压缩比（0.3% ~ 2.0%），纵轴：Normalized AUC。DIET（蓝色实线）在所有压缩比下持续优于其他方法，并接近 Full Data 上界（虚线）。边际收益随压缩比增大而递减，0.3% 时已恢复 99.9% 的全量性能。</div>'" />
+          <figcaption><strong>Figure 3（论文原图）：</strong>以 WuKong 为 Candidate Model，在 KuaiRand 和 Tmall 数据集上不同压缩比的性能对比。DIET 在极小压缩比（0.3%）下已接近全量训练上界。</figcaption>
+        </figure>
+
+        <div class="table-wrap" style="margin-top:16px;">
+          <table>
+            <thead><tr><th>Candidate Model</th><th>压缩比</th><th>KuaiRand AUC（DIET）</th><th>KuaiRand AUC（Full Data）</th><th>差距</th></tr></thead>
+            <tbody>
+              <tr><td>WuKong</td><td>0.3%</td><td>0.7601</td><td>0.7614</td><td>-0.0013</td></tr>
+              <tr><td>WuKong</td><td>1.0%</td><td>0.7612</td><td>0.7614</td><td>-0.0002</td></tr>
+              <tr><td>WuKong</td><td>2.0%</td><td><strong>0.7615</strong></td><td>0.7614</td><td>+0.0001</td></tr>
+              <tr><td>RankMixer</td><td>1.0%</td><td>0.7589</td><td>0.7607</td><td>-0.0018</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>关键发现：<strong>1% 数据即可将 WuKong 的 AUC 差距缩小到 0.0002 以内</strong>，跨架构效果同样成立——DCN 蒸馏出的合成数据对 WuKong 和 RankMixer 同样有效，说明合成数据捕捉到了<strong>架构无关的训练动态</strong>。</p>
+
+        <h3>3.3 消融实验</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>消融变体</th><th>移除的组件</th><th>相关性 $r$（KuaiRand）</th></tr></thead>
+            <tbody>
+              <tr><td>DIET-Full</td><td>—（完整方法）</td><td><strong>0.912</strong></td></tr>
+              <tr><td>w/o 持续记忆融合</td><td>每阶段从头初始化合成数据</td><td>0.841</td></tr>
+              <tr><td>w/o 影响力寻址</td><td>随机选样参与 bi-level 更新</td><td>0.873</td></tr>
+              <tr><td>w/o RaT-BPTT</td><td>完整 M 步反向传播（慢 ~3×）</td><td>0.907</td></tr>
+              <tr><td>Hard Label 替代 Soft Label</td><td>用 one-hot 代替软化 logit</td><td>0.869</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>两个最关键的组件是<strong>持续记忆融合</strong>（r 下降 0.071）和<strong>影响力寻址</strong>（r 下降 0.039）。RaT-BPTT 是效率近似，对质量影响有限，但省去 ~3× 的计算开销。</p>
+
+        <h3>3.4 效率分析</h3>
+        <p>蒸馏开销是一次性的（参考模型训练一次即可），后续所有 Candidate Model 的验证都复用同一批合成数据。设蒸馏开销为 $C_{distill}$，验证 $N$ 个模型所节省的总成本：</p>
+        <div class="formula-light">
+          $$\text{节省总成本} = N \cdot C_{full} - C_{distill} - N \cdot C_{small}, \quad \text{其中 } C_{small} \approx 0.02 \cdot C_{full}$$
+        </div>
+        <p>当 $N \geq 5$ 时节省率即超过 85%；论文引用的实际案例中，WuKong 架构验证成本降低 <strong>60×</strong>。</p>
+      </section>
+
+      <!-- ═══ §4 个人理解 ═══ -->
+      <section class="section" id="insight">
+        <div class="section-title"><span class="icon" style="background:#f5f3ff">💬</span>§4 个人理解与延伸思考</div>
+
+        <h3>4.1 亮点</h3>
+        <div class="step-list">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <strong>把「数据集蒸馏」引入持续学习，定义了一个新问题</strong>
+              <p>现有数据集蒸馏方法几乎全都是静态场景（ImageNet 子集蒸馏、NLP benchmark 压缩），DIET 是第一个把这个范式带进「流式、时序演化、大规模工业推荐」场景的工作，问题定义本身就是贡献。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <strong>合成数据的「架构无关性」在实验中得到了验证</strong>
+              <p>DCN 蒸馏出的合成数据，拿来训 WuKong 和 RankMixer 依然有效，说明这批数据捕捉到了「哪些样本是高影响力的训练信号」这个本质，而非 DCN 特有的归纳偏置。这对工业实践意义很大：参考模型可以用成熟的轻量架构，候选模型可以是任意新架构。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <strong>影响力函数用梯度内积近似，工程可行性强</strong>
+              <p>传统影响力函数需要计算 Hessian 逆矩阵（参数量大时计算量不可承受），DIET 用一阶 Taylor 近似（梯度内积）替代，计算量降到 $O(d)$，在工业推荐（$d$ 通常数十万到百万）中可行。</p>
+            </div>
+          </div>
+        </div>
+
+        <h3>4.2 局限与可能的改进方向</h3>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>⚠️ 局限：参考模型依赖</h4>
+            <p style="font-size:13.5px;">合成数据的质量强依赖参考模型（$\phi$）的能力。若参考模型本身学偏了（如过拟合某种数据偏置），合成数据也会继承这种偏置。论文指出「参考模型容量比架构同质性更关键」，但如何系统处理参考模型的偏置还是开放问题。</p>
+          </div>
+          <div class="mini-card">
+            <h4>⚠️ 局限：embedding 参数继承的局限</h4>
+            <p style="font-size:13.5px;">下游模型直接继承参考模型的 embedding，适用于架构相同（embedding 维度一致）的场景，但跨维度迁移（如参考模型 256d，候选模型 512d）需要额外适配，论文未充分讨论。</p>
+          </div>
+        </div>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>💡 可能的改进：在线蒸馏</h4>
+            <p style="font-size:13.5px;">当前 Phase 2 的 bi-level 优化仍然需要离线跑，能否做成「每来一批数据就增量更新合成记忆」的在线蒸馏，使延迟更低，是一个有趣的方向。</p>
+          </div>
+          <div class="mini-card">
+            <h4>💡 可能的改进：结合 diffusion/生成模型</h4>
+            <p style="font-size:13.5px;">当前合成数据是以 embedding 向量形式存储的，能否用条件生成模型（如 diffusion）来参数化「合成数据生成过程」，使合成数据可以随时根据当前数据分布重新采样，是更长期的研究方向。</p>
+          </div>
+        </div>
+
+        <h3>4.3 与工作的关联（快手电商推荐场景）</h3>
+        <div class="callout-purple">
+          <strong>直接应用价值：</strong>快手电商精排模型（WuKong / RankMixer 规模）的架构迭代实验成本非常高。DIET 提供了一个 1-2% 数据上快速验证架构效果的思路。关键问题是：快手电商推荐的多任务标签（CTR + 成交 + 关注等）比 KuaiRand 更复杂，label 组合更多，EL2N 的 label-conditioned 分层选样是否能很好覆盖，以及参考模型用 DCN 还是大 WuKong，是落地时需要验证的两个关键超参。
+        </div>
+
+        <div class="callout-amber">
+          <strong>与知识蒸馏的关联：</strong>DIET 的 soft label 初始化（用参考模型 logit 作为软标签）本质上是一种特殊的知识蒸馏——但蒸馏的不是「模型权重」，而是「训练数据集」。对比知识蒸馏（KD）：KD 每次推理都需要教师模型在线参与，DIET 是「一次蒸馏，多次复用」，更适合大模型作为教师的工业场景。
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<footer style="margin-top:40px;color:var(--muted);font-size:13px;text-align:center;padding-bottom:40px;">
+  <a href="../index.html" class="back-link" style="margin-bottom:10px;display:inline-flex;">← 返回论文列表</a>
+  <p>DIET 论文解读 · arXiv 2603.24958 · 中科大 + 快手</p>
+</footer>
+
+<script>
+(function(){
+  var tocLinks = document.querySelectorAll('.toc-list a[href^="#"], .toc-sub a[href^="#"]');
+  if (!tocLinks.length) return;
+  var linkMap = {};
+  tocLinks.forEach(function(a){ var id = a.getAttribute('href').slice(1); if (id) linkMap[id] = a; });
+  var targets = Object.keys(linkMap).map(function(id){ return document.getElementById(id); }).filter(Boolean);
+  if (!targets.length) return;
+  var activeId = null;
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){ if (e.isIntersecting) { activeId = e.target.id; } });
+    Object.values(linkMap).forEach(function(a){ a.classList.remove('active'); });
+    if (activeId && linkMap[activeId]) linkMap[activeId].classList.add('active');
+  }, { rootMargin: '-10% 0px -70% 0px', threshold: 0 });
+  targets.forEach(function(t){ io.observe(t); });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>大模型完整训练流水线：预训练 → SFT → RLHF 深度解析</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]})"></script>
+  <style>
+    :root {
+      --bg:#f5f7fb; --card:#ffffff; --text:#1f2937; --muted:#667085;
+      --line:#e5e7eb; --primary:#2563eb; --shadow:0 10px 30px rgba(15,23,42,0.08);
+      --radius:18px; --max:1120px;
+    }
+    *{box-sizing:border-box;}
+    html{scroll-behavior:smooth;}
+    body{margin:0;background:linear-gradient(180deg,#eff6ff 0%,var(--bg) 200px);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;line-height:1.85;}
+    a{color:var(--primary);text-decoration:none;}
+    a:hover{text-decoration:underline;}
+    .page{max-width:var(--max);margin:0 auto;padding:32px 20px 80px;}
+    .back-link{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:14px;margin-bottom:18px;}
+    .back-link:hover{color:var(--primary);text-decoration:none;}
+    .hero{background:radial-gradient(circle at top right,rgba(37,99,235,0.12),transparent 30%),radial-gradient(circle at left bottom,rgba(16,185,129,0.08),transparent 24%),var(--card);border:1px solid rgba(37,99,235,0.15);border-radius:24px;box-shadow:var(--shadow);padding:34px 34px 28px;margin-bottom:22px;}
+    .eyebrow{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-size:13px;font-weight:600;margin-bottom:16px;}
+    h1{margin:0 0 10px;font-size:32px;line-height:1.25;letter-spacing:-0.02em;}
+    .subtitle{margin:0;color:var(--muted);font-size:15px;}
+    .meta-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:24px;}
+    .meta-card{background:#eff6ff;border:1px solid #bfdbfe;border-radius:16px;padding:14px 16px;}
+    .meta-label{color:var(--muted);font-size:12px;margin-bottom:4px;}
+    .meta-value{font-size:14px;font-weight:600;word-break:break-word;}
+    .layout{display:grid;grid-template-columns:240px minmax(0,1fr);gap:22px;align-items:start;}
+    .toc{position:sticky;top:20px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;max-height:calc(100vh - 40px);overflow-y:auto;}
+    .toc h2{margin:0 0 12px;font-size:15px;color:var(--text);}
+    .toc-list{list-style:none;margin:0;padding:0;}
+    .toc-list li{margin:0;}
+    .toc-list a{display:block;padding:5px 8px;border-radius:8px;color:var(--muted);font-size:13px;transition:all 0.15s;}
+    .toc-list a:hover{color:var(--primary);background:#eff6ff;text-decoration:none;}
+    .toc-list a.active{color:var(--primary);background:#eff6ff;font-weight:600;border-left:3px solid var(--primary);padding-left:5px;}
+    .toc-sub{list-style:none;padding-left:12px;margin:0;}
+    .toc-sub a{font-size:12px;padding:3px 8px;}
+    .content{display:flex;flex-direction:column;gap:18px;}
+    .section{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:26px 28px;}
+    .section-title{display:flex;align-items:center;gap:12px;margin:0 0 20px;font-size:20px;font-weight:700;}
+    .icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+    h3{margin:28px 0 12px;font-size:17px;color:#111827;border-left:3px solid #bfdbfe;padding-left:10px;}
+    h4{margin:20px 0 8px;font-size:15px;color:#374151;font-weight:700;}
+    p{margin:0 0 12px;}
+    .callout-blue{background:#eff6ff;border:1px solid #bfdbfe;border-radius:14px;padding:16px 18px;margin:14px 0;}
+    .callout-green{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;padding:16px 18px;margin:14px 0;}
+    .callout-amber{background:#fffbeb;border:1px solid #fde68a;border-radius:14px;padding:16px 18px;margin:14px 0;}
+    .callout-purple{background:#faf5ff;border:1px solid #e9d5ff;border-radius:14px;padding:16px 18px;margin:14px 0;}
+    .callout-cyan{background:#ecfeff;border:1px solid #a5f3fc;border-radius:14px;padding:16px 18px;margin:14px 0;}
+    .callout-red{background:#fff1f2;border:1px solid #fda4af;border-radius:14px;padding:16px 18px;margin:14px 0;}
+    .example-box{background:#f0fdf4;border:1px solid #86efac;border-radius:14px;padding:18px 20px;margin:18px 0;}
+    .ex-title{font-weight:700;color:#166534;margin-bottom:10px;font-size:14px;}
+    .analogy-box{background:#faf5ff;border:1px solid #c4b5fd;border-radius:14px;padding:18px 20px;margin:18px 0;}
+    .analogy-title{font-weight:700;color:#5b21b6;margin-bottom:10px;font-size:14px;}
+    .formula-block{background:#1e293b;color:#e2e8f0;border-radius:12px;padding:16px 20px;margin:14px 0;overflow-x:auto;text-align:center;font-size:15px;}
+    .formula-vars{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px 18px;margin:8px 0 16px;}
+    .formula-vars .var-title{font-weight:700;color:#475569;font-size:13px;margin-bottom:8px;}
+    .two-col{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:14px 0;}
+    .three-col{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:14px 0;}
+    .mini-card{border:1px solid var(--line);border-radius:14px;padding:16px 18px;background:#fff;}
+    .mini-card h4{margin-top:0;font-size:14px;}
+    .mini-card p,.mini-card li{font-size:14px;}
+    .table-wrap{overflow-x:auto;margin:16px 0;}
+    table{width:100%;border-collapse:collapse;font-size:14px;}
+    thead th{background:#eff6ff;color:#1e40af;text-align:left;font-weight:700;padding:10px 14px;border-bottom:2px solid #bfdbfe;}
+    td{padding:10px 14px;border-bottom:1px solid #eef2f7;vertical-align:top;}
+    tbody tr:nth-child(even){background:#f8fbff;}
+    blockquote{margin:16px 0;padding:14px 18px;border-left:4px solid var(--primary);background:rgba(37,99,235,0.05);border-radius:0 12px 12px 0;color:#3f3f46;font-size:15px;}
+    ul,ol{padding-left:24px;margin:8px 0 12px;}
+    li{margin:6px 0;}
+    code{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:2px 7px;font-family:"SF Mono",Consolas,Monaco,monospace;font-size:13px;color:#2563eb;}
+    .big-concept{background:linear-gradient(135deg,#eff6ff 0%,#f0fdf4 100%);border:2px solid #93c5fd;border-radius:16px;padding:20px 24px;margin:20px 0;}
+    .big-concept-title{font-size:18px;font-weight:800;color:#1e40af;margin-bottom:10px;}
+    .step-box{display:flex;gap:14px;margin:12px 0;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:#fff;}
+    .step-num{width:28px;height:28px;border-radius:50%;background:#2563eb;color:#fff;font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;}
+    .step-content{flex:1;font-size:14px;}
+    .pipeline-viz{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin:20px 0;border-radius:14px;overflow:hidden;border:1px solid var(--line);}
+    .pipeline-stage{padding:16px 14px;text-align:center;position:relative;}
+    .pipeline-stage::after{content:"→";position:absolute;right:-10px;top:50%;transform:translateY(-50%);font-size:20px;color:var(--muted);z-index:1;}
+    .pipeline-stage:last-child::after{display:none;}
+    .stage-num{font-size:22px;font-weight:900;margin-bottom:4px;}
+    .stage-name{font-size:13px;font-weight:700;margin-bottom:6px;}
+    .stage-desc{font-size:11px;color:var(--muted);}
+    .tag{display:inline-block;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:600;}
+    footer{margin-top:32px;text-align:center;color:var(--muted);font-size:13px;}
+    @media(max-width:920px){.layout{grid-template-columns:1fr;}.toc{position:static;}.meta-grid,.two-col,.three-col{grid-template-columns:1fr 1fr;}.pipeline-viz{grid-template-columns:1fr 1fr;}}
+    @media(max-width:640px){.page{padding:18px 12px 56px;}.hero,.section{padding:20px 18px;}h1{font-size:26px;}.meta-grid,.two-col,.three-col,.pipeline-viz{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+<div class="page">
+  <a class="back-link" href="../index.html">← 返回笔记列表</a>
+
+  <header class="hero">
+    <div class="eyebrow">📝 学习笔记 · LLM 基础</div>
+    <h1>大模型完整训练流水线：预训练 → SFT → RLHF 深度解析</h1>
+    <p class="subtitle">一篇讲清楚「大模型是怎么从随机初始化变成会聊天的 AI」的完整教程。重点深挖 SFT 和 RLHF 的本质、细节与局限。</p>
+    <div class="meta-grid">
+      <div class="meta-card"><div class="meta-label">核心问题</div><div class="meta-value">SFT 和 RLHF 到底在做什么、为什么这么做</div></div>
+      <div class="meta-card"><div class="meta-label">覆盖阶段</div><div class="meta-value">预训练 → SFT → 奖励模型 → RLHF → DPO/GRPO</div></div>
+      <div class="meta-card"><div class="meta-label">参考模型</div><div class="meta-value">InstructGPT · LLaMA · DeepSeek-R1 · Claude</div></div>
+      <div class="meta-card"><div class="meta-label">适合读者</div><div class="meta-value">想真正理解大模型训练流程的工程师</div></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="toc">
+      <h2>目录</h2>
+      <ul class="toc-list">
+        <li><a href="#overview">§0 四阶段全景图</a></li>
+        <li><a href="#pretrain">§1 预训练：获得「语言能力」</a>
+          <ul class="toc-sub">
+            <li><a href="#pt-what">1.1 在优化什么</a></li>
+            <li><a href="#pt-result">1.2 得到了什么</a></li>
+            <li><a href="#pt-limit">1.3 为什么还不够</a></li>
+          </ul>
+        </li>
+        <li><a href="#sft">§2 SFT：教模型「说人话」</a>
+          <ul class="toc-sub">
+            <li><a href="#sft-what">2.1 SFT 的本质</a></li>
+            <li><a href="#sft-data">2.2 数据是关键</a></li>
+            <li><a href="#sft-loss">2.3 损失函数细节</a></li>
+            <li><a href="#sft-limit">2.4 SFT 的局限</a></li>
+          </ul>
+        </li>
+        <li><a href="#rm">§3 奖励模型：训练「评判者」</a>
+          <ul class="toc-sub">
+            <li><a href="#rm-why">3.1 为什么需要奖励模型</a></li>
+            <li><a href="#rm-how">3.2 如何训练奖励模型</a></li>
+            <li><a href="#rm-detail">3.3 奖励模型的结构细节</a></li>
+          </ul>
+        </li>
+        <li><a href="#rlhf">§4 RLHF-PPO：按评判者标准「进化」</a>
+          <ul class="toc-sub">
+            <li><a href="#rlhf-why">4.1 为什么需要 RL</a></li>
+            <li><a href="#rlhf-ppo">4.2 PPO 完整流程</a></li>
+            <li><a href="#rlhf-kl">4.3 KL 惩罚的作用</a></li>
+            <li><a href="#rlhf-4models">4.4 四个模型同时运行</a></li>
+          </ul>
+        </li>
+        <li><a href="#dpo">§5 DPO：更简单的对齐方法</a></li>
+        <li><a href="#grpo">§6 GRPO：DeepSeek-R1 的秘密</a></li>
+        <li><a href="#engineering">§7 工程实践细节</a></li>
+        <li><a href="#summary">§8 总结：为什么是这套流程</a></li>
+      </ul>
+    </aside>
+
+    <main class="content">
+
+      <!-- ═══ §0 全景图 ═══ -->
+      <section class="section" id="overview">
+        <div class="section-title">
+          <div class="icon" style="background:#eff6ff;">🗺️</div>
+          §0 四阶段全景图
+        </div>
+
+        <p>大模型从随机初始化到能用的 AI 助手，要经历四个阶段。每个阶段解决不同的问题，缺一不可。</p>
+
+        <div class="pipeline-viz">
+          <div class="pipeline-stage" style="background:#dbeafe;">
+            <div class="stage-num" style="color:#1e40af;">①</div>
+            <div class="stage-name">预训练</div>
+            <div style="font-size:20px;margin:4px 0;">📚</div>
+            <div class="stage-desc">在万亿 token 上学语言规律<br>产物：Base Model</div>
+          </div>
+          <div class="pipeline-stage" style="background:#dcfce7;">
+            <div class="stage-num" style="color:#166534;">②</div>
+            <div class="stage-name">SFT 监督微调</div>
+            <div style="font-size:20px;margin:4px 0;">🎓</div>
+            <div class="stage-desc">用标注示范教对话格式<br>产物：SFT Model</div>
+          </div>
+          <div class="pipeline-stage" style="background:#fef3c7;">
+            <div class="stage-num" style="color:#92400e;">③</div>
+            <div class="stage-name">RLHF 偏好对齐</div>
+            <div style="font-size:20px;margin:4px 0;">🏆</div>
+            <div class="stage-desc">用人类偏好数据做强化学习<br>产物：Aligned Model</div>
+          </div>
+          <div class="pipeline-stage" style="background:#fae8ff;">
+            <div class="stage-num" style="color:#701a75;">④</div>
+            <div class="stage-name">持续迭代</div>
+            <div style="font-size:20px;margin:4px 0;">🔄</div>
+            <div class="stage-desc">上线后持续修复和提升<br>产物：v2/v3/v4…</div>
+          </div>
+        </div>
+
+        <div class="big-concept">
+          <div class="big-concept-title">🔑 一句话理解每个阶段在解决什么</div>
+          <div class="table-wrap" style="margin:8px 0 0;">
+            <table>
+              <thead><tr><th>阶段</th><th>解决的核心问题</th><th>类比</th></tr></thead>
+              <tbody>
+                <tr><td><strong>① 预训练</strong></td><td>让模型<em>有能力</em>——理解和生成语言</td><td>让人读完几千本书，有了语言理解和知识储备</td></tr>
+                <tr><td><strong>② SFT</strong></td><td>让模型<em>听话</em>——按指令格式回答，而不是随机续写</td><td>让读了很多书的人学会「被问→给出有用回答」的对话格式</td></tr>
+                <tr><td><strong>③ RLHF</strong></td><td>让模型<em>讨人喜欢</em>——回答不只是格式对，还要质量高、无害</td><td>从「及格水平」提升到「真正优秀」，通过大量反馈不断打磨</td></tr>
+                <tr><td><strong>④ 迭代</strong></td><td>让模型<em>持续进步</em>——修复上线后发现的问题</td><td>产品上市后根据用户反馈持续改进</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="callout-amber">
+          <strong>⚠️ 为什么不能跳步骤？</strong><br>
+          • 没有预训练直接 SFT：模型没有语言能力，学不了指令格式<br>
+          • 没有 SFT 直接 RLHF：Base Model 输出太随机，奖励模型无法区分好坏，RL 无法收敛<br>
+          • 只有预训练 + SFT 没有 RLHF：模型会「及格线」回答，但无法达到「优秀」，且可能输出有害内容<br>
+          <strong>三个阶段各自必要，且顺序不可颠倒。</strong>
+        </div>
+      </section>
+
+      <!-- ═══ §1 预训练 ═══ -->
+      <section class="section" id="pretrain">
+        <div class="section-title">
+          <div class="icon" style="background:#dbeafe;">📚</div>
+          §1 预训练：获得「语言能力」
+        </div>
+
+        <h3 id="pt-what">1.1 预训练在优化什么——「下一个词预测」</h3>
+
+        <p>预训练的训练目标极其简单：给定前面的文字，预测下一个词（token）。这叫<strong>自回归语言模型（Autoregressive Language Model）</strong>，对应损失函数是：</p>
+
+        <div class="formula-block">
+          $$\mathcal{L}_{PT} = -\sum_{t=1}^{T} \log P_\theta(x_t \mid x_1, x_2, \ldots, x_{t-1})$$
+        </div>
+
+        <div class="formula-vars">
+          <div class="var-title">符号解释</div>
+          <ul>
+            <li>$x_1, x_2, \ldots, x_T$：一段文本的 token 序列（如「今天天气很好」被分成 6 个 token）</li>
+            <li>$P_\theta(x_t \mid \text{前文})$：模型对第 $t$ 个 token 的预测概率</li>
+            <li>$\log P$：对数概率，概率越接近 1（预测越准），这一项越接近 0</li>
+            <li><strong>整个损失：让模型尽量准确预测每个位置的下一个词</strong></li>
+          </ul>
+        </div>
+
+        <div class="analogy-box">
+          <div class="analogy-title">📖 类比：完形填空</div>
+          <p>预训练就是让模型做无数遍"完形填空"——「今天天气___」→ 猜「很好」。数据量：互联网上所有文字，大约 10 万亿～100 万亿个词。</p>
+          <p>做了足够多的完形填空后，模型<strong>被迫学会</strong>：语法规则、事实知识（巴黎是法国首都）、逻辑推理（如果…那么…）、各种写作风格……因为这些知识都有助于更准确地预测下一个词。</p>
+        </div>
+
+        <h3 id="pt-result">1.2 预训练得到了什么——Base Model</h3>
+
+        <p>预训练结束后，得到的叫 <strong>Base Model（基础模型）</strong>。它的特点：</p>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>✅ 会做的事</h4>
+            <ul>
+              <li>续写文本（给半截文章，补完后半段）</li>
+              <li>回答知识性问题（如果问题在训练数据的 pattern 里）</li>
+              <li>代码补全（训练数据包含大量代码）</li>
+              <li>翻译、摘要（但没有"指令跟随"格式）</li>
+            </ul>
+          </div>
+          <div class="mini-card">
+            <h4>❌ 不会做的事</h4>
+            <ul>
+              <li>按指令格式回答问题</li>
+              <li>拒绝有害请求</li>
+              <li>多轮对话（不知道自己是 AI）</li>
+              <li>一致性回答（同一个问题可能给出完全不同的答案）</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 例子：Base Model 如何回答「请帮我写一封请假邮件」</div>
+          <p><strong>你输入：</strong>「请帮我写一封请假邮件」</p>
+          <p><strong>Base Model 可能输出（续写模式）：</strong></p>
+          <p style="background:#fee2e2;padding:10px;border-radius:8px;font-size:14px;">
+            「请帮我写一封请假邮件。<br>
+            ——（续写）以下是几个常见请假邮件模板：<br>
+            1. 病假邮件模板：<br>
+            尊敬的 [上级姓名]，我因身体不适……<br>
+            2. 事假邮件模板：……」
+          </p>
+          <p>注意：Base Model 把你的"指令"当成了文章的开头，继续续写，给了你一个"模板列表"而不是一封具体的邮件。它不理解你要的是什么。</p>
+          <p><strong>SFT 后的 Chat Model 输出：</strong></p>
+          <p style="background:#dcfce7;padding:10px;border-radius:8px;font-size:14px;">
+            「当然！这是一封请假邮件：<br><br>
+            主题：请假申请<br>
+            尊敬的 [上级姓名]，<br>
+            您好！我因 [原因] 需要请假 [天数]，时间为 [具体日期]。在此期间，我已安排 [同事姓名] 代为处理紧急事务……」
+          </p>
+        </div>
+
+        <h3 id="pt-limit">1.3 预训练的局限——为什么还需要 SFT</h3>
+
+        <div class="callout-red">
+          <strong>核心问题：预训练目标（续写文本）≠ 我们的目标（有帮助地回答问题）</strong><br><br>
+          互联网上的文本包含大量：错误信息、有害内容、不尊重的语言、广告垃圾……Base Model 学了这些也会生成这些。<br><br>
+          更重要的是：即使 Base Model 有能力回答问题，它不知道自己「应该」以对话形式、有用地回答——它只知道"续写"。<strong>SFT 就是把「续写」能力引导到「有用的对话」上。</strong>
+        </div>
+      </section>
+
+      <!-- ═══ §2 SFT ═══ -->
+      <section class="section" id="sft">
+        <div class="section-title">
+          <div class="icon" style="background:#dcfce7;">🎓</div>
+          §2 SFT 监督微调：完整训练流程深度解析
+        </div>
+
+        <h3 id="sft-what">2.1 SFT 到底在做什么——从数据到参数更新的完整过程</h3>
+
+        <p>SFT（Supervised Fine-Tuning）本质上是一个普通的监督学习，但有几个关键细节决定了它的效果。我们从头到尾完整走一遍：</p>
+
+        <div class="big-concept">
+          <div class="big-concept-title">🗺️ SFT 完整流程一览</div>
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:12px 0;">
+            <div style="background:#dbeafe;border-radius:10px;padding:10px;text-align:center;font-size:13px;"><strong>① 准备数据</strong><br><span style="color:#475569;">(prompt, response) 对</span></div>
+            <div style="background:#e0f2fe;border-radius:10px;padding:10px;text-align:center;font-size:13px;"><strong>② 应用模板</strong><br><span style="color:#475569;">ChatML 格式化</span></div>
+            <div style="background:#dcfce7;border-radius:10px;padding:10px;text-align:center;font-size:13px;"><strong>③ 设 Loss Mask</strong><br><span style="color:#475569;">只对回答计算 loss</span></div>
+            <div style="background:#fef3c7;border-radius:10px;padding:10px;text-align:center;font-size:13px;"><strong>④ 前向传播</strong><br><span style="color:#475569;">计算 cross-entropy</span></div>
+            <div style="background:#fae8ff;border-radius:10px;padding:10px;text-align:center;font-size:13px;"><strong>⑤ 反向传播</strong><br><span style="color:#475569;">更新参数（全量或 LoRA）</span></div>
+          </div>
+        </div>
+
+        <h3 id="sft-data-format">2.2 Step 1&2：数据格式——ChatML 模板详解</h3>
+
+        <p>SFT 的原始数据是一批 <code>(prompt, response)</code> 对，比如：</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0;">
+          <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:14px;">
+            <div style="font-weight:700;color:#1d4ed8;margin-bottom:8px;">prompt（由人类或模板生成）</div>
+            <div style="font-size:13px;">「请用简单语言解释什么是递归」</div>
+          </div>
+          <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:12px;padding:14px;">
+            <div style="font-weight:700;color:#166534;margin-bottom:8px;">response（由人类标注员撰写）</div>
+            <div style="font-size:13px;">「递归就像一面镜子对着另一面镜子……（高质量解释）」</div>
+          </div>
+        </div>
+
+        <p>喂给模型之前，必须先套上<strong>对话模板（Chat Template）</strong>，把数据整理成模型能理解的格式。以 ChatML 格式（OpenAI、Qwen 等使用）为例：</p>
+
+        <pre style="background:#1e293b;color:#e2e8f0;border-radius:12px;padding:18px 22px;font-size:13px;line-height:1.9;overflow-x:auto;"><span style="color:#94a3b8;"># ─────────────────────────────────────────────────────────────
+# 送入模型的完整 token 序列（已经过 tokenizer 编码）
+# 每一行对应一段原始文本，右边注释说明 loss_mask 状态
+# ─────────────────────────────────────────────────────────────</span>
+<span style="color:#86efac;">&lt;|im_start|&gt;</span><span style="color:#fde68a;">system</span><span style="color:#94a3b8;">\n</span>
+你是一个有帮助的 AI 助手。<span style="color:#86efac;">&lt;|im_end|&gt;</span><span style="color:#94a3b8;">\n</span>        <span style="color:#f87171;">← loss_mask = 0，不计算 loss</span>
+
+<span style="color:#86efac;">&lt;|im_start|&gt;</span><span style="color:#fde68a;">user</span><span style="color:#94a3b8;">\n</span>
+请用简单语言解释什么是递归<span style="color:#86efac;">&lt;|im_end|&gt;</span><span style="color:#94a3b8;">\n</span>     <span style="color:#f87171;">← loss_mask = 0，不计算 loss</span>
+
+<span style="color:#86efac;">&lt;|im_start|&gt;</span><span style="color:#fde68a;">assistant</span><span style="color:#94a3b8;">\n</span>
+递归就像一面镜子对着另一面镜子，<span style="color:#94a3b8;">\n</span>        <span style="color:#86efac;">← loss_mask = 1，计算 loss ✓</span>
+你能看到无限层叠的反射。...<span style="color:#86efac;">&lt;|im_end|&gt;</span><span style="color:#94a3b8;">\n</span>  <span style="color:#86efac;">← loss_mask = 1，计算 loss ✓</span></pre>
+
+        <div class="callout-blue">
+          <strong>为什么 prompt 部分 loss_mask = 0？</strong><br>
+          因为 SFT 的目标是教模型「如何回答」，不是教它「如何提问」。如果对 prompt 也计算 loss，模型会浪费容量去记忆 prompt 的写法，反而影响对 response 的学习质量。<br>
+          具体实现：在构造训练 batch 时，把 prompt token 对应的 label 全部设为 <code>-100</code>（PyTorch CrossEntropyLoss 的 ignore_index），这样这些位置不会产生梯度。
+        </div>
+
+        <h3 id="sft-loss">2.3 Step 3&4：Loss 函数——只计算 response 的 Cross-Entropy</h3>
+
+        <p>设 response 部分共有 $T$ 个 token，SFT 的 loss 就是对这 $T$ 个位置做 next-token prediction 的交叉熵：</p>
+
+        <div class="formula-block">
+          $$\mathcal{L}_{SFT} = -\frac{1}{T} \sum_{t=1}^{T} \log P_\theta\!\left(y_t \;\middle|\; \underbrace{x}_{\text{prompt}} ,\, y_1, \ldots, y_{t-1}\right)$$
+        </div>
+
+        <div class="formula-vars">
+          <div class="var-title">逐项理解</div>
+          <ul>
+            <li>$x$：prompt（system + user 部分），只提供上下文，<strong>不产生 loss</strong></li>
+            <li>$y_t$：response 中第 $t$ 个 token 的真实标签</li>
+            <li>$P_\theta(y_t \mid \cdot)$：模型预测第 $t$ 个位置是 $y_t$ 的概率</li>
+            <li>整体目标：让模型在看到 prompt 和前面已生成 token 的条件下，尽量准确预测 response 的每一个后续 token</li>
+            <li>和预训练 loss 唯一的区别：<strong>加了 loss mask，排除了 prompt 的贡献</strong></li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 一条数据的 loss 计算过程（简化版）</div>
+          <p>假设 response 是「好的」（被 tokenizer 分成 3 个 token：「好」「的」「&lt;|im_end|&gt;」）：</p>
+          <div style="font-size:13px;font-family:monospace;background:#f8fafc;border-radius:8px;padding:12px;margin:8px 0;line-height:2;">
+            t=1：模型看到 prompt，预测下一个词 → P(「好」) = 0.72 → loss₁ = -log(0.72) = 0.329<br>
+            t=2：模型看到 prompt + 「好」，预测 → P(「的」) = 0.88 → loss₂ = -log(0.88) = 0.128<br>
+            t=3：模型看到前两步，预测结束符 → P(「&lt;im_end&gt;」) = 0.91 → loss₃ = -log(0.91) = 0.094<br>
+            <strong>total loss = (0.329 + 0.128 + 0.094) / 3 = 0.184</strong>
+          </div>
+          <p>反向传播：梯度只来自这 3 个位置，prompt 部分对梯度无贡献。</p>
+        </div>
+
+        <h3 id="sft-lora">2.4 Step 5：参数更新——全量微调 vs LoRA</h3>
+
+        <p>Base Model 通常有 7B～405B 参数。SFT 时更新参数有两种策略：</p>
+
+        <div class="two-col" style="margin:14px 0;">
+          <div class="mini-card" style="border:2px solid #bfdbfe;">
+            <h4 style="color:#1e40af;">全量微调（Full Fine-tuning）</h4>
+            <p>更新模型的所有参数。一个 7B 模型用 bf16 存储需要 14GB，加上梯度和优化器状态（Adam 需要 3x 参数量），训练时需要约 <strong>7×4 = 56GB</strong> 显存。</p>
+            <p style="color:#dc2626;font-size:13px;">⚠️ 对于 70B 以上的模型，单机根本跑不了，需要模型并行（ZeRO-3）。</p>
+            <p>适用场景：你有充足 GPU，想要最好的效果。</p>
+          </div>
+          <div class="mini-card" style="border:2px solid #86efac;">
+            <h4 style="color:#166534;">LoRA（参数高效微调）</h4>
+            <p>LoRA 的核心思想：大模型的参数更新矩阵 $\Delta W$ 可以用两个低秩矩阵近似：</p>
+            <div class="formula-block" style="margin:8px 0;font-size:13px;">$$\Delta W = B \cdot A, \quad B \in \mathbb{R}^{d \times r},\; A \in \mathbb{R}^{r \times k},\; r \ll \min(d, k)$$</div>
+            <p>只训练 $A$ 和 $B$，冻结原始权重 $W_0$。前向传播时：$h = W_0 x + \Delta W x = W_0 x + BAx$</p>
+            <p>如果 $r=16$，$d=k=4096$（LLaMA-7B 的 attention 维度），则 $\Delta W$ 有 $4096^2 \approx 16M$ 参数，但 $A+B$ 只有 $2 \times 4096 \times 16 = 131K$ 参数，<strong>压缩约 120 倍</strong>。</p>
+            <p style="color:#166534;font-size:13px;">✅ 7B 模型用 LoRA 只需 10~16GB 显存，一张 4090 就能跑。</p>
+          </div>
+        </div>
+
+        <div class="callout-blue">
+          <strong>LoRA 挂载在哪些层？</strong><br>
+          通常挂在 Transformer 的 Self-Attention 层，具体是 Q、K、V 三个投影矩阵（有时也加 O 矩阵和 FFN 层）。Embedding 和 LayerNorm 一般不加 LoRA。<br>
+          <strong>关键超参：</strong>rank（秩 $r$，常用 8/16/32/64）和 lora_alpha（缩放系数，通常 = rank 或 2×rank），以及 target_modules（指定挂哪些层）。
+        </div>
+
+        <h3 id="sft-multiturn">2.5 多轮对话的 SFT 处理</h3>
+
+        <p>实际场景中 SFT 数据往往是多轮对话。多轮对话的 loss mask 有两种策略：</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>策略</th><th>loss mask 设置</th><th>优缺点</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>只算最后一轮</strong></td>
+                <td>只对最后一个 assistant 回合计算 loss，前面的 user/assistant 均 mask 掉</td>
+                <td>实现简单，但浪费了前几轮对话中 assistant 的监督信号</td>
+              </tr>
+              <tr>
+                <td><strong>所有 assistant 轮都算</strong>（推荐）</td>
+                <td>每个 assistant 回合的 token 都计算 loss，user/system 的 token 全部 mask</td>
+                <td>充分利用标注数据，训练更高效。目前大多数开源方案默认这种</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <pre style="background:#1e293b;color:#e2e8f0;border-radius:12px;padding:18px 22px;font-size:13px;line-height:1.9;overflow-x:auto;"><span style="color:#94a3b8;"># 多轮对话的完整 token 序列示例（assistant 回合都计算 loss）</span>
+&lt;|im_start|&gt;system\n你是助手。&lt;|im_end|&gt;\n              <span style="color:#f87171;">← mask</span>
+&lt;|im_start|&gt;user\n你好&lt;|im_end|&gt;\n                   <span style="color:#f87171;">← mask</span>
+&lt;|im_start|&gt;assistant\n你好！有什么可以帮你？&lt;|im_end|&gt;\n  <span style="color:#86efac;">← loss ✓</span>
+&lt;|im_start|&gt;user\n解释递归&lt;|im_end|&gt;\n               <span style="color:#f87171;">← mask</span>
+&lt;|im_start|&gt;assistant\n递归是...&lt;|im_end|&gt;\n         <span style="color:#86efac;">← loss ✓</span></pre>
+
+        <h3 id="sft-data">2.6 SFT 数据质量——「垃圾进，垃圾出」的典型案例</h3>
+
+        <p>SFT 的学习信号完全来自人类标注，标注质量决定了模型上限。</p>
+
+        <blockquote>InstructGPT 的著名结论：<strong>13,000 条高质量数据训练的 1.3B 模型</strong>，人类偏好胜过没有 SFT 的 <strong>175B GPT-3</strong>。数据质量 >> 数据量 >> 模型大小。</blockquote>
+
+        <div class="three-col">
+          <div class="mini-card">
+            <h4>🎯 格式一致性</h4>
+            <p>所有数据必须使用同一套 Chat Template，system prompt 风格、回答结构、拒绝格式保持统一。格式混乱会让模型在两种格式之间反复摇摆，两边都学不好。</p>
+          </div>
+          <div class="mini-card">
+            <h4>📏 回答质量决定天花板</h4>
+            <p>模型只能学到标注员能写出来的水平。如果 50% 的标注是平庸的，模型就会学到平庸。要求标注员按「专家水平」而非「及格水平」来写示例。</p>
+          </div>
+          <div class="mini-card">
+            <h4>🌐 任务覆盖多样性</h4>
+            <p>数据需要覆盖：写作/代码/数学/知识问答/对话/分析/角色扮演/安全拒绝……如果某类任务数据很少，模型在这类任务上就会表现差（分布外问题）。</p>
+          </div>
+        </div>
+
+        <h3 id="sft-limit">2.7 SFT 的根本局限——为什么还需要 RLHF</h3>
+
+        <div class="callout-red">
+          <strong>SFT 存在的两大根本问题：</strong>
+          <ol>
+            <li>
+              <strong>只会「模仿」，不理解「好坏」：</strong>损失函数告诉模型「你要输出 token A」，但从不告诉模型「为什么 A 比 B 好」。模型没有形成对质量的判断能力，只是在记忆和泛化标注员的写作风格。
+              <br>后果：遇到没见过的 prompt，模型不知道什么样的回答才算好，只能「随机漫步」。
+            </li>
+            <li>
+              <strong>标注示例质量有上限：</strong>人类标注员无法对每一种可能的 prompt 都写出「最优」回答，只能写出「还不错」的示例。SFT 把模型训练到「接近标注员水平」，但无法超越。
+            </li>
+          </ol>
+          <p><strong>RLHF 的解法：</strong>不再问「模型应该输出什么」，而是问「模型的输出够不够好」——通过大量尝试 + 奖励模型评分 + 强化学习更新，让模型自己摸索出超越标注员示例的策略。</p>
+        </div>
+      </section>
+
+      <!-- ═══ §3 奖励模型 ═══ -->
+      <section class="section" id="rm">
+        <div class="section-title">
+          <div class="icon" style="background:#fef3c7;">⚖️</div>
+          §3 奖励模型：训练「自动评判者」
+        </div>
+
+        <h3 id="rm-why">3.1 为什么需要奖励模型——人类实时打分太贵</h3>
+
+        <p>有了 SFT 模型后，我们知道要用强化学习让模型继续提升。RL 需要一个「奖励信号」——模型生成了一段回答，需要有人或系统告诉它这个回答好不好、好多少分。</p>
+
+        <p>最理想的做法是：模型每次生成回答，立刻让人类给个分数。但这有根本性的问题：</p>
+
+        <div class="callout-amber">
+          <strong>为什么不能实时让人类打分？</strong>
+          <ul>
+            <li>一次 PPO 训练可能要生成 <strong>几百万条</strong>回答，人类根本评不过来</li>
+            <li>人类标注有延迟（至少几小时），RL 需要实时反馈</li>
+            <li>成本极高：请人打分的费用会是训练费用的 100 倍以上</li>
+          </ul>
+          <p><strong>解决方案：</strong>不让人类实时打分，而是先让人类标注一批偏好数据，用这些数据<strong>训练一个模型来代替人类打分</strong>——这就是奖励模型（Reward Model）。</p>
+        </div>
+
+        <h3 id="rm-how">3.2 奖励模型如何训练——从「排序」中学打分</h3>
+
+        <p>关键洞察：让人类说「哪个回答更好」比让人类说「这个回答打几分」要容易得多、一致性更高。</p>
+
+        <div class="step-box">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <strong>收集偏好数据：</strong>对同一个 prompt，让 SFT 模型生成 4～9 个不同的回答（采样时加入随机性），让人类标注员排序：「第 2 个 &gt; 第 1 个 &gt; 第 4 个 &gt; 第 3 个」
+          </div>
+        </div>
+        <div class="step-box">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <strong>转化成成对比较：</strong>从排序中提取出所有的两两对比：(第2个, 第1个)、(第2个, 第4个)、(第2个, 第3个)、(第1个, 第4个)… 每对都是一个「好回答 $y_w$ vs 差回答 $y_l$」的训练样本。
+          </div>
+        </div>
+        <div class="step-box">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <strong>用 Bradley-Terry 模型训练：</strong>损失函数让奖励模型给好回答的打分高于差回答：
+            <div class="formula-block" style="margin:10px 0 0;">
+              $$\mathcal{L}_{RM} = -\mathbb{E}_{(x, y_w, y_l)} \left[ \log \sigma\!\left( r_\theta(x, y_w) - r_\theta(x, y_l) \right) \right]$$
+            </div>
+            <p style="font-size:13px;margin:8px 0 0;">其中 $r_\theta(x, y)$ 是奖励模型对 (prompt $x$, 回答 $y$) 的打分，$\sigma$ 是 sigmoid 函数。这个损失让 $r(x, y_w) > r(x, y_l)$，即好回答的分数更高。</p>
+          </div>
+        </div>
+
+        <!-- Bradley-Terry 展开讲解 -->
+        <div class="big-concept" style="margin-top:18px;">
+          <div class="big-concept-title">🔬 Bradley-Terry 模型详解——为什么这个损失函数有效？</div>
+
+          <h4 style="margin:14px 0 8px;color:#1e40af;">① 原始 Bradley-Terry 假设</h4>
+          <p style="font-size:14px;">Bradley-Terry（1952）是一个用于<strong>成对比较（Pairwise Comparison）</strong>的概率模型。它假设每个「选手」有一个潜在能力值（strength）$s_i$，两者之间的胜负概率为：</p>
+          <div class="formula-block" style="font-size:14px;">
+            $$P(i \text{ 胜过 } j) = \frac{s_i}{s_i + s_j}$$
+          </div>
+          <p style="font-size:14px;">对应到奖励模型，我们把打分 $r_\theta(x, y)$ 当作「能力值」，令 $s = e^{r}$（保证正数），则：</p>
+          <div class="formula-block" style="font-size:14px;">
+            $$P(y_w \succ y_l \mid x) = \frac{e^{r_\theta(x,\,y_w)}}{e^{r_\theta(x,\,y_w)} + e^{r_\theta(x,\,y_l)}} = \sigma\!\left(r_\theta(x, y_w) - r_\theta(x, y_l)\right)$$
+          </div>
+          <p style="font-size:14px;">最后一步用了 sigmoid 的等价变形：$\frac{e^a}{e^a+e^b} = \frac{1}{1+e^{b-a}} = \sigma(a-b)$。</p>
+          <p style="font-size:14px;color:#374151;background:#f0fdf4;border-radius:8px;padding:10px 14px;border:1px solid #86efac;margin-top:6px;">
+            <strong>直觉：</strong>$\sigma(r_w - r_l)$ 就是「奖励模型认为 $y_w$ 更好的概率」。当 $r_w \gg r_l$ 时这个概率接近 1；当两者相等时为 0.5；当 $r_w \ll r_l$ 时接近 0。
+          </p>
+
+          <h4 style="margin:18px 0 8px;color:#1e40af;">② 从最大似然到损失函数</h4>
+          <p style="font-size:14px;">我们希望奖励模型「尽量正确地复现人类的偏好判断」，即最大化人类标注数据上的对数似然：</p>
+          <div class="formula-block" style="font-size:14px;">
+            $$\max_\theta \;\mathbb{E}_{(x,\,y_w,\,y_l)}\!\left[\log P_\theta(y_w \succ y_l \mid x)\right] = \max_\theta \;\mathbb{E}\!\left[\log \sigma\!\left(r_\theta(x,y_w) - r_\theta(x,y_l)\right)\right]$$
+          </div>
+          <p style="font-size:14px;">取负号变成最小化损失，就得到我们看到的 $\mathcal{L}_{RM}$：</p>
+          <div class="formula-block" style="font-size:14px;">
+            $$\mathcal{L}_{RM} = -\mathbb{E}\!\left[\log \sigma\!\left(r_\theta(x,y_w) - r_\theta(x,y_l)\right)\right]$$
+          </div>
+          <p style="font-size:14px;color:#374151;background:#eff6ff;border-radius:8px;padding:10px 14px;border:1px solid #bfdbfe;margin-top:6px;">
+            <strong>本质：</strong>这和二分类的交叉熵完全等价——把「$y_w$ 比 $y_l$ 好」当作正例（label=1），用 sigmoid 输出预测概率，做 Binary Cross-Entropy。唯一特别之处是输入不是单个样本的 logit，而是<strong>两个得分的差值</strong>。
+          </p>
+
+          <h4 style="margin:18px 0 8px;color:#1e40af;">③ 梯度方向——参数怎么更新</h4>
+          <p style="font-size:14px;">对 $r_\theta(x, y_w)$ 求偏导（令 $\Delta = r_w - r_l$）：</p>
+          <div class="formula-block" style="font-size:14px;">
+            $$\frac{\partial \mathcal{L}_{RM}}{\partial r_w} = -\frac{\partial}{\partial r_w}\log\sigma(\Delta) = -(1 - \sigma(\Delta)) = \sigma(\Delta) - 1 \leq 0$$
+          </div>
+          <p style="font-size:14px;">梯度为负 → 梯度下降时 $r_w$ 增大（好回答分数涨）。<br>
+          对 $r_l$ 求导同理得 $\sigma(\Delta) \geq 0$，即 $r_l$ 减小（差回答分数跌）。</p>
+          <div class="table-wrap" style="margin:10px 0 0;">
+            <table style="font-size:13px;">
+              <thead><tr><th>当前情况</th><th>$\sigma(\Delta)$</th><th>梯度幅度</th><th>更新力度</th></tr></thead>
+              <tbody>
+                <tr><td>$r_w \gg r_l$（模型已判断正确）</td><td>≈ 1</td><td>≈ 0</td><td>几乎不更新（已经很确信）</td></tr>
+                <tr><td>$r_w \approx r_l$（模型举棋不定）</td><td>≈ 0.5</td><td>≈ 0.5</td><td>较大更新（最需要学习的地方）</td></tr>
+                <tr><td>$r_w \ll r_l$（判断错了）</td><td>≈ 0</td><td>≈ 1</td><td>最大更新（强力纠错）</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p style="font-size:14px;margin-top:10px;">这个自适应的更新幅度是 BT 损失的优雅之处——<strong>越难的样本（模型判断不确定或判断错误）得到越大的学习信号</strong>，和人类考试时「错题重点复习」的直觉完全一致。</p>
+
+          <h4 style="margin:18px 0 8px;color:#1e40af;">④ 具体数值示例</h4>
+          <p style="font-size:14px;">假设当前奖励模型对上文「天空为什么是蓝色」例子的打分是：$r(B)=2.1,\; r(D)=1.3,\; r(A)=0.8,\; r(C)=-0.5$</p>
+          <p style="font-size:14px;">对训练对 (B, D)（B 应该比 D 好）：</p>
+          <div class="formula-block" style="font-size:13px;">
+            $$\sigma(r_B - r_D) = \sigma(2.1 - 1.3) = \sigma(0.8) = \frac{1}{1+e^{-0.8}} \approx 0.69$$
+          </div>
+          <p style="font-size:14px;">loss = $-\log(0.69) \approx 0.37$，梯度幅度 = $1 - 0.69 = 0.31$，模型需要进一步拉大 B 和 D 的差距。</p>
+          <p style="font-size:14px;">对训练对 (B, C)（B 应该比 C 好）：</p>
+          <div class="formula-block" style="font-size:13px;">
+            $$\sigma(r_B - r_C) = \sigma(2.1 - (-0.5)) = \sigma(2.6) \approx 0.93$$
+          </div>
+          <p style="font-size:14px;">loss = $-\log(0.93) \approx 0.07$，梯度幅度 = $1 - 0.93 = 0.07$，模型已经很确信 B > C，几乎不更新——<strong>把宝贵的学习机会留给更难区分的对</strong>。</p>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 具体例子：一条偏好数据的完整标注过程</div>
+          <p><strong>Prompt：</strong>「解释为什么天空是蓝色的，用小学生能懂的语言」</p>
+          <p><strong>SFT 模型生成的 4 个候选回答：</strong></p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>回答</th><th>内容</th><th>人类排名</th></tr></thead>
+              <tbody>
+                <tr><td>回答 A</td><td>「天空是蓝色的，因为大气散射了太阳光中蓝色波长的光，这种现象叫瑞利散射……（专业物理术语一堆）」</td><td>3（太专业，小学生看不懂）</td></tr>
+                <tr><td>回答 B</td><td>「想象太阳光是一包彩色糖豆，里面有红的、橙的、黄的、绿的、蓝的……当阳光进入大气层，蓝色糖豆（光）特别爱乱跑，到处弹来弹去，所以你看哪里天空都是蓝色的！」</td><td>1（最好！有类比，小学生能懂）</td></tr>
+                <tr><td>回答 C</td><td>「因为天空本来就是蓝色的。」</td><td>4（太简单，没有解释）</td></tr>
+                <tr><td>回答 D</td><td>「太阳光包含很多颜色。蓝色光比红色光更容易被空气中的小颗粒弹散，所以天空看起来是蓝色的。」</td><td>2（还不错，但没有类比）</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p><strong>生成的训练对（从排名 B&gt;D&gt;A&gt;C 提取）：</strong>(B,D)、(B,A)、(B,C)、(D,A)、(D,C)、(A,C) 共 6 对</p>
+          <p><strong>奖励模型训练目标：</strong>对每一对，让 $r(B) > r(D)$，$r(D) > r(A)$，$r(A) > r(C)$……最终奖励模型学会给「通俗易懂、有类比、能让小学生理解」的回答更高的分。</p>
+        </div>
+
+        <h3 id="rm-detail">3.3 奖励模型的结构细节</h3>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>🏗️ 模型结构</h4>
+            <p>通常是 SFT 模型（或同规模模型）+ 线性打分头：</p>
+            <pre style="background:#1e293b;color:#e2e8f0;border-radius:8px;padding:12px;font-size:12px;margin:8px 0;">class RewardModel(nn.Module):
+    def __init__(self, lm_backbone):
+        self.lm = lm_backbone  # SFT 模型
+        self.score_head = nn.Linear(
+            lm.hidden_size, 1)  # 打分头
+
+    def forward(self, input_ids):
+        hidden = self.lm(input_ids)
+        # 取最后一个 token 的隐状态
+        last = hidden[:, -1, :]
+        return self.score_head(last)  # 输出一个分数</pre>
+          </div>
+          <div class="mini-card">
+            <h4>⚠️ 奖励模型的关键风险</h4>
+            <p><strong>Reward Hacking（奖励函数被钻空子）：</strong></p>
+            <ul style="font-size:14px;">
+              <li>模型可能发现「长回答得分更高」，开始无意义地堆字数</li>
+              <li>可能发现「加很多鼓励语气的词」得分高，开始过度讨好</li>
+              <li>奖励模型本身是不完美的，训练足够多 RL 步后模型会发现其漏洞</li>
+            </ul>
+            <p><strong>这就是为什么需要 KL 惩罚</strong>（见 §4.3），防止模型因为 reward hacking 而退化。</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══ §4 RLHF-PPO ═══ -->
+      <section class="section" id="rlhf">
+        <div class="section-title">
+          <div class="icon" style="background:#fae8ff;">🚀</div>
+          §4 RLHF-PPO：按评判者标准「进化」
+        </div>
+
+        <h3 id="rlhf-why">4.1 为什么需要 RL——SFT 无法做的事</h3>
+
+        <p>有了奖励模型后，我们有了一个「自动打分机」。现在核心问题是：<strong>如何用这个分数来提升语言模型？</strong></p>
+
+        <div class="analogy-box">
+          <div class="analogy-title">🏋️ 类比：运动员训练</div>
+          <p><strong>SFT 阶段：</strong>教练（标注员）给运动员展示几千个标准动作视频，让运动员模仿。运动员学会了基本姿势，能完成基本任务。</p>
+          <p><strong>RLHF 阶段：</strong>运动员开始实战——每次完成一个动作后，专业裁判（奖励模型）打分。运动员的目标是最大化自己的得分，不断调整动作，超越标注员示例的水平。</p>
+          <p><strong>关键区别：</strong>SFT 限于"见过的示例水平"，RL 可以通过大量尝试-反馈-调整，找到超越任何单一示例的策略。</p>
+        </div>
+
+        <p>从数学角度，RLHF 的目标是：</p>
+        <div class="formula-block">
+          $$\max_\theta \; \mathbb{E}_{x \sim D,\, y \sim \pi_\theta(\cdot|x)} \left[ r(x, y) \right] - \beta \cdot \text{KL}\!\left[\pi_\theta(\cdot|x) \| \pi_{\text{ref}}(\cdot|x)\right]$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">每一项的含义</div>
+          <ul>
+            <li>$\pi_\theta$：当前策略（语言模型），参数为 $\theta$</li>
+            <li>$r(x, y)$：奖励模型对 prompt $x$、回答 $y$ 的打分（越高越好）</li>
+            <li>$\text{KL}[\pi_\theta \| \pi_\text{ref}]$：当前策略与参考模型（SFT 模型）的 KL 散度（衡量"偏离了多少"）</li>
+            <li>$\beta$：KL 惩罚系数，控制允许偏离多少</li>
+            <li><strong>整体目标：最大化奖励，同时不要偏离 SFT 模型太远</strong></li>
+          </ul>
+        </div>
+
+        <h3 id="rlhf-ppo">4.2 PPO 完整训练流程——一次迭代发生了什么</h3>
+
+        <p>PPO（Proximal Policy Optimization）是目前 RLHF 中最常用的 RL 算法，核心思想是：<strong>每次更新幅度不能太大</strong>，防止训练崩溃。</p>
+
+        <p>一次 PPO 迭代（对一个 prompt $x$）的完整步骤：</p>
+
+        <div class="step-box">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <strong>采样（Rollout）：</strong>用当前策略 $\pi_\theta$ 生成回答 $y$。
+            <br>同时记录生成过程中每个 token 的 log 概率 $\log \pi_\theta(y_t \mid x, y_{&lt;t})$（后面计算 ratio 要用）。
+          </div>
+        </div>
+
+        <div class="step-box">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <strong>计算奖励：</strong>把 $(x, y)$ 送入奖励模型，得到分数 $r(x, y)$。
+            <br>同时计算 KL 惩罚：$\text{KL}_t = \log \pi_\theta(y_t) - \log \pi_\text{ref}(y_t)$（逐 token 计算）。
+            <br>最终每个 token 的奖励：$\hat{r}_t = r(x,y) \cdot \mathbf{1}[t=T] - \beta \cdot \text{KL}_t$（只在最后一个 token 加奖励模型的分数）
+          </div>
+        </div>
+
+        <div class="step-box">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <strong>计算优势函数（Advantage）：</strong>用价值网络（Critic）估计每个时刻的期望回报 $V(s_t)$，计算优势 $A_t = \hat{r}_t - V(s_t)$。
+            <br>$A_t &gt; 0$：这个 token 的选择比预期要好，应该增大其概率。
+            <br>$A_t &lt; 0$：比预期差，应该减小其概率。
+          </div>
+        </div>
+
+        <div class="step-box">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <strong>PPO 裁剪更新：</strong>用裁剪目标函数更新策略：
+            <div class="formula-block" style="margin:10px 0 0;font-size:13px;">
+              $$\mathcal{L}_{PPO} = -\mathbb{E}\!\left[\min\!\left(\rho_t A_t,\; \text{clip}(\rho_t, 1-\varepsilon, 1+\varepsilon) A_t\right)\right]$$
+            </div>
+            <p style="font-size:13px;margin:8px 0 0;">$\rho_t = \frac{\pi_\theta(y_t)}{\pi_{\theta_\text{old}}(y_t)}$ 是新旧策略的概率比，$\varepsilon=0.2$。核心：比率被限制在 $[0.8, 1.2]$，每次更新不超过 20%。</p>
+          </div>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 PPO 一步更新的直觉例子</div>
+          <p><strong>Prompt：</strong>「给我推荐一本好书」</p>
+          <p><strong>当前策略生成：</strong>「我推荐《百年孤独》，这是加西亚·马尔克斯的魔幻现实主义杰作，讲述了布恩迪亚家族七代人的故事……（高质量推荐，有理由）」</p>
+          <p><strong>奖励模型打分：</strong>8.5 / 10（具体推荐，有书名有理由，很有帮助）</p>
+          <p><strong>旧策略（SFT 模型）对同一生成的 log 概率：</strong>相对较低（因为 SFT 模型给这种详细推荐的概率不高）</p>
+          <p><strong>优势 $A_t &gt; 0$：</strong>这个回答比 Critic 预期的好，所以每个 token 的概率都应该增大</p>
+          <p><strong>PPO 更新后：</strong>模型对这种「给出具体书名 + 详细理由」格式的回答概率增大了，但由于裁剪，最多增大到 $1.2$ 倍，不会一下子跳得太远。</p>
+        </div>
+
+        <h3 id="rlhf-kl">4.3 KL 惩罚——系在 SFT 模型上的「安全绳」</h3>
+
+        <p>KL 散度惩罚是 RLHF 中最重要的稳定性保障机制。</p>
+
+        <div class="analogy-box">
+          <div class="analogy-title">🪢 类比：绳子限制</div>
+          <p>想象 SFT 模型是一个「原点」，用强化学习让模型向高分方向移动，但系了一根弹性绳——离原点越远，绳子拉力越大。</p>
+          <p>没有绳子（无 KL 惩罚）：模型会发现奖励模型的漏洞，不断钻空子，最终输出奇怪的文本（Reward Hacking）。比如发现「在回答里加很多感叹号」可以得高分，然后所有回答都加满感叹号。</p>
+          <p>有了绳子：即使发现了漏洞，因为离 SFT 模型太远会受到惩罚，模型被迫在「钻空子」和「保持正常」之间取平衡，训练更稳定。</p>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>$\beta$（KL系数）</th><th>效果</th><th>风险</th></tr></thead>
+            <tbody>
+              <tr><td>太大（如 0.5）</td><td>模型几乎不偏离 SFT，训练稳定</td><td>RL 改进空间太小，提升有限</td></tr>
+              <tr><td>太小（如 0.001）</td><td>RL 可以大幅改变模型</td><td>容易 reward hacking，训练不稳定</td></tr>
+              <tr><td>合适（如 0.02~0.1）</td><td>在改进空间和稳定性之间取得平衡</td><td>需要反复调参</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="rlhf-4models">4.4 RLHF-PPO 需要四个模型同时运行</h3>
+
+        <p>这是 PPO 最大的工程挑战——需要同时维护和运行四个模型：</p>
+
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0;">
+          <div style="background:#dbeafe;border:1px solid #93c5fd;border-radius:12px;padding:14px;text-align:center;">
+            <div style="font-size:20px;margin-bottom:6px;">🎭</div>
+            <div style="font-weight:700;font-size:13px;color:#1e40af;margin-bottom:6px;">Actor（策略网络）</div>
+            <div style="font-size:12px;color:#1e3a5f;">被训练的语言模型，生成回答<br><strong>需要更新梯度</strong></div>
+          </div>
+          <div style="background:#dcfce7;border:1px solid #86efac;border-radius:12px;padding:14px;text-align:center;">
+            <div style="font-size:20px;margin-bottom:6px;">📋</div>
+            <div style="font-weight:700;font-size:13px;color:#166534;margin-bottom:6px;">Reference（参考模型）</div>
+            <div style="font-size:12px;color:#14532d;">SFT 模型的副本，计算 KL<br><strong>冻结，不更新</strong></div>
+          </div>
+          <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:12px;padding:14px;text-align:center;">
+            <div style="font-size:20px;margin-bottom:6px;">🏆</div>
+            <div style="font-weight:700;font-size:13px;color:#92400e;margin-bottom:6px;">Reward Model（奖励模型）</div>
+            <div style="font-size:12px;color:#78350f;">给生成的回答打分<br><strong>冻结，不更新</strong></div>
+          </div>
+          <div style="background:#fae8ff;border:1px solid #e879f9;border-radius:12px;padding:14px;text-align:center;">
+            <div style="font-size:20px;margin-bottom:6px;">📊</div>
+            <div style="font-weight:700;font-size:13px;color:#701a75;margin-bottom:6px;">Critic（价值网络）</div>
+            <div style="font-size:12px;color:#4a044e;">估计期望回报，计算 Advantage<br><strong>需要更新梯度</strong></div>
+          </div>
+        </div>
+
+        <div class="callout-amber">
+          <strong>四个模型同时运行的代价：</strong>每次 PPO 更新，GPU 显存需要同时放下 4 个模型（每个都是 7B~70B 参数）。如果是 70B 模型，单次 PPO 训练需要约 <strong>数百张 A100</strong>。这也是为什么 DPO 被广泛采用——它只需要 2 个模型（Actor + Reference），省掉了 RM 和 Critic。
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 InstructGPT 的 RLHF 实验数据（OpenAI 论文）</div>
+          <ul>
+            <li>SFT 数据：约 <strong>13,000 条</strong> prompt-response 对，由标注员撰写</li>
+            <li>RM 训练数据：约 <strong>33,000 条</strong> prompt，每条有 4–9 个候选回答，标注员排序</li>
+            <li>PPO 训练：约 <strong>31,000 条</strong> prompt，反复采样和更新</li>
+            <li>结果：经过 RLHF 的 <strong>1.3B</strong> 模型，人类评估胜率高于未经 RLHF 的 <strong>175B GPT-3</strong>（大了 100 多倍的模型）</li>
+            <li>结论：<strong>对齐质量比参数量更重要</strong></li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ═══ §5 DPO ═══ -->
+      <section class="section" id="dpo">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">🎯</div>
+          §5 DPO：更简单的对齐方法（绕过 RL）
+        </div>
+
+        <p>DPO（Direct Preference Optimization，直接偏好优化，Stanford 2023）的出发点很简单：<strong>能不能不用 RL，直接从偏好数据训练语言模型？</strong></p>
+
+        <h3>DPO 的核心数学洞察</h3>
+
+        <p>数学上可以证明：在 KL 约束下的最优策略和奖励函数之间存在一个直接的解析关系：</p>
+
+        <div class="formula-block">
+          $$r(x, y) = \beta \log \frac{\pi^*(y|x)}{\pi_\text{ref}(y|x)} + Z(x)$$
+        </div>
+
+        <p>这意味着奖励函数可以直接用策略的对数概率比来表示。把这个关系代入偏好模型，化简后得到 DPO 损失：</p>
+
+        <div class="formula-block">
+          $$\mathcal{L}_{DPO} = -\mathbb{E}\!\left[\log \sigma\!\left(\beta \log\frac{\pi_\theta(y_w|x)}{\pi_\text{ref}(y_w|x)} - \beta \log\frac{\pi_\theta(y_l|x)}{\pi_\text{ref}(y_l|x)}\right)\right]$$
+        </div>
+
+        <p>直觉：让好回答 $y_w$ 相对于参考模型的概率提升，比坏回答 $y_l$ 的提升更大。</p>
+
+        <h3>DPO vs RLHF-PPO 对比</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>维度</th><th>RLHF-PPO</th><th>DPO</th></tr></thead>
+            <tbody>
+              <tr><td>所需模型数量</td><td>4 个（Actor / Reference / RM / Critic）</td><td>2 个（Actor + Reference）</td></tr>
+              <tr><td>是否需要在线采样</td><td>✅ 每次都要采样新回答</td><td>❌ 用离线偏好数据集</td></tr>
+              <tr><td>训练复杂度</td><td>极高（需要调 PPO 超参）</td><td>类似 SFT（简单）</td></tr>
+              <tr><td>计算成本</td><td>极高（4 个大模型同时占显存）</td><td>低（约为 RLHF 的 1/4）</td></tr>
+              <tr><td>效果</td><td>上限更高（能持续在线改进）</td><td>依赖数据集质量，上限稍低</td></tr>
+              <tr><td>适用场景</td><td>有大量实时标注资源、追求极致质量</td><td>资源有限、有现成偏好数据集</td></tr>
+              <tr><td>典型应用</td><td>GPT-4、Claude（早期）</td><td>LLaMA-2-Chat、Zephyr、Mistral</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout-green">
+          <strong>开源社区为什么都用 DPO？</strong><br>
+          对于没有大量 GPU 资源和实时标注团队的开源项目，DPO 只需要：① 一个现成的 SFT 模型，② 一个公开的偏好数据集（如 Anthropic HH、OpenHermes），③ 相当于 SFT 的计算量。<br>
+          这让个人或小团队也能做 RLHF 对齐，大大降低了门槛。
+        </div>
+      </section>
+
+      <!-- ═══ §6 GRPO ═══ -->
+      <section class="section" id="grpo">
+        <div class="section-title">
+          <div class="icon" style="background:#fffbeb;">🧠</div>
+          §6 GRPO：DeepSeek-R1 的秘密武器
+        </div>
+
+        <p>GRPO（Group Relative Policy Optimization，组相对策略优化）是 DeepSeek 团队提出的算法，是 DeepSeek-R1 在数学推理上超越 GPT-4o 的核心技术。</p>
+
+        <h3>GRPO 解决了 PPO 的什么问题</h3>
+
+        <p>PPO 需要 Critic（价值网络）来估计每一步的期望回报。Critic 和 Actor 一样大（也是一个 7B/70B 模型），成本极高，而且估计误差会导致训练不稳定。</p>
+
+        <p>GRPO 的观察：<strong>对于数学题、代码等有客观答案的任务，可以不用 Critic！</strong>让模型对同一道题生成多个答案，用组内的相对好坏来计算优势：</p>
+
+        <div class="formula-block">
+          $$\hat{A}_i = \frac{r_i - \text{mean}(r_1,\ldots,r_G)}{\text{std}(r_1,\ldots,r_G)}$$
+        </div>
+
+        <div class="analogy-box">
+          <div class="analogy-title">📝 类比：学生刷题</div>
+          <p><strong>PPO 方式（需要 Critic）：</strong>老师对学生的每一步解题过程都给详细打分（需要老师投入大量精力）。</p>
+          <p><strong>GRPO 方式（组内对比）：</strong>学生对同一道题写 8 种解法，只告诉他哪几种答案对、哪几种错。学生通过对比找出规律——无需老师逐步点评，靠自己大量练习归纳。</p>
+          <p><strong>为什么数学/代码特别适合：</strong>答案有客观对错（不需要主观判断），可以自动验证（答案是否正确），多解法自然存在（同一道题有多种做法）。</p>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 DeepSeek-R1 的训练效果</div>
+          <ul>
+            <li>AIME 2024 准确率：GRPO 训练前 15.6% → 训练后 <strong>79.8%</strong></li>
+            <li>最惊人的发现：模型<strong>自发涌现出了「思考-验证-回溯」的 CoT 推理行为</strong>，没有人教它这么做，是 RL 探索的结果</li>
+            <li>训练后模型会在回答前写大量的「等等，让我重新想想」「这里有个错误……」——完全是自发行为</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ═══ §7 工程细节 ═══ -->
+      <section class="section" id="engineering">
+        <div class="section-title">
+          <div class="icon" style="background:#ecfeff;">⚙️</div>
+          §7 实际工程细节——落地时踩的坑
+        </div>
+
+        <h3>SFT 阶段的工程细节</h3>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>📦 数据格式问题</h4>
+            <ul>
+              <li>prompt 部分的 loss mask 要设为 0（不计入 loss），否则模型会同时学习"怎么提问"</li>
+              <li>多轮对话：只对最后一轮的回答计算 loss，或者对所有 assistant 轮都计算 loss（后者效果通常更好）</li>
+              <li>packing（把多条短数据拼接成一条长数据）提升训练效率，但要注意 attention mask 防止跨样本的注意力</li>
+            </ul>
+          </div>
+          <div class="mini-card">
+            <h4>⚡ 训练稳定性</h4>
+            <ul>
+              <li>学习率：通常比预训练低 10–100x（如 1e-5 ~ 5e-5）</li>
+              <li>Warmup：少量 warmup step 防止初始梯度爆炸</li>
+              <li>Gradient clipping：clip_grad_norm=1.0 是标配</li>
+              <li>LoRA rank：太小（r=4）效果差，太大（r=128）训练慢，通常 r=16 或 r=32</li>
+            </ul>
+          </div>
+        </div>
+
+        <h3>RLHF 阶段的工程细节</h3>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>🎛️ 关键超参</h4>
+            <ul>
+              <li>$\beta$（KL系数）：0.02～0.1，需要根据任务调整</li>
+              <li>$\varepsilon$（PPO 裁剪）：通常 0.2</li>
+              <li>mini-batch size：通常 8～64 个 prompt</li>
+              <li>PPO epochs：每批数据更新几次（通常 1～4 次）</li>
+              <li>生成长度：限制最大生成 token 数，防止模型生成超长废话</li>
+            </ul>
+          </div>
+          <div class="mini-card">
+            <h4>🚨 常见训练崩溃原因</h4>
+            <ul>
+              <li>Reward hacking：RM 分数一直涨但 KL 也快速上升，模型开始生成乱码</li>
+              <li>Entropy collapse：模型变得非常确定，输出多样性极低（生成总是重复同样的句子）</li>
+              <li>Value network不稳定：Critic 的估计误差太大，导致 Advantage 信号噪声大</li>
+              <li>处理方案：加大 $\beta$，加 entropy bonus，降低学习率</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="callout-blue">
+          <strong>实用 Tips：如何判断 RLHF 训练是否健康？</strong>
+          <ul style="font-size:14px;margin:6px 0;">
+            <li><strong>RM 分数缓慢稳定上升：</strong>健康。如果上升太快说明可能 reward hacking</li>
+            <li><strong>KL 散度在合理范围内：</strong>通常 &lt; 5 是安全的，超过 10 要警惕</li>
+            <li><strong>生成多样性保持：</strong>不同 prompt 应该得到不同风格的回答</li>
+            <li><strong>Benchmark 分数同步提升：</strong>RM 分数提升但 benchmark 不动甚至下降，说明 reward hacking</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ═══ §8 总结 ═══ -->
+      <section class="section" id="summary">
+        <div class="section-title">
+          <div class="icon" style="background:#faf5ff;">🗺️</div>
+          §8 总结：为什么是这套流程
+        </div>
+
+        <h3>四阶段的必要性——每一步都不可少</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>阶段</th><th>本质</th><th>解决的问题</th><th>为什么这一步不能省</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>预训练</strong></td>
+                <td>自监督学习（无需标注）</td>
+                <td>获得语言理解和生成能力，积累世界知识</td>
+                <td>没有这步，模型什么都不会，后续步骤无从谈起</td>
+              </tr>
+              <tr>
+                <td><strong>SFT</strong></td>
+                <td>监督学习（需要标注）</td>
+                <td>让模型学会「对话格式」，从「续写」转向「回答」</td>
+                <td>没有 SFT，RL 无法收敛——奖励模型无法区分毫无格式的随机续写的好坏</td>
+              </tr>
+              <tr>
+                <td><strong>RLHF</strong></td>
+                <td>强化学习（需要偏好数据）</td>
+                <td>让模型超越示例水平，学会「什么是好回答」而非「模仿某个示例」</td>
+                <td>没有 RLHF，模型只能达到标注员水平，无法继续提升，也无法学会更复杂的偏好判断</td>
+              </tr>
+              <tr>
+                <td><strong>持续迭代</strong></td>
+                <td>在线学习（用户数据）</td>
+                <td>修复上线后发现的长尾问题，扩展能力边界</td>
+                <td>没有这步，模型会随着用户需求变化而逐渐落伍</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>RLHF 和 DPO/GRPO 的关系一图总结</h3>
+
+        <div class="big-concept">
+          <div class="big-concept-title">🔑 「偏好对齐」的三条路径</div>
+          <div style="margin:12px 0;font-size:14px;line-height:2.2;">
+            <div><span style="background:#dbeafe;border:1px solid #93c5fd;border-radius:6px;padding:3px 10px;font-weight:700;">路径 1：RLHF + PPO</span> → 学习信号：人类偏好排序 → 优化方式：在线 RL（需要 RM + Critic）→ 适合：大公司有资源、追求上限</div>
+            <div><span style="background:#dcfce7;border:1px solid #86efac;border-radius:6px;padding:3px 10px;font-weight:700;">路径 2：DPO / IPO</span> → 学习信号：人类偏好对 → 优化方式：离线监督学习（无需 RM）→ 适合：资源有限、有偏好数据集</div>
+            <div><span style="background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:3px 10px;font-weight:700;">路径 3：GRPO</span> → 学习信号：客观规则验证（对/错）→ 优化方式：组内对比 RL（无需 Critic）→ 适合：数学/代码等可验证任务</div>
+          </div>
+          <p style="font-size:14px;margin-top:8px;">三条路径都是「用人类（或规则）的偏好信号来改进模型」，只是在<strong>信号获取方式</strong>和<strong>优化算法</strong>上做了不同的权衡。</p>
+        </div>
+
+        <blockquote>
+          大模型训练流水线的每一步，本质上都在回答同一个问题：<strong>「如何给模型一个学习信号，让它朝着我们想要的方向移动，同时不破坏它已有的能力？」</strong>
+          <br><br>
+          预训练用「预测下一个词」作为信号；SFT 用「标注员的示例」；RLHF 用「人类对好坏的判断」；GRPO 用「答案是否正确的规则」。信号的来源越精准、越可扩展，模型就能进化得越快、越好。
+        </blockquote>
+
+        <h3>学习路线建议</h3>
+
+        <div class="three-col">
+          <div class="mini-card">
+            <h4>📚 推荐阅读顺序</h4>
+            <ol style="font-size:13px;">
+              <li>InstructGPT 论文（2022）：RLHF 的原始论文</li>
+              <li>Constitutional AI（2022）：RLAIF 方向</li>
+              <li>DPO 论文（2023，Rafailov et al.）</li>
+              <li>DeepSeek-Math（2024）：GRPO 原始论文</li>
+              <li>DeepSeek-R1（2025）：GRPO 工业应用</li>
+            </ol>
+          </div>
+          <div class="mini-card">
+            <h4>🔧 动手实践</h4>
+            <ul style="font-size:13px;">
+              <li>用 LLaMA-Factory 跑一个 7B 模型的 SFT（几行配置搞定）</li>
+              <li>用 TRL 库的 DPOTrainer 在 Anthropic HH 数据集上做偏好对齐</li>
+              <li>跑 GRPO 在 GSM8K 上做数学对齐（TRL 有完整示例）</li>
+            </ul>
+          </div>
+          <div class="mini-card">
+            <h4>🔗 其他学习笔记</h4>
+            <ul style="font-size:13px;">
+              <li><a href="../topics/notes-rl.html">LLM 中的 RL 方法全解析</a>（PPO/DPO/GRPO 公式推导）</li>
+              <li><a href="../topics/notes-llm-teams.html">大厂大模型部门技术栈</a>（工程实践视角）</li>
+              <li><a href="../topics/notes-tokenizer.html">LLM Tokenizer 详解</a></li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <footer>
+    <a href="../index.html" class="back-link">← 返回笔记列表</a>
+    <p>学习笔记 · 大模型完整训练流水线深度解析</p>
+  </footer>
+</div>
+
+<script>
+(function(){
+  // TOC 滚动高亮：使用 IntersectionObserver 监听所有带 id 的 section/h3
+  var tocLinks = document.querySelectorAll('.toc-list a[href^="#"], .toc-sub a[href^="#"]');
+  if (!tocLinks.length) return;
+
+  // 建立 id -> tocLink 映射
+  var linkMap = {};
+  tocLinks.forEach(function(a){
+    var id = a.getAttribute('href').slice(1);
+    if (id) linkMap[id] = a;
+  });
+
+  var targets = Object.keys(linkMap).map(function(id){
+    return document.getElementById(id);
+  }).filter(Boolean);
+
+  if (!targets.length) return;
+
+  var activeId = null;
+
+  function setActive(id){
+    if (id === activeId) return;
+    activeId = id;
+    tocLinks.forEach(function(a){ a.classList.remove('active'); });
+    if (id && linkMap[id]){
+      linkMap[id].classList.add('active');
+      // 让目录自动滚动到对应项可见
+      var toc = document.querySelector('.toc');
+      if (toc){
+        var li = linkMap[id];
+        var tocTop = toc.getBoundingClientRect().top;
+        var liTop  = li.getBoundingClientRect().top;
+        var offset = liTop - tocTop - toc.clientHeight / 2;
+        toc.scrollBy({ top: offset, behavior: 'smooth' });
+      }
+    }
+  }
+
+  // rootMargin: 上边距 -10%（稍微进入视口就算），下边距 -60%（只有顶部 40% 区域触发）
+  var observer = new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      if (entry.isIntersecting){
+        setActive(entry.target.id);
+      }
+    });
+  }, { rootMargin: '-10% 0px -60% 0px', threshold: 0 });
+
+  targets.forEach(function(el){ observer.observe(el); });
+})();
+</script>
+</body>
+</html>

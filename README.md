@@ -1,121 +1,90 @@
-# 论文博客专区
+# 📚 Paper Notes
 
-这是一个零依赖的静态博客专区，主打 **HTML 网页上传**。
+个人论文笔记与技术学习站点，使用 GitHub Pages 托管。
 
-## 源码目录结构
+🌐 在线访问：**[yaoyuanzhou.github.io](https://yaoyuanzhou.github.io)**
 
-```text
-blog/
-├── index.html                  # 博客首页
-├── README.md                   # 使用说明
-├── data/
-│   └── posts.js                # 文章索引
-├── posts/
-│   └── trm-paper-notes.html    # 示例论文页面
-└── templates/
-    └── paper-template.html     # 新论文模板
+---
+
+## 目录结构
+
+```
+paper-notes/
+├── index.html          # 首页导航
+├── papers/             # 论文精读笔记（17 篇）
+│   ├── cobra.html
+│   ├── das.html
+│   ├── diet.html
+│   └── ...
+├── topics/             # 专题学习笔记（12 个）
+│   ├── notes-tokenizer.html
+│   ├── notes-agent.html
+│   ├── notes-rl.html
+│   └── ...
+└── code/
+    └── tokenizer/      # Tokenizer 配套代码实现
+        ├── 01_bpe.py
+        ├── 02_wordpiece.py
+        ├── 03_unigram_lm.py
+        ├── 04_bbpe.py
+        └── 05_tiktoken_guide.py
 ```
 
-## 你以后怎么上传论文
+---
 
-### 方式一：直接放 HTML（推荐）
+## 论文笔记 `papers/`
 
-1. 把你的论文解读整理成一个独立 HTML 文件。
-2. 放到 `blog/posts/`，例如：
-   - `blog/posts/2026-trm.html`
-   - `blog/posts/attention-is-all-you-need.html`
-3. 打开 `blog/data/posts.js`，追加一条文章信息。
-4. 用浏览器打开 `blog/index.html`，就能在首页看到新文章。
+| 论文 | 关键词 |
+|------|--------|
+| COBRA | 推荐系统 |
+| DAS | 推荐系统 |
+| DIET | 推荐系统 |
+| ETeGRec | 推荐系统 |
+| GPSD | 推荐系统 |
+| GRID | 推荐系统 |
+| LIGER | 推荐系统 |
+| LIGR | 推荐系统 |
+| MTGRec | 推荐系统 |
+| OneRec | 推荐系统 |
+| OneSearch | 搜索 |
+| Prefix-Ngram | NLP |
+| SeMId | 推荐系统 |
+| SId for Ranking | 推荐系统 |
+| SIDE | 推荐系统 |
+| TIGER | 推荐系统 |
+| TRM | 推荐系统 |
 
-### 方式二：先写 Markdown，再转 HTML
+---
 
-如果你先产出 Markdown，可以先转成 HTML 再放进 `blog/posts/`。
+## 专题笔记 `topics/`
 
-## 新增文章时要改哪里
+| 专题 | 内容 |
+|------|------|
+| Tokenizer | BPE / WordPiece / Unigram LM / BBPE / tiktoken 原理与实现 |
+| Agent | Agent 架构、ReAct、工具调用、多 Agent 协作 |
+| RAG | 检索增强生成全流程 |
+| ReAct | ReAct + Reflexion 范式 |
+| RL | 强化学习基础 |
+| Tool Calling | 工具调用格式与实现 |
+| LLM Pipeline | 大模型训练推理流水线 |
+| LLM Teams | 团队协作与工程实践 |
+| Inference | 推理加速与优化 |
+| Math | 数学基础 |
+| GPU Hardware | GPU 硬件基础 |
+| Harness Engineering | Harness Engineering 概念（2026） |
 
-只需要改 2 处：
+---
 
-1. 新增文章文件：`blog/posts/你的文章.html`
-2. 更新索引：`blog/data/posts.js`
+## 代码 `code/tokenizer/`
 
-示例：
+配套 Tokenizer 专题笔记的完整 Python 实现，从零实现各主流分词算法，注释翔实，可直接运行。
 
-```js
-{
-  id: 'attention-is-all-you-need',
-  title: 'Attention Is All You Need',
-  date: '2026-03-27',
-  year: '2026',
-  tags: ['Transformer', 'NLP', '经典论文'],
-  summary: 'Transformer 开山之作，核心是自注意力机制替代 RNN/CNN。',
-  source: 'https://arxiv.org/abs/1706.03762',
-  file: './posts/attention-is-all-you-need.html',
-  readingTime: '12 分钟',
-  author: 'Vaswani et al.'
-}
+```bash
+python code/tokenizer/01_bpe.py         # BPE 完整实现（训练+编码+解码）
+python code/tokenizer/02_wordpiece.py   # WordPiece（BERT 风格）
+python code/tokenizer/03_unigram_lm.py  # Unigram LM（T5 / XLNet）
+python code/tokenizer/04_bbpe.py        # BBPE 字节级（GPT-4 / LLaMA3）
+
+pip install tiktoken
+python code/tokenizer/05_tiktoken_guide.py  # OpenAI tiktoken 完整使用指南
 ```
-
-## 自动化工作流
-
-现在你还可以直接使用个人级 skill：`paper-blog-publisher`
-
-它会把以下流程串起来：
-
-1. 识别输入来源（HTML / Markdown / PDF / arXiv / 论文网页）
-2. 需要时联动 `paper-reader` 自动解读论文
-3. 生成或复用 HTML 文章页
-4. 自动收录到 `blog/posts/`
-5. 自动更新 `blog/data/posts.js`
-
-以后你可以直接对我说：
-
-- `总结并上传这篇论文`
-- `把这个 paper 解读后发到博客上`
-- `把这个 html 论文页收录进博客`
-
-个人级 skill 目录：
-
-- `/Users/yaoyuanzhou/.codeflicker/skills/paper-blog-publisher`
-
-注意：skill 创建/更新后通常需要等待约 30 秒生效，或重启 VS Code 立即生效。
-
-## GitHub Pages 挂载
-
-你现在已经有个人仓库：`Yaoyuanzhou/yaoyuanzhou.github.io`。
-
-当前采用的是 **替换首页** 的方式：把博客静态文件发布到该仓库根目录，站点地址就是：
-
-- `https://yaoyuanzhou.github.io/`
-
-发布后的 GitHub Pages 仓库目录结构会是：
-
-```text
-yaoyuanzhou.github.io/
-├── index.html
-├── README.md
-├── .nojekyll
-├── data/
-├── posts/
-└── templates/
-```
-
-如果你后续继续在当前仓库维护博客源码，那么发布时只需要把 `blog/` 目录内容同步到 GitHub Pages 仓库根目录即可。
-
-详细步骤见：`blog/GITHUB_PAGES.md`
-
-## 发布方式
-
-### 本地直接看
-
-直接双击打开 `blog/index.html` 即可。
-
-### 作为网页发布
-
-后续如果你想把它发布成网页，可以放到任一静态托管：
-- GitHub Pages
-- 公司内部静态资源服务
-- Nginx 静态目录
-
-## 当前已收录
-
-- `TRM：用语义 Token 替代 Item ID`

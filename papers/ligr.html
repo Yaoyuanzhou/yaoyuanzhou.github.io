@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LiGR: LinkedIn 大规模生成式排序框架解读</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false }
+          ],
+          throwOnError: false
+        });
+      }
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #2563eb; --primary-soft: #eff6ff;
+      --accent: #7c3aed; --accent-soft: rgba(124,58,237,0.06);
+      --shadow: 0 10px 30px rgba(15,23,42,0.08); --radius: 18px; --max: 1120px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: linear-gradient(180deg,#f8fbff 0%,var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      line-height: 1.8;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .page { max-width: var(--max); margin: 0 auto; padding: 32px 20px 80px; }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    .back-link:hover { color: var(--primary); text-decoration: none; }
+    .hero {
+      background: radial-gradient(circle at top right, rgba(59,130,246,0.12), transparent 30%),
+                  radial-gradient(circle at left bottom, rgba(37,99,235,0.08), transparent 24%),
+                  var(--card);
+      border: 1px solid rgba(59,130,246,0.1);
+      border-radius: 24px; box-shadow: var(--shadow);
+      padding: 34px 34px 28px; margin-bottom: 22px;
+    }
+    .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: #eff6ff; color: #1d4ed8; font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+    h1 { margin: 0 0 10px; font-size: 32px; line-height: 1.25; letter-spacing: -0.02em; }
+    .subtitle { margin: 0; color: var(--muted); font-size: 15px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 24px; }
+    .meta-card { background: #fbfdff; border: 1px solid #e7eefb; border-radius: 16px; padding: 14px 16px; }
+    .meta-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .meta-value { font-size: 14px; font-weight: 600; word-break: break-word; }
+    .layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 22px; align-items: start; }
+    .toc { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; }
+    .toc h2 { margin: 0 0 12px; font-size: 15px; color: var(--text); }
+    .toc-list { list-style: none; margin: 0; padding: 0; }
+    .toc-list li { margin: 0; }
+    .toc-list a { display: block; padding: 5px 8px; border-radius: 8px; color: var(--muted); font-size: 13px; transition: all 0.15s; }
+    .toc-list a:hover { color: var(--primary); background: #f0f6ff; text-decoration: none; }
+        .toc-list a.active{color:var(--primary);background:#eff6ff;font-weight:600;border-left:3px solid var(--primary);padding-left:5px;}
+.toc-sub { list-style: none; padding-left: 12px; margin: 0; }
+    .toc-sub a { font-size: 12px; padding: 3px 8px; }
+    .content { display: flex; flex-direction: column; gap: 18px; }
+    .section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 26px 28px; }
+    .section-title { display: flex; align-items: center; gap: 12px; margin: 0 0 20px; font-size: 20px; font-weight: 700; }
+    .icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+    h3 { margin: 24px 0 12px; font-size: 17px; color: #111827; }
+    h4 { margin: 18px 0 8px; font-size: 15px; color: #374151; }
+    .paper-info { background: #fafbff; border-left: 4px solid var(--primary); border-radius: 12px; padding: 14px 16px; margin: 16px 0; color: #334155; }
+    .paper-info p { margin: 4px 0; font-size: 14px; }
+    .callout-blue { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 14px; padding: 14px 16px; margin: 14px 0; }
+    .callout-amber { background: #fffbeb; border: 1px solid #fde68a; border-radius: 14px; padding: 14px 16px; margin: 14px 0; }
+    .callout-green { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 14px; padding: 14px 16px; margin: 14px 0; }
+    .callout-purple { background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 14px; padding: 14px 16px; margin: 14px 0; }
+    .example-box { background: #f0fdf4; border: 1px solid #86efac; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .ex-title { font-weight: 700; color: #166534; margin-bottom: 8px; font-size: 14px; }
+    .formula-block { margin: 16px 0 8px; overflow-x: auto; }
+    .formula-vars { background: #f8faff; border: 1px solid #dbeafe; border-radius: 12px; padding: 12px 16px; margin: 4px 0 16px; font-size: 14px; color: #374151; }
+    .formula-vars .var-title { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+    .formula-vars ul { margin: 0; padding-left: 18px; }
+    .formula-vars li { margin: 4px 0; }
+    .flow-diagram { border: 1px solid #bfdbfe; border-radius: 14px; padding: 16px; margin: 16px 0; background: #f8fbff; }
+    .flow-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0; }
+    .flow-box { background: #eff6ff; border: 1px solid #93c5fd; border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 600; }
+    .flow-arrow { color: #60a5fa; font-weight: 700; font-size: 16px; }
+    .two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .mini-card { border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; background: #fff; }
+    .mini-card h4 { margin-top: 0; font-size: 14px; }
+    .table-wrap { overflow-x: auto; margin: 16px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    thead th { background: #f3f6fb; color: #334155; text-align: left; font-weight: 700; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+    td { padding: 10px 14px; border-bottom: 1px solid #eef2f7; vertical-align: top; }
+    tbody tr:nth-child(even) { background: #fcfdff; }
+    figure { margin: 20px 0; background: #fbfdff; border: 1px solid #e8edf5; border-radius: 16px; padding: 14px; }
+    figure img { width: 100%; display: block; border-radius: 12px; background: #fff; }
+    .fig-placeholder { background: #f3f4f6; border-radius: 12px; padding: 28px; text-align: center; color: #6b7280; font-size: 14px; }
+    figcaption { margin-top: 10px; font-size: 13px; color: var(--muted); }
+    blockquote { margin: 16px 0; padding: 14px 18px; border-left: 4px solid var(--accent); background: rgba(124,58,237,0.05); border-radius: 0 12px 12px 0; color: #3f3f46; }
+    ul, ol { padding-left: 22px; }
+    li + li { margin-top: 6px; }
+    .katex-display { overflow-x: auto; padding: 6px 0; }
+    footer { margin-top: 32px; text-align: center; color: var(--muted); font-size: 13px; }
+    @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } .toc { position: static; } .meta-grid, .two-col { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 640px) { .page { padding: 18px 12px 56px; } .hero, .section { padding: 20px 18px; } h1 { font-size: 26px; } .meta-grid, .two-col { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div class="page">
+  <a class="back-link" href="../index.html">← 返回论文列表</a>
+
+  <header class="hero">
+    <div class="eyebrow">🔗 LinkedIn · 大规模排序 · KDD 2025</div>
+    <h1>LiGR：用 7 个特征超越数百个特征，LinkedIn 生成式排序的工业实践</h1>
+    <p class="subtitle">From Features to Transformers: Redefining Ranking for Scalable Impact</p>
+    <div class="meta-grid">
+      <div class="meta-card">
+        <div class="meta-label">作者</div>
+        <div class="meta-value">Fedor Borisyuk, Lars Hertel et al. · LinkedIn</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">年份</div>
+        <div class="meta-value">2025</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">来源</div>
+        <div class="meta-value">KDD 2025 · arXiv 2502.03417</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">核心成果</div>
+        <div class="meta-value">7特征超越数百特征 · DAU +0.27% · Scaling Law 验证</div>
+      </div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="toc">
+      <h2>目录</h2>
+      <ul class="toc-list">
+        <li><a href="#background">§1 背景与动机</a></li>
+        <li><a href="#architecture">§2 模型架构</a>
+          <ul class="toc-sub">
+            <li><a href="#baseline">2.1 基线模型</a></li>
+            <li><a href="#ligr-arch">2.2 LiGR Transformer</a></li>
+            <li><a href="#setwise">2.3 Setwise 排序层</a></li>
+            <li><a href="#sid">2.4 Semantic ID 集成</a></li>
+          </ul>
+        </li>
+        <li><a href="#system">§3 系统架构与推理优化</a></li>
+        <li><a href="#experiments">§4 实验结果</a></li>
+        <li><a href="#lessons">§5 工程经验</a></li>
+        <li><a href="#summary">§6 一句话总结</a></li>
+      </ul>
+    </aside>
+
+    <main class="content">
+
+      <!-- 一句话总结 -->
+      <section class="section" id="tldr">
+        <div class="section-title">
+          <div class="icon" style="background:#eff6ff;">💬</div>
+          一句话总结
+        </div>
+        <blockquote>
+          LiGR 将生成式推荐（HSTU 风格）引入 LinkedIn 大规模排序，用 7 个特征 + Gated Transformer + Setwise Attention 超越了需要数百特征的 DLRM 基线，在 Feed 排序上验证了序列长度/层数/嵌入维度同步扩展的 Scaling Law，SID 替代 Post ID 将参数量压缩 4×，并在生产 A/B 测试中实现 DAU +0.27%。
+        </blockquote>
+      </section>
+
+      <!-- §1 背景 -->
+      <section class="section" id="background">
+        <div class="section-title">
+          <div class="icon" style="background:#eff6ff;">🎯</div>
+          §1 背景与动机
+        </div>
+
+        <div class="paper-info">
+          <p><strong>论文：</strong>From Features to Transformers: Redefining Ranking for Scalable Impact</p>
+          <p><strong>机构：</strong>LinkedIn, Mountain View, CA（KDD 2025）</p>
+          <p><strong>发表：</strong>arXiv 2502.03417，KDD 2025</p>
+          <p><strong>链接：</strong><a href="https://arxiv.org/abs/2502.03417" target="_blank">arxiv.org/abs/2502.03417</a></p>
+        </div>
+
+        <h3>LinkedIn Feed 排序的三大目标</h3>
+        <p>LiGR 是 LinkedIn 大规模排序框架（LinkedIn Generative Recommender for Ranking），在 Feed 排序和视频检索上全面取代传统 DLRM 方案。其三个突破性目标：</p>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>目标 1：大幅简化特征工程</h4>
+            <p>传统 LinkedIn Feed 排序模型需要<strong>数百个手工特征</strong>（稠密特征、计数特征、交叉特征等），需要大量人工设计和维护。</p>
+            <p><strong>成果：</strong>LiGR 只用 <strong>7 个特征</strong>即可超越传统方案的全特征性能，其中最重要的单个特征是 Actor ID（帖子作者 ID）。</p>
+          </div>
+          <div class="mini-card">
+            <h4>目标 2：验证 Ranking 的 Scaling Law</h4>
+            <p>语言模型领域已有大量 Scaling Law 研究，但推荐排序系统的 Scaling Law 在工业界鲜有验证。</p>
+            <p><strong>成果：</strong>在序列长度、层数、嵌入维度上验证 Scaling Law——每增加一个数量级的训练 FLOPS，Long Dwell AUC 提升约 0.015。</p>
+          </div>
+          <div class="mini-card">
+            <h4>目标 3：从 Pointwise 到 Setwise 排序</h4>
+            <p>传统 Feed 排序依赖 Pointwise + 规则多样性重排（如：同一 Actor 帖子间必须至少间隔2个位置）。规则统一假设限制了个性化。</p>
+            <p><strong>成果：</strong>Setwise 注意力模型替代多样性规则，A/B 测试显示 DAU +0.27%，Feed 时长 +0.28%。</p>
+          </div>
+          <div class="mini-card">
+            <h4>对比：与 HSTU (Meta) 的差异</h4>
+            <p>LiGR 将 Meta HSTU 方案（Actions Speak Louder Than Words）迁移到 LinkedIn 排序场景，并做出了关键改进：</p>
+            <ul>
+              <li>Gated Normalization（门控归一化）替代标准 LayerNorm</li>
+              <li>Setwise 层处理会话内 item 交互</li>
+              <li>Semantic ID（SID）替代 Post ID，参数量从 5.4B→1.3B</li>
+              <li>实验证明 LiGR 在各规模上均优于 HSTU</li>
+            </ul>
+          </div>
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2502.03417v1/extracted/6179349/figures/FeedContributionTower.png"
+               alt="Figure 1: LinkedIn Feed 基线模型 Contribution Tower"
+               onerror="this.onerror=null;this.parentElement.innerHTML='<div class=\'fig-placeholder\'><b>Figure 1：LinkedIn Feed 基线模型 Contribution Tower</b><br><br>展示传统 DLRM 架构的 Contribution Tower：输入包含 Actor ID、Hashtag 等稀疏特征和大量稠密特征，通过嵌入表 Lookup + 多层 FC 输出多任务预测（Likes/Comments/Shares/Votes）</div>'" />
+          <figcaption><strong>Figure 1（论文原图）：</strong>LinkedIn Feed 基线排序模型的 Contribution Tower。传统 DLRM 架构：Actor ID + Hashtag 稀疏特征通过嵌入表映射，与大量稠密特征拼接后经多层 FC 预测各项互动指标。</figcaption>
+        </figure>
+      </section>
+
+      <!-- §2 架构 -->
+      <section class="section" id="architecture">
+        <div class="section-title">
+          <div class="icon" style="background:#eff6ff;">⚙️</div>
+          §2 模型架构
+        </div>
+
+        <h3 id="ligr-arch">2.2 LiGR Transformer 核心设计</h3>
+
+        <figure>
+          <img src="https://arxiv.org/html/2502.03417v1/extracted/6179349/GR.png"
+               alt="Figure 2: LiGR 架构总览"
+               onerror="this.onerror=null;this.parentElement.innerHTML='<div class=\'fig-placeholder\'><b>Figure 2：LiGR 架构</b><br><br>全序列 Transformer 架构：输入 = 用户历史行为 token 序列（动作交错格式）+ 候选 item；历史注意力处理长序列；Setwise 注意力（绿色块）处理会话内 item 交互；门控 skip-connection 提升训练稳定性</div>'" />
+          <figcaption><strong>Figure 2（论文原图）：</strong>LiGR 架构总览。历史注意力（causal）处理长期行为序列，In-Session Setwise 注意力（绿色块）捕获当前会话中候选 item 间的交互，两者输出综合用于多任务预测。</figcaption>
+        </figure>
+
+        <p>LiGR 是一个<strong>全序列 Transformer 架构</strong>，采用 HSTU 的动作交错（action interleaving）方案，将用户历史按序排列：</p>
+
+        <div class="flow-diagram">
+          <p style="font-weight:700;margin:0 0 10px;font-size:14px;">LiGR 输入序列格式</p>
+          <div class="flow-row">
+            <div class="flow-box">$X_0$（历史 item）</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box">$y_0$（对应动作）</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box">$X_1$（历史 item）</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box">$y_1$（动作）</div>
+            <div class="flow-arrow">→ … →</div>
+            <div class="flow-box">$X_n$（候选 item）</div>
+          </div>
+        </div>
+
+        <p>其中每个 token $X_i$ 是多个嵌入特征的<strong>拼接</strong>（item 特征、作者特征、内容嵌入等），$y_i$ 是多元动作标签（click/like/comment/share）。因果注意力（Causal Attention）防止位置 $i$ 向前看。</p>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：动作交错（Action Interleaving）为什么比纯 item 序列更好？</div>
+          <p>假设用户的历史行为是：看了帖子 A → <em>点赞</em>，看了帖子 B → <em>仅查看</em>，看了帖子 C → <em>评论+分享</em>。</p>
+          <p><strong>纯 item 序列（传统做法）：</strong>序列 = [A, B, C]，动作信息被丢弃。模型无法区分"看了 A 并点赞"与"看了 A 并滑走"——同样是帖子 A 出现在历史里，对下一个推荐的影响其实截然不同。</p>
+          <p><strong>动作交错（LiGR 做法）：</strong>序列 = [$X_A$, $y_{\text{点赞}}$, $X_B$, $y_{\text{查看}}$, $X_C$, $y_{\text{评论+分享}}$]。注意力机制可以学到：出现在<em>高参与度动作</em>之后的 item 类型预示着用户兴趣；<em>低参与度动作</em>之后的 item 可能是用户不感兴趣的内容类型。这种动作条件化的兴趣建模是纯 item 序列无法捕获的。</p>
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2502.03417v1/extracted/6179349/GR_transformer.png"
+               alt="Figure 3: LiGR Transformer 门控归一化架构"
+               onerror="this.onerror=null;this.parentElement.innerHTML='<div class=\'fig-placeholder\'><b>Figure 3：LiGR Transformer 门控 skip-connection</b><br><br>标准 Transformer 的 skip-connection 是 h = h + F(h)，LiGR 改为 h = h + F(h) × σ(hW)，其中 σ(hW) 是门控信号（线性投影 + sigmoid）。门控允许模型自适应地控制每层残差的信号强度，提升大模型训练稳定性</div>'" />
+          <figcaption><strong>Figure 3（论文原图）：</strong>LiGR 的门控归一化 skip-connection。公式 $h^{j+1} = h^j + F(h^j) \times \sigma(h^j W)$，其中 $\sigma(h^j W)$ 是可学习门控，替代标准 LayerNorm，显著提升了大规模训练稳定性。</figcaption>
+        </figure>
+
+        <p>门控归一化公式：</p>
+        <div class="formula-block">
+          $$h^{j+1} = h^j + F(h^j) \times \sigma(h^j W)$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$h^j$：第 $j$ 层 Transformer 的隐状态</li>
+            <li>$F(h^j)$：Multi-Head Attention 或 FFN 的输出</li>
+            <li>$\sigma(h^j W)$：门控信号，线性投影 $W$ + Sigmoid，值域 $(0,1)$</li>
+            <li>整体等价于将残差连接乘以一个自适应的实值门控，类似 Highway Transformer，但门控作用在 $F(h^j)$ 上而非 skip 上</li>
+          </ul>
+        </div>
+
+        <h3 id="setwise">2.3 Setwise 排序层（关键创新）</h3>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：Gated Normalization 如何解决大规模训练不稳定？</div>
+          <p>标准 Transformer 的残差连接是 $h^{j+1} = h^j + F(h^j)$，没有任何门控。当模型深度增加（比如 16 层）或序列极长时，不同层的残差贡献可能差别很大，导致梯度爆炸或消失。</p>
+          <p><strong>LiGR 的修复：</strong>$h^{j+1} = h^j + F(h^j) \times \sigma(h^j W)$。门控 $\sigma(h^j W) \in (0,1)$ 根据当前隐状态自适应地缩放残差的贡献。如果某层的 $F(h^j)$ 幅度过大，门控会自动变小以限制其影响——类似于 LSTM 中遗忘门的作用，但作用在 Transformer 的残差路径上。</p>
+          <p><strong>工程效果：</strong>在 16 层 + 2048 步序列的大规模配置下，无门控训练会出现 loss spike；加了门控后训练曲线稳定，这是 LiGR 能 Scale 到大模型的关键之一。</p>
+        </div>
+
+        <p>LinkedIn Feed 传统的 Pointwise 排序 + 规则多样性重排存在明显局限：规则是一刀切的，无法个性化。LiGR 增加了 In-Session Setwise Attention：</p>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>Setwise 注意力机制</h4>
+            <p>在 LiGR 的历史注意力之外，增加<strong>会话内注意力块</strong>（如 Figure 2 绿色块）：会话内的候选 item 之间互相 attend，模拟用户在当前展示列表中的选择行为。</p>
+            <p>会话由 session ID 区分，使用 FlexAttention 高效处理变长会话的注意力掩码。</p>
+          </div>
+          <div class="mini-card">
+            <h4>训练损失增强</h4>
+            <p>在原有二元交叉熵之外，增加 Attention Rank Loss（Ai et al. 2018）——对会话内 item 的相对顺序进行优化，鼓励模型在会话级别正确排列 item。</p>
+            <p>实验结果：In-Session Setwise Attention 使 Long Dwell AUC 额外提升 <strong>+0.20%</strong>（Contributions AUC 无明显变化）。</p>
+          </div>
+        </div>
+
+        <h3 id="sid">2.4 Semantic ID 集成（LiGR + SID）</h3>
+
+        <p>LiGR 中 SID 的作用是替代或补充 Post ID（数据库分配的帖子 ID），以解决大词汇量 ID 嵌入表的问题。</p>
+
+        <p><strong>RQ-VAE 配置：</strong>3层 codebook，每层 1,000 个码向量，latent 维度 8，使用 FLOPs Regularizer 保证均匀聚类，使用指数移动平均 + 向量重置防止 codebook 塌陷。</p>
+
+        <p><strong>Prefix 编码方案（concat pooling）：</strong></p>
+        <ul>
+          <li><strong>1-gram</strong>：$c_1$ 直接查嵌入表</li>
+          <li><strong>2-gram</strong>：$(c_1, c_2)$ 拼接后查嵌入表</li>
+          <li><strong>3-gram</strong>：$(c_1, c_2, c_3)$ 哈希到大小 $10^6$ 的嵌入表中</li>
+          <li>每级 SID 嵌入维度为 32，最终使用 <strong>concat pooling</strong>（拼接三级 embedding）而非求和</li>
+        </ul>
+
+        <div class="callout-blue">
+          <strong>LiGR vs Meta Prefix-Ngram 的关键区别：</strong>
+          <ul>
+            <li>Meta 使用<strong>求和（sum）</strong>聚合各前缀嵌入，LiGR 使用<strong>拼接（concat）</strong>——保留各层嵌入的独立信号</li>
+            <li>Meta 的 codebook 大小 K=2048，LiGR 的 K=1,000（每层）</li>
+            <li>Meta 的 RQ-VAE 在广告内容模型上训练；LiGR 的 RQ-VAE 在帖子内容嵌入上训练</li>
+          </ul>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>特征组合</th><th>Long Dwell AUC 变化</th><th>Contribution AUC 变化</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>All features (基准)</td><td>——</td><td>——</td></tr>
+              <tr><td>只用 SID（去掉所有其他特征）</td><td>-6.5%</td><td>-4.6%</td></tr>
+              <tr><td>去掉 Post ID，加入 SID</td><td><strong>+0.40%</strong></td><td><strong>+0.11%</strong></td></tr>
+              <tr><td>保留 Post ID，额外加入 SID</td><td>+0.26%</td><td>+0.22%</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：为什么 SID 替换 Post ID 能压缩参数量 4 倍还提升 AUC？</div>
+          <p>LinkedIn 的帖子（Post）数量是数十亿量级。直接为每个 Post ID 维护一个嵌入向量，需要约 <strong>5.4B 参数</strong>的嵌入表（数十亿 × 嵌入维度）。</p>
+          <p><strong>SID 如何压缩：</strong>3 层 codebook，每层 1,000 个码向量。所有帖子共享同一套 3 × 1,000 = 3,000 个码向量。最终嵌入表参数量约 <strong>1.3B</strong>（约 75% 压缩），且对新帖子天然泛化（无需新增嵌入行）。</p>
+          <p><strong>为什么 AUC 还更好？</strong>Post ID 是数据库随机分配的，相近的 ID 没有任何语义关联。SID 基于帖子内容嵌入（LiPost 模型）量化生成，相同主题的帖子会聚类到相近的 codebook 前缀（如科技类帖子 → 第1层码字同为 42，商业类帖子 → 第1层码字同为 17）。模型通过 SID 嵌入学到的是"话题级别"的兴趣模式，泛化能力更强。</p>
+          <p><strong>concat vs sum 的直觉：</strong>concat 保留了各层码字的独立信号（第1层 = 粗粒度类别，第3层 = 细粒度子类），sum 会让粗细粒度信息互相叠加干扰。LiGR 实验验证了 concat (+0.40% Long Dwell) 优于 sum。</p>
+        </div>
+
+        <p>关键结论：SID 可以<strong>完全替代 Post ID</strong>，且替代后性能更好（+0.40% Long Dwell）。同时将模型参数量从 5.4B 降至 1.3B（约 75% 压缩）。</p>
+      </section>
+
+      <!-- §3 系统架构 -->
+      <section class="section" id="system">
+        <div class="section-title">
+          <div class="icon" style="background:#eff6ff;">🏗️</div>
+          §3 系统架构与推理优化
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2502.03417v1/extracted/6179349/figures/ARTAL_arch.png"
+               alt="Figure 5: LiGR 系统架构"
+               onerror="this.onerror=null;this.parentElement.innerHTML='<div class=\'fig-placeholder\'><b>Figure 5：LiGR 系统架构</b><br><br>系统包含近线存储（nearline）用于保存用户历史和 item 特征，GNN 和 LLM 生成 item/member embedding，模型服务层将历史一次性编码并复用于所有候选打分</div>'" />
+          <figcaption><strong>Figure 5（论文原图）：</strong>LiGR 系统架构。近线存储保存用户历史行为序列和 item 特征，支持长序列（最长 2048 步）的历史注意力计算，GPU 推理时历史编码在候选间摊销（amortized inference）。</figcaption>
+        </figure>
+
+        <h3>推理优化</h3>
+        <p>LiGR 大模型的在线 serving 面临延迟挑战，采用以下四项优化：</p>
+        <ol>
+          <li><strong>Split Scoring（分割打分）：</strong>仅对 Pointwise 打分后的 top 10 帖子应用 Setwise 注意力，pointwise 和 setwise 的模型权重分开部署</li>
+          <li><strong>Score Combination（分数叠加）：</strong>前 10 个帖子的 Setwise 分数叠加到 Pointwise 分数，11 位之后保持 Pointwise 排序</li>
+          <li><strong>规则多样性重排下线：</strong>Setwise 模型上线后，传统基于规则的多样性重排器被关闭</li>
+          <li><strong>Unified Inference（统一推理）：</strong>Pointwise 和 Setwise 模型权重合并，一次推理完成所有打分；所有候选打包为 batch，复用历史编码</li>
+        </ol>
+
+        <p>最终增量延迟成本：<strong>p90 仅 10ms</strong>，满足 Feed 排序的严苛延迟要求。</p>
+
+        <p><strong>训练优化：</strong>使用 Flash Attention + 混合精度（FP16），历史序列最长 2048 步，8×A100 GPU，训练数据 1.1 亿序列（2024年1月至8月）。嵌入表使用列向量分割（column-wise splitting）分布在多个设备，支持 5.4B 参数的稀疏嵌入表。</p>
+      </section>
+
+      <!-- §4 实验 -->
+      <section class="section" id="experiments">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">📊</div>
+          §4 实验结果
+        </div>
+
+        <h3>主要排序性能</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>模型</th><th>Long Dwell AUC</th><th>Contributions AUC</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>基线（DLRM，数百特征）</td><td>0.755</td><td>0.903</td></tr>
+              <tr><td><strong>LiGR（7个特征）</strong></td><td><strong>0.773（+2.4%）</strong></td><td><strong>0.914（+1.2%）</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Scaling Law 实验</h3>
+
+        <div class="two-col">
+          <figure>
+            <img src="https://arxiv.org/html/2502.03417v1/extracted/6179349/figures/Normalized_entropy_GR_vs_HSTU.png"
+                 alt="Figure 6: Normalized Entropy Scaling"
+                 onerror="this.onerror=null;this.parentElement.innerHTML='<div class=\'fig-placeholder\'><b>Figure 6：Scaling - Normalized Entropy</b><br>LiGR 在所有 FLOPS 规模上均优于 HSTU</div>'" />
+            <figcaption>Figure 6：归一化评估熵随 FLOPS 的 Scaling。LiGR（蓝）持续优于 HSTU（橙）。</figcaption>
+          </figure>
+          <figure>
+            <img src="https://arxiv.org/html/2502.03417v1/extracted/6179349/figures/Long_dwell_new.png"
+                 alt="Figure 7: Long Dwell AUC Scaling"
+                 onerror="this.onerror=null;this.parentElement.innerHTML='<div class=\'fig-placeholder\'><b>Figure 7：Scaling - Long Dwell AUC</b><br>每提升 1个数量级 FLOPS，Long Dwell AUC 约增加 0.015</div>'" />
+            <figcaption>Figure 7：Long Dwell AUC 随 FLOPS 的 Scaling 曲线。LiGR 展现出稳定的幂律增长。</figcaption>
+          </figure>
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2502.03417v1/extracted/6179349/figures/Contributions_new.png"
+               alt="Figure 8: Contributions AUC Scaling"
+               onerror="this.onerror=null;this.parentElement.innerHTML='<div class=\'fig-placeholder\'><b>Figure 8：Scaling - Contributions AUC</b><br>同样显示 LiGR Scaling Law 优于 HSTU</div>'" />
+          <figcaption>Figure 8：Contributions AUC 随训练 FLOPS 的 Scaling，LiGR 全程优于 HSTU。</figcaption>
+        </figure>
+
+        <div class="callout-blue">
+          <strong>LiGR vs HSTU 关键数据：</strong>在相同计算量（$10^{17}$ FLOPS）下，Long Dwell AUC：LiGR = 76.03，HSTU = 75.87（LiGR 优 +0.16%）。且 LiGR 可以使用 FlashAttention，支持更大规模的模型；HSTU 依赖 SiLU attention，无法使用 FlashAttention。
+        </div>
+
+        <h3>各维度 Scaling 分析</h3>
+
+        <figure>
+          <img src="https://arxiv.org/html/2502.03417v1/extracted/6179349/figures/sequence_length_scaling_both.png"
+               alt="Figure 12: 序列长度 Scaling"
+               onerror="this.onerror=null;this.parentElement.innerHTML='<div class=\'fig-placeholder\'><b>Figure 12：序列长度 Scaling</b><br>在 layers=16、id_emb_dim=64 固定条件下，增加序列长度显示出最清晰的 Scaling Law（对所有指标一致正向）</div>'" />
+          <figcaption>Figure 12：序列长度独立 Scaling 曲线（固定 layers=16, id_emb_dim=64）。序列长度增加是三个维度中唯一在所有指标上均显示一致 Scaling 的维度。</figcaption>
+        </figure>
+
+        <p>关键发现：</p>
+        <ul>
+          <li><strong>序列长度</strong>：独立 Scaling 时，所有指标均一致正向，是三维中最稳定的 Scaling 维度</li>
+          <li><strong>ID 嵌入维度</strong>：Long Dwell AUC 正向，但 Contributions AUC 不规律</li>
+          <li><strong>Transformer 层数</strong>：Long Dwell AUC 正向，但 Evaluation Loss 无明显规律</li>
+          <li><strong>结论：</strong>要实现全面 Scaling，需要同时扩展所有三个维度，而非单独扩展</li>
+        </ul>
+
+        <h3>特征消融（Feature Ablation）</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>单特征</th><th>Long Dwell AUC</th><th>Contribution AUC</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Post ID</td><td>0.703</td><td>0.857</td></tr>
+              <tr><td><strong>Original Actor ID</strong></td><td><strong>0.731</strong></td><td><strong>0.893</strong></td></tr>
+              <tr><td>Post Type (Video/Photo/...)</td><td>0.706</td><td>0.883</td></tr>
+              <tr><td>Update Age of Post</td><td>0.680</td><td>0.854</td></tr>
+              <tr><td>Activity ID of Shared Post</td><td>0.695</td><td>0.856</td></tr>
+              <tr><td>Post content embedding (LiPost)</td><td>0.703</td><td>0.878</td></tr>
+              <tr><td>All 7 features</td><td>0.767</td><td>0.912</td></tr>
+              <tr><td>基线（数百特征）</td><td>0.755</td><td>0.904</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>最重要的单特征是 <strong>Actor ID（帖子作者 ID）</strong>——单凭此一个特征（0.731）已接近基线（0.755），体现了 LinkedIn Feed 中 user-author 关系的核心信号价值。</p>
+
+        <h3>在线 A/B 测试</h3>
+        <div class="callout-green">
+          <strong>Setwise 排序层 A/B 测试（生产环境）：</strong>
+          <ul>
+            <li>DAU（每日活跃用户参与专业内容）：<strong>+0.27%</strong></li>
+            <li>Feed 时长（Time Spent on Feed）：<strong>+0.28%</strong></li>
+            <li>规则多样性重排器下线，模型自动学习多样性</li>
+          </ul>
+        </div>
+
+        <h3>视频检索（LiGR for Retrieval）</h3>
+        <p>在视频检索任务（2周数据），使用 LiGR + LiNR（LinkedIn GPU 检索系统）：</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>实验配置</th><th>Recall@400</th><th>相对提升</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>基线（无 LiGR，cosine）</td><td>0.0799</td><td>—</td></tr>
+              <tr><td>共享层 + cosine</td><td>0.1197</td><td>+49.81%</td></tr>
+              <tr><td>共享层 + MLP</td><td>0.3905</td><td>+226.23%</td></tr>
+              <tr><td>+ LiGR（共享层 + MLP）</td><td>0.3997</td><td>+2.36%</td></tr>
+              <tr><td><strong>+ LiGR + Video ID</strong></td><td><strong>0.4435</strong></td><td><strong>+10.96%</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- §5 工程经验 -->
+      <section class="section" id="lessons">
+        <div class="section-title">
+          <div class="icon" style="background:#fff7ed;">💡</div>
+          §5 工程经验（Lessons Learnt）
+        </div>
+
+        <h3>关于多样性</h3>
+        <p>LinkedIn 多年来使用规则多样性重排（Rule-Based Diversity）：同一 Actor 间最少 2 个间隔、Out-of-Network 内容最少 2 个间隔等。</p>
+        <ul>
+          <li>消融实验：去掉所有多样性规则，DAU 下降 -0.18%（规则有价值）</li>
+          <li>但规则是一刀切方案，限制了个性化</li>
+          <li>Setwise 模型替代后：DAU +0.27%，规则关闭，效果反而更好——模型学到了更个性化的多样性策略</li>
+        </ul>
+
+        <h3>关于 LiGR 开发路径</h3>
+        <p>LiGR 的开发是对 LinkedIn 训练 pipeline 的全面重建（数据格式、特征、训练方式均与 DLRM 根本不同），经历了以下阶段：</p>
+        <ol>
+          <li><strong>验证 ID 特征的等效性：</strong>证明计数特征可以被 ID 嵌入特征模拟</li>
+          <li><strong>从重要特征开始构建：</strong>从 DLRM 的 top 特征或对应 ID 特征逐个添加，直到新增特征的 AUC 收益很小</li>
+          <li><strong>解决冷启动：</strong>太少特征时 item 冷启动严重，加入 Actor ID 等特征后冷启动显著改善；增加 user 历史时间窗口减少 member 冷启动</li>
+          <li><strong>规模扩展：</strong>确保特征充足后，沿序列长度、嵌入维度、层数三个维度同步 Scale Up</li>
+        </ol>
+
+        <figure>
+          <img src="https://arxiv.org/html/2502.03417v1/extracted/6179349/figures/gr-progress-chart_new.png"
+               alt="Figure 13: LiGR 迭代 AUC 进展"
+               onerror="this.onerror=null;this.parentElement.innerHTML='<div class=\'fig-placeholder\'><b>Figure 13：LiGR 迭代进展</b><br><br>横轴=时间（迭代轮次），纵轴=AUC。展示从最初小模型到最终生产模型的 AUC 逐步提升历程，验证了 Scaling + 特征工程的价值</div>'" />
+          <figcaption>Figure 13：LiGR 各版本迭代的 AUC 进展曲线，展示了从小模型到生产级大模型的完整研发历程。</figcaption>
+        </figure>
+
+        <div class="callout-amber">
+          <strong>关于架构选择的关键洞见：</strong>
+          <p>大量架构变体实验（DCNv2、不同注意力激活函数、Position Embedding 方案）的结论是：<strong>大多数架构改变对 AUC 影响有限</strong>，性能提升的主要驱动力是<strong>特征</strong>和<strong>模型规模</strong>。这与 LLM 领域的经验一致：数据 + 规模 > 架构细节。</p>
+        </div>
+      </section>
+
+      <!-- §6 总结 -->
+      <section class="section" id="summary">
+        <div class="section-title">
+          <div class="icon" style="background:#eff6ff;">💬</div>
+          §6 一句话总结与个人理解
+        </div>
+
+        <blockquote>
+          LiGR 将生成式推荐（HSTU 风格）引入 LinkedIn 大规模排序，用 7 个特征 + Gated Transformer + Setwise Attention 超越了需要数百特征的 DLRM 基线，在 Feed 排序上验证了序列长度/层数/嵌入维度同步扩展的 Scaling Law，SID 替代 Post ID 将参数量压缩 4×，并在生产 A/B 测试中实现 DAU +0.27%。
+        </blockquote>
+
+        <h3>核心贡献总结</h3>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>✅ 主要亮点</h4>
+            <ul>
+              <li>门控 skip-connection：解决大规模 Transformer 训练稳定性问题</li>
+              <li>Setwise Attention：替代规则多样性，学到更好的会话多样性</li>
+              <li>SID + concat pooling：替代 Post ID，参数量 5.4B→1.3B，AUC 提升</li>
+              <li>工程细节翔实：FlexAttention、分拆 Scoring、摊销历史推理等</li>
+              <li>特征消融结论实用：Actor ID 是最核心特征</li>
+            </ul>
+          </div>
+          <div class="mini-card">
+            <h4>⚠️ 局限与注意</h4>
+            <ul>
+              <li>SID 仅替换 Post ID（内容稀疏特征），未涵盖 User ID 侧</li>
+              <li>序列长度 Scaling 最稳定，但计算成本也最高（O(n²) 注意力）</li>
+              <li>生产 A/B 测试只报告了 Setwise 部分，不清楚完整 LiGR 系统的在线增益</li>
+              <li>LinkedIn Feed 是 professional 内容场景，结论未必完全迁移到娱乐/广告场景</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="callout-amber">
+          <strong>对工业推荐从业者的启示：</strong>
+          <p>LiGR 的工程路径可以作为"如何将生成式推荐从检索迁移到排序"的参考蓝图：（1）先验证 ID 嵌入能覆盖手工特征；（2）从少量核心特征开始，逐步加入直到边际收益小；（3）解决冷启动后再 Scale Up；（4）同步扩展三个维度而非单独扩展。核心技术点：Gated Normalization + Setwise Layer + SID Concat Pooling。</p>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <footer>
+    <a href="../index.html" class="back-link">← 返回论文列表</a>
+    <p>Generated by paper-reader · arXiv 2502.03417 · KDD 2025</p>
+  </footer>
+</div>
+
+<script>
+(function(){
+  // TOC 滚动高亮：使用 IntersectionObserver 监听所有带 id 的 section/h3
+  var tocLinks = document.querySelectorAll('.toc-list a[href^="#"], .toc-sub a[href^="#"]');
+  if (!tocLinks.length) return;
+
+  // 建立 id -> tocLink 映射
+  var linkMap = {};
+  tocLinks.forEach(function(a){
+    var id = a.getAttribute('href').slice(1);
+    if (id) linkMap[id] = a;
+  });
+
+  var targets = Object.keys(linkMap).map(function(id){
+    return document.getElementById(id);
+  }).filter(Boolean);
+
+  if (!targets.length) return;
+
+  var activeId = null;
+
+  function setActive(id){
+    if (id === activeId) return;
+    activeId = id;
+    tocLinks.forEach(function(a){ a.classList.remove('active'); });
+    if (id && linkMap[id]){
+      linkMap[id].classList.add('active');
+      // 让目录自动滚动到对应项可见
+      var toc = document.querySelector('.toc');
+      if (toc){
+        var li = linkMap[id];
+        var tocTop = toc.getBoundingClientRect().top;
+        var liTop  = li.getBoundingClientRect().top;
+        var offset = liTop - tocTop - toc.clientHeight / 2;
+        toc.scrollBy({ top: offset, behavior: 'smooth' });
+      }
+    }
+  }
+
+  // rootMargin: 上边距 -10%（稍微进入视口就算），下边距 -60%（只有顶部 40% 区域触发）
+  var observer = new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      if (entry.isIntersecting){
+        setActive(entry.target.id);
+      }
+    });
+  }, { rootMargin: '-10% 0px -60% 0px', threshold: 0 });
+
+  targets.forEach(function(el){ observer.observe(el); });
+})();
+</script>
+</body>
+</html>

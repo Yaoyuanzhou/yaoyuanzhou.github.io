@@ -1,0 +1,1841 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LLM Tokenizer 方法总结</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false }
+          ],
+          throwOnError: false
+        });
+      }
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #0891b2; --primary-soft: #ecfeff;
+      --accent: #7c3aed; --shadow: 0 10px 30px rgba(15,23,42,0.08);
+      --radius: 18px; --max: 1120px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: linear-gradient(180deg,#f0fdff 0%,var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      line-height: 1.8;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .page { max-width: var(--max); margin: 0 auto; padding: 32px 20px 80px; }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    .back-link:hover { color: var(--primary); text-decoration: none; }
+    .hero {
+      background: radial-gradient(circle at top right, rgba(8,145,178,0.12), transparent 30%),
+                  radial-gradient(circle at left bottom, rgba(16,185,129,0.08), transparent 24%),
+                  var(--card);
+      border: 1px solid rgba(8,145,178,0.15);
+      border-radius: 24px; box-shadow: var(--shadow);
+      padding: 34px 34px 28px; margin-bottom: 22px;
+    }
+    .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: #ecfeff; color: #0e7490; font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+    h1 { margin: 0 0 10px; font-size: 32px; line-height: 1.25; letter-spacing: -0.02em; }
+    .subtitle { margin: 0; color: var(--muted); font-size: 15px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 24px; }
+    .meta-card { background: #f0fdff; border: 1px solid #a5f3fc; border-radius: 16px; padding: 14px 16px; }
+    .meta-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .meta-value { font-size: 14px; font-weight: 600; word-break: break-word; }
+    .layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 22px; align-items: start; }
+    .toc { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; }
+    .toc h2 { margin: 0 0 12px; font-size: 15px; color: var(--text); }
+    .toc-list { list-style: none; margin: 0; padding: 0; }
+    .toc-list li { margin: 0; }
+    .toc-list a { display: block; padding: 5px 8px; border-radius: 8px; color: var(--muted); font-size: 13px; transition: all 0.15s; }
+    .toc-list a:hover { color: var(--primary); background: #f0fdff; text-decoration: none; }
+        .toc-list a.active{color:var(--primary);background:#eff6ff;font-weight:600;border-left:3px solid var(--primary);padding-left:5px;}
+.toc-sub { list-style: none; padding-left: 12px; margin: 0; }
+    .toc-sub a { font-size: 12px; padding: 3px 8px; }
+    .content { display: flex; flex-direction: column; gap: 18px; }
+    .section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 26px 28px; }
+    .section-title { display: flex; align-items: center; gap: 12px; margin: 0 0 20px; font-size: 20px; font-weight: 700; }
+    .icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+    h3 { margin: 24px 0 12px; font-size: 17px; color: #111827; }
+    h4 { margin: 18px 0 8px; font-size: 15px; color: #374151; }
+    .callout-blue { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 14px; padding: 14px 16px; margin: 14px 0; }
+    .callout-cyan { background: #ecfeff; border: 1px solid #a5f3fc; border-radius: 14px; padding: 14px 16px; margin: 14px 0; }
+    .callout-amber { background: #fffbeb; border: 1px solid #fde68a; border-radius: 14px; padding: 14px 16px; margin: 14px 0; }
+    .callout-green { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 14px; padding: 14px 16px; margin: 14px 0; }
+    .callout-purple { background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 14px; padding: 14px 16px; margin: 14px 0; }
+    .example-box { background: #f0fdf4; border: 1px solid #86efac; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .ex-title { font-weight: 700; color: #166534; margin-bottom: 8px; font-size: 14px; }
+    .formula-block { margin: 16px 0 8px; overflow-x: auto; }
+    .formula-vars { background: #f8faff; border: 1px solid #dbeafe; border-radius: 12px; padding: 12px 16px; margin: 4px 0 16px; font-size: 14px; color: #374151; }
+    .formula-vars .var-title { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+    .formula-vars ul { margin: 0; padding-left: 18px; }
+    .formula-vars li { margin: 4px 0; }
+    .flow-diagram { border: 1px solid #a5f3fc; border-radius: 14px; padding: 16px; margin: 16px 0; background: #f0fdff; }
+    .flow-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0; }
+    .flow-box { background: #ecfeff; border: 1px solid #67e8f9; border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 600; }
+    .flow-arrow { color: #06b6d4; font-weight: 700; font-size: 16px; }
+    .two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .mini-card { border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; background: #fff; }
+    .mini-card h4 { margin-top: 0; font-size: 14px; }
+    .table-wrap { overflow-x: auto; margin: 16px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    thead th { background: #f0fdff; color: #164e63; text-align: left; font-weight: 700; padding: 10px 14px; border-bottom: 1px solid #a5f3fc; }
+    td { padding: 10px 14px; border-bottom: 1px solid #eef2f7; vertical-align: top; }
+    tbody tr:nth-child(even) { background: #f8fffe; }
+    blockquote { margin: 16px 0; padding: 14px 18px; border-left: 4px solid var(--accent); background: rgba(124,58,237,0.05); border-radius: 0 12px 12px 0; color: #3f3f46; }
+    ul, ol { padding-left: 22px; }
+    li + li { margin-top: 6px; }
+    code { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 6px; padding: 2px 7px; font-family: "SF Mono",Consolas,Monaco,monospace; font-size: 13px; color: #0e7490; }
+    pre { background: #1e293b; color: #e2e8f0; border-radius: 0 0 12px 12px; padding: 16px 20px; overflow-x: auto; font-family: "SF Mono",Consolas,Monaco,monospace; font-size: 13px; line-height: 1.7; margin: 0; }
+    pre .kw { color: #93c5fd; } pre .fn { color: #6ee7b7; } pre .str { color: #fde68a; } pre .cm { color: #94a3b8; }
+    /* ── 可折叠代码块 ── */
+    details.code-block { margin: 16px 0; border-radius: 12px; overflow: hidden; border: 1px solid #2d3748; }
+    details.code-block > pre { border-radius: 0; margin: 0; }
+    details.code-block summary.code-toggle {
+      display: flex; align-items: center; gap: 8px;
+      background: #0f172a; color: #94a3b8;
+      padding: 9px 16px; cursor: pointer;
+      font-family: "SF Mono",Consolas,Monaco,monospace; font-size: 12px;
+      user-select: none; list-style: none; outline: none;
+      transition: background 0.15s;
+    }
+    details.code-block summary.code-toggle::-webkit-details-marker { display: none; }
+    details.code-block summary.code-toggle::before {
+      content: "▶"; font-size: 10px; transition: transform 0.2s; flex-shrink: 0;
+    }
+    details.code-block[open] summary.code-toggle::before { transform: rotate(90deg); }
+    details.code-block summary.code-toggle:hover { background: #1e293b; color: #e2e8f0; }
+    details.code-block summary.code-toggle .badge {
+      margin-left: auto; background: #1e3a5f; color: #60a5fa;
+      padding: 1px 8px; border-radius: 999px; font-size: 11px;
+    }
+    .katex-display { overflow-x: auto; padding: 6px 0; }
+    footer { margin-top: 32px; text-align: center; color: var(--muted); font-size: 13px; }
+    @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } .toc { position: static; } .meta-grid, .two-col { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 640px) { .page { padding: 18px 12px 56px; } .hero, .section { padding: 20px 18px; } h1 { font-size: 26px; } .meta-grid, .two-col { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div class="page">
+  <a class="back-link" href="../index.html">← 返回笔记列表</a>
+
+  <header class="hero">
+    <div class="eyebrow">📝 学习笔记 · LLM 基础</div>
+    <h1>LLM Tokenizer 方法总结</h1>
+    <p class="subtitle">从字符到 Token 的完整演化路径：BPE / WordPiece / Unigram / SentencePiece / tiktoken</p>
+    <div class="meta-grid">
+      <div class="meta-card">
+        <div class="meta-label">涵盖方法</div>
+        <div class="meta-value">BPE · WordPiece · Unigram · SentencePiece · BBPE · tiktoken</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">代表模型</div>
+        <div class="meta-value">GPT-2/4 · BERT · T5 · LLaMA · Gemini</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">难度</div>
+        <div class="meta-value">⭐⭐⭐ 中等</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">工程重点</div>
+        <div class="meta-value">vocab size 选择 · OOV · 多语言 · 数字处理</div>
+      </div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="toc">
+      <h2>目录</h2>
+      <ul class="toc-list">
+        <li><a href="#tldr">一句话总结</a></li>
+        <li><a href="#why">§1 为什么需要 Tokenizer？</a></li>
+        <li><a href="#bpe">§2 BPE：字节对编码</a></li>
+        <li><a href="#wordpiece">§3 WordPiece：BERT 的选择</a></li>
+        <li><a href="#unigram">§4 Unigram LM：概率视角</a></li>
+        <li><a href="#sentencepiece">§5 SentencePiece：统一框架</a></li>
+        <li><a href="#bbpe">§6 BBPE + tiktoken：字节级方案</a></li>
+        <li><a href="#compare">§7 横向对比</a></li>
+        <li><a href="#engineering">§8 工程实践</a></li>
+        <li><a href="#summary">§9 总结与启发</a></li>
+        <li><a href="#code">§10 完整代码实现</a>
+          <ul class="toc-sub">
+            <li><a href="#code-bpe">BPE 完整实现</a></li>
+            <li><a href="#code-wordpiece">WordPiece 实现</a></li>
+            <li><a href="#code-unigram">Unigram LM 实现</a></li>
+            <li><a href="#code-vocab-match">有词表后如何匹配</a></li>
+            <li><a href="#code-tiktoken">tiktoken 实际使用</a></li>
+          </ul>
+        </li>
+      </ul>
+    </aside>
+
+    <main class="content">
+
+      <!-- 一句话总结 -->
+      <section class="section" id="tldr">
+        <div class="section-title">
+          <div class="icon" style="background:#ecfeff;">💬</div>
+          一句话总结
+        </div>
+        <blockquote>
+          LLM 的 Tokenizer 本质是「将任意文本映射到有限词表的整数序列」。主流方法沿着 BPE（频率驱动的贪心合并）→ WordPiece（最大化语言模型概率的合并）→ Unigram（从大词表剪枝，概率最优）→ SentencePiece（语言无关的统一框架）→ BBPE/tiktoken（字节级杜绝 OOV） 这条路演进；选哪种取决于语言范围、数字/代码比例、服务延迟等工程约束。
+        </blockquote>
+      </section>
+
+      <!-- §1 为什么需要 Tokenizer -->
+      <section class="section" id="why">
+        <div class="section-title">
+          <div class="icon" style="background:#ecfeff;">🎯</div>
+          §1 为什么需要 Tokenizer？
+        </div>
+
+        <p>语言模型的本质是：给定一段历史序列，预测下一个元素的概率。这个"元素"可以是：</p>
+        <ul>
+          <li><strong>字符级（Char-level）：</strong>每个字母/汉字都是一个 token。序列太长，模型难以学习长程依赖。</li>
+          <li><strong>单词级（Word-level）：</strong>每个完整词语是一个 token。词表极大（英文 100 万+），出现生词（OOV）会崩溃。</li>
+          <li><strong>子词级（Subword-level）：</strong>介于两者之间，频率高的词保持完整，稀有词拆成子词。✅ 主流选择</li>
+        </ul>
+
+        <div class="callout-cyan">
+          <strong>核心矛盾：</strong>词表越大，模型表达能力越强，但参数量（embedding table）越大、OOV 风险越小；词表越小，序列越长，注意力计算开销越大。Tokenizer 就是在这个 trade-off 上求最优解的工具。
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：同一段文字在不同粒度下的序列长度差异</div>
+          <p>文本：<code>"Tokenization is important!"</code></p>
+          <ul>
+            <li><strong>字符级（27 token）：</strong><code>T o k e n i z a t i o n   i s   i m p o r t a n t !</code></li>
+            <li><strong>单词级（3 token）：</strong><code>Tokenization | is | important!</code></li>
+            <li><strong>BPE 子词级（5 token）：</strong><code>Token | ization | is | important | !</code></li>
+          </ul>
+          <p>序列长度直接影响 Transformer 的计算量（$O(n^2)$ attention），所以子词级方案在保持语义完整的同时，大幅减少序列长度。</p>
+        </div>
+
+        <h3>Tokenizer 的两个阶段</h3>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>训练阶段（构建词表）</h4>
+            <p>在大型语料库上统计词频/共现，通过特定算法（BPE/WordPiece/Unigram）构建一个固定大小的词表（vocabulary），词表大小通常 32K–128K。这是一次性的离线过程。</p>
+          </div>
+          <div class="mini-card">
+            <h4>推理阶段（编码/解码）</h4>
+            <p>给定任意文本，按照词表规则将文本切分为 token id 序列（encode），或将模型输出的 id 序列还原为文本（decode）。推理时 tokenizer 是固定的，不再更新。</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- §2 BPE -->
+      <section class="section" id="bpe">
+        <div class="section-title">
+          <div class="icon" style="background:#eff6ff;">🔤</div>
+          §2 BPE：字节对编码（Byte Pair Encoding）
+        </div>
+
+        <p><strong>来源：</strong>1994 年提出用于数据压缩，2016 年被 Sennrich 等人引入 NMT（神经机器翻译），现为 GPT 系列（GPT-1/2/3/4-o）的基础方案。</p>
+
+        <h3>核心思想</h3>
+        <p>从字符级词表出发，<strong>反复合并语料库中最高频的相邻字节对</strong>，直到词表达到目标大小。这是一种贪心算法——每一步都选择当前最优的合并操作。</p>
+
+        <h3>算法步骤（详细版）</h3>
+        <div class="flow-diagram">
+          <div class="flow-row">
+            <div class="flow-box">Step 1：初始化字符词表<br><small>每个字符=一个 token，加上特殊词尾符 ◁</small></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box">Step 2：统计语料中所有 bigram 频率</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box">Step 3：合并最高频 bigram<br><small>将它作为新 token 加入词表</small></div>
+          </div>
+          <div class="flow-row" style="margin-left: 40px;">
+            <div class="flow-arrow">↓</div>
+          </div>
+          <div class="flow-row">
+            <div class="flow-box">Step 4：更新语料中所有被合并的 pair</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box">Step 5：重复 Step2-4<br><small>直到词表大小达到预设 K</small></div>
+          </div>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 完整示例：BPE 在 3 个词上构建词表</div>
+          <p><strong>语料（含词频）：</strong>「low」×5，「lower」×2，「newest」×6，「widest」×3</p>
+          <p><strong>初始词表（字符级，加词尾符）：</strong></p>
+          <details class="code-block" open>
+          <summary class="code-toggle">📄 BPE 词表迭代过程<span class="badge">Python</span></summary>
+        <pre>low&lt;/w&gt;: 5    low e r&lt;/w&gt;: 2    n e w e s t&lt;/w&gt;: 6    w i d e s t&lt;/w&gt;: 3</pre>
+        </details>
+          <p><strong>迭代 1：</strong>统计所有 bigram 频率：<code>e s</code> 出现 6+3=9 次 → 合并为 <code>es</code></p>
+          <details class="code-block" open>
+          <summary class="code-toggle">📄 BPE 词表迭代过程<span class="badge">Python</span></summary>
+        <pre>low&lt;/w&gt;: 5    low e r&lt;/w&gt;: 2    n e w es t&lt;/w&gt;: 6    w i d es t&lt;/w&gt;: 3</pre>
+        </details>
+          <p><strong>迭代 2：</strong><code>es t</code> 出现 6+3=9 次 → 合并为 <code>est</code></p>
+          <details class="code-block" open>
+          <summary class="code-toggle">📄 BPE 词表迭代过程<span class="badge">Python</span></summary>
+        <pre>low&lt;/w&gt;: 5    low e r&lt;/w&gt;: 2    n e w est&lt;/w&gt;: 6    w i d est&lt;/w&gt;: 3</pre>
+        </details>
+          <p><strong>迭代 3：</strong><code>l o</code> 出现 5+2=7 次 → 合并为 <code>lo</code></p>
+          <p>以此类推，最终词表将包含：<code>lo</code>、<code>low</code>、<code>est</code>、<code>new</code>、<code>newest</code> 等子词。</p>
+          <p><strong>关键点：</strong>遇到新词 <code>lower</code>，会先切成字符 <code>l o w e r</code>，然后按学到的合并规则从前往后合并：<code>lo</code> → <code>low</code> → <code>low e r</code>（若 <code>er</code> 也被合并过就继续合并）。</p>
+        </div>
+
+        <h3>推理时编码（Encode）过程</h3>
+        <p>训练阶段学到的是一个<strong>有序合并规则列表</strong>（merge rules），推理时按顺序应用这些规则：</p>
+        <details class="code-block">
+          <summary class="code-toggle">📄 伪代码：BPE 编码（Encode）<span class="badge">Python</span></summary>
+        <pre><span class="cm"># 伪代码：BPE 编码</span>
+<span class="kw">def</span> <span class="fn">bpe_encode</span>(word, merge_rules):
+    tokens = <span class="fn">list</span>(word) + [<span class="str">'&lt;/w&gt;'</span>]       <span class="cm"># 字符级初始化</span>
+    <span class="kw">for</span> pair <span class="kw">in</span> merge_rules:              <span class="cm"># 按训练顺序应用合并规则</span>
+        tokens = <span class="fn">apply_merge</span>(tokens, pair)
+    <span class="kw">return</span> tokens</pre>
+        </details>
+
+        <div class="callout-cyan">
+          <strong>BPE 的优缺点：</strong><br>
+          ✅ 简单直观，高频词不会被拆分；能处理稀有词（拆成子词）；推理速度快（一次遍历合并规则）<br>
+          ❌ 贪心合并不保证全局最优；同一个词可能有多种合并方式（歧义）；对数字处理不友好（如 <code>12345</code> 会被拆成 <code>12 34 5</code>，丢失数值大小关系）
+        </div>
+
+        <h3>代表性模型</h3>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>GPT-1/2/3（原始 BPE）</h4>
+            <p>词表大小 50,257（GPT-2）。操作在字符级别（Unicode 字符），空格被当作普通字符处理。<code>&#9474;hello</code> 和 <code>hello</code> 是不同 token（开头有空格与否不同）。</p>
+          </div>
+          <div class="mini-card">
+            <h4>GPT-4 / LLaMA（BBPE / tiktoken）</h4>
+            <p>升级为字节级 BPE（详见 §6），解决 Unicode 稀有字符的 OOV 问题。cl100k 词表 100,256 tokens，显著提升代码/数学/多语言能力。</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- §3 WordPiece -->
+      <section class="section" id="wordpiece">
+        <div class="section-title">
+          <div class="icon" style="background:#eff6ff;">🧩</div>
+          §3 WordPiece：BERT 的选择
+        </div>
+
+        <p><strong>来源：</strong>Google 在 2012 年用于语音识别（Schuster & Nakamura），后被 BERT（2018）广泛推广。</p>
+
+        <h3>与 BPE 的核心区别</h3>
+        <p>BPE 选择"频率最高的 pair"合并，WordPiece 选择"合并后使语言模型<strong>对训练数据的似然概率最大</strong>的 pair"合并。</p>
+
+        <p>判断是否合并 pair $(x, y)$ 的标准：</p>
+        <div class="formula-block">
+          $$\text{score}(x, y) = \frac{P(xy)}{P(x) \cdot P(y)}$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$P(xy)$：片段 $xy$ 在语料中出现的频率（合并后）</li>
+            <li>$P(x), P(y)$：片段 $x$ 和 $y$ 分别独立出现的频率</li>
+            <li>该分数本质是 <strong>互信息（Pointwise Mutual Information, PMI）</strong>：越高说明 $x$ 和 $y$ 共同出现的频率远高于独立出现，值得合并为一个整体</li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：为什么 PMI 比纯频率更聪明？</div>
+          <p>假设语料中：</p>
+          <ul>
+            <li><code>un</code> 出现 1000 次，<code>happy</code> 出现 800 次，<code>unhappy</code> 出现 50 次</li>
+            <li><code>the</code> 出现 5000 次，<code>cat</code> 出现 200 次，<code>the cat</code> 出现 100 次</li>
+          </ul>
+          <p><strong>BPE 逻辑（纯频率）：</strong>可能先合并 <code>th</code> + <code>e</code> → <code>the</code>（高频），这当然对，但 <code>the cat</code> 也因为出现 100 次而有合并倾向。</p>
+          <p><strong>WordPiece PMI 逻辑：</strong>
+            <br>score(<code>the</code>, <code>cat</code>) = P(the cat) / (P(the) × P(cat)) ≈ 很小（因为 <code>the</code> 和 <code>cat</code> 各自高频，联合出现只是巧合）
+            <br>score(<code>un</code>, <code>happy</code>) = 明显更高（<code>unhappy</code> 的出现几乎都是 <code>un</code>+<code>happy</code> 组合，不是随机的）
+          </p>
+          <p>PMI 准确捕捉了"这两个片段确实应该在一起"的情况，而不只看绝对频率。</p>
+        </div>
+
+        <h3>WordPiece 的子词前缀规则</h3>
+        <p>BERT 的 WordPiece 有一个重要约定：<strong>非开头的子词用 <code>##</code> 前缀标记</strong>，表示这个子词紧跟在前面的 token 后面（没有空格）。</p>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：BERT 如何 tokenize "unaffordable"</div>
+          <p>词表中没有 <code>unaffordable</code> 这个完整词，会被拆分为：</p>
+          <p><code>un</code> + <code>##aff</code> + <code>##ord</code> + <code>##able</code></p>
+          <p>解码时看到 <code>##</code> 前缀就知道拼接，重建原词：<code>un + aff + ord + able = unaffordable</code></p>
+          <p><strong>对比没有 <code>##</code> 的 BPE：</strong>BPE 直接输出 <code>un</code> <code>afford</code> <code>able</code>，通过位置信息而非前缀来表示连续性。</p>
+        </div>
+
+        <div class="callout-cyan">
+          <strong>WordPiece vs BPE 对比：</strong><br>
+          ✅ PMI 打分比纯频率更语义合理，更少产生"凑巧共现"的 token 合并<br>
+          ✅ <code>##</code> 前缀使得 decode 非常简单清晰<br>
+          ❌ PMI 计算需要额外统计，训练速度比 BPE 慢；词表构建期间不能像 BPE 那样直接用二维频率表
+        </div>
+
+        <h3>代表性模型</h3>
+        <p>BERT / BERT-multilingual / DistilBERT / ALBERT 均使用 WordPiece，词表大小通常 30,000。</p>
+      </section>
+
+      <!-- §4 Unigram LM -->
+      <section class="section" id="unigram">
+        <div class="section-title">
+          <div class="icon" style="background:#faf5ff;">🎲</div>
+          §4 Unigram LM：概率视角的 Tokenizer
+        </div>
+
+        <p><strong>来源：</strong>Kudo（2018）提出，被 T5、XLNet、mBART 等 Google/Facebook 模型采用。</p>
+
+        <h3>核心思想：反向剪枝</h3>
+        <p>BPE 和 WordPiece 都是从<strong>小词表出发向上合并</strong>，Unigram LM 反其道而行之：</p>
+        <ol>
+          <li>从一个<strong>非常大的初始词表</strong>出发（包含所有常见字符串，可达 10 万+）</li>
+          <li>对每个 token，计算"如果删掉这个 token，语料库的似然损失多少"</li>
+          <li>删掉使损失最小的一部分 token（通常每轮删掉 10-20%）</li>
+          <li>重复直到词表达到目标大小</li>
+        </ol>
+
+        <h3>概率模型</h3>
+        <p>假设语料中每个句子 $W$ 的最优分词方式为 $x^* = \arg\max_x P(x)$，其中：</p>
+        <div class="formula-block">
+          $$P(x) = \prod_{i=1}^{n} p(x_i)$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$x = (x_1, x_2, \ldots, x_n)$：句子的一种分词方案</li>
+            <li>$p(x_i)$：子词 $x_i$ 在语言模型中的概率（unigram 概率，独立同分布假设）</li>
+            <li>Unigram：字面意思是"一元语言模型"，即每个子词的概率与上下文无关</li>
+            <li>训练目标：最大化整个语料的对数似然 $\sum_{s} \log P(s)$</li>
+          </ul>
+        </div>
+
+        <p>训练时用 <strong>EM（Expectation-Maximization）算法</strong>迭代：</p>
+        <ul>
+          <li><strong>E 步：</strong>给定当前词表，用 Viterbi/前向-后向算法找每个句子的最优分词</li>
+          <li><strong>M 步：</strong>用最优分词计算每个子词的频率，更新 $p(x_i)$</li>
+        </ul>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：Unigram 如何处理"unaffordable"的多种分词方案</div>
+          <p>这个词有多种分词方式，Unigram 会给每种分配一个概率：</p>
+          <ul>
+            <li>方案 A：<code>un</code> + <code>afford</code> + <code>able</code> → P = p(un) × p(afford) × p(able)</li>
+            <li>方案 B：<code>u</code> + <code>naff</code> + <code>ordable</code> → P = p(u) × p(naff) × p(ordable)</li>
+            <li>方案 C：<code>unafford</code> + <code>able</code> → P = p(unafford) × p(able)</li>
+          </ul>
+          <p>如果 <code>afford</code> 和 <code>un</code> 在词表中都有较高概率，方案 A 胜出。如果 <code>naff</code> 和 <code>ordable</code> 从未见过，其概率极低，方案 B 被淘汰。</p>
+          <p><strong>关键优势：</strong>Unigram 不像 BPE 那样强制执行固定合并顺序，而是给出所有可能分词的概率分布，可以用于<strong>子词正则化（Subword Regularization）</strong>——训练时随机按概率采样不同分词方案，增强模型鲁棒性。</p>
+        </div>
+
+        <div class="callout-purple">
+          <strong>子词正则化（Subword Regularization）：</strong>Unigram 的独特优势——训练语言模型时，不是固定用最优分词，而是按概率分布随机采样分词方案。同一个词在不同 epoch 可能被分成不同的子词，迫使模型学会从多种子词组合中理解语义，显著提升模型对罕见词和拼写变体的鲁棒性。BPE 无法做到这一点，因为它的分词是确定性的。
+        </div>
+      </section>
+
+      <!-- §5 SentencePiece -->
+      <section class="section" id="sentencepiece">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">🔧</div>
+          §5 SentencePiece：语言无关的统一框架
+        </div>
+
+        <p><strong>来源：</strong>Google Kudo & Richardson（2018），开源工具库，支持 BPE 和 Unigram 两种算法。</p>
+
+        <h3>核心创新：消除空格假设</h3>
+        <p>BPE 和 WordPiece 都<strong>先用空格分词</strong>，再在词内部做子词分割——这对英语很自然，但对中文、日文等无空格语言失效，对泰语等粘着语也不友好。</p>
+
+        <p>SentencePiece 的做法：<strong>把空格作为特殊字符 <code>▁</code>（U+2581）</strong>，直接在原始字符流上做分词，不预先按空格切分。</p>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：SentencePiece 如何处理同一句话</div>
+          <p>输入：<code>"Hello world"</code></p>
+          <p><strong>传统 BPE（先分词再子词）：</strong>先切成 <code>["Hello", "world"]</code>，再分别做 BPE → <code>["He", "##llo", "world"]</code></p>
+          <p><strong>SentencePiece（原始字符流）：</strong>将空格替换为 <code>▁</code> 后得到 <code>"▁Hello▁world"</code>，直接在这个字符串上做分词 → <code>["▁Hello", "▁world"]</code> 或 <code>["▁He", "llo", "▁world"]</code></p>
+          <p><strong>中文处理：</strong>输入 <code>"你好世界"</code> 直接分词为 <code>["▁你好", "世界"]</code> 或 <code>["▁你", "好", "世", "界"]</code>，不需要分词预处理。</p>
+        </div>
+
+        <h3>SentencePiece 的四大特性</h3>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>① 纯数据驱动</h4>
+            <p>不依赖任何语言特定的预处理（不需要空格分词、形态分析、汉字分割等）。只需要原始文本，算法自己学习分词边界。</p>
+          </div>
+          <div class="mini-card">
+            <h4>② 可逆编解码</h4>
+            <p>通过 <code>▁</code> 标记，encode 和 decode 是完全可逆的，没有任何信息损失（包括空格位置）。</p>
+          </div>
+          <div class="mini-card">
+            <h4>③ 两种算法可选</h4>
+            <p>--model_type=bpe 或 unigram，框架统一，算法可插拔。T5 用 Unigram，LLaMA/Gemini 也用 SentencePiece+BPE。</p>
+          </div>
+          <div class="mini-card">
+            <h4>④ 处理特殊字符</h4>
+            <p>支持自定义特殊 token（[PAD], [UNK], [BOS], [EOS]），支持 byte fallback 模式（对 OOV 字符用 &lt;0xHH&gt; 表示）。</p>
+          </div>
+        </div>
+
+        <h3>代表性模型</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>模型</th><th>算法</th><th>词表大小</th><th>特殊处理</th></tr></thead>
+            <tbody>
+              <tr><td>T5</td><td>SentencePiece Unigram</td><td>32,000</td><td>无 byte fallback</td></tr>
+              <tr><td>XLNet</td><td>SentencePiece BPE</td><td>32,000</td><td>同 T5</td></tr>
+              <tr><td>LLaMA 1/2</td><td>SentencePiece BPE</td><td>32,000</td><td>byte fallback ON</td></tr>
+              <tr><td>Gemini / PaLM</td><td>SentencePiece BPE</td><td>256,000</td><td>多语言扩展词表</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- §6 BBPE + tiktoken -->
+      <section class="section" id="bbpe">
+        <div class="section-title">
+          <div class="icon" style="background:#fff7ed;">⚡</div>
+          §6 BBPE + tiktoken：字节级方案
+        </div>
+
+        <h3>BBPE：Byte-level BPE</h3>
+        <p><strong>问题背景：</strong>原始 BPE 以 Unicode 字符为基本单位，遇到罕见 Unicode 字符（如生僻汉字、emoji、特殊符号）会触发 OOV（out-of-vocabulary）——模型完全不认识这个 token，只能用 [UNK] 替代，丢失信息。</p>
+
+        <p><strong>BBPE 的解法：</strong>将基本单位从"Unicode 字符"换为"字节"（byte）。<strong>任何文本都可以表示为字节序列</strong>（UTF-8 编码），256 个字节足以表示所有 Unicode 字符，因此初始词表只有 256 个 token，绝无 OOV。</p>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：BBPE 如何表示生僻汉字 "𠀀"（U+20000）</div>
+
+          <p><strong>第一步：理解"字节"是什么</strong></p>
+          <p>计算机存储文字时，最终都是一串 <strong>0-255 的整数</strong>（称为"字节"）。
+          UTF-8 就是一套规则，规定"每个 Unicode 字符应该用哪几个字节来表示"。</p>
+
+          <p>常见例子：</p>
+          <ul style="font-size:14px;margin:6px 0 12px;">
+            <li>字母 <code>A</code> → 只需 <strong>1 个字节</strong>：<code>65</code></li>
+            <li>汉字 <code>你</code> → 需要 <strong>3 个字节</strong>：<code>228, 189, 160</code></li>
+            <li>生僻字 <code>𠀀</code> → 需要 <strong>4 个字节</strong>：<code>240, 160, 128, 128</code></li>
+            <li>emoji <code>🌍</code> → 需要 <strong>4 个字节</strong>：<code>240, 159, 140, 141</code></li>
+          </ul>
+
+          <p><strong>第二步：那 <code>0xF0 0xA0 0x80 0x80</code> 和 <code>[240, 160, 128, 128]</code> 是什么关系？</strong></p>
+          <p>完全是同一组数字，<strong>只是写法不同</strong>——一个用十六进制（0x 开头），一个用十进制：</p>
+          <table style="font-size:13px;width:auto;margin:8px 0 14px;">
+            <thead><tr><th>十六进制（0x）</th><th>→</th><th>十进制</th></tr></thead>
+            <tbody>
+              <tr><td><code>0xF0</code></td><td>→</td><td><code>240</code></td></tr>
+              <tr><td><code>0xA0</code></td><td>→</td><td><code>160</code></td></tr>
+              <tr><td><code>0x80</code></td><td>→</td><td><code>128</code></td></tr>
+              <tr><td><code>0x80</code></td><td>→</td><td><code>128</code></td></tr>
+            </tbody>
+          </table>
+          <p>所以 <code>𠀀</code> 这个字，就是 4 个字节：<code>240, 160, 128, 128</code>。</p>
+
+          <p><strong>第三步：BBPE 怎么处理这 4 个字节？</strong></p>
+          <p>BBPE 的词表里有 <strong>256 个基础 token</strong>，就是 0-255 这 256 个字节 id，相当于 256 块乐高积木。任何文字最终都能被拆成这 256 块积木的组合，<strong>永远不会 OOV</strong>。</p>
+
+          <div style="background:#1e293b;color:#e2e8f0;border-radius:10px;padding:12px 16px;font-family:monospace;font-size:13px;margin:10px 0;">
+            <span style="color:#94a3b8;"># 传统字符级 BPE</span><br>
+            <span style="color:#fde68a;">"𠀀"</span> → 词表里没有 → <span style="color:#f87171;">[UNK]</span>（信息丢失！）<br><br>
+            <span style="color:#94a3b8;"># BBPE（字节级）</span><br>
+            <span style="color:#fde68a;">"𠀀"</span> → UTF-8 字节 → <span style="color:#6ee7b7;">[240] [160] [128] [128]</span>（4 个 token，保留全部信息）<br><br>
+            <span style="color:#94a3b8;"># 如果 𠀀 在语料中频繁出现，BPE 会把这 4 个字节合并成 1 个 token</span><br>
+            <span style="color:#6ee7b7;">[240, 160, 128, 128]</span> → 合并 → <span style="color:#6ee7b7;">[token_99999]</span>（效率更高）
+          </div>
+
+          <p><strong>GPT-2 的处理：</strong>256 个字节基础 token + 常见字节序列合并 → 最终 50,257 词表。</p>
+        </div>
+
+        <h3>tiktoken：OpenAI 的高性能实现</h3>
+        <p>tiktoken 是 OpenAI 开源的 BPE tokenizer 实现（Rust 编写，Python bindings），采用 BBPE，是 GPT-3.5/GPT-4 系列的标准 tokenizer。</p>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>cl100k_base（GPT-4）</h4>
+            <p>词表大小 100,256 tokens。改进了数字处理（每个数字最多 3 位一组，如 <code>1234</code> → <code>12</code> <code>34</code>，减少数学任务的困难）。对代码和多语言表现更好。</p>
+          </div>
+          <div class="mini-card">
+            <h4>p50k_base（GPT-3）</h4>
+            <p>词表大小 50,281 tokens。与 GPT-2 的词表基本兼容但有扩展。代码处理能力介于 GPT-2 和 GPT-4 之间。</p>
+          </div>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">⚠️ 数字 Tokenization 的工程痛点：为什么早期 GPT 数学很差？</div>
+
+          <p><strong>根本问题：模型做数学，本质是在做"token 序列操作"。token 切法不对，加减乘除就全乱了。</strong></p>
+
+          <p>先看一个具体例子：计算 <code>1234 + 5678</code>。人类的做法是<strong>逐位对齐</strong>，从个位开始加：</p>
+          <div style="font-family:monospace;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 16px;margin:8px 0 14px;font-size:14px;">
+            &nbsp;&nbsp;1 2 3 4<br>
+            + 5 6 7 8<br>
+            ─────────<br>
+            &nbsp;&nbsp;6 9 1 2
+          </div>
+          <p>要做到这个，模型<strong>必须能"看到"每一位数字</strong>。如果 tokenizer 把 <code>1234</code> 当成一个 token，模型就看不到"千位是1、百位是2"这件事，自然就不会算了。</p>
+
+          <h4>GPT-2 BPE 的问题：数字切法完全随机</h4>
+          <p>GPT-2 的 BPE 词表是纯粹按语料频率训练的，数字没有任何特殊处理。结果：</p>
+
+          <div class="table-wrap">
+            <table style="font-size:13px;">
+              <thead><tr><th>数字文本</th><th>GPT-2 实际切出的 token</th><th>问题</th></tr></thead>
+              <tbody>
+                <tr><td><code>100</code></td><td><code>[100]</code> → 1 个 token</td><td>凑巧，词表里有这个词</td></tr>
+                <tr><td><code>101</code></td><td><code>[101]</code> → 1 个 token</td><td>凑巧也有</td></tr>
+                <tr><td><code>1000</code></td><td><code>[10][00]</code> 或 <code>[1000]</code></td><td>随语料频率决定，无规律</td></tr>
+                <tr><td><code>1234567</code></td><td><code>[1234][567]</code> 或 <code>[12][345][67]</code> ……</td><td>切法不固定，模型无法学到数位结构</td></tr>
+                <tr><td><code>3.14159</code></td><td><code>[3][.][14][159]</code></td><td>整数部分和小数部分分界也乱</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p>模型在大量算术训练后，面对 <code>1234 + 5678</code>，它看到的是：<code>[1234]</code> <code>[+]</code> <code>[5678]</code>，只有 3 个 token。它没有办法从 <code>[1234]</code> 这一个 token 里解析出"千位是1、百位是2、十位是3、个位是4"——就像你让人一眼看出"1234"的每一位、脑子里完全不经过分解一样，很难。</p>
+
+          <h4>GPT-4 cl100k 的改进：强制 3 位一组</h4>
+          <p>GPT-4 的 tiktoken 在构建词表时，<strong>用正则表达式对数字做了预切分规则</strong>：连续数字最多合并成 3 位一组，超过 3 位一定切开。</p>
+
+          <div class="table-wrap">
+            <table style="font-size:13px;">
+              <thead><tr><th>数字文本</th><th>GPT-4 切出的 token</th><th>效果</th></tr></thead>
+              <tbody>
+                <tr><td><code>7</code></td><td><code>[7]</code></td><td>1位数，1个token</td></tr>
+                <tr><td><code>42</code></td><td><code>[42]</code></td><td>2位数，1个token</td></tr>
+                <tr><td><code>100</code></td><td><code>[100]</code></td><td>3位数，1个token</td></tr>
+                <tr><td><code>1234</code></td><td><code>[123][4]</code> 或 <code>[1][234]</code></td><td>4位数，切成3+1</td></tr>
+                <tr><td><code>1234567</code></td><td><code>[123][456][7]</code></td><td>7位数，切成3+3+1，<strong>有规律</strong></td></tr>
+                <tr><td><code>1,234,567</code></td><td><code>[1][,][234][,][567]</code></td><td>千分位逗号也被合理处理</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p>现在模型计算 <code>1234 + 5678</code>，看到的是 <code>[123][4]</code> <code>[+]</code> <code>[567][8]</code>。虽然还不是每位一个 token，但结构已经规律很多，模型通过大量训练可以学会进位计算。</p>
+
+          <h4>为什么不干脆每个数字一个 token（最理想方案）？</h4>
+          <p>理论上最好的切法是：<code>0</code>–<code>9</code> 各一个 token，让模型真正逐位计算。但这有代价：</p>
+
+          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 16px;margin:8px 0 14px;font-size:13px;font-family:monospace;">
+            <span style="color:#64748b;"># 3位一组（GPT-4 方案）</span><br>
+            "1234567" → 3 个 token：<span style="color:#6ee7b7;">[123][456][7]</span><br><br>
+            <span style="color:#64748b;"># 每位一个（理想方案）</span><br>
+            "1234567" → 7 个 token：<span style="color:#fbbf24;">[1][2][3][4][5][6][7]</span><br><br>
+            <span style="color:#64748b;"># 代价：序列长度变为 2.3 倍，attention 计算量变为 5+ 倍</span>
+          </div>
+
+          <p>对于包含大量数字的任务（如代码、金融数据、数学证明），序列长度翻倍意味着推理速度和成本都显著变差。所以 3 位一组是一个工程上的妥协方案。</p>
+
+          <div class="callout-amber">
+            <strong>结论：</strong>数字切法是 tokenizer 设计中的隐性决策，直接影响数学能力。GPT-2 之所以数学差，很大程度上是因为 BPE 随机切数字导致模型根本"看不见"数位结构。GPT-4 通过正则预切分规则修复了这个问题，这是其数学能力提升的重要工程原因之一。
+          </div>
+        </div>
+      </section>
+
+      <!-- §7 横向对比 -->
+      <section class="section" id="compare">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">📊</div>
+          §7 横向对比
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>方法</th><th>合并策略</th><th>初始单位</th><th>OOV</th><th>多语言</th><th>代表模型</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>BPE</strong></td>
+                <td>频率最高 bigram</td>
+                <td>Unicode 字符</td>
+                <td>有</td>
+                <td>差</td>
+                <td>GPT-1/2, RoBERTa</td>
+              </tr>
+              <tr>
+                <td><strong>WordPiece</strong></td>
+                <td>PMI 最高 bigram</td>
+                <td>Unicode 字符</td>
+                <td>有</td>
+                <td>中</td>
+                <td>BERT, DistilBERT</td>
+              </tr>
+              <tr>
+                <td><strong>Unigram LM</strong></td>
+                <td>从大词表剪枝</td>
+                <td>Unicode 字符</td>
+                <td>有（可缓解）</td>
+                <td>中</td>
+                <td>T5, XLNet, mBART</td>
+              </tr>
+              <tr>
+                <td><strong>SentencePiece</strong></td>
+                <td>BPE 或 Unigram（可选）</td>
+                <td>原始字符流（含空格）</td>
+                <td>byte fallback 可选</td>
+                <td>强</td>
+                <td>LLaMA, Gemini, PaLM</td>
+              </tr>
+              <tr>
+                <td><strong>BBPE / tiktoken</strong></td>
+                <td>频率最高 bigram</td>
+                <td>字节（256 个）</td>
+                <td>无</td>
+                <td>最强</td>
+                <td>GPT-3/4, GPT-4o</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>主流大模型分词算法速查</h3>
+
+        <h4>OpenAI 系列</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>模型</th><th>算法</th><th>词表大小</th><th>词表名</th><th>备注</th></tr></thead>
+            <tbody>
+              <tr><td>GPT-2</td><td>BPE（字符级）</td><td>50,257</td><td><code>gpt2</code></td><td>首个大规模 BPE 语言模型</td></tr>
+              <tr><td>GPT-3</td><td>BPE（字符级）</td><td>50,281</td><td><code>p50k_base</code></td><td>与 GPT-2 基本兼容</td></tr>
+              <tr><td>GPT-3.5 / GPT-4</td><td><strong>BBPE（字节级 BPE）</strong></td><td>100,256</td><td><code>cl100k_base</code></td><td>数字 3 位一组；多语言效率提升</td></tr>
+              <tr><td>GPT-4o</td><td><strong>BBPE</strong></td><td>200,019</td><td><code>o200k_base</code></td><td>词表扩到 20 万；中日韩效率大幅提升</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4>Google 系列</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>模型</th><th>算法</th><th>词表大小</th><th>备注</th></tr></thead>
+            <tbody>
+              <tr><td>BERT</td><td><strong>WordPiece</strong></td><td>30,522</td><td><code>##</code> 前缀标记非首子词</td></tr>
+              <tr><td>T5</td><td><strong>SentencePiece + Unigram LM</strong></td><td>32,000</td><td>支持子词正则化（训练时随机采样分词）</td></tr>
+              <tr><td>PaLM / Gemini / Gemma</td><td><strong>SentencePiece + BPE</strong></td><td>256,000</td><td>超大词表；多语言覆盖最全</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4>Meta LLaMA 系列</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>模型</th><th>算法</th><th>词表大小</th><th>备注</th></tr></thead>
+            <tbody>
+              <tr><td>LLaMA 1 / 2 / Code LLaMA</td><td><strong>SentencePiece + BPE</strong></td><td>32,000</td><td>byte fallback 模式；中文效率较低</td></tr>
+              <tr><td>LLaMA 3 / 3.1 / 3.2</td><td><strong>BBPE（tiktoken 风格）</strong></td><td>128,256</td><td>从 SP 迁移到 tiktoken；词表扩 4×；中文效率大幅提升</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4>国产及其他主流模型</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>模型</th><th>算法</th><th>词表大小</th><th>备注</th></tr></thead>
+            <tbody>
+              <tr><td>Claude 1/2/3（Anthropic）</td><td>BBPE（类 tiktoken）</td><td>~100K</td><td>架构未完全公开；与 cl100k 类似</td></tr>
+              <tr><td>Mistral / Mixtral</td><td>SentencePiece + BPE</td><td>32,000</td><td>同 LLaMA 2 词表</td></tr>
+              <tr><td>BLOOM（BigScience）</td><td>BBPE</td><td>250,680</td><td>250 种语言；字节级覆盖</td></tr>
+              <tr><td>Qwen / Qwen2（阿里）</td><td>BBPE（tiktoken）</td><td>~151,936</td><td>特别扩充中日韩字符；中文效率高</td></tr>
+              <tr><td>DeepSeek v2/v3</td><td>BBPE</td><td>100,000+</td><td>中英双语优化</td></tr>
+              <tr><td>Yi（零一万物）</td><td>SentencePiece + BPE</td><td>64,000</td><td>中英双语扩展词表</td></tr>
+              <tr><td>Baichuan 2</td><td>SentencePiece + BPE</td><td>125,696</td><td>中文优化；扩充汉字 token</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout-green">
+          <strong>三大演进趋势：</strong>
+          <ol style="margin:8px 0;">
+            <li><strong>BBPE 取代字符级 BPE</strong> — LLaMA 3、Qwen 都从 SentencePiece 迁移到了 tiktoken 风格的字节级 BPE，零 OOV。</li>
+            <li><strong>词表持续扩大</strong> — 32K → 100K → 256K。每翻一倍，同等文本的 token 数减少，推理成本下降，中文/代码/数学能力提升。</li>
+            <li><strong>WordPiece 退出主流</strong> — 新模型几乎不再用，只有 BERT 系老模型还在用；PMI 打分的优势在 BBPE 面前不再显著。</li>
+          </ol>
+        </div>
+
+        <h3>词表大小选择指南</h3>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>词表太小的问题</h4>
+            <ul style="font-size:14px;">
+              <li>稀有词 / 专有名词被过度拆分 → 序列变长</li>
+              <li>长序列增加推理延迟和内存</li>
+              <li>模型更难学习词汇级语义</li>
+            </ul>
+          </div>
+          <div class="mini-card">
+            <h4>词表太大的问题</h4>
+            <ul style="font-size:14px;">
+              <li>Embedding table 参数量激增（32B 模型 128K 词表的 embedding 层 ≈ 10B 参数）</li>
+              <li>低频 token 训练不充分，embedding 学不好</li>
+              <li>softmax 计算开销大</li>
+            </ul>
+          </div>
+        </div>
+
+        <p>实践中：英语专用模型用 32K–50K；多语言模型用 100K–256K；代码/数学专用可能用 64K 但做特殊数字处理。</p>
+      </section>
+
+      <!-- §8 工程实践 -->
+      <section class="section" id="engineering">
+        <div class="section-title">
+          <div class="icon" style="background:#ecfeff;">🛠️</div>
+          §8 工程实践与常见坑
+        </div>
+
+        <h3>坑 1：特殊 token 污染</h3>
+        <p>Tokenizer 通常有特殊 token（如 <code>[CLS]</code>, <code>[SEP]</code>, <code>&lt;eos&gt;</code>）。如果训练数据中的文本恰好包含这些字符串，它们会被当作特殊 token 处理而不是普通字符——需要在预处理时转义。</p>
+
+        <h3>坑 2：不同 tokenizer 的不可互换性</h3>
+        <p>BERT 的 WordPiece tokenizer 和 GPT-4 的 tiktoken <strong>完全不兼容</strong>——同一段文字会产生不同的 token ID 序列、不同的长度。不能把 BERT 的 token id 直接喂给 GPT 模型。每个预训练模型必须配套使用其对应的 tokenizer。</p>
+
+        <h3>坑 3：首尾空格导致 token 变化</h3>
+        <div class="example-box">
+          <div class="ex-title">💡 举例：" hello" vs "hello" 是不同 token</div>
+          <details class="code-block">
+            <summary class="code-toggle">📄 示例：空格位置影响 token id<span class="badge">tiktoken</span></summary>
+          <pre><span class="kw">import</span> tiktoken
+enc = tiktoken.<span class="fn">get_encoding</span>(<span class="str">"cl100k_base"</span>)
+enc.<span class="fn">encode</span>(<span class="str">"hello"</span>)     <span class="cm"># [15339]</span>
+enc.<span class="fn">encode</span>(<span class="str">" hello"</span>)    <span class="cm"># [24748]  ← 不同！开头空格使 token 变化</span></pre>
+          </details>
+          <p>在构建 prompt 时，字符串拼接的空格位置会影响 tokenization 结果，进而影响模型对内容的理解。这也是为什么 chat template 要精心设计 system/user/assistant token 的格式。</p>
+        </div>
+
+        <h3>坑 4：多语言 token 效率不均</h3>
+        <p>英语语料训练的 tokenizer 对中文/日文/阿拉伯文效率极低——同样一段话，中文可能需要 4-5× 更多 token 才能表达（因为中文字符在英语 tokenizer 的词表中极少合并，每个汉字可能被拆成 2-3 个 byte token）。这导致多语言模型的"token 效率"（同等信息量的 token 数）极不均匀。</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>语言</th><th>文本</th><th>tiktoken cl100k token 数</th></tr></thead>
+            <tbody>
+              <tr><td>English</td><td>"Hello, how are you today?"</td><td>6 tokens</td></tr>
+              <tr><td>中文</td><td>"你好，你今天怎么样？"</td><td>11 tokens（约 1.8× 英文）</td></tr>
+              <tr><td>日文</td><td>「こんにちは、お元気ですか？」</td><td>18 tokens（约 3× 英文）</td></tr>
+              <tr><td>阿拉伯语</td><td>مرحبا، كيف حالك اليوم؟</td><td>约 20 tokens（约 3.3× 英文）</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>这也是为什么 LLaMA 2 到 LLaMA 3 的词表从 32K 扩展到 128K，很大一个目标是提升多语言 token 效率。</p>
+
+        <h3>坑 5：代码中连续空格/缩进问题</h3>
+        <p>Python 缩进（4 个空格）在某些 tokenizer 里会被分成 4 个 space token，大幅增加代码序列长度。GPT-4 的 cl100k 对连续空格有专门的合并规则（如 4 个空格合并为一个 token），显著提升代码处理效率。</p>
+      </section>
+
+      <!-- §9 总结 -->
+      <section class="section" id="summary">
+        <div class="section-title">
+          <div class="icon" style="background:#faf5ff;">💡</div>
+          §9 总结与选型建议
+        </div>
+
+        <h3>演化路径回顾</h3>
+        <div class="flow-diagram">
+          <div class="flow-row">
+            <div class="flow-box">字符级<br>（序列太长）</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box">词级<br>（OOV 问题）</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box">BPE<br>（频率驱动合并）</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box">WordPiece<br>（PMI 更语义）</div>
+          </div>
+          <div class="flow-row">
+            <div class="flow-arrow" style="margin-left:40px;">↓</div>
+          </div>
+          <div class="flow-row">
+            <div class="flow-box">Unigram LM<br>（概率最优，可随机采样）</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box">SentencePiece<br>（语言无关统一框架）</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box">BBPE / tiktoken<br>（字节级，零 OOV）</div>
+          </div>
+        </div>
+
+        <h3>选型建议</h3>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>✅ 英语 + 代码 + 数学</h4>
+            <p>首选 <strong>BBPE + tiktoken</strong>（cl100k 或更大词表），配合数字 3 位一组处理。GPT-4 / CodeLLaMA 的选择。</p>
+          </div>
+          <div class="mini-card">
+            <h4>✅ 多语言场景</h4>
+            <p>首选 <strong>SentencePiece + BPE</strong>（词表 100K+），不依赖空格分词，中文/阿拉伯文/日文效率更均衡。LLaMA 3 / Gemini 的选择。</p>
+          </div>
+          <div class="mini-card">
+            <h4>✅ 需要 subword regularization</h4>
+            <p>选 <strong>SentencePiece + Unigram LM</strong>，训练时随机采样不同分词方案，显著提升低资源语言和拼写变体的鲁棒性。T5 的选择。</p>
+          </div>
+          <div class="mini-card">
+            <h4>✅ 下游微调 / 接续预训练</h4>
+            <p>必须使用与预训练模型<strong>完全相同</strong>的 tokenizer，不能替换。不同 tokenizer 的 token 空间完全不同，换了 tokenizer 相当于换了语言。</p>
+          </div>
+        </div>
+
+        <blockquote>
+          LLM 的 Tokenizer 本质是「将任意文本映射到有限词表的整数序列」。主流方法沿着 BPE（频率驱动的贪心合并）→ WordPiece（最大化语言模型概率的合并）→ Unigram（从大词表剪枝，概率最优）→ SentencePiece（语言无关的统一框架）→ BBPE/tiktoken（字节级杜绝 OOV） 这条路演进；选哪种取决于语言范围、数字/代码比例、服务延迟等工程约束。
+        </blockquote>
+      </section>
+
+
+      <!-- §10 完整代码实现 -->
+      <section class="section" id="code">
+        <div class="section-title">
+          <div class="icon" style="background:#1e293b;color:#6ee7b7;">💻</div>
+          §10 完整代码实现（从零训练到推理）
+        </div>
+        <div class="callout-cyan">
+          本节提供三种核心算法的<strong>完整 Python 实现</strong>（不依赖第三方 tokenizer 库），以及"有词表后如何做 encode/decode"的通用工具代码。代码可直接运行。
+        </div>
+
+        <!-- BPE 完整实现 -->
+        <h3 id="code-bpe">BPE 完整实现（训练 + 编码 + 解码）</h3>
+        <p>包括：① 从语料库训练 BPE 词表；② 用学到的 merge rules 对新文本编码；③ 将 token ids 解码回文本。</p>
+        <details class="code-block" open>
+          <summary class="code-toggle">📄 BPE 完整实现：训练 + 编码 + 解码<span class="badge">Python</span></summary>
+        <pre><span class="kw">from</span> collections <span class="kw">import</span> Counter, defaultdict
+<span class="kw">from</span> typing <span class="kw">import</span> Dict, List, Tuple
+
+
+<span class="cm"># ═══════════════════════════════════════════════════
+#  BPE 训练：从语料 → 词表 + 合并规则
+# ═══════════════════════════════════════════════════</span>
+<span class="kw">def</span> <span class="fn">get_vocab</span>(corpus: List[str]) -&gt; Dict[str, int]:
+    <span class="str">"""把语料转换为字符级词频词典（每个词加 &lt;/w&gt; 结尾标记）"""</span>
+    vocab = Counter()
+    <span class="kw">for</span> text <span class="kw">in</span> corpus:
+        <span class="kw">for</span> word <span class="kw">in</span> text.split():
+            <span class="cm"># 字符间加空格，末尾加 &lt;/w&gt;</span>
+            vocab[<span class="str">' '</span>.join(list(word)) + <span class="str">' &lt;/w&gt;'</span>] += 1
+    <span class="kw">return</span> dict(vocab)
+
+
+<span class="kw">def</span> <span class="fn">get_stats</span>(vocab: Dict[str, int]) -&gt; Dict[Tuple[str, str], int]:
+    <span class="str">"""统计词典中所有相邻 bigram 的频率"""</span>
+    pairs = Counter()
+    <span class="kw">for</span> word, freq <span class="kw">in</span> vocab.items():
+        symbols = word.split()
+        <span class="kw">for</span> i <span class="kw">in</span> range(len(symbols) - 1):
+            pairs[(symbols[i], symbols[i + 1])] += freq
+    <span class="kw">return</span> dict(pairs)
+
+
+<span class="kw">def</span> <span class="fn">merge_vocab</span>(pair: Tuple[str, str], vocab: Dict[str, int]) -&gt; Dict[str, int]:
+    <span class="str">"""将词典中所有词里的 pair 合并为一个新 token"""</span>
+    bigram = <span class="str">' '</span>.join(pair)
+    replacement = <span class="str">''</span>.join(pair)
+    <span class="kw">return</span> {
+        word.replace(bigram, replacement): freq
+        <span class="kw">for</span> word, freq <span class="kw">in</span> vocab.items()
+    }
+
+
+<span class="kw">def</span> <span class="fn">train_bpe</span>(
+    corpus: List[str],
+    target_vocab_size: int
+) -&gt; Tuple[Dict[str, int], List[Tuple[str, str]]]:
+    <span class="str">"""
+    BPE 训练主函数
+    Returns:
+        token2id: 词表（token → id）
+        merge_rules: 有序合并规则列表
+    """</span>
+    vocab = <span class="fn">get_vocab</span>(corpus)
+    
+    <span class="cm"># 初始词表：所有出现过的字符 + 特殊符号</span>
+    all_chars = set()
+    <span class="kw">for</span> word <span class="kw">in</span> vocab:
+        all_chars.update(word.split())
+    token2id = {ch: i <span class="kw">for</span> i, ch <span class="kw">in</span> enumerate(sorted(all_chars))}
+    
+    merge_rules = []
+    
+    <span class="kw">while</span> len(token2id) &lt; target_vocab_size:
+        pairs = <span class="fn">get_stats</span>(vocab)
+        <span class="kw">if not</span> pairs:
+            <span class="kw">break</span>
+        
+        <span class="cm"># 选频率最高的 pair</span>
+        best_pair = max(pairs, key=pairs.get)
+        
+        <span class="cm"># 合并并更新词典</span>
+        vocab = <span class="fn">merge_vocab</span>(best_pair, vocab)
+        
+        <span class="cm"># 记录合并规则 + 新 token</span>
+        new_token = <span class="str">''</span>.join(best_pair)
+        merge_rules.append(best_pair)
+        token2id[new_token] = len(token2id)
+    
+    <span class="kw">return</span> token2id, merge_rules
+
+
+<span class="cm"># ═══════════════════════════════════════════════════
+#  BPE 编码：文本 → token id 序列
+# ═══════════════════════════════════════════════════</span>
+<span class="kw">def</span> <span class="fn">bpe_tokenize_word</span>(word: str, merge_rules: List[Tuple[str, str]]) -&gt; List[str]:
+    <span class="str">"""对单个词应用 BPE 合并规则，返回 token 字符串列表"""</span>
+    tokens = list(word) + [<span class="str">'&lt;/w&gt;'</span>]
+    
+    <span class="kw">for</span> pair <span class="kw">in</span> merge_rules:
+        i = 0
+        new_tokens = []
+        <span class="kw">while</span> i &lt; len(tokens):
+            <span class="cm"># 如果当前位置匹配目标 pair，则合并</span>
+            <span class="kw">if</span> i &lt; len(tokens) - 1 <span class="kw">and</span> (tokens[i], tokens[i+1]) == pair:
+                new_tokens.append(tokens[i] + tokens[i+1])
+                i += 2
+            <span class="kw">else</span>:
+                new_tokens.append(tokens[i])
+                i += 1
+        tokens = new_tokens
+    
+    <span class="kw">return</span> tokens
+
+
+<span class="kw">def</span> <span class="fn">bpe_encode</span>(
+    text: str,
+    token2id: Dict[str, int],
+    merge_rules: List[Tuple[str, str]]
+) -&gt; List[int]:
+    <span class="str">"""文本 → token id 列表（未知 token 用 UNK id=0）"""</span>
+    unk_id = token2id.get(<span class="str">'&lt;unk&gt;'</span>, 0)
+    ids = []
+    <span class="kw">for</span> word <span class="kw">in</span> text.split():
+        tokens = <span class="fn">bpe_tokenize_word</span>(word, merge_rules)
+        ids.extend(token2id.get(t, unk_id) <span class="kw">for</span> t <span class="kw">in</span> tokens)
+    <span class="kw">return</span> ids
+
+
+<span class="cm"># ═══════════════════════════════════════════════════
+#  BPE 解码：token id 序列 → 文本
+# ═══════════════════════════════════════════════════</span>
+<span class="kw">def</span> <span class="fn">bpe_decode</span>(
+    ids: List[int],
+    id2token: Dict[int, str]
+) -&gt; str:
+    <span class="str">"""token id 列表 → 原始文本（去掉 &lt;/w&gt; 标记，恢复空格）"""</span>
+    tokens = [id2token.get(i, <span class="str">'&lt;unk&gt;'</span>) <span class="kw">for</span> i <span class="kw">in</span> ids]
+    <span class="cm"># &lt;/w&gt; 代表词尾，后面应该跟空格（除了最后一个 token）</span>
+    text = <span class="str">''</span>.join(tokens).replace(<span class="str">'&lt;/w&gt;'</span>, <span class="str">' '</span>).strip()
+    <span class="kw">return</span> text
+
+
+<span class="cm"># ═══════════════════════════════════════════════════
+#  使用示例
+# ═══════════════════════════════════════════════════</span>
+<span class="kw">if</span> __name__ == <span class="str">'__main__'</span>:
+    corpus = [
+        <span class="str">"low low low low low"</span>,
+        <span class="str">"lower lower"</span>,
+        <span class="str">"newest newest newest newest newest newest"</span>,
+        <span class="str">"widest widest widest"</span>,
+    ]
+    
+    token2id, merge_rules = <span class="fn">train_bpe</span>(corpus, target_vocab_size=30)
+    id2token = {v: k <span class="kw">for</span> k, v <span class="kw">in</span> token2id.items()}
+    
+    <span class="cm"># 编码</span>
+    text = <span class="str">"low newest"</span>
+    ids = <span class="fn">bpe_encode</span>(text, token2id, merge_rules)
+    print(<span class="str">f"encode('{text}') = {ids}"</span>)
+    <span class="cm"># 例如: encode('low newest') = [14, 22, 23]</span>
+    
+    <span class="cm"># 解码</span>
+    decoded = <span class="fn">bpe_decode</span>(ids, id2token)
+    print(<span class="str">f"decode({ids}) = '{decoded}'"</span>)
+    <span class="cm"># 例如: decode([14, 22, 23]) = 'low newest'</span>
+    
+    print(<span class="str">f"学到的合并规则（前10条）: {merge_rules[:10]}"</span>)
+    print(<span class="str">f"词表大小: {len(token2id)}"</span>)</pre>
+        </details>
+
+        <!-- WordPiece 实现 -->
+        <h3 id="code-wordpiece">WordPiece 实现（BERT 风格）</h3>
+        <p>WordPiece 的推理阶段（给定词表如何分词）使用<strong>最长匹配优先（MaxMatch / Greedy Longest Match）</strong>，训练阶段用 PMI 打分。这里实现最常用的推理侧 tokenizer：</p>
+        <details class="code-block" open>
+          <summary class="code-toggle">📄 WordPiece 实现（BERT 风格）<span class="badge">Python</span></summary>
+        <pre><span class="kw">from</span> typing <span class="kw">import</span> Dict, List, Optional
+
+
+<span class="cm"># ═══════════════════════════════════════════════════
+#  WordPiece 训练：从语料构建词表（PMI 打分版）
+# ═══════════════════════════════════════════════════</span>
+<span class="kw">def</span> <span class="fn">train_wordpiece</span>(
+    corpus: List[str],
+    target_vocab_size: int,
+    special_tokens: List[str] = None
+) -&gt; List[str]:
+    <span class="str">"""
+    简化版 WordPiece 训练
+    Returns: 词表列表（按 token 字符串排列）
+    """</span>
+    <span class="kw">if</span> special_tokens <span class="kw">is</span> None:
+        special_tokens = [<span class="str">'[PAD]'</span>, <span class="str">'[UNK]'</span>, <span class="str">'[CLS]'</span>, <span class="str">'[SEP]'</span>, <span class="str">'[MASK]'</span>]
+    
+    <span class="cm"># Step 1：构建字符级初始词表</span>
+    char_counts = Counter()
+    word_counts = Counter()
+    <span class="kw">for</span> text <span class="kw">in</span> corpus:
+        <span class="kw">for</span> word <span class="kw">in</span> text.lower().split():
+            word_counts[word] += 1
+            <span class="kw">for</span> i, ch <span class="kw">in</span> enumerate(word):
+                <span class="cm"># 非首字符加 ## 前缀</span>
+                symbol = ch <span class="kw">if</span> i == 0 <span class="kw">else</span> <span class="str">'##'</span> + ch
+                char_counts[symbol] += 1
+    
+    <span class="cm"># 词表从特殊 token + 字符开始</span>
+    vocab = set(special_tokens) | set(char_counts.keys())
+    
+    <span class="cm"># Step 2：迭代合并（PMI 打分）</span>
+    <span class="cm"># 将每个词表示为 symbol 序列</span>
+    word_symbols = {}
+    <span class="kw">for</span> word <span class="kw">in</span> word_counts:
+        symbols = [word[0]] + [<span class="str">'##'</span> + ch <span class="kw">for</span> ch <span class="kw">in</span> word[1:]]
+        word_symbols[word] = symbols
+    
+    <span class="kw">while</span> len(vocab) &lt; target_vocab_size:
+        <span class="cm"># 计算每个 symbol 的出现频率</span>
+        sym_freq = Counter()
+        pair_freq = Counter()
+        <span class="kw">for</span> word, count <span class="kw">in</span> word_counts.items():
+            syms = word_symbols[word]
+            <span class="kw">for</span> s <span class="kw">in</span> syms:
+                sym_freq[s] += count
+            <span class="kw">for</span> i <span class="kw">in</span> range(len(syms) - 1):
+                pair_freq[(syms[i], syms[i+1])] += count
+        
+        <span class="kw">if not</span> pair_freq:
+            <span class="kw">break</span>
+        
+        total = sum(sym_freq.values())
+        <span class="cm"># PMI 打分：P(AB) / (P(A) * P(B))</span>
+        best_pair, best_score = None, -1
+        <span class="kw">for</span> (a, b), ab_count <span class="kw">in</span> pair_freq.items():
+            score = (ab_count / total) / ((sym_freq[a] / total) * (sym_freq[b] / total))
+            <span class="kw">if</span> score &gt; best_score:
+                best_score, best_pair = score, (a, b)
+        
+        <span class="kw">if</span> best_pair <span class="kw">is</span> None:
+            <span class="kw">break</span>
+        
+        <span class="cm"># 合并 best_pair → 新 token</span>
+        a, b = best_pair
+        <span class="cm"># 去掉 b 开头的 ## 前缀（如果 b 是 ##x 则合并后是 ax）</span>
+        new_token = a + (b[2:] <span class="kw">if</span> b.startswith(<span class="str">'##'</span>) <span class="kw">else</span> b)
+        vocab.add(new_token)
+        
+        <span class="cm"># 更新所有词的 symbol 序列</span>
+        <span class="kw">for</span> word <span class="kw">in</span> word_symbols:
+            syms = word_symbols[word]
+            merged = []
+            i = 0
+            <span class="kw">while</span> i &lt; len(syms):
+                <span class="kw">if</span> i &lt; len(syms) - 1 <span class="kw">and</span> syms[i] == a <span class="kw">and</span> syms[i+1] == b:
+                    merged.append(new_token)
+                    i += 2
+                <span class="kw">else</span>:
+                    merged.append(syms[i])
+                    i += 1
+            word_symbols[word] = merged
+    
+    <span class="kw">return</span> sorted(vocab)
+
+
+<span class="cm"># ═══════════════════════════════════════════════════
+#  WordPiece 推理：最长匹配（BERT 官方算法）
+# ═══════════════════════════════════════════════════</span>
+<span class="kw">class</span> <span class="fn">WordPieceTokenizer</span>:
+    <span class="str">"""BERT 风格的 WordPiece tokenizer"""</span>
+    
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, vocab: List[str], unk_token: str = <span class="str">'[UNK]'</span>):
+        self.vocab = set(vocab)
+        self.token2id = {t: i <span class="kw">for</span> i, t <span class="kw">in</span> enumerate(vocab)}
+        self.id2token = {i: t <span class="kw">for</span> i, t <span class="kw">in</span> enumerate(vocab)}
+        self.unk_token = unk_token
+        self.unk_id = self.token2id.get(unk_token, 0)
+    
+    <span class="kw">def</span> <span class="fn">_tokenize_word</span>(self, word: str) -&gt; List[str]:
+        <span class="str">"""
+        对单个词用最长匹配分词
+        - 首字符从头开始匹配
+        - 非首子串加 ## 前缀匹配
+        """</span>
+        tokens = []
+        start = 0
+        word_len = len(word)
+        is_bad = False
+        
+        <span class="kw">while</span> start &lt; word_len:
+            end = word_len
+            found = None
+            
+            <span class="kw">while</span> start &lt; end:
+                substr = word[start:end]
+                <span class="cm"># 非开头子串加 ## 前缀</span>
+                candidate = substr <span class="kw">if</span> start == 0 <span class="kw">else</span> <span class="str">'##'</span> + substr
+                
+                <span class="kw">if</span> candidate <span class="kw">in</span> self.vocab:
+                    found = candidate
+                    <span class="kw">break</span>
+                end -= 1
+            
+            <span class="kw">if</span> found <span class="kw">is</span> None:
+                <span class="cm"># 没有任何匹配 → 整个词用 [UNK]</span>
+                is_bad = True
+                <span class="kw">break</span>
+            
+            tokens.append(found)
+            start = end
+        
+        <span class="kw">return</span> [self.unk_token] <span class="kw">if</span> is_bad <span class="kw">else</span> tokens
+    
+    <span class="kw">def</span> <span class="fn">encode</span>(self, text: str, add_special_tokens: bool = True) -&gt; List[int]:
+        <span class="str">"""文本 → token id 列表（可选加 [CLS]/[SEP]）"""</span>
+        tokens = []
+        <span class="kw">if</span> add_special_tokens:
+            tokens.append(<span class="str">'[CLS]'</span>)
+        
+        <span class="kw">for</span> word <span class="kw">in</span> text.lower().split():
+            tokens.extend(self.<span class="fn">_tokenize_word</span>(word))
+        
+        <span class="kw">if</span> add_special_tokens:
+            tokens.append(<span class="str">'[SEP]'</span>)
+        
+        <span class="kw">return</span> [self.token2id.get(t, self.unk_id) <span class="kw">for</span> t <span class="kw">in</span> tokens]
+    
+    <span class="kw">def</span> <span class="fn">decode</span>(self, ids: List[int], skip_special_tokens: bool = True) -&gt; str:
+        <span class="str">"""token id 列表 → 文本（合并 ## 前缀）"""</span>
+        special = {<span class="str">'[CLS]'</span>, <span class="str">'[SEP]'</span>, <span class="str">'[PAD]'</span>, <span class="str">'[MASK]'</span>}
+        tokens = [self.id2token.get(i, <span class="str">'[UNK]'</span>) <span class="kw">for</span> i <span class="kw">in</span> ids]
+        
+        words = []
+        current = <span class="str">''</span>
+        <span class="kw">for</span> token <span class="kw">in</span> tokens:
+            <span class="kw">if</span> skip_special_tokens <span class="kw">and</span> token <span class="kw">in</span> special:
+                <span class="kw">if</span> current:
+                    words.append(current)
+                    current = <span class="str">''</span>
+                <span class="kw">continue</span>
+            <span class="kw">if</span> token.startswith(<span class="str">'##'</span>):
+                current += token[2:]      <span class="cm"># ## 前缀直接拼接，不加空格</span>
+            <span class="kw">else</span>:
+                <span class="kw">if</span> current:
+                    words.append(current)
+                current = token
+        <span class="kw">if</span> current:
+            words.append(current)
+        
+        <span class="kw">return</span> <span class="str">' '</span>.join(words)
+    
+    <span class="kw">def</span> <span class="fn">tokenize</span>(self, text: str) -&gt; List[str]:
+        <span class="str">"""文本 → token 字符串列表（调试用）"""</span>
+        result = []
+        <span class="kw">for</span> word <span class="kw">in</span> text.lower().split():
+            result.extend(self.<span class="fn">_tokenize_word</span>(word))
+        <span class="kw">return</span> result
+
+
+<span class="cm"># 使用示例</span>
+<span class="kw">if</span> __name__ == <span class="str">'__main__'</span>:
+    <span class="cm"># 用自定义词表创建 tokenizer</span>
+    vocab = [
+        <span class="str">'[PAD]'</span>, <span class="str">'[UNK]'</span>, <span class="str">'[CLS]'</span>, <span class="str">'[SEP]'</span>, <span class="str">'[MASK]'</span>,
+        <span class="str">'un'</span>, <span class="str">'##aff'</span>, <span class="str">'##ord'</span>, <span class="str">'##able'</span>,
+        <span class="str">'hello'</span>, <span class="str">'world'</span>, <span class="str">'##ing'</span>, <span class="str">'##ed'</span>,
+        <span class="str">'a'</span>, <span class="str">'b'</span>, <span class="str">'c'</span>, <span class="str">'d'</span>, <span class="str">'e'</span>, <span class="str">'f'</span>, <span class="str">'g'</span>
+    ]
+    tokenizer = <span class="fn">WordPieceTokenizer</span>(vocab)
+    
+    <span class="cm"># tokenize</span>
+    tokens = tokenizer.<span class="fn">tokenize</span>(<span class="str">"unaffordable hello"</span>)
+    print(<span class="str">f"tokenize: {tokens}"</span>)
+    <span class="cm"># → ['un', '##aff', '##ord', '##able', 'hello']</span>
+    
+    <span class="cm"># encode（含 [CLS]/[SEP]）</span>
+    ids = tokenizer.<span class="fn">encode</span>(<span class="str">"hello world"</span>)
+    print(<span class="str">f"encode: {ids}"</span>)
+    
+    <span class="cm"># decode</span>
+    text = tokenizer.<span class="fn">decode</span>(ids)
+    print(<span class="str">f"decode: '{text}'"</span>)
+    <span class="cm"># → 'hello world'</span></pre>
+        </details>
+
+        <!-- Unigram LM 实现 -->
+        <h3 id="code-unigram">Unigram LM 实现（Viterbi 最优分词）</h3>
+        <p>给定 Unigram 词表和每个 token 的对数概率，用 Viterbi 算法找最优分词，并支持多候选采样（子词正则化）。</p>
+        <details class="code-block" open>
+          <summary class="code-toggle">📄 Unigram LM 实现（Viterbi 最优分词）<span class="badge">Python</span></summary>
+        <pre><span class="kw">import</span> math
+<span class="kw">import</span> random
+<span class="kw">from</span> typing <span class="kw">import</span> Dict, List, Tuple, Optional
+
+
+<span class="cm"># ═══════════════════════════════════════════════════
+#  Unigram 词表格式：token → log_prob（对数概率）
+# ═══════════════════════════════════════════════════</span>
+<span class="kw">class</span> <span class="fn">UnigramTokenizer</span>:
+    <span class="str">"""
+    Unigram LM Tokenizer
+    vocab: dict[token_str → log_prob]（log_prob 均为负数或 0）
+    """</span>
+    
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, vocab: Dict[str, float], unk_token: str = <span class="str">'&lt;unk&gt;'</span>):
+        self.vocab = vocab
+        self.unk_token = unk_token
+        self.token2id = {t: i <span class="kw">for</span> i, t <span class="kw">in</span> enumerate(sorted(vocab.keys()))}
+        self.id2token = {i: t <span class="kw">for</span> t, i <span class="kw">in</span> self.token2id.items()}
+        <span class="kw">if</span> unk_token <span class="kw">not in</span> self.token2id:
+            uid = len(self.token2id)
+            self.token2id[unk_token] = uid
+            self.id2token[uid] = unk_token
+    
+    <span class="kw">def</span> <span class="fn">_viterbi_segment</span>(self, text: str) -&gt; List[str]:
+        <span class="str">"""
+        Viterbi 算法：找使 Unigram 概率最大的分词方案
+        时间复杂度 O(n²)，n 为文本长度
+        """</span>
+        n = len(text)
+        NEG_INF = float(<span class="str">'-inf'</span>)
+        
+        <span class="cm"># best_score[i]：前 i 个字符的最优对数概率</span>
+        best_score = [NEG_INF] * (n + 1)
+        best_score[0] = 0.0
+        <span class="cm"># back[i]：最优路径的回溯指针</span>
+        back = [0] * (n + 1)
+        
+        <span class="kw">for</span> i <span class="kw">in</span> range(1, n + 1):
+            <span class="kw">for</span> j <span class="kw">in</span> range(i):
+                chunk = text[j:i]
+                <span class="kw">if</span> chunk <span class="kw">in</span> self.vocab:
+                    score = best_score[j] + self.vocab[chunk]
+                    <span class="kw">if</span> score &gt; best_score[i]:
+                        best_score[i] = score
+                        back[i] = j
+        
+        <span class="cm"># 回溯路径</span>
+        tokens = []
+        i = n
+        <span class="kw">while</span> i &gt; 0:
+            j = back[i]
+            tokens.append(text[j:i])
+            i = j
+        
+        <span class="kw">return</span> tokens[::-1]
+    
+    <span class="kw">def</span> <span class="fn">_sample_segment</span>(self, text: str, alpha: float = 0.1) -&gt; List[str]:
+        <span class="str">"""
+        子词正则化：按概率分布随机采样一种分词方案（用于训练数据增强）
+        alpha：温度系数，越大越随机；alpha=0 等价于贪心最优
+        """</span>
+        n = len(text)
+        <span class="cm"># 用前向算法计算每个位置的所有可能分词及其分数</span>
+        candidates = []
+        
+        <span class="kw">def</span> <span class="fn">_segment_recursive</span>(pos, path):
+            <span class="kw">if</span> pos == n:
+                candidates.append((path[:], <span class="fn">sum</span>(self.vocab.get(t, -20) <span class="kw">for</span> t <span class="kw">in</span> path)))
+                <span class="kw">return</span>
+            <span class="kw">for</span> end <span class="kw">in</span> range(pos + 1, n + 1):
+                chunk = text[pos:end]
+                <span class="kw">if</span> chunk <span class="kw">in</span> self.vocab:
+                    path.append(chunk)
+                    <span class="fn">_segment_recursive</span>(end, path)
+                    path.pop()
+        
+        <span class="cm"># 只采样少量候选以控制复杂度（实际生产用 lattice sampling）</span>
+        <span class="fn">_segment_recursive</span>(0, [])
+        
+        <span class="kw">if not</span> candidates:
+            <span class="kw">return</span> self.<span class="fn">_viterbi_segment</span>(text)  <span class="cm"># fallback</span>
+        
+        <span class="cm"># softmax 采样</span>
+        scores = [s * (1 / (alpha + 1e-9)) <span class="kw">for</span> _, s <span class="kw">in</span> candidates]
+        max_s = max(scores)
+        weights = [math.exp(s - max_s) <span class="kw">for</span> s <span class="kw">in</span> scores]
+        total = sum(weights)
+        probs = [w / total <span class="kw">for</span> w <span class="kw">in</span> weights]
+        
+        r = random.random()
+        cumsum = 0.0
+        <span class="kw">for</span> (tokens, _), p <span class="kw">in</span> zip(candidates, probs):
+            cumsum += p
+            <span class="kw">if</span> r &lt; cumsum:
+                <span class="kw">return</span> tokens
+        <span class="kw">return</span> candidates[-1][0]
+    
+    <span class="kw">def</span> <span class="fn">tokenize</span>(self, text: str, sample: bool = False) -&gt; List[str]:
+        <span class="str">"""文本 → token 字符串列表；sample=True 启用子词正则化"""</span>
+        result = []
+        <span class="cm"># 按空格预切分（实际 SentencePiece 版本不需要这步）</span>
+        <span class="kw">for</span> word <span class="kw">in</span> text.split():
+            <span class="kw">if</span> sample:
+                result.extend(self.<span class="fn">_sample_segment</span>(word))
+            <span class="kw">else</span>:
+                result.extend(self.<span class="fn">_viterbi_segment</span>(word))
+        <span class="kw">return</span> result
+    
+    <span class="kw">def</span> <span class="fn">encode</span>(self, text: str, sample: bool = False) -&gt; List[int]:
+        <span class="str">"""文本 → token id 列表"""</span>
+        tokens = self.<span class="fn">tokenize</span>(text, sample=sample)
+        unk_id = self.token2id[self.unk_token]
+        <span class="kw">return</span> [self.token2id.get(t, unk_id) <span class="kw">for</span> t <span class="kw">in</span> tokens]
+    
+    <span class="kw">def</span> <span class="fn">decode</span>(self, ids: List[int]) -&gt; str:
+        <span class="str">"""token id 列表 → 文本"""</span>
+        <span class="kw">return</span> <span class="str">' '</span>.join(self.id2token.get(i, self.unk_token) <span class="kw">for</span> i <span class="kw">in</span> ids)
+
+
+<span class="cm"># 使用示例</span>
+<span class="kw">if</span> __name__ == <span class="str">'__main__'</span>:
+    <span class="cm"># 模拟词表（token → log_prob）</span>
+    vocab = {
+        <span class="str">'un'</span>: -2.0, <span class="str">'afford'</span>: -3.5, <span class="str">'able'</span>: -2.5,
+        <span class="str">'unafford'</span>: -6.0, <span class="str">'unaffordable'</span>: -8.0,
+        <span class="str">'u'</span>: -5.0, <span class="str">'n'</span>: -5.0, <span class="str">'a'</span>: -4.0,
+        <span class="str">'hello'</span>: -2.0, <span class="str">'world'</span>: -2.1,
+        <span class="str">'&lt;unk&gt;'</span>: -20.0,
+    }
+    tokenizer = <span class="fn">UnigramTokenizer</span>(vocab)
+    
+    text = <span class="str">"unaffordable"</span>
+    
+    <span class="cm"># 最优分词（Viterbi）</span>
+    best = tokenizer.<span class="fn">tokenize</span>(text, sample=False)
+    print(<span class="str">f"Viterbi 最优: {best}"</span>)
+    <span class="cm"># → ['un', 'afford', 'able']</span>
+    
+    <span class="cm"># 子词正则化（随机采样，训练时用）</span>
+    samples = [tokenizer.<span class="fn">tokenize</span>(text, sample=True) <span class="kw">for</span> _ <span class="kw">in</span> range(5)]
+    print(<span class="str">f"随机采样 5 次: {samples}"</span>)
+    <span class="cm"># 可能输出: [['un','afford','able'], ['u','n','afford','able'], ...]</span>
+    
+    <span class="cm"># encode / decode</span>
+    ids = tokenizer.<span class="fn">encode</span>(<span class="str">"hello world"</span>)
+    print(<span class="str">f"encode: {ids}"</span>)
+    print(<span class="str">f"decode: {tokenizer.decode(ids)}"</span>)</pre>
+        </details>
+
+        <!-- 有词表后如何匹配 -->
+        <h3 id="code-vocab-match">核心：有词表后如何 Encode / Decode</h3>
+        <p>这是实际工程中最常见的需求：<strong>已有一个训练好的词表文件，如何用它做编解码？</strong>以下给出一个通用的 <code>VocabMatcher</code>，支持加载词表文件、encode、decode、批量处理，并处理 OOV。</p>
+        <details class="code-block" open>
+          <summary class="code-toggle">📄 VocabMatcher：通用词表匹配器<span class="badge">Python</span></summary>
+        <pre><span class="kw">import</span> json
+<span class="kw">from</span> typing <span class="kw">import</span> Dict, List, Union
+<span class="kw">from</span> pathlib <span class="kw">import</span> Path
+
+
+<span class="cm"># ═══════════════════════════════════════════════════
+#  通用词表匹配器
+# ═══════════════════════════════════════════════════</span>
+<span class="kw">class</span> <span class="fn">VocabMatcher</span>:
+    <span class="str">"""
+    通用 Token ↔ ID 双向映射器
+    支持从 dict / json 文件 / txt 文件加载词表
+    """</span>
+    
+    <span class="kw">def</span> <span class="fn">__init__</span>(
+        self,
+        vocab: Union[Dict[str, int], None] = None,
+        unk_token: str = <span class="str">'[UNK]'</span>,
+        pad_token: str = <span class="str">'[PAD]'</span>,
+        bos_token: str = <span class="str">'[BOS]'</span>,
+        eos_token: str = <span class="str">'[EOS]'</span>,
+    ):
+        self.unk_token = unk_token
+        self.pad_token = pad_token
+        self.bos_token = bos_token
+        self.eos_token = eos_token
+        
+        <span class="kw">if</span> vocab <span class="kw">is not</span> None:
+            self.token2id = vocab
+        <span class="kw">else</span>:
+            self.token2id = {}
+        
+        self.id2token = {v: k <span class="kw">for</span> k, v <span class="kw">in</span> self.token2id.items()}
+        
+        <span class="cm"># 确保特殊 token 存在</span>
+        <span class="kw">for</span> tok <span class="kw">in</span> [pad_token, unk_token, bos_token, eos_token]:
+            <span class="kw">if</span> tok <span class="kw">not in</span> self.token2id:
+                new_id = len(self.token2id)
+                self.token2id[tok] = new_id
+                self.id2token[new_id] = tok
+    
+    <span class="cm"># ─── 加载词表 ───────────────────────────────────────</span>
+    
+    @classmethod
+    <span class="kw">def</span> <span class="fn">from_json</span>(cls, path: str, **kwargs) -&gt; <span class="str">'VocabMatcher'</span>:
+        <span class="str">"""从 vocab.json 加载（格式：{"token": id, ...}）"""</span>
+        <span class="kw">with</span> open(path, <span class="str">'r'</span>, encoding=<span class="str">'utf-8'</span>) <span class="kw">as</span> f:
+            vocab = json.load(f)
+        <span class="kw">return</span> cls(vocab=vocab, **kwargs)
+    
+    @classmethod
+    <span class="kw">def</span> <span class="fn">from_txt</span>(cls, path: str, **kwargs) -&gt; <span class="str">'VocabMatcher'</span>:
+        <span class="str">"""
+        从 vocab.txt 加载（格式：每行一个 token，行号即 id）
+        BERT 词表就是这种格式
+        """</span>
+        <span class="kw">with</span> open(path, <span class="str">'r'</span>, encoding=<span class="str">'utf-8'</span>) <span class="kw">as</span> f:
+            tokens = [line.rstrip(<span class="str">'\n'</span>) <span class="kw">for</span> line <span class="kw">in</span> f]
+        vocab = {tok: i <span class="kw">for</span> i, tok <span class="kw">in</span> enumerate(tokens)}
+        <span class="kw">return</span> cls(vocab=vocab, **kwargs)
+    
+    @classmethod
+    <span class="kw">def</span> <span class="fn">from_list</span>(cls, tokens: List[str], **kwargs) -&gt; <span class="str">'VocabMatcher'</span>:
+        <span class="str">"""从 token 列表构建（顺序即 id）"""</span>
+        vocab = {tok: i <span class="kw">for</span> i, tok <span class="kw">in</span> enumerate(tokens)}
+        <span class="kw">return</span> cls(vocab=vocab, **kwargs)
+    
+    <span class="cm"># ─── 属性 ───────────────────────────────────────────</span>
+    
+    @property
+    <span class="kw">def</span> <span class="fn">vocab_size</span>(self) -&gt; int:
+        <span class="kw">return</span> len(self.token2id)
+    
+    @property
+    <span class="kw">def</span> <span class="fn">unk_id</span>(self) -&gt; int:
+        <span class="kw">return</span> self.token2id[self.unk_token]
+    
+    @property
+    <span class="kw">def</span> <span class="fn">pad_id</span>(self) -&gt; int:
+        <span class="kw">return</span> self.token2id[self.pad_token]
+    
+    <span class="cm"># ─── 单条编解码 ─────────────────────────────────────</span>
+    
+    <span class="kw">def</span> <span class="fn">token_to_id</span>(self, token: str) -&gt; int:
+        <span class="str">"""单个 token → id（OOV 返回 unk_id）"""</span>
+        <span class="kw">return</span> self.token2id.get(token, self.unk_id)
+    
+    <span class="kw">def</span> <span class="fn">id_to_token</span>(self, id: int) -&gt; str:
+        <span class="str">"""单个 id → token（越界返回 unk_token）"""</span>
+        <span class="kw">return</span> self.id2token.get(id, self.unk_token)
+    
+    <span class="kw">def</span> <span class="fn">encode</span>(
+        self,
+        tokens: List[str],
+        add_bos: bool = False,
+        add_eos: bool = False,
+        max_length: Optional[int] = None,
+        padding: bool = False,
+    ) -&gt; List[int]:
+        <span class="str">"""
+        token 列表 → id 列表
+        - tokens: 已经由分词器切好的 token 字符串列表
+        - add_bos/add_eos: 是否在首尾加特殊 token
+        - max_length: 截断长度（None 不截断）
+        - padding: 是否补 PAD 到 max_length
+        """</span>
+        ids = [self.<span class="fn">token_to_id</span>(t) <span class="kw">for</span> t <span class="kw">in</span> tokens]
+        
+        <span class="kw">if</span> add_bos:
+            ids = [self.token2id[self.bos_token]] + ids
+        <span class="kw">if</span> add_eos:
+            ids = ids + [self.token2id[self.eos_token]]
+        
+        <span class="kw">if</span> max_length <span class="kw">is not</span> None:
+            ids = ids[:max_length]
+            <span class="kw">if</span> padding <span class="kw">and</span> len(ids) &lt; max_length:
+                ids += [self.pad_id] * (max_length - len(ids))
+        
+        <span class="kw">return</span> ids
+    
+    <span class="kw">def</span> <span class="fn">decode</span>(
+        self,
+        ids: List[int],
+        skip_special_tokens: bool = True,
+        join_str: str = <span class="str">' '</span>,
+    ) -&gt; str:
+        <span class="str">"""
+        id 列表 → token 字符串（空格连接）
+        - skip_special_tokens: 跳过 PAD/BOS/EOS/UNK 等
+        - join_str: token 间分隔符（BPE 解码后通常不需要空格，根据算法决定）
+        """</span>
+        special = {self.pad_token, self.unk_token, self.bos_token, self.eos_token}
+        tokens = [
+            self.<span class="fn">id_to_token</span>(i) <span class="kw">for</span> i <span class="kw">in</span> ids
+            <span class="kw">if not</span> (skip_special_tokens <span class="kw">and</span> self.<span class="fn">id_to_token</span>(i) <span class="kw">in</span> special)
+        ]
+        <span class="kw">return</span> join_str.join(tokens)
+    
+    <span class="cm"># ─── 批量编码 ───────────────────────────────────────</span>
+    
+    <span class="kw">def</span> <span class="fn">batch_encode</span>(
+        self,
+        batch_tokens: List[List[str]],
+        max_length: int,
+        padding: bool = True,
+        add_eos: bool = True,
+    ) -&gt; Dict[str, List[List[int]]]:
+        <span class="str">"""
+        批量编码（返回 input_ids + attention_mask）
+        batch_tokens: 多条样本的 token 列表
+        """</span>
+        input_ids = []
+        attention_masks = []
+        
+        <span class="kw">for</span> tokens <span class="kw">in</span> batch_tokens:
+            ids = self.<span class="fn">encode</span>(
+                tokens,
+                add_eos=add_eos,
+                max_length=max_length,
+                padding=padding,
+            )
+            <span class="cm"># attention_mask：非 PAD 位置为 1，PAD 位置为 0</span>
+            mask = [0 <span class="kw">if</span> i == self.pad_id <span class="kw">else</span> 1 <span class="kw">for</span> i <span class="kw">in</span> ids]
+            input_ids.append(ids)
+            attention_masks.append(mask)
+        
+        <span class="kw">return</span> {<span class="str">'input_ids'</span>: input_ids, <span class="str">'attention_mask'</span>: attention_masks}
+    
+    <span class="cm"># ─── 工具方法 ───────────────────────────────────────</span>
+    
+    <span class="kw">def</span> <span class="fn">save_vocab</span>(self, path: str):
+        <span class="str">"""保存词表到 JSON 文件"""</span>
+        <span class="kw">with</span> open(path, <span class="str">'w'</span>, encoding=<span class="str">'utf-8'</span>) <span class="kw">as</span> f:
+            json.dump(self.token2id, f, ensure_ascii=False, indent=2)
+    
+    <span class="kw">def</span> <span class="fn">contains</span>(self, token: str) -&gt; bool:
+        <span class="str">"""检查 token 是否在词表中"""</span>
+        <span class="kw">return</span> token <span class="kw">in</span> self.token2id
+    
+    <span class="kw">def</span> <span class="fn">oov_rate</span>(self, tokens: List[str]) -&gt; float:
+        <span class="str">"""计算 OOV 比例"""</span>
+        oov = sum(1 <span class="kw">for</span> t <span class="kw">in</span> tokens <span class="kw">if</span> t <span class="kw">not in</span> self.token2id)
+        <span class="kw">return</span> oov / len(tokens) <span class="kw">if</span> tokens <span class="kw">else</span> 0.0
+    
+    <span class="kw">def</span> <span class="fn">__repr__</span>(self):
+        <span class="kw">return</span> <span class="str">f"VocabMatcher(vocab_size={self.vocab_size}, unk='{self.unk_token}')"</span>
+
+
+<span class="cm"># ═══════════════════════════════════════════════════
+#  使用示例
+# ═══════════════════════════════════════════════════</span>
+<span class="kw">if</span> __name__ == <span class="str">'__main__'</span>:
+
+    <span class="cm"># ── 方式 1：从 dict 构建 ──────────────────────────</span>
+    vocab_dict = {
+        <span class="str">'[PAD]'</span>: 0, <span class="str">'[UNK]'</span>: 1, <span class="str">'[CLS]'</span>: 2, <span class="str">'[SEP]'</span>: 3,
+        <span class="str">'hello'</span>: 4, <span class="str">'world'</span>: 5, <span class="str">'un'</span>: 6, <span class="str">'##aff'</span>: 7,
+        <span class="str">'##ord'</span>: 8, <span class="str">'##able'</span>: 9, <span class="str">'token'</span>: 10,
+    }
+    matcher = <span class="fn">VocabMatcher</span>(vocab=vocab_dict)
+    print(matcher)                    <span class="cm"># VocabMatcher(vocab_size=13, unk='[UNK]')</span>
+    
+    <span class="cm"># ── 方式 2：从 vocab.txt 加载（BERT 格式）──────────</span>
+    <span class="cm"># matcher = VocabMatcher.from_txt('/path/to/vocab.txt')</span>
+    
+    <span class="cm"># ── 方式 3：从 vocab.json 加载（HuggingFace 格式）──</span>
+    <span class="cm"># matcher = VocabMatcher.from_json('/path/to/vocab.json')</span>
+    
+    <span class="cm"># ── 单条 encode ───────────────────────────────────</span>
+    tokens = [<span class="str">'un'</span>, <span class="str">'##aff'</span>, <span class="str">'##ord'</span>, <span class="str">'##able'</span>]
+    ids = matcher.<span class="fn">encode</span>(tokens)
+    print(<span class="str">f"encode: {ids}"</span>)            <span class="cm"># [6, 7, 8, 9]</span>
+    
+    <span class="cm"># 带截断和 padding</span>
+    ids_padded = matcher.<span class="fn">encode</span>(tokens, add_eos=True, max_length=8, padding=True)
+    print(<span class="str">f"encode(padded): {ids_padded}"</span>)   <span class="cm"># [6, 7, 8, 9, &lt;eos_id&gt;, 0, 0, 0]</span>
+    
+    <span class="cm"># ── decode ────────────────────────────────────────</span>
+    text = matcher.<span class="fn">decode</span>(ids)
+    print(<span class="str">f"decode: '{text}'"</span>)           <span class="cm"># 'un ##aff ##ord ##able'</span>
+    
+    <span class="cm"># ── 批量 encode ──────────────────────────────────</span>
+    batch = [[<span class="str">'hello'</span>, <span class="str">'world'</span>], [<span class="str">'un'</span>, <span class="str">'##aff'</span>, <span class="str">'##ord'</span>]]
+    result = matcher.<span class="fn">batch_encode</span>(batch, max_length=6, padding=True)
+    print(<span class="str">"batch input_ids:"</span>, result[<span class="str">'input_ids'</span>])
+    print(<span class="str">"batch attention_mask:"</span>, result[<span class="str">'attention_mask'</span>])
+    <span class="cm"># input_ids:   [[4, 5, 3, 0, 0, 0], [6, 7, 8, 3, 0, 0]]</span>
+    <span class="cm"># attention:   [[1, 1, 1, 0, 0, 0], [1, 1, 1, 1, 0, 0]]</span>
+    
+    <span class="cm"># ── OOV 率检查 ───────────────────────────────────</span>
+    oov_tokens = [<span class="str">'hello'</span>, <span class="str">'xyz123'</span>, <span class="str">'world'</span>, <span class="str">'foobar'</span>]
+    print(<span class="str">f"OOV 率: {matcher.oov_rate(oov_tokens):.1%}"</span>)   <span class="cm"># 50.0%</span></pre>
+        </details>
+
+        <!-- tiktoken 实际使用 -->
+        <h3 id="code-tiktoken">tiktoken 实际使用（GPT-4 / GPT-3.5）</h3>
+        <p>如果你直接用 OpenAI 模型，<code>tiktoken</code> 是最实用的工具：</p>
+        <details class="code-block" open>
+          <summary class="code-toggle">📄 tiktoken 完整使用指南<span class="badge">Python</span></summary>
+        <pre><span class="kw">import</span> tiktoken
+
+
+<span class="cm"># ═══════════════════════════════════════════════════
+#  tiktoken 完整使用指南
+# ═══════════════════════════════════════════════════</span>
+
+<span class="cm"># 1. 加载编码器</span>
+enc = tiktoken.<span class="fn">get_encoding</span>(<span class="str">"cl100k_base"</span>)      <span class="cm"># GPT-4 / GPT-3.5</span>
+<span class="cm"># enc = tiktoken.get_encoding("p50k_base")          # GPT-3</span>
+<span class="cm"># enc = tiktoken.get_encoding("r50k_base")          # GPT-2</span>
+
+<span class="cm"># 2. 基础编解码</span>
+text = <span class="str">"Hello, 你好世界！🌍"</span>
+ids = enc.<span class="fn">encode</span>(text)
+print(<span class="str">f"token ids : {ids}"</span>)
+<span class="cm"># [9906, 11, 220, 57668, 53901, 11375, 6447, 127, 246, 9468, 242, 101]</span>
+
+decoded = enc.<span class="fn">decode</span>(ids)
+print(<span class="str">f"decoded   : {decoded}"</span>)                <span class="cm"># 完全还原</span>
+
+<span class="cm"># 3. 查看每个 token 对应的文本</span>
+tokens_bytes = [enc.<span class="fn">decode_single_token_bytes</span>(t) <span class="kw">for</span> t <span class="kw">in</span> ids]
+print(<span class="str">f"token bytes: {tokens_bytes}"</span>)
+<span class="cm"># [b'Hello', b',', b' ', b'\xe4\xbd\xa0', ...]</span>
+
+<span class="cm"># 4. 不切分特殊 token（用于 Chat 格式）</span>
+ids_no_special = enc.<span class="fn">encode</span>(text, disallowed_special=())
+<span class="cm"># 阻止 &lt;|endoftext|&gt; 等被误识别为特殊 token</span>
+
+<span class="cm"># 5. 计算 token 数（不实际编码，更快）</span>
+num_tokens = <span class="fn">len</span>(enc.<span class="fn">encode</span>(text))
+print(<span class="str">f"token 数: {num_tokens}"</span>)
+
+<span class="cm"># 6. 模型专属 encoding（自动对应正确词表）</span>
+enc_gpt4 = tiktoken.<span class="fn">encoding_for_model</span>(<span class="str">"gpt-4"</span>)
+enc_gpt35 = tiktoken.<span class="fn">encoding_for_model</span>(<span class="str">"gpt-3.5-turbo"</span>)
+
+
+<span class="cm"># ═══════════════════════════════════════════════════
+#  实用工具：计算 Chat Messages 的 token 数
+#  参考 OpenAI 官方文档 "How to count tokens with tiktoken"
+# ═══════════════════════════════════════════════════</span>
+<span class="kw">def</span> <span class="fn">num_tokens_from_messages</span>(messages: list, model: str = <span class="str">"gpt-4"</span>) -&gt; int:
+    <span class="str">"""
+    计算 messages 列表的 token 数（兼容 gpt-3.5-turbo / gpt-4）
+    messages 格式：[{"role": "user", "content": "..."}]
+    """</span>
+    <span class="kw">try</span>:
+        encoding = tiktoken.<span class="fn">encoding_for_model</span>(model)
+    <span class="kw">except</span> KeyError:
+        encoding = tiktoken.<span class="fn">get_encoding</span>(<span class="str">"cl100k_base"</span>)
+    
+    <span class="cm"># gpt-3.5-turbo / gpt-4 格式</span>
+    tokens_per_message = 3  <span class="cm"># &lt;|im_start|&gt; role \n content &lt;|im_end|&gt;</span>
+    tokens_per_name = 1
+    
+    num_tokens = 0
+    <span class="kw">for</span> message <span class="kw">in</span> messages:
+        num_tokens += tokens_per_message
+        <span class="kw">for</span> key, value <span class="kw">in</span> message.items():
+            num_tokens += <span class="fn">len</span>(encoding.<span class="fn">encode</span>(str(value)))
+            <span class="kw">if</span> key == <span class="str">"name"</span>:
+                num_tokens += tokens_per_name
+    num_tokens += 3  <span class="cm"># 每次回复前有 &lt;|im_start|&gt;assistant</span>
+    <span class="kw">return</span> num_tokens
+
+
+<span class="cm"># 使用示例</span>
+messages = [
+    {<span class="str">"role"</span>: <span class="str">"system"</span>, <span class="str">"content"</span>: <span class="str">"You are a helpful assistant."</span>},
+    {<span class="str">"role"</span>: <span class="str">"user"</span>,   <span class="str">"content"</span>: <span class="str">"Hello, how are you?"</span>},
+]
+n = <span class="fn">num_tokens_from_messages</span>(messages)
+print(<span class="str">f"这段对话占 {n} tokens"</span>)    <span class="cm"># ~22 tokens</span>
+
+
+<span class="cm"># ═══════════════════════════════════════════════════
+#  实用工具：截断文本到指定 token 数
+# ═══════════════════════════════════════════════════</span>
+<span class="kw">def</span> <span class="fn">truncate_text</span>(text: str, max_tokens: int, model: str = <span class="str">"gpt-4"</span>) -&gt; str:
+    <span class="str">"""截断文本到 max_tokens（完整 token 边界截断，不会截断 UTF-8 字节）"""</span>
+    enc = tiktoken.<span class="fn">encoding_for_model</span>(model)
+    ids = enc.<span class="fn">encode</span>(text)
+    <span class="kw">if</span> <span class="fn">len</span>(ids) &lt;= max_tokens:
+        <span class="kw">return</span> text
+    <span class="kw">return</span> enc.<span class="fn">decode</span>(ids[:max_tokens])
+
+<span class="cm"># 超长文本截断到 100 tokens</span>
+long_text = <span class="str">"这是一段很长的文本 "</span> * 100
+truncated = <span class="fn">truncate_text</span>(long_text, max_tokens=100)
+print(<span class="str">f"截断后 token 数: {len(tiktoken.encoding_for_model('gpt-4').encode(truncated))}"</span>)</pre>
+        </details>
+
+        <div class="callout-green">
+          <strong>💡 与 HuggingFace Transformers 的对比</strong><br>
+          上面是从零实现的版本，适合学习原理。实际项目推荐直接用：
+          <pre style="margin:8px 0 0;font-size:12px;"><span class="kw">from</span> transformers <span class="kw">import</span> AutoTokenizer
+
+tokenizer = AutoTokenizer.<span class="fn">from_pretrained</span>(<span class="str">"bert-base-uncased"</span>)
+
+ids = tokenizer.<span class="fn">encode</span>(<span class="str">"hello world"</span>, add_special_tokens=True)
+tokens = tokenizer.<span class="fn">convert_ids_to_tokens</span>(ids)
+text = tokenizer.<span class="fn">decode</span>(ids, skip_special_tokens=True)
+batch = tokenizer([<span class="str">"hello"</span>, <span class="str">"world"</span>], padding=True, return_tensors=<span class="str">"pt"</span>)</pre>
+          <strong>原理相同，接口更完善</strong>，但理解了本文的从零实现，你就知道 HuggingFace 内部在干什么了。
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <footer>
+    <a href="../index.html" class="back-link">← 返回笔记列表</a>
+    <p>学习笔记 · LLM Tokenizer 方法总结</p>
+  </footer>
+</div>
+
+<script>
+(function(){
+  // TOC 滚动高亮：使用 IntersectionObserver 监听所有带 id 的 section/h3
+  var tocLinks = document.querySelectorAll('.toc-list a[href^="#"], .toc-sub a[href^="#"]');
+  if (!tocLinks.length) return;
+
+  // 建立 id -> tocLink 映射
+  var linkMap = {};
+  tocLinks.forEach(function(a){
+    var id = a.getAttribute('href').slice(1);
+    if (id) linkMap[id] = a;
+  });
+
+  var targets = Object.keys(linkMap).map(function(id){
+    return document.getElementById(id);
+  }).filter(Boolean);
+
+  if (!targets.length) return;
+
+  var activeId = null;
+
+  function setActive(id){
+    if (id === activeId) return;
+    activeId = id;
+    tocLinks.forEach(function(a){ a.classList.remove('active'); });
+    if (id && linkMap[id]){
+      linkMap[id].classList.add('active');
+      // 让目录自动滚动到对应项可见
+      var toc = document.querySelector('.toc');
+      if (toc){
+        var li = linkMap[id];
+        var tocTop = toc.getBoundingClientRect().top;
+        var liTop  = li.getBoundingClientRect().top;
+        var offset = liTop - tocTop - toc.clientHeight / 2;
+        toc.scrollBy({ top: offset, behavior: 'smooth' });
+      }
+    }
+  }
+
+  // rootMargin: 上边距 -10%（稍微进入视口就算），下边距 -60%（只有顶部 40% 区域触发）
+  var observer = new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      if (entry.isIntersecting){
+        setActive(entry.target.id);
+      }
+    });
+  }, { rootMargin: '-10% 0px -60% 0px', threshold: 0 });
+
+  targets.forEach(function(el){ observer.observe(el); });
+})();
+</script>
+</body>
+</html>

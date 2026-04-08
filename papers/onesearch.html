@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OneSearch：电商搜索端到端生成式统一框架</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false }
+          ],
+          throwOnError: false
+        });
+      }
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #2563eb; --primary-soft: #eff6ff;
+      --accent: #7c3aed; --accent-soft: rgba(124,58,237,0.06);
+      --shadow: 0 10px 30px rgba(15,23,42,0.08); --radius: 18px; --max: 1120px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: linear-gradient(180deg,#f8fbff 0%,var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      line-height: 1.8;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .page { max-width: var(--max); margin: 0 auto; padding: 32px 20px 80px; }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    .back-link:hover { color: var(--primary); text-decoration: none; }
+    .hero {
+      background: radial-gradient(circle at top right, rgba(37,99,235,0.12), transparent 30%),
+                  radial-gradient(circle at left bottom, rgba(16,185,129,0.08), transparent 24%),
+                  var(--card);
+      border: 1px solid rgba(37,99,235,0.1);
+      border-radius: 24px; box-shadow: var(--shadow);
+      padding: 34px 34px 28px; margin-bottom: 22px;
+    }
+    .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: #eff6ff; color: #1d4ed8; font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+    h1 { margin: 0 0 10px; font-size: 32px; line-height: 1.25; letter-spacing: -0.02em; }
+    .subtitle { margin: 0; color: var(--muted); font-size: 15px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 24px; }
+    .meta-card { background: #fbfdff; border: 1px solid #e7eefb; border-radius: 16px; padding: 14px 16px; }
+    .meta-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .meta-value { font-size: 14px; font-weight: 600; word-break: break-word; }
+    .layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 22px; align-items: start; }
+    .toc { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; }
+    .toc h2 { margin: 0 0 12px; font-size: 15px; color: var(--text); }
+    .toc-list { list-style: none; margin: 0; padding: 0; }
+    .toc-list li { margin: 0; }
+    .toc-list a { display: block; padding: 5px 8px; border-radius: 8px; color: var(--muted); font-size: 13px; transition: all 0.15s; }
+    .toc-list a:hover { color: var(--primary); background: #f0f6ff; text-decoration: none; }
+        .toc-list a.active{color:var(--primary);background:#eff6ff;font-weight:600;border-left:3px solid var(--primary);padding-left:5px;}
+.toc-sub { list-style: none; padding-left: 12px; margin: 0; }
+    .toc-sub a { font-size: 12px; padding: 3px 8px; }
+    .content { display: flex; flex-direction: column; gap: 18px; }
+    .section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 26px 28px; }
+    .section-title { display: flex; align-items: center; gap: 12px; margin: 0 0 20px; font-size: 20px; font-weight: 700; }
+    .icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+    h3 { margin: 24px 0 12px; font-size: 17px; color: #111827; }
+    h4 { margin: 18px 0 8px; font-size: 15px; color: #374151; }
+    .paper-info { background: #fafbff; border-left: 4px solid var(--primary); border-radius: 12px; padding: 14px 16px; margin: 16px 0; color: #334155; }
+    .paper-info p { margin: 4px 0; font-size: 14px; }
+    .callout-blue { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 14px; padding: 14px 16px; margin: 14px 0; }
+    .callout-amber { background: #fffbeb; border: 1px solid #fde68a; border-radius: 14px; padding: 14px 16px; margin: 14px 0; }
+    .callout-green { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 14px; padding: 14px 16px; margin: 14px 0; }
+    .callout-purple { background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 14px; padding: 14px 16px; margin: 14px 0; }
+    .example-box { background: #f0fdf4; border: 1px solid #86efac; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .ex-title { font-weight: 700; color: #166534; margin-bottom: 8px; font-size: 14px; }
+    .formula-block { margin: 16px 0 8px; overflow-x: auto; }
+    .formula-vars { background: #f8faff; border: 1px solid #dbeafe; border-radius: 12px; padding: 12px 16px; margin: 4px 0 16px; font-size: 14px; color: #374151; }
+    .formula-vars .var-title { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+    .formula-vars ul { margin: 0; padding-left: 18px; }
+    .formula-vars li { margin: 4px 0; }
+    .flow-diagram { border: 1px solid #bfdbfe; border-radius: 14px; padding: 16px; margin: 16px 0; background: #f8fbff; }
+    .flow-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0; }
+    .flow-box { background: #eff6ff; border: 1px solid #93c5fd; border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 600; }
+    .flow-arrow { color: #60a5fa; font-weight: 700; font-size: 16px; }
+    .two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .mini-card { border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; background: #fff; }
+    .mini-card h4 { margin-top: 0; font-size: 14px; }
+    .table-wrap { overflow-x: auto; margin: 16px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    thead th { background: #f3f6fb; color: #334155; text-align: left; font-weight: 700; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+    td { padding: 10px 14px; border-bottom: 1px solid #eef2f7; vertical-align: top; }
+    tbody tr:nth-child(even) { background: #fcfdff; }
+    figure { margin: 20px 0; background: #fbfdff; border: 1px solid #e8edf5; border-radius: 16px; padding: 14px; }
+    figure img { width: 100%; display: block; border-radius: 12px; background: #fff; }
+    .fig-placeholder { background: #f3f4f6; border-radius: 12px; padding: 28px; text-align: center; color: #6b7280; font-size: 14px; }
+    figcaption { margin-top: 10px; font-size: 13px; color: var(--muted); }
+    blockquote { margin: 16px 0; padding: 14px 18px; border-left: 4px solid var(--accent); background: rgba(124,58,237,0.05); border-radius: 0 12px 12px 0; color: #3f3f46; }
+    ul, ol { padding-left: 22px; }
+    li + li { margin-top: 6px; }
+    .katex-display { overflow-x: auto; padding: 6px 0; }
+    footer { margin-top: 32px; text-align: center; color: var(--muted); font-size: 13px; }
+    @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } .toc { position: static; } .meta-grid, .two-col { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 640px) { .page { padding: 18px 12px 56px; } .hero, .section { padding: 20px 18px; } h1 { font-size: 26px; } .meta-grid, .two-col { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div class="page">
+  <a class="back-link" href="../index.html">← 返回论文列表</a>
+
+  <header class="hero">
+    <div class="eyebrow">🔵 快手电商 · 端到端生成式搜索 · 工业落地</div>
+    <h1>OneSearch：第一个工业部署的电商搜索端到端生成式框架</h1>
+    <p class="subtitle">OneSearch: A Preliminary Exploration of the Unified End-to-End Generative Framework for E-commerce Search</p>
+    <div class="meta-grid">
+      <div class="meta-card">
+        <div class="meta-label">作者</div>
+        <div class="meta-value">Ben Chen, Xian Guo 等 · 快手电商搜索团队</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">年份</div>
+        <div class="meta-value">2025</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">来源</div>
+        <div class="meta-value">arXiv 2509.03236</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">核心成果</div>
+        <div class="meta-value">CTR +1.67% · 订单量 +3.22% · 运营成本 -75.40%</div>
+      </div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="toc">
+      <h2>目录</h2>
+      <ul class="toc-list">
+        <li><a href="#tldr">一句话总结</a></li>
+        <li><a href="#background">§1 背景与动机</a></li>
+        <li><a href="#method">§2 方法详解</a>
+          <ul class="toc-sub">
+            <li><a href="#khqe">2.1 KHQE：关键词增强层次量化</a></li>
+            <li><a href="#museq">2.2 多视图用户行为序列注入</a></li>
+            <li><a href="#arch">2.3 统一 Encoder-Decoder 架构</a></li>
+            <li><a href="#pars">2.4 PARS：偏好感知奖励系统</a></li>
+          </ul>
+        </li>
+        <li><a href="#experiments">§3 实验结果</a></li>
+        <li><a href="#summary">§4 一句话总结与个人理解</a></li>
+      </ul>
+    </aside>
+
+    <main class="content">
+
+      <!-- 一句话总结 -->
+      <section class="section" id="tldr">
+        <div class="section-title">
+          <div class="icon" style="background:#eff6ff;">💬</div>
+          一句话总结
+        </div>
+        <blockquote>
+          OneSearch 是快手首个工业部署的电商搜索端到端生成式框架，通过 RQ-OPQ 层次量化编码（保留商品独特属性）+ 三视图用户行为序列注入（User ID 构建/显式短序列/隐式长序列）+ 多阶段 SFT 与自适应奖励系统，将传统多阶段级联架构（召回-粗排-精排）统一为一个 Transformer encoder-decoder 模型，在快手商城搜索 A/B 测试中实现商品 CTR +1.67%、买家数 +2.40%、订单量 +3.22%，同时将运营成本降低 75.40%、MFU 从 3.26% 提升至 27.32%。
+        </blockquote>
+      </section>
+
+      <!-- §1 背景 -->
+      <section class="section" id="background">
+        <div class="section-title">
+          <div class="icon" style="background:#eff6ff;">🎯</div>
+          §1 背景与动机
+        </div>
+
+        <div class="paper-info">
+          <p><strong>论文：</strong>OneSearch: A Preliminary Exploration of the Unified End-to-End Generative Framework for E-commerce Search</p>
+          <p><strong>机构：</strong>快手（Kuaishou），电商搜索算法团队</p>
+          <p><strong>发表：</strong>arXiv 2509.03236，2025</p>
+          <p><strong>链接：</strong><a href="https://arxiv.org/abs/2509.03236" target="_blank">arxiv.org/abs/2509.03236</a></p>
+        </div>
+
+        <h3>1.1 传统多阶段级联架构（MCA）的根本局限</h3>
+        <p>电商搜索系统的目标是：在用户输入搜索词后，从数亿候选商品中，在 1 秒内返回同时满足<strong>语义相关性</strong>和<strong>个性化偏好</strong>的商品列表。为此，传统系统普遍采用<strong>多阶段级联架构（Multi-stage Cascading Architecture, MCA）</strong>：</p>
+
+        <div class="flow-diagram">
+          <p style="font-weight:700;margin:0 0 10px;font-size:14px;">传统 MCA 搜索流程</p>
+          <div class="flow-row">
+            <div class="flow-box">全量候选池<br>~10亿商品</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box">召回阶段<br>（EBR 向量检索）<br>→ 万级候选</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box">粗排阶段<br>（轻量模型）<br>→ 千级候选</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box">精排阶段<br>（复杂模型）<br>→ 百级结果</div>
+          </div>
+        </div>
+
+        <p>MCA 通过逐步收窄候选池，平衡了计算效率和排序精度。但它存在两个根本性缺陷：</p>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>缺陷 1：计算碎片化（Fragmented Compute）</h4>
+            <p>绝大多数 serving 资源被消耗在各阶段之间的<strong>通信和存储</strong>，而非真正的数值计算。每一阶段需要独立的模型服务、特征存储、候选传递——系统越复杂，浪费越严重。</p>
+            <p><strong>量化表现：</strong>快手 MCA 的 MFU（模型 FLOPs 利用率）仅为 <strong>3.26%</strong>，绝大多数算力被浪费在碎片化的通信开销上。</p>
+          </div>
+          <div class="mini-card">
+            <h4>缺陷 2：优化目标冲突（Objective Collision）</h4>
+            <p>召回阶段追求<strong>高召回率</strong>（尽量不漏掉相关商品），精排阶段追求<strong>高精度</strong>（尽量把最好的排最前）。两者目标本质上存在冲突，且精排只能对召回/粗排的幸存者重排——如果用户真正想要的商品在召回阶段就被过滤，后续再好的精排也无能为力。</p>
+            <p><strong>实验验证：</strong>论文发现粗排阶段倾向于聚合高曝光商品（HitRate 高但 MRR 低），而精排只能在此基础上重排，这是 MCA 性能天花板的根源。</p>
+          </div>
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2509.03236v5/x1.png"
+               alt="Figure 1: OneSearch 端到端框架 vs 传统 MCA 对比"
+               onerror="this.onerror=null;this.parentElement.innerHTML='<div class=\'fig-placeholder\'><b>Figure 1：端到端框架 vs MCA 对比</b><br><br>(a) OneSearch 提出的端到端生成式检索框架：输入 query + 用户行为序列，直接通过 Transformer encoder-decoder 生成商品 SID 列表，无需多阶段传递；(b) 传统 MCA：召回→粗排→精排三阶段独立模型级联，存在碎片化计算和目标冲突</div>'" />
+          <figcaption><strong>Figure 1（论文原图）：</strong>OneSearch 端到端生成式框架（左）与传统 MCA（右）的对比。端到端框架将召回+精排统一为一个模型的生成过程，从根本上消除阶段间目标冲突和计算碎片化。</figcaption>
+        </figure>
+
+        <h3>1.2 电商搜索场景的独特挑战</h3>
+        <p>与视频推荐（OneRec）不同，电商搜索面临三个额外的核心挑战，导致推荐领域的 GR 方法无法直接迁移：</p>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>挑战 1：商品文本噪声严重</h4>
+            <p>商家为了增加曝光，会在商品标题中堆砌大量无关关键词（如"男女通用 学生 成人 老人 礼物 送父母..."）。这些<strong>语义顺序弱、冗余噪声多</strong>的文本会严重误导 SID 的编码质量，导致同类商品的 SID 聚类混乱。</p>
+          </div>
+          <div class="mini-card">
+            <h4>挑战 2：强相关性约束</h4>
+            <p>搜索查询通常只有 2-3 个关键词（如"耐克跑鞋 男 42码"），任何一个属性不匹配都会导致严重的相关性问题。传统基于 SID 的 GR 模型倾向于学习<strong>共享的 SID 信息</strong>，会丢失每个商品的独特属性（如"42码"这一关键信息），破坏查询-商品的相关性约束。</p>
+          </div>
+          <div class="mini-card">
+            <h4>挑战 3：用户搜索意图隐含</h4>
+            <p>用户输入的搜索词往往非常简短，背后的真实购买意图需要结合<strong>用户历史行为</strong>来推断。例如同样搜索"跑鞋"，一个马拉松选手和一个休闲跑步用户的真实需求完全不同，必须将 query 与用户画像有效融合。</p>
+          </div>
+          <div class="mini-card">
+            <h4>生成式搜索 vs 推荐的根本差异</h4>
+            <p>如 Figure 3 所示：推荐的输入输出都是闭合词汇 item，纯 SID 方法可行；查询建议的输入输出都是开放词汇文本，Transformer 直接生效；但搜索的输入是开放词汇（query 文本），输出是闭合词汇（商品 SID）——这种<strong>混合开-闭词汇</strong>的特性使得两种方法都不能直接套用。</p>
+          </div>
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2509.03236v5/x2.png"
+               alt="Figure 3: 推荐/搜索/广告/查询建议输入输出差异对比"
+               onerror="this.onerror=null;this.parentElement.innerHTML='<div class=\'fig-placeholder\'><b>Figure 3：不同任务输入输出差异</b><br><br>推荐：输入闭合词汇用户历史 → 输出闭合词汇 item SID（纯 GR 可行）；搜索/广告：输入开放词汇 query → 输出闭合词汇 item SID（混合，需要特殊设计）；查询建议：输入开放词汇前缀 → 输出开放词汇 query（纯文本生成可行）；导航栏：输入闭合词汇场景 → 输出开放词汇 category text</div>'" />
+          <figcaption><strong>Figure 3（论文原图）：</strong>推荐、搜索/广告、查询建议和导航栏四类任务的输入-输出词汇差异。电商搜索（输入开放词汇 query → 输出闭合词汇 SID）是最特殊的混合类型，现有 GR 方法无法直接适用。</figcaption>
+        </figure>
+
+        <div class="callout-blue">
+          <strong>OneSearch 的定位：</strong>业界<em>首个</em>工业部署的电商搜索端到端生成式框架。之前 OneRec（视频推荐）、OneSug（查询建议）、EGA（广告）均已落地，但电商搜索因其独特挑战（强相关性约束 + 混合词汇类型）一直是空白，OneSearch 填补了这一空缺。
+        </div>
+      </section>
+
+      <!-- §2 方法 -->
+      <section class="section" id="method">
+        <div class="section-title">
+          <div class="icon" style="background:#eff6ff;">⚙️</div>
+          §2 方法详解：OneSearch 四大模块
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2509.03236v5/x3.png"
+               alt="Figure 4: OneSearch 整体框架图"
+               onerror="this.onerror=null;this.parentElement.innerHTML='<div class=\'fig-placeholder\'><b>Figure 4：OneSearch 整体框架</b><br><br>框架包含四个部分：(1) KHQE：关键词增强层次量化编码，生成 RQ-OPQ 混合 SID；(2) 多视图行为序列注入：User ID 构建 + 显式短序列 + 隐式长序列；(3) 统一 Encoder-Decoder 架构：encoder 编码用户/查询/序列，decoder 自回归生成商品 SID 列表；(4) PARS：三阶段 SFT + 自适应奖励系统（奖励模型重排 + list-wise DPO + 用户交互对齐）</div>'" />
+          <figcaption><strong>Figure 4（论文原图）：</strong>OneSearch 框架总览。四个模块从商品表示、用户建模、架构设计、训练优化四个维度协同解决电商搜索端到端生成的核心挑战。</figcaption>
+        </figure>
+
+        <h3 id="khqe">2.1 KHQE：关键词增强层次量化编码</h3>
+        <p>KHQE（Keyword-enhanced Hierarchical Quantization Encoding）是 OneSearch 的商品/查询表示模块，解决两个核心问题：(a) 商品文本噪声多、属性无序；(b) 普通 RQ-VAE/RQ-Kmeans 会丢失商品的独特属性。它分三步构建 SID：</p>
+
+        <h4>Step 1：协同-语义对齐表示</h4>
+        <p>首先训练一个<strong>对齐编码器</strong>，使商品和查询的 embedding 同时反映内容语义和用户行为协同信号。训练数据来自真实用户搜索日志，包含 query-query、item-item、query-item 三类配对（由 ItemCF 和 Swing 挖掘）。</p>
+
+        <p>对齐总损失为：</p>
+        <div class="formula-block">
+          $$\mathcal{L}_{\text{align}} = \lambda_1 \cdot \mathcal{L}_{q2q} + \lambda_2 \cdot \mathcal{L}_{i2i} + \lambda_3 \cdot \mathcal{L}_{q2i} + \lambda_4 \cdot \mathcal{L}_{\text{rank}} + \lambda_5 \cdot \mathcal{L}_{\text{rel}}$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\mathcal{L}_{q2q}, \mathcal{L}_{i2i}$：query-query / item-item 对比损失，拉近协同相似 pair 的表示</li>
+            <li>$\mathcal{L}_{q2i}$：query-item 对比损失，使 embedding 反映真实业务相关性</li>
+            <li>$\mathcal{L}_{\text{rank}}$：margin loss，区分不同行为级别（曝光 / 点击 / 下单）的 query-item pair</li>
+            <li>$\mathcal{L}_{\text{rel}}$：相关性校正损失，对相似度阈值附近的样本用 LLM 打分并让 BGE 模型拟合该得分</li>
+            <li>$\lambda_i$：各损失的调节权重</li>
+          </ul>
+        </div>
+
+        <h4>Step 2：核心关键词增强</h4>
+        <p>商品文本中充斥大量卖家为刷曝光而堆砌的无关词。KHQE 使用<strong>命名实体识别（NER）</strong>从快手电商平台中识别 <strong>18 类结构化属性</strong>（品牌、材质、适用人群、场景等），挖掘过去 1 年的点击 query-item 对作为标注数据，用 Qwen-VL 为每个商品识别对应的核心关键词。</p>
+
+        <p>最终查询和商品的增强表示为：</p>
+        <div class="formula-block">
+          $$e_q^o = \frac{1}{2}\!\left(e_q + \frac{1}{m}\sum_{i=1}^{m} e_k^i\right), \quad e_i^o = \frac{1}{2}\!\left(e_i + \frac{1}{n}\sum_{j=1}^{n} e_k^j\right)$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$e_q, e_i$：查询/商品的原始 BGE 编码向量</li>
+            <li>$e_k^i$：第 $i$ 个核心关键词对应的向量（与商品分布对齐）</li>
+            <li>$m, n$：查询/商品对应的核心关键词数量</li>
+            <li>$e_q^o, e_i^o$：关键词增强后的最终表示，均值融合保证关键词权重不超过原始内容</li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：关键词增强如何减少噪声？</div>
+          <p>一个商品的原始标题可能是：「耐克 2024 新款男女通用跑步鞋 学生 情侣 父母礼物 减震防滑 42码 黑色 送礼首选」</p>
+          <p><strong>没有关键词增强时：</strong>BGE 编码器看到的是整段文本，"男女通用"、"礼物"、"情侣"等无关词会稀释"耐克"、"42码"、"跑步"等核心属性的权重，导致该商品被聚类到混合类别下。</p>
+          <p><strong>关键词增强后：</strong>NER 识别出核心属性：品牌=耐克、尺码=42码、类型=跑步鞋、颜色=黑色。这 4 个关键词的向量平均后与原始 embedding 各取 50% 权重，使最终表示中核心属性占主导，编码结果更精准，RQ-Kmeans 聚类时同类商品（同品牌+同功能）会被分配相近的 SID 前缀。</p>
+        </div>
+
+        <h4>Step 3：RQ-OPQ 混合量化</h4>
+        <p>KHQE 的核心创新：将 <strong>RQ-Kmeans</strong>（处理层次语义）和 <strong>OPQ</strong>（处理独特属性的残差）结合使用。</p>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>RQ-Kmeans：层次语义 SID（3层）</h4>
+            <p>用残差量化 K-means 对 $e_i^o$ 进行 3 层层次聚类，生成 3 个 SID 码字。CodeBook 配置：<strong>(4096, 1024, 512)</strong>——前层码本大以覆盖粗粒度类别，后层码本小以区分细节。仅对第 3 层使用 balanced k-means（全层 balanced 会导致层次聚类坍缩）。</p>
+          </div>
+          <div class="mini-card">
+            <h4>OPQ：独特属性 SID（2层）</h4>
+            <p>RQ-Kmeans 量化后的<strong>残差向量</strong>包含商品独特属性（如"42码"这一信息）。用 OPQ（Optimized Product Quantization）对残差量化，生成 2 个额外码字（256-256）。最终每个商品的完整 SID 长度为 <strong>5 层</strong>，前 3 层捕获层次语义，后 2 层保留独特属性。</p>
+          </div>
+        </div>
+
+        <div class="callout-blue">
+          <strong>RQ-OPQ vs 纯 RQ-Kmeans（实验数据）：</strong>在 CodeBook 利用率（CUR）和独立编码率（ICR）两个指标上，RQ-OPQ 均显著优于纯 RQ-Kmeans。加入关键词增强后，3 层配置的 ICR 提升 57.15%，验证了 OPQ 残差编码对保留商品独特属性的有效性。同时 RQ-OPQ 面对新商品加入（如 11.11 大促）时，CUR 下降幅度（0.43%）远小于纯 RQ-Kmeans（1.11%）。
+        </div>
+
+        <h3 id="museq">2.2 多视图用户行为序列注入（Mu-Seq）</h3>
+        <p>为了让搜索模型理解用户的真实购买意图，OneSearch 从三个视角将用户历史行为注入模型：</p>
+
+        <figure>
+          <img src="https://arxiv.org/html/2509.03236v5/x4.png"
+               alt="Figure 5: 不同层次量化编码对商品的表示"
+               onerror="this.onerror=null;this.parentElement.innerHTML='<div class=\'fig-placeholder\'><b>Figure 5：不同层次量化编码对商品的表示效果对比</b><br><br>展示 RQ-Kmeans、RQ-OPQ(2/256)、RQ-OPQ(4/256)、RQ-OPQ(4*2/256) 等配置在商品向量空间中的聚类可视化，以及对应的 CUR/ICR 指标。RQ-OPQ(2/256) 在层次语义和独特属性两方面均达到最佳平衡。</div>'" />
+          <figcaption><strong>Figure 5（论文原图）：</strong>不同层次量化编码配置的商品表示对比。RQ-OPQ (2/256) 实现了最佳的层次语义表示和独特属性保留，其他配置（4层 OPQ、全层 OPQ）因过度量化导致大量商品聚集到相同 SID 下。</figcaption>
+        </figure>
+
+        <h4>视角 1：行为序列构建的 User ID</h4>
+        <p>传统方法（如 TIGER）用随机哈希为每个用户分配一个固定 ID，导致不同行为偏好的用户可能获得相同 ID，个性化能力极弱。OneSearch 提出用<strong>行为序列加权平均</strong>来构建 User ID：</p>
+
+        <div class="formula-block">
+          $$SID_{\text{short}} = \left\lceil \sum_{i=1}^{m} \lambda_i \cdot SID_{s_i} \right\rceil, \quad \text{where}\ \lambda_i = \frac{\exp(\sqrt{i})}{\sum_{i}^{m}\exp(\sqrt{i})}$$
+        </div>
+        <div class="formula-block">
+          $$SID_{\text{long}} = \left\lceil \sum_{j=1}^{n} \mu_j \cdot SID_{l_j} \right\rceil, \quad \text{where}\ \mu_j = \frac{\exp(\sqrt{j})}{\sum_{j}^{n}\exp(\sqrt{j})}$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$Seq_{\text{short}} = \{s_1, \ldots, s_m\}$：用户最近点击的 $m$ 个商品</li>
+            <li>$Seq_{\text{long}} = \{l_1, \ldots, l_n\}$：用户长期历史行为序列（按时间顺序）</li>
+            <li>$\lambda_i, \mu_j$：指数递增权重（越近的行为权重越大），用 $\sqrt{i}$ 代替线性 $i$ 以减缓衰减速度</li>
+            <li>$SID_{s_i}$：第 $i$ 个商品的 RQ-OPQ SID 向量</li>
+            <li>$\lceil \cdot \rceil$：取整操作，将连续的加权平均转化为离散 SID 表示</li>
+            <li>User ID 最终长度为 10（短序列和长序列各贡献 5 个 token）</li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：行为序列 User ID 如何区分不同用户？</div>
+          <p>假设有两个用户，都搜索过"跑鞋"：</p>
+          <p><strong>用户 A（马拉松选手）：</strong>最近 5 次点击 = [耐克 Zoom X, 专业马拉松鞋垫, 压缩裤, 能量胶, 运动水壶]。这些商品的 SID 加权平均后，User ID 的语义重心在「专业运动装备」聚类附近。</p>
+          <p><strong>用户 B（休闲跑步者）：</strong>最近 5 次点击 = [回力帆布鞋, 运动T恤, 健身房会员卡, 瑜伽垫, 耳机]。User ID 的语义重心在「休闲运动生活」聚类附近。</p>
+          <p><strong>推理时：</strong>模型输入两个用户的 User ID + 相同 query "跑鞋"，会因为 User ID 不同而生成不同的商品 SID 列表——用户 A 倾向于专业竞技跑鞋，用户 B 倾向于舒适休闲跑鞋。这是随机哈希 ID 无法做到的。</p>
+        </div>
+
+        <h4>视角 2：显式短期行为序列（Explicit Short Seq）</h4>
+        <p>直接将用户最近的<strong>历史查询序列</strong>（$Seq_{\text{query}}$）和<strong>短期点击商品序列</strong>（$Seq_{\text{short}}$）的 SID 拼接到 prompt 中，作为 encoder 的显式输入。模型可以直接"看到"用户最近在搜什么、点了什么，学习其近期偏好变化。同时使用<strong>滑动窗口数据增强</strong>（最大窗口 5）生成多个训练样本，帮助模型学习兴趣变化规律。</p>
+
+        <h4>视角 3：隐式长期行为序列（Implicit Long Seq）</h4>
+        <p>长期历史序列可能包含数千条记录（$|Seq_{\text{long}}| \sim 10^3$），无法直接拼接到 prompt 中。OneSearch 设计了一种<strong>聚合压缩</strong>方式：将每个商品的 RQ-Kmeans 3 层聚类中心向量按层求和，再通过 QFormer 压缩为固定长度的隐式表示。</p>
+
+        <div class="formula-block">
+          $$\mathbf{M}_{\text{click}} = \left\{\sum_{i=1}^{m}\mathbf{Item}_{emb}^{L_1},\ \sum_{i=1}^{m}\mathbf{Item}_{emb}^{L_2},\ \sum_{i=1}^{m}\mathbf{Item}_{emb}^{L_3}\right\}$$
+        </div>
+        <div class="formula-block">
+          $$\mathbf{Q} = \text{QFormer}(\mathbf{M}_{\text{click}},\ \mathbf{M}_{\text{order}},\ \mathbf{M}_{\text{RSU}}), \quad \mathbf{Q} \in \mathbb{R}^{N_M \times 768}$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\mathbf{M}_{\text{click}}, \mathbf{M}_{\text{order}}, \mathbf{M}_{\text{RSU}}$：分别为点击/下单/搜索相关行为序列的层级聚合向量</li>
+            <li>$\mathbf{Item}_{emb}^{L_k}$：商品在第 $k$ 层 RQ-Kmeans 聚类中心的 embedding</li>
+            <li>$\mathbf{Q}$：经 QFormer 压缩后的长期行为隐式表示，维度为 $N_M \times 768$</li>
+            <li>$N_M$：QFormer 输出的固定 token 数量</li>
+            <li>三类行为（点击/下单/RSU）的权重不同，隐式反映了不同强度的行为信号</li>
+          </ul>
+        </div>
+
+        <h3 id="arch">2.3 统一 Encoder-Decoder 架构</h3>
+        <p>OneSearch 基于 BART（或 mT5 / Qwen3）的 encoder-decoder 架构。Encoder 接收用户和查询的所有特征，Decoder 自回归生成商品 SID 列表。</p>
+
+        <p>模型的完整输入 $\mathbf{X}_U$ 包含：</p>
+
+        <div class="flow-diagram">
+          <p style="font-weight:700;margin:0 0 10px;font-size:14px;">OneSearch Encoder 输入构成</p>
+          <div class="flow-row">
+            <div class="flow-box">$[BOS]$</div>
+            <div class="flow-arrow">+</div>
+            <div class="flow-box">User ID<br>（行为序列构建，10 token）</div>
+            <div class="flow-arrow">+</div>
+            <div class="flow-box">Query 文本<br>+ Query SID</div>
+            <div class="flow-arrow">+</div>
+            <div class="flow-box">短期行为序列<br>（历史查询 + 点击商品 SID）</div>
+            <div class="flow-arrow">+</div>
+            <div class="flow-box">隐式长期序列<br>$\mathbf{Q}$（QFormer 压缩）</div>
+            <div class="flow-arrow">+</div>
+            <div class="flow-box">用户画像<br>$\mathcal{U}$</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box">Decoder<br>生成 top-K 商品 SID</div>
+          </div>
+        </div>
+
+        <p>推理公式：</p>
+        <div class="formula-block">
+          $$\mathcal{I} := \mathcal{M}(uid,\ q,\ SID_q,\ Seq_q,\ Seq_{\text{short}},\ Seq_{\text{long}}^{emb},\ \mathcal{U})$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$uid$：行为序列构建的用户 ID（10 token）</li>
+            <li>$q$：输入查询文本；$SID_q$：查询的 KHQE 编码 SID</li>
+            <li>$Seq_q$：用户历史查询序列；$Seq_{\text{short}}$：短期点击商品序列</li>
+            <li>$Seq_{\text{long}}^{emb}$：QFormer 压缩后的长期行为隐式向量 $\mathbf{Q}$</li>
+            <li>$\mathcal{U}$：用户画像（平台人群标签）</li>
+            <li>$\mathcal{I}$：生成的商品 SID 列表（beam search 大小 = 512）</li>
+          </ul>
+        </div>
+
+        <div class="callout-amber">
+          <strong>Beam Search 策略选择：</strong>OneSearch 测试了约束 beam search（只输出合法 SID）和非约束 beam search。与 GRID 的发现一致，两种策略性能相近，但约束 beam search 解码复杂度更高（需维护 trie 树）。最终在线部署使用 <strong>beam size = 512</strong> 的非约束 beam search，平衡了生成质量和延迟。
+        </div>
+
+        <h3 id="pars">2.4 PARS：偏好感知奖励系统</h3>
+        <p>电商搜索需要同时满足<strong>相关性约束</strong>（搜"耐克 42 码"不能出现阿迪达斯）和<strong>个性化偏好</strong>（同样的鞋，不同用户排序不同）。PARS 通过三阶段 SFT + 自适应奖励模型来平衡这两个目标。</p>
+
+        <h4>三阶段监督微调（Multi-stage SFT）</h4>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>阶段 1：语义内容对齐</h4>
+            <p>三个子任务：(a) query/item 文本 → SID（文本到 ID 的映射）；(b) SID → 原始文本（ID 到文本的逆映射）；(c) 文本 → 品类信息（强化相关性）。前两个任务建立 SID ↔ 文本的双向对齐，第三个确保 SID 的品类语义准确。</p>
+          </div>
+          <div class="mini-card">
+            <h4>阶段 2：共现同步</h4>
+            <p>忽略用户特征，只学习 query ↔ item 的内在语义和协同关系。包含：query ↔ item 互相预测，以及 query SID ↔ item SID 的互相预测。使用大规模在线交互语料，学习搜索场景中商品的语义协同关系。</p>
+          </div>
+          <div class="mini-card" style="grid-column: span 2;">
+            <h4>阶段 3：用户个性化建模</h4>
+            <p>加入完整用户信息（User ID + query + $SID_q$ + 短期序列 + 长期序列）作为输入，以目标商品 SID 为标签，指导模型学习个性化的用户-查询-商品匹配。短期序列使用滑动窗口增强（窗口最大 5），生成额外训练样本来学习兴趣演变。</p>
+          </div>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：三阶段 SFT 如何循序渐进地建立搜索理解？</div>
+          <p><strong>阶段 1（语义对齐）：</strong>模型学到"query='耐克跑鞋'对应 SID=[142, 37, 89, 201, 55]"，以及"SID=[142, 37, 89, ...]的商品是'耐克 Zoom X跑鞋'"。模型此时能在文本和 SID 之间双向翻译，但还不知道用户偏好。</p>
+          <p><strong>阶段 2（共现同步）：</strong>模型大量学习"搜了'跑鞋'的用户会点什么商品"，内化了查询-商品的协同关系（比如"马拉松鞋"和"跑步鞋"在用户行为上高度相关，应该聚在一起）。</p>
+          <p><strong>阶段 3（个性化）：</strong>加入具体用户信息。同一查询"跑鞋"，对于历史主要购买专业装备的用户，输出倾向于竞技跑鞋 SID；对于历史购买休闲用品的用户，输出倾向于休闲跑鞋 SID。三个阶段层层递进，让模型逐步具备：理解 SID → 理解商品关系 → 理解用户偏好。</p>
+        </div>
+
+        <h4>自适应奖励系统（Adaptive Reward System）</h4>
+        <p>PARS 的奖励系统通过两个阶段让模型超越 SFT 学到的分布：</p>
+
+        <p><strong>① 用户行为 6 级权重：</strong>将用户交互分为 6 个层次，分配基础奖励权重 $\lambda = [2.0, 1.5, 1.0, 0.5, 0.2, 0.0]$：</p>
+        <ul>
+          <li>Level 1：搜索场景内购买的商品（最强正信号）</li>
+          <li>Level 2：推荐场景同品类购买的商品</li>
+          <li>Level 3：点击的商品</li>
+          <li>Level 4：曝光未点击的商品</li>
+          <li>Level 5：同品类未曝光商品</li>
+          <li>Level 6：其他品类随机商品（无信号）</li>
+        </ul>
+
+        <p><strong>② 校准 CTR/CVR，计算自适应奖励：</strong></p>
+        <div class="formula-block">
+          $$Cnt_T = \log\!\left((Cnt_{\text{pos}}+10)\cdot(Cnt_{\text{clk}}+10)\cdot(Cnt_{\text{order}}+10)\right)$$
+        </div>
+        <div class="formula-block">
+          $$Ctr_i = \frac{\log(Cnt_{\text{clk}}+10)}{Cnt_T}, \quad Cvr_i = \frac{\log(Cnt_{\text{order}}+10)}{\log(Cnt_{\text{clk}}+10)}$$
+        </div>
+        <div class="formula-block">
+          $$r(q, i) = 2\lambda \cdot \frac{Ctr_i \cdot Cvr_i}{Ctr_i + Cvr_i}$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$Cnt_{\text{pos}}, Cnt_{\text{clk}}, Cnt_{\text{order}}$：商品的曝光次数、点击次数、下单次数</li>
+            <li>$Cnt_T$：综合流量规模的对数归一化，消除"仅曝光一次就点击"导致 CTR=100% 的偏差</li>
+            <li>$r(q,i)$：最终调和平均奖励分，同时考虑 CTR 和 CVR，避免偏重其中一项</li>
+            <li>$\lambda$：行为等级对应的基础权重（$[2.0, 1.5, 1.0, 0.5, 0.2, 0.0]$）</li>
+          </ul>
+        </div>
+
+        <p><strong>③ Reward Model + List-wise DPO 混合排序：</strong>先训练一个三塔 SIM 奖励模型（CTR/CVR/CTCVR 三个 tower + 相关性分 $S_{\text{Rel}}$，权重系数 10 倍以确保相关性约束），用奖励模型对 OneSearch 生成的 beam search 结果重排，收集排序变化样本做 list-wise DPO 训练。DPO 优化目标：</p>
+
+        <div class="formula-block">
+          $$\hat{r}_\theta(x_u, i_{w/l}) = \beta \log \frac{\pi_\theta(i_{w/l}|x_u)}{\pi_{\text{ref}}(i_{w/l}|x_u)}$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\hat{r}_\theta(x_u, i_w)$：语言模型隐式定义的偏好奖励，正样本 $i_w$（点击/升排的商品）应高于负样本 $i_l$</li>
+            <li>$\pi_\theta, \pi_{\text{ref}}$：当前模型和参考模型的条件概率，比值体现偏好程度</li>
+            <li>$\beta$：KL 散度系数，控制新模型与参考模型的偏离程度</li>
+            <li>$rw_\Delta$：正负样本奖励差，差值越小，损失权重越大（鼓励区分细微差异）</li>
+          </ul>
+        </div>
+
+        <div class="callout-blue">
+          <strong>两阶段 RL 训练节奏：</strong>第一阶段（奖励模型引导）每周训练一次，使模型对齐 MCA 排序模型的分布；第二阶段（用户真实交互对齐）尽量做到流式更新，让模型持续从最新用户行为中学习，突破 MCA 性能上限。全球大促期间（11.11、6.18）会加强第一阶段奖励模型的训练频次。
+        </div>
+      </section>
+
+      <!-- §3 实验 -->
+      <section class="section" id="experiments">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">📊</div>
+          §3 实验结果
+        </div>
+
+        <h3>3.1 实验设置</h3>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>数据集</h4>
+            <p>快手商城搜索平台 2025 年 5-8 月用户交互数据（约 10 亿 PV），训练集 90 天，测试集最后 1 天，包含点击和下单行为两类。</p>
+          </div>
+          <div class="mini-card">
+            <h4>评估指标</h4>
+            <p>离线指标：<strong>HitRate@K</strong> 和 <strong>MRR@K</strong>（K=350/10），模拟真实 Top-K 召回+排序场景。在线指标：商品 CTR、PV CTR、PV CVR、买家数、订单量（均为相对于在线 MCA 的变化量）。</p>
+          </div>
+          <div class="mini-card">
+            <h4>基线</h4>
+            <p><strong>Online MCA</strong>：快手商城搜索线上多阶段级联系统（召回+粗排+精排），包含数千特征和多个独立模型。论文未构建离线 MCA 仿真，直接与线上系统对比，更真实。</p>
+          </div>
+          <div class="mini-card">
+            <h4>实现细节</h4>
+            <p>基座模型：BART-B（线上部署选择，已在快手多个场景验证）。线上实际使用模型参数量至少是 BART-B 的 100 倍（保密）。Beam size = 512，SFT batch = 512，DPO batch = 128，RQ-OPQ 配置：(4096, 1024, 512 | 256, 256)。</p>
+          </div>
+        </div>
+
+        <h3>3.2 离线性能对比（Table 5）</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>方法</th><th>Order HR@350</th><th>Order MRR@350</th><th>Click HR@350</th><th>Click MRR@350</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>Online MCA（基线）</strong></td><td>51.74%</td><td>19.26%</td><td>64.40%</td><td>16.89%</td></tr>
+              <tr><td>MCA w/o ranking（仅召回+粗排）</td><td>75.75%</td><td>4.19%</td><td>80.23%</td><td>3.00%</td></tr>
+              <tr><td>OPQ only (8/256)</td><td>19.43%</td><td>9.55%</td><td>22.57%</td><td>7.42%</td></tr>
+              <tr><td>RQ-Kmeans (1024-1024-1024)</td><td>57.39%</td><td>9.12%</td><td>63.63%</td><td>7.46%</td></tr>
+              <tr><td>RQ-Kmeans (4096-1024-512)</td><td>59.58%</td><td>14.29%</td><td>62.49%</td><td>11.82%</td></tr>
+              <tr><td>+ keywords</td><td>62.38%</td><td>14.30%</td><td>66.14%</td><td>12.10%</td></tr>
+              <tr><td>+ l3 balanced</td><td>63.16%</td><td>13.59%</td><td>68.26%</td><td>11.67%</td></tr>
+              <tr><td>+ Adaptive RS</td><td>64.33%</td><td>16.11%</td><td>68.94%</td><td>13.80%</td></tr>
+              <tr><td>RQ-OPQ (2/256)</td><td>65.05%</td><td>15.33%</td><td>68.88%</td><td>12.90%</td></tr>
+              <tr style="background:#eff6ff; font-weight:700;"><td>RQ-OPQ (2/256) + Adaptive RS（OneSearch）</td><td><strong>66.46%</strong></td><td>18.38%</td><td><strong>71.06%</strong></td><td><strong>16.33%</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout-blue">
+          <strong>关键发现：</strong>OneSearch 在 HR@350 上大幅超越 Online MCA（66.46% vs 51.74%，Order 场景提升 28.5%），MRR@350 达到相当水平（18.38% vs 19.26%）。这说明 OneSearch 能召回更多用户真正想要的商品，同时个性化排序能力基本追平了拥有数千特征的 MCA 精排。MCA "仅粗排" 的 MRR@350 仅 4.19%，印证了精排的重要性，也说明 OneSearch 真正做到了召回+精排的统一。
+        </div>
+
+        <h3>3.3 消融研究</h3>
+
+        <h4>行为序列注入消融（Table 6）</h4>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>消融配置</th><th>Order HR@350</th><th>Order MRR@350</th><th>Click HR@350</th><th>Click MRR@350</th></tr>
+            </thead>
+            <tbody>
+              <tr style="background:#eff6ff; font-weight:600;"><td>OneSearch（完整）</td><td>66.46%</td><td>18.38%</td><td>71.06%</td><td>16.33%</td></tr>
+              <tr><td>w/o User SIDs（改用随机哈希 ID）</td><td>-0.94%</td><td>-0.37%</td><td>-1.72%</td><td>-0.36%</td></tr>
+              <tr><td>w/o 短期行为序列（$Seq_{\text{short}}$）</td><td>-3.43%</td><td>-1.53%</td><td>-4.15%</td><td>-1.32%</td></tr>
+              <tr><td>w/o 隐式长期序列（$Seq_{\text{long}}^{emb}$）</td><td>-2.26%</td><td>-1.01%</td><td>-3.00%</td><td>-1.05%</td></tr>
+              <tr><td>w/o 滑动窗口增强</td><td>-1.95%</td><td>-0.81%</td><td>-1.80%</td><td>-0.70%</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>短期行为序列贡献最大（HR -3.43%~-4.15%），说明近期点击行为是搜索意图推断的最强信号。隐式长期序列次之（HR -2.26%~-3.00%），行为序列构建的 User ID 贡献相对小但不可忽略。滑动窗口增强验证了数据增强对学习兴趣演变的有效性。</p>
+
+        <h4>RQ-OPQ 配置消融（Table 7）</h4>
+        <p>RQ-OPQ (2/256) 是最优配置。增加 OPQ 层数（4/256）因序列变长和解码复杂度上升，反而使性能下降 2-3%。对全部 embedding 使用 OPQ（4*2/256、4*4/256）效果极差，类似于全层 balanced k-means 导致的层次聚类坍缩——过度量化破坏了层次语义结构，使大量商品被聚集到相同 SID 下。</p>
+
+        <h3>3.4 在线 A/B 测试（Table 8）</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>方法</th><th>Search PVs</th><th>Item CTR</th><th>PV CTR</th><th>PV CVR</th><th>Buyer 数</th><th>Order 数</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>MCA w/o ranking</td><td>-</td><td>-9.97%</td><td>-</td><td>-</td><td>-28.78%</td><td>-39.14%</td></tr>
+              <tr><td>OneSearch¹（无 RQ-OPQ 和长序列）</td><td colspan="6" style="text-align:center;color:#6b7280;">与 MCA 相当（统计不显著）</td></tr>
+              <tr><td>OneSearch²（完整配置）</td><td>-</td><td style="color:#1d4ed8;font-weight:600;">+1.45%</td><td>+1.40%</td><td>-</td><td>-</td><td>-</td></tr>
+              <tr style="background:#f0fdf4; font-weight:700;"><td>OneSearch²_RM（+奖励模型重排）</td><td>+1.10%</td><td style="color:#15803d;">+1.67%</td><td>+3.14%</td><td>+1.78%</td><td>+2.40%</td><td>+3.22%</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout-green">
+          <strong>A/B 测试亮点：</strong>
+          <ul style="margin:8px 0;">
+            <li>纯 OneSearch²（无奖励模型）已在 Item CTR 上超越 Online MCA，证明端到端生成式方法本身的排序能力</li>
+            <li>加入奖励模型重排后（OneSearch²_RM），订单量提升 <strong>+3.22%</strong>，买家数 +2.40%，在大规模搜索场景中这是显著增量</li>
+            <li>"仅召回+粗排"版本的订单量暴跌 -39.14%，间接验证了 OneSearch 的精排能力已达到完整 MCA 水平</li>
+          </ul>
+        </div>
+
+        <h3>3.5 计算效率与工程收益</h3>
+
+        <figure>
+          <img src="https://arxiv.org/html/2509.03236v5/x5.png"
+               alt="Figure 7: MFU 和 OPEX 对比"
+               onerror="this.onerror=null;this.parentElement.innerHTML='<div class=\'fig-placeholder\'><b>Figure 7：MFU 和 OPEX 对比</b><br><br>左图：Online MCA MFU = 3.26%，OneSearch MFU = 27.32%（提升 8.4 倍）。大多数 LLM 在 H100 上达到约 40% MFU，OneSearch 达到同量级水平，远超 MCA 的碎片化计算效率；右图：OPEX（运营成本）OneSearch 仅为 MCA 的 24.60%，即节省约 75.40%。</div>'" />
+          <figcaption><strong>Figure 7（论文原图）：</strong>MFU 和运营成本（OPEX）对比。OneSearch 将 MFU 从 3.26% 提升至 27.32%（提升 8.4×），同时将运营成本降低 75.40%，从根本上解决了 MCA 的计算碎片化问题。</figcaption>
+        </figure>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>MFU 提升：3.26% → 27.32%</h4>
+            <p>MCA 的绝大多数算力消耗在各阶段间的通信、存储和候选传递，实际有效计算占比极低（仅 3.26%）。OneSearch 将所有计算集中在一个 Transformer 模型中，MFU 达到 27.32%——接近 LLM 在 H100 上的典型水平（约 40%），相当于以更少的总算力实现了更好的效果。</p>
+          </div>
+          <div class="mini-card">
+            <h4>OPEX 降低 75.40%</h4>
+            <p>消除多个独立模型服务（召回 embedding 服务 + 粗排 + 精排 + 独立相关性模型）及其对应的存储、通信基础设施，OneSearch 的运营成本仅为 MCA 的 24.60%。对于日均数千万 PV 的平台，这是数量级的成本节省。</p>
+          </div>
+        </div>
+
+        <h3>3.6 人工评估与进一步分析</h3>
+        <p>随机抽取 200 个 query，提取 3200 个 query-item pair，由专家评估三个维度（相关性评级：Good / Fair / Bad）：</p>
+        <ul>
+          <li><strong>页面优质率</strong>（整体用户体验）：OneSearch² 提升 <strong>+1.03%</strong></li>
+          <li><strong>商品质量</strong>（排除假冒、图文不符、价格异常）：提升 <strong>+2.12%</strong></li>
+          <li><strong>查询-商品相关性</strong>：提升 <strong>+1.87%</strong>（主题和核心关键词均匹配的 Good 比例）</li>
+        </ul>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：OneSearch 如何提升长尾搜索和冷启动场景？</div>
+          <p><strong>MCA 的困境：</strong>对于冷启动 query（用户第一次搜索某个品类）或长尾商品（历史交互数据少），MCA 的召回模型（基于用户历史向量相似性）几乎无法找到相关商品，精排模型因无历史特征而退化为流行度排序。</p>
+          <p><strong>OneSearch 的优势：</strong>论文发现在热门 query（top 频率）OneSearch 相对 MCA 提升 0.37%，普通 query 提升 1.27%，<strong>长尾/冷启动 query 提升高达 3.13%</strong>。这是因为 OneSearch 的 KHQE 基于内容语义而非协同统计，能通过关键词-语义对齐理解新品类；多阶段 SFT 中的 Co-occurrence 阶段学习了大量 query-item 语义对，具备处理未见过的 query 的能力。</p>
+          <p>行业维度分析：Top-30 行业中 28 个行业 CTR 上升，平均提升 2.49%，说明 OneSearch 在几乎所有商品类目下都有增益，而非仅在某些垂类有效。</p>
+        </div>
+      </section>
+
+      <!-- §4 总结 -->
+      <section class="section" id="summary">
+        <div class="section-title">
+          <div class="icon" style="background:#faf5ff;">💡</div>
+          §4 总结与个人理解
+        </div>
+
+        <h3>4.1 核心亮点</h3>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>创新 1：RQ-OPQ 混合编码</h4>
+            <p>RQ-Kmeans（层次语义）+ OPQ（残差独特属性）+ 关键词增强（消除噪声）的组合是 OneSearch 最核心的技术贡献。它解决了 SID 编码的一个本质矛盾：共享 SID 前缀有利于层次语义共享，但会丢失每个商品的独特属性。RQ-OPQ 通过在残差上补充 OPQ 编码同时保留了两者。</p>
+          </div>
+          <div class="mini-card">
+            <h4>创新 2：三视图用户建模</h4>
+            <p>User ID 构建（行为序列加权平均）+ 显式短序列（prompt 文本拼接）+ 隐式长序列（QFormer 压缩）的三层次建模，在不同的信息密度和时效性之间取得平衡。这套框架对推荐场景同样适用，是用户建模的一个通用范式。</p>
+          </div>
+          <div class="mini-card">
+            <h4>创新 3：PARS 两阶段 RL</h4>
+            <p>第一阶段（奖励模型引导）确保模型不离 MCA 分布太远，第二阶段（用户真实交互）突破 MCA 上限。这种"先对齐后超越"的训练策略，是解决端到端 GR 从零训练不稳定问题的实用方案，值得借鉴。</p>
+          </div>
+          <div class="mini-card">
+            <h4>工程价值：效率飞跃</h4>
+            <p>MFU 从 3.26% 到 27.32%，OPEX 降低 75.40%，这不仅是学术成果，更是工业落地的核心说服力。说明端到端 GR 框架不只是效果更好，还在算力利用率上有质的提升，对大规模搜索系统有根本性的 ROI 优势。</p>
+          </div>
+        </div>
+
+        <h3>4.2 不足与局限</h3>
+        <ul>
+          <li><strong>商品 SID 需要预计算：</strong>RQ-OPQ tokenizer 需要离线构建，大促期间新品爆发会带来 SID 分布漂移（虽然实验显示 CUR/ICR 下降很小，但长期积累效应未充分探讨）。</li>
+          <li><strong>奖励模型依赖 MCA 数据：</strong>第一阶段 RL 的奖励模型基于 MCA 系统收集的训练数据，天然存在 MCA 分布偏差，需要第二阶段用户真实交互来矫正，增加了训练管道复杂度。</li>
+          <li><strong>beam search 搜索空间大：</strong>5 层 SID（3层 RQ-Kmeans + 2层 OPQ）的 beam size=512 解码，计算开销远高于简单的 3 层 SID，序列长度和解码速度的 trade-off 需要持续优化。</li>
+          <li><strong>跨场景泛化：</strong>论文部署在快手商城搜索/详情页/首页三个场景，但三个场景的用户行为分布差异显著（首页偏浏览、商城偏意图购买），OneSearch 是否需要针对不同场景单独训练未详细讨论。</li>
+        </ul>
+
+        <h3>4.3 启发与对比</h3>
+        <div class="callout-purple">
+          <strong>与 OneRec 的对比：</strong>OneRec（视频推荐）是纯闭合词汇输入输出，SID 编码相对简单（3层 RQ-VAE/Kmeans），奖励系统使用 P-Score + GRPO。OneSearch 面向电商搜索，需要处理开放词汇输入（query 文本），因此必须引入 KHQE（关键词增强 + RQ-OPQ）来应对强相关性约束，同时放弃 GRPO（在搜索场景引入不相关 SID），改用 list-wise DPO + 用户交互直接训练。这是两篇论文在技术路线上的核心差异，体现了搜索和推荐在 GR 落地路径上的本质不同。
+        </div>
+
+        <div class="callout-amber">
+          <strong>给电商推荐/搜索系统的启发：</strong>OneSearch 的成功说明，在计算资源允许的情况下，端到端生成式框架相比 MCA 有全面优势——不只是效果更好，还有成本更低、目标更一致。但核心难点在于 SID 编码质量（RQ-OPQ 保留独特属性）和训练稳定性（多阶段 SFT 循序渐进），缺一不可。
+        </div>
+
+        <blockquote>
+          OneSearch 是快手首个工业部署的电商搜索端到端生成式框架，通过 RQ-OPQ 层次量化编码（保留商品独特属性）+ 三视图用户行为序列注入（User ID 构建/显式短序列/隐式长序列）+ 多阶段 SFT 与自适应奖励系统，将传统多阶段级联架构（召回-粗排-精排）统一为一个 Transformer encoder-decoder 模型，在快手商城搜索 A/B 测试中实现商品 CTR +1.67%、买家数 +2.40%、订单量 +3.22%，同时将运营成本降低 75.40%、MFU 从 3.26% 提升至 27.32%。
+        </blockquote>
+      </section>
+
+    </main>
+  </div>
+
+    </main>
+  </div>
+
+  <footer>
+    <a href="../index.html" class="back-link">← 返回论文列表</a>
+    <p>Generated by paper-reader · arXiv 2509.03236 · 快手电商搜索团队</p>
+  </footer>
+</div>
+
+<script>
+(function(){
+  // TOC 滚动高亮：使用 IntersectionObserver 监听所有带 id 的 section/h3
+  var tocLinks = document.querySelectorAll('.toc-list a[href^="#"], .toc-sub a[href^="#"]');
+  if (!tocLinks.length) return;
+
+  // 建立 id -> tocLink 映射
+  var linkMap = {};
+  tocLinks.forEach(function(a){
+    var id = a.getAttribute('href').slice(1);
+    if (id) linkMap[id] = a;
+  });
+
+  var targets = Object.keys(linkMap).map(function(id){
+    return document.getElementById(id);
+  }).filter(Boolean);
+
+  if (!targets.length) return;
+
+  var activeId = null;
+
+  function setActive(id){
+    if (id === activeId) return;
+    activeId = id;
+    tocLinks.forEach(function(a){ a.classList.remove('active'); });
+    if (id && linkMap[id]){
+      linkMap[id].classList.add('active');
+      // 让目录自动滚动到对应项可见
+      var toc = document.querySelector('.toc');
+      if (toc){
+        var li = linkMap[id];
+        var tocTop = toc.getBoundingClientRect().top;
+        var liTop  = li.getBoundingClientRect().top;
+        var offset = liTop - tocTop - toc.clientHeight / 2;
+        toc.scrollBy({ top: offset, behavior: 'smooth' });
+      }
+    }
+  }
+
+  // rootMargin: 上边距 -10%（稍微进入视口就算），下边距 -60%（只有顶部 40% 区域触发）
+  var observer = new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      if (entry.isIntersecting){
+        setActive(entry.target.id);
+      }
+    });
+  }, { rootMargin: '-10% 0px -60% 0px', threshold: 0 });
+
+  targets.forEach(function(el){ observer.observe(el); });
+})();
+</script>
+</body>
+</html>

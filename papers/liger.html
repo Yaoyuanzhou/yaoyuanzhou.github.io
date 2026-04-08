@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LIGER 论文解读</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false }
+          ],
+          throwOnError: false
+        });
+      }
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #2563eb; --primary-soft: #eff6ff;
+      --accent: #7c3aed; --accent-soft: rgba(124,58,237,0.06);
+      --shadow: 0 10px 30px rgba(15,23,42,0.08); --radius: 18px; --max: 1120px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: linear-gradient(180deg,#f8fbff 0%,var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      line-height: 1.8;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .page { max-width: var(--max); margin: 0 auto; padding: 32px 20px 80px; }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    .back-link:hover { color: var(--primary); text-decoration: none; }
+    .hero {
+      background: radial-gradient(circle at top right,rgba(37,99,235,0.14),transparent 30%),
+                  radial-gradient(circle at left bottom,rgba(124,58,237,0.10),transparent 24%), var(--card);
+      border: 1px solid rgba(37,99,235,0.08); border-radius: 24px;
+      box-shadow: var(--shadow); padding: 34px 34px 28px; margin-bottom: 22px;
+    }
+    .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--primary-soft); color: var(--primary); font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+    h1 { font-size: 34px; line-height: 1.25; letter-spacing: -0.02em; margin-bottom: 10px; }
+    .subtitle { color: var(--muted); font-size: 16px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-top: 24px; }
+    .meta-card { background: #fbfdff; border: 1px solid #e7eefb; border-radius: 16px; padding: 14px 16px; }
+    .meta-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .meta-value { font-size: 14px; font-weight: 600; word-break: break-word; }
+    .layout { display: grid; grid-template-columns: 260px minmax(0,1fr); gap: 22px; align-items: start; }
+    .toc { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; }
+    .toc h2 { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+    .toc-list { list-style: none; }
+    .toc-list li { margin: 7px 0; }
+    .toc-list a { font-size: 13.5px; color: var(--muted); }
+    .toc-list a:hover { color: var(--primary); text-decoration: none; }
+        .toc-list a.active{color:var(--primary);background:#eff6ff;font-weight:600;border-left:3px solid var(--primary);padding-left:5px;}
+.toc-sub { padding-left: 14px; margin-top: 4px; }
+    .toc-sub li { margin: 4px 0; }
+    .toc-sub a { font-size: 12.5px; }
+    .content { display: flex; flex-direction: column; gap: 20px; }
+    .section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 28px 30px; }
+    .section-title { font-size: 22px; font-weight: 800; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 2px solid #f0f4ff; display: flex; align-items: center; gap: 10px; }
+    .section-title .icon { width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+    h3 { font-size: 18px; font-weight: 700; margin: 26px 0 12px; color: #111827; }
+    h4 { font-size: 15px; font-weight: 700; margin: 20px 0 10px; color: #1d4ed8; }
+    p { margin-bottom: 12px; }
+    p:last-child { margin-bottom: 0; }
+    ul, ol { padding-left: 22px; }
+    li { margin-bottom: 8px; }
+    .callout { border-radius: 14px; padding: 14px 18px; margin: 16px 0; font-size: 14.5px; }
+    .callout-blue { background: linear-gradient(180deg,rgba(37,99,235,0.08),rgba(37,99,235,0.04)); border: 1px solid rgba(37,99,235,0.16); }
+    .callout-blue strong { color: #1d4ed8; }
+    .callout-amber { background: #fffbeb; border: 1px solid #fde68a; }
+    .callout-amber strong { color: #92400e; }
+    .callout-green { background: #f0fdf4; border: 1px solid #86efac; }
+    .callout-green strong { color: #166534; }
+    .callout-purple { background: var(--accent-soft); border: 1px solid rgba(124,58,237,0.18); }
+    .callout-purple strong { color: #6d28d9; }
+    .note { background: #f8faff; border: 1px dashed #cbd5e1; border-radius: 12px; padding: 12px 16px; color: #475467; font-size: 13.5px; margin: 12px 0; }
+    .example-box { background: #f0fdf4; border: 1px solid #86efac; border-radius: 14px; padding: 16px 20px; margin: 16px 0; }
+    .example-box .ex-title { font-size: 12px; font-weight: 700; color: #166534; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+    .example-box p { margin-bottom: 8px; font-size: 14px; color: #166534; }
+    .example-box p:last-child { margin-bottom: 0; }
+    blockquote { margin: 16px 0; padding: 14px 18px; border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 0 12px 12px 0; color: #3f3f46; font-size: 14.5px; }
+    .paper-info { background: #fafbff; border-left: 4px solid var(--primary); border-radius: 12px; padding: 14px 16px; margin: 16px 0; color: #334155; font-size: 14px; }
+    .paper-info p { margin: 5px 0; }
+    figure { margin: 22px 0; background: #fbfdff; border: 1px solid #e8edf5; border-radius: 16px; padding: 14px; }
+    figure img { width: 100%; display: block; border-radius: 12px; background: #fff; }
+    figcaption { margin-top: 10px; font-size: 13.5px; color: var(--muted); line-height: 1.6; }
+    .fig-placeholder { padding: 36px 24px; text-align: center; background: #f8faff; border-radius: 12px; color: #94a3b8; font-size: 14px; border: 2px dashed #e2e8f0; line-height: 1.9; }
+    .formula-block { background: #fafbff; border: 1px solid #e8edf5; border-radius: 14px; padding: 16px 20px; margin: 14px 0; overflow-x: auto; }
+    .formula-vars { background: #f0f7ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 12px 16px; margin: 6px 0 16px; font-size: 13.5px; color: #374151; }
+    .formula-vars .var-title { font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+    .formula-vars ul { margin: 0; padding-left: 18px; }
+    .formula-vars li { margin: 5px 0; }
+    .katex-display { overflow-x: auto; overflow-y: hidden; padding: 6px 0; }
+    .table-wrap { overflow-x: auto; margin: 16px 0; }
+    table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 12px; font-size: 13.5px; }
+    thead th { background: #f3f6fb; color: #334155; font-weight: 700; border-bottom: 2px solid var(--line); text-align: left; padding: 12px 14px; }
+    td { padding: 11px 14px; border-bottom: 1px solid #eef2f7; vertical-align: top; }
+    tbody tr:nth-child(even) { background: #fafcff; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; }
+    .badge-green { background: #dcfce7; color: #166534; }
+    .badge-red { background: #fee2e2; color: #991b1b; }
+    .badge-blue { background: #dbeafe; color: #1e40af; }
+    .badge-gray { background: #f3f4f6; color: #374151; }
+    .badge-yellow { background: #fef9c3; color: #854d0e; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+    .mini-card { border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; background: #fff; }
+    .mini-card h4 { margin-top: 0; font-size: 14px; }
+    .step-list { display: flex; flex-direction: column; gap: 14px; margin: 16px 0; }
+    .step { display: flex; gap: 14px; background: #fafbff; border: 1px solid #e8edf5; border-radius: 14px; padding: 14px 16px; }
+    .step-num { width: 28px; height: 28px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; flex-shrink: 0; margin-top: 2px; }
+    .step-body { flex: 1; }
+    .step-body strong { display: block; margin-bottom: 4px; font-size: 14.5px; color: #111; }
+    .step-body p { font-size: 13.5px; color: #374151; margin: 0; }
+    .flow-diagram { background: #f8faff; border: 1px solid #dbeafe; border-radius: 16px; padding: 24px; margin: 20px 0; overflow-x: auto; }
+    .flow-row { display: flex; align-items: center; gap: 0; flex-wrap: nowrap; justify-content: center; min-width: max-content; }
+    .flow-box { background: #fff; border: 1.5px solid #93c5fd; border-radius: 12px; padding: 10px 16px; text-align: center; font-size: 13px; min-width: 110px; }
+    .flow-box .fb-title { font-weight: 700; color: #1e40af; margin-bottom: 3px; }
+    .flow-box .fb-desc { font-size: 11.5px; color: var(--muted); }
+    .flow-box.stage1 { border-color: #a78bfa; background: #f5f3ff; }
+    .flow-box.stage1 .fb-title { color: #6d28d9; }
+    .flow-box.stage2 { border-color: #6ee7b7; background: #f0fdf4; }
+    .flow-box.stage2 .fb-title { color: #065f46; }
+    .flow-box.out { border-color: #fca5a5; background: #fff1f2; }
+    .flow-box.out .fb-title { color: #991b1b; }
+    .flow-arrow { font-size: 20px; color: #93c5fd; padding: 0 8px; flex-shrink: 0; }
+    .footer { margin-top: 18px; color: var(--muted); font-size: 13px; text-align: center; }
+    @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } .toc { position: static; } .meta-grid, .two-col { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 640px) { .page { padding: 18px 12px 56px; } .hero, .section { padding: 20px 18px; } h1 { font-size: 26px; } .meta-grid, .two-col { grid-template-columns: 1fr; } th, td { padding: 10px; } }
+  </style>
+</head>
+<body>
+<div class="page">
+  <a class="back-link" href="../index.html">← 返回论文列表</a>
+
+  <header class="hero">
+    <div class="eyebrow">📄 论文解读 · 生成式检索 × 稠密检索混合</div>
+    <h1>LIGER：统一生成式检索与稠密检索的混合推荐框架</h1>
+    <p class="subtitle">Unifying Generative and Dense Retrieval for Sequential Recommendation</p>
+    <div class="meta-grid">
+      <div class="meta-card"><div class="meta-label">作者</div><div class="meta-value">Paischer, Hassani, Li et al. · Meta AI + Univ. Wisconsin</div></div>
+      <div class="meta-card"><div class="meta-label">发表</div><div class="meta-value">arXiv 2411.18814 · 2024.11</div></div>
+      <div class="meta-card"><div class="meta-label">场景</div><div class="meta-value">序列推荐召回（小规模学术 benchmark）</div></div>
+      <div class="meta-card"><div class="meta-label">核心命题</div><div class="meta-value">生成式检索在学术集上劣于稠密检索，混合方案弥合差距并修复冷启动</div></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="toc">
+      <h2>📋 目录</h2>
+      <ul class="toc-list">
+        <li><a href="#summary">一句话总结</a></li>
+        <li><a href="#background">背景与问题</a>
+          <ul class="toc-sub">
+            <li><a href="#bg-dense">稠密检索</a></li>
+            <li><a href="#bg-gr">生成式检索</a></li>
+            <li><a href="#bg-gap">性能差距分析</a></li>
+            <li><a href="#bg-coldstart">冷启动困境</a></li>
+          </ul>
+        </li>
+        <li><a href="#method">方法详解</a>
+          <ul class="toc-sub">
+            <li><a href="#method-input">输入构建</a></li>
+            <li><a href="#method-loss">双目标训练</a></li>
+            <li><a href="#method-inference">推理三步流程</a></li>
+            <li><a href="#method-vs">与 TIGER 的区别</a></li>
+          </ul>
+        </li>
+        <li><a href="#exp">实验结果</a></li>
+        <li><a href="#insight">个人理解与延伸</a></li>
+      </ul>
+    </aside>
+
+    <main class="content">
+
+      <!-- ═══ 一句话总结 ═══ -->
+      <section class="section" id="summary">
+        <div class="section-title"><span class="icon" style="background:#dbeafe">💡</span>一句话总结</div>
+        <p><strong>LIGER 首先通过严格控制变量的实验，证明了在小规模学术 benchmark 上生成式检索（TIGER）全面落后于稠密检索，并揭示了冷启动物品几乎无法被生成式模型检索到的根本原因；随后提出混合方案：用 Decoder 做 Beam Search 缩小候选集，补充冷启动物品，再用 Encoder 的稠密向量做最终排序，实现了两者的优势互补。</strong></p>
+        <div class="paper-info">
+          <p>📄 <strong>原文：</strong><a href="https://arxiv.org/abs/2411.18814" target="_blank">https://arxiv.org/abs/2411.18814</a></p>
+          <p>🔗 <strong>基础：</strong>TIGER（arXiv 2305.05065，NeurIPS 2023）—— RQ-VAE Semantic ID + 生成式召回</p>
+          <p>🔗 <strong>延伸：</strong>COBRA（arXiv 2503.02453）进一步把稠密向量融入生成过程</p>
+        </div>
+        <div class="callout callout-blue">
+          <strong>三句话核心贡献：</strong><br>
+          ① 公平对比实验（相同输入+相同架构）证明：学术 benchmark 上生成式检索性能全面低于稠密检索，且对冷启动物品 Recall ≈ 0；<br>
+          ② 定量分析冷启动失效根因：模型生成冷启动物品的概率 $p^\star$ 始终低于 Beam Search 第 $K$ 名的阈值 $p_K$，物品永远进不了候选集；<br>
+          ③ 提出 LIGER 混合框架：Beam Search 粗召 $K$ 个候选 + 补充冷启动集 + 稠密精排，在所有数据集上达到最好或第二好的成绩。
+        </div>
+      </section>
+
+      <!-- ═══ 背景与问题 ═══ -->
+      <section class="section" id="background">
+        <div class="section-title"><span class="icon" style="background:#fef9c3">🔍</span>背景与问题</div>
+
+        <h3 id="bg-dense">稠密检索（Dense Retrieval）</h3>
+        <p>序列推荐的主流做法：用 Transformer Encoder 对用户交互历史建模，输出一个稠密向量 $\hat{\mathbf{E}}$，然后与全量物品的 embedding 做内积搜索，取 Top-K 作为推荐结果。</p>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>✅ 优势</h4>
+            <ul style="font-size:13.5px">
+              <li>精度高，长期迭代优化成熟</li>
+              <li>支持冷启动（文本 embedding 提供先验信息）</li>
+              <li>训练目标明确（对比学习/内积优化）</li>
+            </ul>
+          </div>
+          <div class="mini-card">
+            <h4>⚠️ 不足</h4>
+            <ul style="font-size:13.5px">
+              <li>存储代价 $O(N)$：每个物品一个向量</li>
+              <li>推理要对比全量物品：$O(N)$ 计算</li>
+              <li>物品库增长时存储/计算线性增加</li>
+            </ul>
+          </div>
+        </div>
+
+        <h3 id="bg-gr">生成式检索（Generative Retrieval）</h3>
+        <p>TIGER 提出的新范式：用 RQ-VAE 把每个物品的文本 embedding 量化成 $m$ 个整数（Semantic ID），然后训练 Encoder-Decoder Transformer 直接"生成"下一个物品的 Semantic ID 序列，用 Beam Search 解码出 Top-K 候选。</p>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>✅ 优势</h4>
+            <ul style="font-size:13.5px">
+              <li>存储只需 $O(t)$：只存 $t$ 个 codebook 向量</li>
+              <li>推理代价 $O(t \cdot K)$：Beam Search，远小于 $O(N)$</li>
+              <li>语义相似物品共享 Semantic ID 前缀</li>
+            </ul>
+          </div>
+          <div class="mini-card">
+            <h4>⚠️ 不足（本文揭示）</h4>
+            <ul style="font-size:13.5px">
+              <li>学术集上精度系统性低于稠密检索</li>
+              <li>冷启动物品生成概率近乎为零</li>
+              <li>预测机制（next-token prediction）效率低</li>
+            </ul>
+          </div>
+        </div>
+
+        <h3 id="bg-gap">性能差距：严格控制变量后的公平对比</h3>
+        <p>以往很多论文在不同输入信息、不同架构下比较两者，结论可信度存疑。LIGER 严格控制：相同文本输入（Sentence-T5 XXL embedding）+ 相同 Transformer 架构（6 层 T5）+ 相同数据预处理，做了消融分析：</p>
+
+        <figure>
+          <img src="https://arxiv.org/html/2411.18814v2/x3.png" alt="Figure 3: Dense vs Generative Retrieval 对比"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+                 <b>Figure 3: 四个数据集上 In-set 与 Cold-start 的 Recall@10 对比</b><br><br>
+                 横坐标：Beauty / Sports / Toys / Steam 四个数据集<br>
+                 纵坐标：Recall@10<br><br>
+                 四条曲线：Dense(ID) / Dense(SID) / TIGER / TIGER(T)<br><br>
+                 <b>核心结论</b>：稠密检索在 In-set 全面领先 TIGER；Cold-start 场景下，TIGER 和 TIGER(T) 均接近 0，而稠密方法有明显非零表现。
+               </div>`" />
+          <figcaption><strong>Figure 3（论文原图）：</strong>四个数据集上 In-set 和 Cold-start 场景的 Recall@10 对比。稠密方法（Dense ID / Dense SID）在两种场景下均稳定优于生成式方法（TIGER / TIGER(T)）。特别是冷启动场景，TIGER 系列几乎为 0。</figcaption>
+        </figure>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>方法</th><th>输入信息</th><th>预测机制</th><th>In-set 性能</th><th>Cold-start 性能</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>Dense (ID)</td>
+                <td>Item ID + 文本 emb</td>
+                <td>内积搜索</td>
+                <td>中</td>
+                <td>中（文本提供先验）</td>
+              </tr>
+              <tr>
+                <td>Dense (SID)</td>
+                <td>Semantic ID + 文本 emb</td>
+                <td>内积搜索</td>
+                <td><strong>高（接近 Dense ID）</strong></td>
+                <td>中-高</td>
+              </tr>
+              <tr>
+                <td>TIGER</td>
+                <td>Semantic ID（阶段2不用文本）</td>
+                <td>Beam Search 生成</td>
+                <td>低</td>
+                <td><span class="badge badge-red">≈ 0</span></td>
+              </tr>
+              <tr>
+                <td>TIGER (T)</td>
+                <td>Semantic ID + 文本 emb</td>
+                <td>Beam Search 生成</td>
+                <td>稍高于 TIGER</td>
+                <td><span class="badge badge-red">≈ 0</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-purple">
+          <strong>关键结论：</strong>把稠密检索改用 Semantic ID 索引（Dense SID）后，与 TIGER 的差距大幅缩小。说明性能差距的主要来源不是"用哪种 ID"，而是<strong>预测机制本身（内积 vs 自回归 next-token prediction）</strong>。加入文本 embedding 给 TIGER 只有边际改善，且仍无法解决冷启动。
+        </div>
+
+        <h3 id="bg-coldstart">冷启动困境的量化分析</h3>
+        <p>生成式检索对冷启动物品几乎失效。论文对此给出了精确的量化解释：</p>
+
+        <div class="step-list">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <strong>Beam Search 的阈值机制</strong>
+              <p>模型用 Beam Search 生成 $K$ 个候选，第 $K$ 名被选中的生成概率记为 $p_K$（这是进入候选集的最低门槛）。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <strong>冷启动物品的生成概率极低</strong>
+              <p>冷启动物品的 Semantic ID 从未出现在训练集中，模型生成该 ID 序列的概率记为 $p^\star$。实验发现对于所有 $K \in \{10, 20, 40, 80\}$，$p^\star &lt; p_K$ 始终成立。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <strong>结论：架构性局限，不可调参解决</strong>
+              <p>$p_{\text{diff}} = p_K - p^\star > 0$ 的差值随 $K$ 增大而缩小，但始终大于 0。这意味着即使无限扩大 $K$，冷启动物品也难以自然进入候选集——除非使用显式补充机制。</p>
+            </div>
+          </div>
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2411.18814v2/x4.png" alt="Figure 4: 冷启动物品生成概率分析"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+                 <b>Figure 4: TIGER 无法生成冷启动物品的概率分析</b><br><br>
+                 (a) 示意图：Beam Search 产生 K 个候选，最低概率为 p_K；冷启动物品的生成概率为 p★<br>
+                 (b) 直方图：p_K（K=10）与 p★ 的分布对比，p★ 远低于 p_K<br>
+                 (c) 差值 p_diff = p_K - p★ 在 K=10/20/40/80 下的分布，始终 > 0<br><br>
+                 <b>结论</b>：p★ 始终低于进入 Beam Search 候选集的门槛，冷启动物品永远无法被生成式模型自然召回。
+               </div>`" />
+          <figcaption><strong>Figure 4（论文原图）：</strong>TIGER 无法生成冷启动物品的定量证明。(b) 直方图显示冷启动物品生成概率 $p^\star$ 与 Beam 阈值 $p_K$ 的分布几乎不重叠；(c) 差值 $p_{\text{diff}} = p_K - p^\star > 0$ 在所有 $K$ 值下成立，只有当 $p_{\text{diff}} \leq 0$ 时才能成功召回。</figcaption>
+        </figure>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：为什么冷启动物品的生成概率天然极低</div>
+          <p><strong>训练阶段：</strong>模型在 Amazon Beauty 数据集训练，学到了"护肤品用户序列 → 下一个物品大概率是某类护肤品 Semantic ID"的分布。这个分布是在训练集物品的 ID 上拟合的。</p>
+          <p><strong>冷启动物品：</strong>新上线的口红产品 X，其 Semantic ID = (12, 5, 8, 1)。这个序列在训练集的条件概率分布中出现概率极低（甚至为 0），因为模型从没见过"用户喜欢 X"这样的训练样本。</p>
+          <p><strong>Beam Search 的问题：</strong>Beam Search 只保留生成概率最高的 K 个路径。训练集中 Top-1000 的常见物品生成概率很高（$p_K$ 对应第 K 名），而 X 的概率 $p^\star$ 远低于这个门槛，永远进不了候选集。</p>
+          <p><strong>对比稠密检索：</strong>稠密方法用物品的文本 embedding 作为先验，X 的文本 embedding（"口红、持色、哑光"）与用户历史中相似物品语义接近，能通过内积搜索被召回——这就是 Cold-start 场景下稠密方法非零而生成式方法为零的原因。</p>
+        </div>
+      </section>
+
+      <!-- ═══ 方法详解 ═══ -->
+      <section class="section" id="method">
+        <div class="section-title"><span class="icon" style="background:#dcfce7">⚙️</span>方法详解</div>
+
+        <p>LIGER（<strong>L</strong>everage<strong>I</strong>ng dense retrieval for <strong>GE</strong>nerative <strong>R</strong>etrieval）的设计原则：<strong>用生成式检索压缩候选空间，用稠密向量精排，显式补充冷启动物品</strong>。</p>
+
+        <div class="flow-diagram">
+          <div class="flow-row">
+            <div class="flow-box">
+              <div class="fb-title">用户交互序列</div>
+              <div class="fb-desc">$\{i_1, i_2, \ldots, i_n\}$</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box stage1">
+              <div class="fb-title">输入 Embedding 构建</div>
+              <div class="fb-desc">SID emb + 文本 emb<br>+ 物品位置 + SID 位置</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box stage1">
+              <div class="fb-title">Encoder-Decoder<br>Transformer</div>
+              <div class="fb-desc">6 层 T5<br>双头输出</div>
+            </div>
+          </div>
+          <div style="text-align:center;margin:14px 0;color:var(--muted);font-size:13px">↓ 推理时分三步</div>
+          <div class="flow-row">
+            <div class="flow-box stage1">
+              <div class="fb-title">① Decoder<br>Beam Search</div>
+              <div class="fb-desc">生成 K 个候选<br>$\mathcal{I}_{\text{beam}}$</div>
+            </div>
+            <div class="flow-arrow">+</div>
+            <div class="flow-box stage2">
+              <div class="fb-title">② 补充冷启动集</div>
+              <div class="fb-desc">$\mathcal{I}_{\text{comb}} = \mathcal{I}_{\text{beam}} \cup \mathcal{C}$</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box stage2">
+              <div class="fb-title">③ Encoder 稠密精排</div>
+              <div class="fb-desc">$\hat{\mathcal{I}} = \text{topk}(\text{sim}(\hat{\mathbf{E}}, \mathbf{e}_i^{\text{text}}))$</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box out">
+              <div class="fb-title">最终推荐列表</div>
+              <div class="fb-desc">Top-K 结果</div>
+            </div>
+          </div>
+        </div>
+
+        <h3 id="method-input">输入 Embedding 构建</h3>
+        <p>对用户历史中的每个物品 $i$（其 Semantic ID 为 $(s_i^1, s_i^2, \ldots, s_i^m)$），LIGER 为 Semantic ID 的每一位 $j$ 构建输入 Embedding：</p>
+
+        <div class="formula-block">
+          $$\mathbf{E}_{s_i^j} = \mathbf{e}_{s_i^j} + \mathbf{e}_i^{\text{text}} + \mathbf{e}_i^{\text{pos}} + \mathbf{e}_j^{\text{pos}}$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\mathbf{E}_{s_i^j}$：物品 $i$ 的第 $j$ 个 Semantic ID 对应的输入向量，作为 Transformer 的 token 输入</li>
+            <li>$\mathbf{e}_{s_i^j}$：第 $j$ 位 Semantic ID 值（整数）的可学习 embedding，来自共享码表</li>
+            <li>$\mathbf{e}_i^{\text{text}}$：物品 $i$ 的文本 embedding，由 Sentence-T5 XXL 编码物品属性（标题/价格/类目/描述）得到，在 TIGER 阶段2中被丢弃，LIGER 全程保留</li>
+            <li>$\mathbf{e}_i^{\text{pos}}$：物品 $i$ 在用户交互序列中的位置 embedding（第几个交互物品）</li>
+            <li>$\mathbf{e}_j^{\text{pos}}$：Semantic ID 内部第 $j$ 位的位置 embedding（区分同一物品的不同 SID 位）</li>
+            <li>物品 $i$ 的完整输入：$\mathbf{E}_i = [\mathbf{E}_{s_i^1}, \mathbf{E}_{s_i^2}, \ldots, \mathbf{E}_{s_i^m}]$（拼接为序列）</li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：LIGER 输入与 TIGER 的区别</div>
+          <p><strong>TIGER 的做法：</strong>阶段2完全丢弃文本 embedding，只用可学习的 SID embedding $\mathbf{e}_{s_i^j}$。新物品的 SID 从来没在训练中出现过，对应的 embedding 是随机初始化，模型无法识别。</p>
+          <p><strong>LIGER 的做法：</strong>每个 token 输入 = SID 可学习 embedding + 文本 embedding + 两个位置 embedding。文本 embedding 是用预训练语言模型从物品内容（标题、类目等）编码来的，新物品同样可以生成有意义的文本 embedding。</p>
+          <p><strong>为什么还不够：</strong>即使 TIGER 加了文本 embedding（TIGER(T)），冷启动仍然失败——因为文本 embedding 只改善了输入端的语义，但 Decoder 的生成分布仍然只覆盖训练集物品的 SID。输入再好，生成出口没有冷启动物品的"路"，也是徒劳。</p>
+        </div>
+
+        <h3 id="method-loss">双目标训练：稠密 Loss + 生成 Loss</h3>
+        <p>LIGER 的 Transformer 是 Encoder-Decoder 架构，两个输出头同时训练：</p>
+
+        <h4>联合训练目标</h4>
+        <div class="formula-block">
+          $$\mathcal{L} = -\log \frac{\exp\!\bigl(\text{sim}(\hat{\mathbf{E}}(\Theta), \mathbf{e}_{n+1}^{\text{text}})/\tau\bigr)}{\sum_{i \in \mathcal{I}} \exp\!\bigl(\text{sim}(\hat{\mathbf{E}}(\Theta), \mathbf{e}_i^{\text{text}})/\tau\bigr)} - \sum_{j=1}^{m} \log P(s_{n+1}^j \mid [\mathbf{E}_1, \ldots, \mathbf{E}_n]; \Theta)$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\hat{\mathbf{E}}(\Theta)$：Encoder 对输入序列 $\{E_1, \ldots, E_n\}$ 的输出向量（"预测的用户表示"）</li>
+            <li>$\mathbf{e}_{n+1}^{\text{text}}$：下一个目标物品的文本 embedding（Sentence-T5 编码，固定不更新）</li>
+            <li>$\text{sim}(\cdot, \cdot)$：余弦相似度</li>
+            <li>$\tau$：温度超参数，越小对比越尖锐</li>
+            <li><strong>第一项</strong>（稠密 Loss）：Softmax 对比损失，让 Encoder 输出对齐下一物品的文本 embedding，实现稠密检索能力</li>
+            <li><strong>第二项</strong>（生成 Loss）：自回归逐 token 预测下一物品的 Semantic ID 序列 $(s_{n+1}^1, \ldots, s_{n+1}^m)$，赋予 Decoder 生成式检索能力</li>
+            <li>$s_{n+1}^j$：目标物品 Semantic ID 的第 $j$ 位整数值</li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：双 Loss 如何协同工作</div>
+          <p><strong>场景：</strong>用户历史 = [护肤水, 精华液, 面霜]，下一个物品 = 眼霜 X。</p>
+          <p><strong>稠密 Loss 的作用：</strong>让 Encoder 输出 $\hat{\mathbf{E}}$ 与"眼霜 X"的文本 embedding（从"修复眼周细纹、紧致提拉"等属性编码）相似。这样 Encoder 学会了"给定护肤序列，预测下一个物品的文本语义空间位置"。</p>
+          <p><strong>生成 Loss 的作用：</strong>让 Decoder 学会从序列 Embedding 生成眼霜 X 的 Semantic ID（如 (7, 2, 15, 3)）。这让 Decoder 能做 Beam Search 粗召。</p>
+          <p><strong>推理时的分工：</strong>Decoder 先用 Beam Search 从"语义空间"召回 K 个候选（包含了粗粒度相关的物品），Encoder 再做细粒度稠密排序，用文本语义相似度精选 Top-K。两步互补：生成式缩小搜索空间，稠密做精排。</p>
+        </div>
+
+        <h3 id="method-inference">推理三步流程</h3>
+        <div class="step-list">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <strong>Beam Search 粗召（Decoder 生成）</strong>
+              <p>用 Decoder 做 Beam Search，生成 $K$ 个 Semantic ID 候选，每个 ID 对应训练集中的一个物品。候选集 $\mathcal{I}_{\text{beam}} = \text{TF}([\mathbf{E}_1, \ldots, \mathbf{E}_n]; K)$。$K$ 通常远小于全量物品数 $N$（如 $K=20$ vs $N \approx 12000$），大幅压缩搜索空间。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <strong>补充冷启动物品</strong>
+              <p>将训练期间未见过的新物品集合 $\mathcal{C}$（即冷启动物品集）直接并入候选集：$\mathcal{I}_{\text{comb}} = \mathcal{I}_{\text{beam}} \cup \mathcal{C}$。实际系统中，新物品定期入库，$|\mathcal{C}|$ 相对较小，这一步代价可控。这是显式解决冷启动问题的关键——不依赖生成式模型"自发"生成冷启动物品，而是主动将其注入候选集。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <strong>稠密精排（Encoder 输出）</strong>
+              <p>用 Encoder 的输出 $\hat{\mathbf{E}}$ 与所有候选物品的文本 embedding 计算余弦相似度，取 Top-K：$\hat{\mathcal{I}} = \text{topk}(\text{sim}(\hat{\mathbf{E}}, \mathbf{e}_i^{\text{text}}),\; \forall i \in \mathcal{I}_{\text{comb}})$。这一步的计算量是 $O(K + |\mathcal{C}|)$，远小于全量稠密检索的 $O(N)$。</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-green">
+          <strong>三步设计的妙处：</strong>生成式检索把"全量物品"压缩到"K 个语义相关候选"（存储和计算 $O(t)$ 级别），冷启动物品被显式补充（解决覆盖率问题），稠密排序负责精细排名（解决精度问题）。三个目标各司其职，互不干扰。
+        </div>
+
+        <h3 id="method-vs">与 TIGER 的核心区别</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>对比维度</th><th>TIGER</th><th>LIGER</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>架构</td>
+                <td>Encoder-Decoder T5（仅用 Decoder 推理）</td>
+                <td><span class="badge badge-blue">Encoder-Decoder T5（双头输出）</span></td>
+              </tr>
+              <tr>
+                <td>阶段2 文本 embedding</td>
+                <td><span class="badge badge-red">丢弃</span></td>
+                <td><span class="badge badge-green">全程保留，融入输入和稠密 Loss</span></td>
+              </tr>
+              <tr>
+                <td>训练目标</td>
+                <td>仅 next-token prediction（生成式 Loss）</td>
+                <td>稠密对比 Loss + 生成式 Loss（联合训练）</td>
+              </tr>
+              <tr>
+                <td>推理策略</td>
+                <td>纯 Beam Search，可选预留冷启动槽位</td>
+                <td>Beam Search + 显式冷启动补充 + 稠密精排</td>
+              </tr>
+              <tr>
+                <td>冷启动处理</td>
+                <td><span class="badge badge-red">需预知冷启动比例 ε（不实用）</span></td>
+                <td><span class="badge badge-green">自动补充冷启动集，无需预知比例</span></td>
+              </tr>
+              <tr>
+                <td>推理代价</td>
+                <td>$O(t \cdot K)$（纯生成）</td>
+                <td>$O(t \cdot K) + O(K + |\mathcal{C}|)$（略高）</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ═══ 实验结果 ═══ -->
+      <section class="section" id="exp">
+        <div class="section-title"><span class="icon" style="background:#f0fdf4">📊</span>实验结果</div>
+
+        <h3>实验设置</h3>
+        <p>在 4 个数据集上评估：Amazon Beauty、Sports and Outdoors、Toys and Games（Amazon Review 2014），以及 Steam 游戏数据集。5-core 过滤，序列截取最近 20 个，leave-one-out 划分，用 Recall@10 和 NDCG@10 评估。</p>
+
+        <div class="callout callout-amber">
+          <strong>重要说明：</strong>所有结论<strong>仅适用于小规模学术 benchmark</strong>。论文明确指出已有工业级生成式检索实现（如 SemID / TIGER 在 YouTube 上）超越稠密检索。本文目标不是断言"生成式不如稠密"，而是在学术集上提供公平对比分析和改进方案。
+        </div>
+
+        <h3>NPG（标准化性能差距）分析</h3>
+        <p>定义归一化性能差距（NPG）来量化 LIGER 弥合两者差距的程度：</p>
+
+        <div class="formula-block">
+          $$\text{NPG}(K) = \frac{r(K) - r_{\text{TIGER}}}{r_{\text{dense}} - r_{\text{TIGER}}}$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$r(K)$：LIGER 用 $K$ 个 Beam Search 候选时的 Recall@10</li>
+            <li>$r_{\text{TIGER}}$：TIGER 的 Recall@10（NPG = 0% 时的基准）</li>
+            <li>$r_{\text{dense}}$：纯稠密检索的 Recall@10（NPG = 100% 时的上界）</li>
+            <li>$\text{NPG}(K) = 0\%$：与 TIGER 性能相同；$= 100\%$：追上稠密检索</li>
+          </ul>
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2411.18814v2/x5.png" alt="Figure 5: LIGER 推理过程和 NPG 曲线"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+                 <b>Figure 5: LIGER 推理过程（左）和 NPG 随 K 变化曲线（右）</b><br><br>
+                 左图：Algorithm 1 推理三步流程示意<br>
+                 右图：横坐标 K（Beam Search 候选数量），纵坐标 NPG（0%~100%）<br>
+                 四条折线：Beauty / Sports / Toys / Steam<br><br>
+                 <b>结论</b>：随着 K 增大，NPG 单调上升，最终在四个数据集上均接近 100%（追上稠密检索）。K=20 时 NPG 通常已超过 50%。
+               </div>`" />
+          <figcaption><strong>Figure 5（论文原图）：</strong>左侧展示 LIGER 的推理算法（三步流程）；右侧展示 NPG 随 Beam Search 候选数 $K$ 变化的曲线。随 $K$ 增大，LIGER 在四个数据集上均单调提升，逐渐追平纯稠密检索的性能，验证了候选集质量是瓶颈。</figcaption>
+        </figure>
+
+        <h3>主要实验结果</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>方法</th><th>类型</th><th>In-set Recall@10</th><th>Cold-start Recall@10</th><th>备注</th></tr></thead>
+            <tbody>
+              <tr><td>SASRec</td><td>ID-based Dense</td><td>低</td><td>很差</td><td>无文本先验</td></tr>
+              <tr><td>UniSRec</td><td>Text-based Dense</td><td>中高</td><td>中高</td><td>文本预训练</td></tr>
+              <tr><td>RecFormer</td><td>Text-based Dense</td><td>中高</td><td>中高</td><td>LM 预训练</td></tr>
+              <tr><td>TIGER</td><td>Generative</td><td>中</td><td><span class="badge badge-red">≈ 0</span></td><td>冷启动失效</td></tr>
+              <tr style="background:#f0fdf4"><td><strong>LIGER</strong>（K=20）</td><td>Hybrid</td><td><span class="badge badge-green">最高或第二</span></td><td><span class="badge badge-green">最高或第二</span></td><td>K=20 候选</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="note">LIGER 报告的结果使用 K=20（Beam Search 生成 20 个候选），附录提供了不同 K 值的完整结果。K 越大性能越高但推理代价也越大，K=20 是性能/代价的合理平衡点。</div>
+      </section>
+
+      <!-- ═══ 个人理解与延伸 ═══ -->
+      <section class="section" id="insight">
+        <div class="section-title"><span class="icon" style="background:var(--accent-soft);color:var(--accent)">💡</span>个人理解与延伸</div>
+
+        <h3>1. 公平比较的价值</h3>
+        <p>LIGER 最大的贡献之一不是方法，而是<strong>实验设计</strong>：严格控制输入信息和模型架构，让两种范式在同一起跑线上竞争。过去很多工作在不等价条件下比较生成式和稠密检索，结论误导性很强。这种"控制变量"的思路为后续工作提供了可信的基准。</p>
+
+        <h3>2. 冷启动是架构性问题</h3>
+        <blockquote>
+          生成式检索的核心问题不在"生成什么"，而在"生成分布覆盖范围有限"——训练集之外的物品概率天然趋零，这是自回归生成的固有局限，不能靠加更多训练数据或更好的文本 embedding 解决。
+        </blockquote>
+        <p>LIGER 选择了最务实的方案：绕开这个限制，而不是试图修复它。显式补充冷启动候选集是一个简单但有效的工程解法。</p>
+
+        <h3>3. LIGER 是"混合推荐"思路的先驱</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>工作</th><th>与 LIGER 的关系</th></tr></thead>
+            <tbody>
+              <tr><td><strong>TIGER</strong>（NeurIPS 2023）</td><td>LIGER 的基础，发明了 RQ-VAE SID 和生成式召回范式</td></tr>
+              <tr><td><strong>COBRA</strong>（Baidu 2025）</td><td>更进一步：直接在生成式过程中融入稠密向量（BeamFusion），而非 LIGER 的"后处理"方式</td></tr>
+              <tr><td><strong>ETEGRec</strong>（RUC+快手 2025）</td><td>端到端联合训练 tokenizer 和推荐模型，从根源解决两阶段解耦的次优问题</td></tr>
+              <tr><td><strong>OneRec</strong>（快手 2025）</td><td>工业级直接生成，跳过稠密检索阶段，用 MoE 扩容解决精度问题</td></tr>
+              <tr><td><strong>GRID</strong>（Snap 2025）</td><td>开源基准框架，系统比较 RK-Means vs RQ-VAE 等 tokenization 方案</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>4. 局限性与未解问题</h3>
+        <ul>
+          <li><strong>学术集结论不代表工业结论：</strong>小规模数据集（万级物品）vs 工业级数据集（亿级物品），生成式检索的存储/计算优势在后者更为显著，精度差距也可能缩小甚至逆转</li>
+          <li><strong>推理开销小幅增加：</strong>LIGER = Beam Search + 稠密精排，比纯生成式略慢，但比纯稠密（$O(N)$）快很多。实际工程部署时需要仔细测量 latency</li>
+          <li><strong>冷启动集的维护：</strong>需要一个实时或定时更新的"新物品集合 $\mathcal{C}$"，引入了额外的系统复杂度</li>
+          <li><strong>K 的选择：</strong>K 越大性能越好，但代价也越高。论文用 K=20，但最优 K 因数据集和业务需求而异</li>
+        </ul>
+
+        <h3>5. 对工程师的启发</h3>
+        <div class="callout callout-purple">
+          <strong>核心 Takeaway：</strong>
+          <ol style="margin:10px 0 0 16px;">
+            <li style="margin-bottom:6px;">生成式检索在小规模场景不如稠密检索，但这不是"生成式检索没价值"——而是提示我们需要更好的设计（如 COBRA、OneRec 的工业级方案）</li>
+            <li style="margin-bottom:6px;">冷启动问题需要<strong>显式设计</strong>，不能依赖模型自发泛化——无论是 LIGER 的补充集方法，还是 ETEGRec 的端到端对齐，都是针对冷启动的主动设计</li>
+            <li style="margin-bottom:6px;">"用生成式缩小候选空间 + 用稠密排序精排"这个 Pipeline 思路，在工业搜索/推荐中有广泛应用价值，不局限于本文的小规模实验</li>
+            <li>Encoder-Decoder 双头训练（既生成 SID 又预测稠密向量）是 LIGER 的核心架构选择，后续 COBRA 等工作均在此基础上发展</li>
+          </ol>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <footer style="text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;border-top:1px solid var(--line);margin-top:40px;">
+    <p>论文解读笔记 · 仅供学习参考 · <a href="../index.html" style="color:var(--primary);">← 返回论文列表</a></p>
+  </footer>
+</div>
+
+<script>
+(function(){
+  // TOC 滚动高亮：使用 IntersectionObserver 监听所有带 id 的 section/h3
+  var tocLinks = document.querySelectorAll('.toc-list a[href^="#"], .toc-sub a[href^="#"]');
+  if (!tocLinks.length) return;
+
+  // 建立 id -> tocLink 映射
+  var linkMap = {};
+  tocLinks.forEach(function(a){
+    var id = a.getAttribute('href').slice(1);
+    if (id) linkMap[id] = a;
+  });
+
+  var targets = Object.keys(linkMap).map(function(id){
+    return document.getElementById(id);
+  }).filter(Boolean);
+
+  if (!targets.length) return;
+
+  var activeId = null;
+
+  function setActive(id){
+    if (id === activeId) return;
+    activeId = id;
+    tocLinks.forEach(function(a){ a.classList.remove('active'); });
+    if (id && linkMap[id]){
+      linkMap[id].classList.add('active');
+      // 让目录自动滚动到对应项可见
+      var toc = document.querySelector('.toc');
+      if (toc){
+        var li = linkMap[id];
+        var tocTop = toc.getBoundingClientRect().top;
+        var liTop  = li.getBoundingClientRect().top;
+        var offset = liTop - tocTop - toc.clientHeight / 2;
+        toc.scrollBy({ top: offset, behavior: 'smooth' });
+      }
+    }
+  }
+
+  // rootMargin: 上边距 -10%（稍微进入视口就算），下边距 -60%（只有顶部 40% 区域触发）
+  var observer = new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      if (entry.isIntersecting){
+        setActive(entry.target.id);
+      }
+    });
+  }, { rootMargin: '-10% 0px -60% 0px', threshold: 0 });
+
+  targets.forEach(function(el){ observer.observe(el); });
+})();
+</script>
+</body>
+</html>

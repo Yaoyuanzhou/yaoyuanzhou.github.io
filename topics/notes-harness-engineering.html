@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Harness Engineering：让 AI Agent 不再犯同一个错误</title>
+  <style>
+    :root {
+      --bg:#f5f7fb; --card:#ffffff; --text:#1f2937; --muted:#667085;
+      --line:#e5e7eb; --primary:#2563eb; --shadow:0 10px 30px rgba(15,23,42,0.08);
+      --radius:18px; --max:1100px;
+    }
+    *{box-sizing:border-box;}
+    html{scroll-behavior:smooth;}
+    body{margin:0;background:linear-gradient(180deg,#fef3c7 0%,var(--bg) 200px);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;line-height:1.85;}
+    a{color:var(--primary);text-decoration:none;}
+    a:hover{text-decoration:underline;}
+    .page{max-width:var(--max);margin:0 auto;padding:32px 20px 80px;}
+    .back-link{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:14px;margin-bottom:18px;}
+    .back-link:hover{color:var(--primary);text-decoration:none;}
+    .hero{background:radial-gradient(circle at top right,rgba(245,158,11,0.14),transparent 30%),radial-gradient(circle at left bottom,rgba(37,99,235,0.08),transparent 24%),var(--card);border:1px solid rgba(245,158,11,0.35);border-radius:24px;box-shadow:var(--shadow);padding:34px 34px 28px;margin-bottom:22px;}
+    .eyebrow{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:#fef3c7;color:#92400e;font-size:13px;font-weight:600;margin-bottom:16px;}
+    h1{margin:0 0 10px;font-size:30px;line-height:1.25;letter-spacing:-0.02em;}
+    .subtitle{margin:0;color:var(--muted);font-size:15px;}
+    .layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:22px;align-items:start;}
+    .toc{position:sticky;top:20px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;max-height:calc(100vh - 40px);overflow-y:auto;}
+    .toc h2{margin:0 0 12px;font-size:15px;}
+    .toc-list{list-style:none;margin:0;padding:0;}
+    .toc-list li{margin:0;}
+    .toc-list a{display:block;padding:5px 8px;border-radius:8px;color:var(--muted);font-size:13px;transition:all 0.15s;}
+    .toc-list a:hover{color:var(--primary);background:#fef3c7;text-decoration:none;}
+    .content{display:flex;flex-direction:column;gap:18px;min-width:0;}
+    .section{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:26px 28px;overflow:hidden;}
+    .section-title{display:flex;align-items:center;gap:12px;margin:0 0 20px;font-size:20px;font-weight:700;}
+    .icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+    h3{margin:26px 0 12px;font-size:17px;color:#111827;border-left:3px solid #fcd34d;padding-left:10px;}
+    h4{margin:18px 0 8px;font-size:15px;color:#374151;font-weight:700;}
+    p{margin:0 0 12px;}
+    pre{background:#1e293b;color:#e2e8f0;border-radius:12px;padding:16px 20px;overflow-x:auto;font-size:13px;line-height:1.7;margin:14px 0;}
+    code{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:2px 7px;font-family:"SF Mono",Consolas,Monaco,monospace;font-size:13px;color:#2563eb;}
+    table{width:100%;border-collapse:collapse;font-size:13.5px;margin:14px 0;}
+    thead th{background:#fef3c7;color:#92400e;text-align:left;font-weight:700;padding:10px 14px;border-bottom:2px solid #fcd34d;}
+    td{padding:10px 14px;border-bottom:1px solid #eef2f7;vertical-align:top;}
+    tbody tr:nth-child(even){background:#fffbf0;}
+    .callout{border-radius:14px;padding:16px 18px;margin:14px 0;}
+    .callout-blue{background:#eff6ff;border:1px solid #bfdbfe;}
+    .callout-green{background:#f0fdf4;border:1px solid #bbf7d0;}
+    .callout-amber{background:#fffbeb;border:1px solid #fde68a;}
+    .callout-purple{background:#faf5ff;border:1px solid #e9d5ff;}
+    .callout-red{background:#fef2f2;border:1px solid #fecaca;}
+    .callout-orange{background:#fff7ed;border:1px solid #fed7aa;}
+    .example-box{background:#fffbeb;border:1px solid #fcd34d;border-radius:14px;padding:18px 20px;margin:18px 0;}
+    .ex-title{font-weight:700;color:#92400e;margin-bottom:10px;font-size:14px;}
+    ul,ol{padding-left:24px;margin:8px 0 12px;}
+    li{margin:6px 0;}
+    .tag{display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;}
+    .tag-amber{background:#fef3c7;color:#92400e;}
+    .tag-blue{background:#dbeafe;color:#1e40af;}
+    .tag-green{background:#d1fae5;color:#065f46;}
+    .tag-purple{background:#ede9fe;color:#5b21b6;}
+    .tag-red{background:#fee2e2;color:#991b1b;}
+
+    /* 流程图 SVG 通用 */
+    .diagram{background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:24px;margin:18px 0;overflow-x:auto;}
+    .diagram svg{display:block;margin:0 auto;}
+
+    /* 对比卡片 */
+    .compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:16px 0;}
+    .compare-card{border-radius:14px;padding:16px 18px;}
+    .compare-bad{background:#fef2f2;border:1.5px solid #fca5a5;}
+    .compare-good{background:#f0fdf4;border:1.5px solid #86efac;}
+    .compare-title{font-weight:700;font-size:13px;margin-bottom:8px;}
+    .compare-bad .compare-title{color:#991b1b;}
+    .compare-good .compare-title{color:#166534;}
+
+    /* 步骤时间线 */
+    .timeline{position:relative;padding-left:32px;margin:18px 0;}
+    .timeline::before{content:"";position:absolute;left:11px;top:6px;bottom:6px;width:2px;background:linear-gradient(to bottom,#fcd34d,#f59e0b);}
+    .timeline-item{position:relative;margin-bottom:22px;}
+    .timeline-item::before{content:"";position:absolute;left:-26px;top:5px;width:12px;height:12px;border-radius:50%;background:#f59e0b;border:2px solid #fff;box-shadow:0 0 0 2px #fcd34d;}
+    .timeline-item:last-child{margin-bottom:0;}
+    .tl-title{font-weight:700;font-size:15px;color:#111827;margin-bottom:4px;}
+    .tl-date{font-size:12px;color:#f59e0b;font-weight:600;margin-bottom:6px;}
+    .tl-body{font-size:14px;color:#374151;line-height:1.7;}
+
+    /* Agent 角色卡 */
+    .agent-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:18px 0;}
+    .agent-card{border-radius:16px;padding:18px;text-align:center;}
+    .agent-icon{font-size:32px;margin-bottom:8px;}
+    .agent-name{font-weight:700;font-size:15px;margin-bottom:4px;}
+    .agent-desc{font-size:13px;color:#6b7280;line-height:1.6;}
+
+    footer{margin-top:32px;text-align:center;color:var(--muted);font-size:13px;}
+    @media(max-width:860px){.layout{grid-template-columns:1fr;}.toc{position:static;}.compare-grid{grid-template-columns:1fr;}.agent-grid{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <a class="back-link" href="../index.html">← 返回笔记列表</a>
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="eyebrow">🔧 Agent 工程实践</div>
+    <h1>Harness Engineering：让 AI Agent 不再犯同一个错误</h1>
+    <p class="subtitle">
+      2026 年 2 月爆火的 AI 工程新范式 · 由 Mitchell Hashimoto 命名 · OpenAI / Anthropic / Martin Fowler 相继跟进<br>
+      核心思想：每次发现 Agent 犯错，就工程化一个解决方案，让它永远不再犯这个错
+    </p>
+    <div style="margin-top:16px;display:flex;flex-wrap:wrap;gap:8px;">
+      <span class="tag tag-amber">2026 年新概念</span>
+      <span class="tag tag-blue">AGENTS.md</span>
+      <span class="tag tag-green">三 Agent 架构</span>
+      <span class="tag tag-purple">Generator-Evaluator</span>
+      <span class="tag tag-red">Self-Evaluation 问题</span>
+    </div>
+  </div>
+
+  <div class="layout">
+    <!-- 左侧 TOC -->
+    <nav class="toc">
+      <h2>目录</h2>
+      <ul class="toc-list">
+        <li><a href="#what">一、什么是 Harness？</a></li>
+        <li><a href="#origin">二、概念的起源与传播</a></li>
+        <li><a href="#two-forms">三、两种实践形式</a></li>
+        <li><a href="#problem">四、为什么 Agent 会犯错？</a></li>
+        <li><a href="#self-eval">五、自我评估失效问题</a></li>
+        <li><a href="#three-agent">六、三 Agent Harness 架构</a></li>
+        <li><a href="#sprint-contract">七、Sprint 合同机制</a></li>
+        <li><a href="#result">八、效果数据对比</a></li>
+        <li><a href="#context-eng">九、与 Context Engineering 的关系</a></li>
+        <li><a href="#evolve">十、随模型迭代的演进</a></li>
+        <li><a href="#summary">十一、总结与实践建议</a></li>
+      </ul>
+    </nav>
+
+    <!-- 主内容 -->
+    <div class="content">
+
+      <!-- § 一 什么是 Harness -->
+      <section class="section" id="what" style="background:linear-gradient(135deg,#fffbeb 0%,#fef3c7 100%);border:1.5px solid #fcd34d;">
+        <div class="section-title">
+          <div class="icon" style="background:#fef3c7;">🔧</div>
+          <span>一、什么是 Harness Engineering？</span>
+        </div>
+
+        <div class="callout callout-amber" style="font-size:15px;line-height:1.8;">
+          <strong style="color:#92400e;font-size:16px;">"Harness Engineering"</strong> — Mitchell Hashimoto（Ghostty 作者）的原始定义：<br><br>
+          <em>"It is the idea that anytime you find an agent makes a mistake, you take the time to engineer a solution such that the agent never makes that mistake again."</em><br><br>
+          <strong>中文：每次发现 Agent 犯了一个错误，你就花时间工程化一个解决方案，让它永远不再犯这个错。</strong>
+        </div>
+
+        <h3>词源：为什么叫 "Harness"？</h3>
+        <p><strong>Harness</strong>（马具/挽具）的字面含义是套在马身上、让人能够控制和引导马匹的那套装置。</p>
+
+        <div class="diagram">
+          <svg width="680" height="180" viewBox="0 0 680 180" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif">
+            <!-- 马的比喻 -->
+            <rect x="20" y="40" width="160" height="100" rx="12" fill="#fef3c7" stroke="#fcd34d" stroke-width="1.5"/>
+            <text x="100" y="80" text-anchor="middle" font-size="30">🐎</text>
+            <text x="100" y="108" text-anchor="middle" font-size="13" fill="#92400e" font-weight="700">AI Agent</text>
+            <text x="100" y="126" text-anchor="middle" font-size="12" fill="#b45309">动力充足</text>
+            <text x="100" y="142" text-anchor="middle" font-size="12" fill="#b45309">但不守规矩</text>
+
+            <!-- 箭头 -->
+            <path d="M185 90 L240 90" stroke="#f59e0b" stroke-width="2" fill="none" marker-end="url(#arrowAmber)"/>
+            <text x="212" y="82" text-anchor="middle" font-size="11" fill="#b45309">套上</text>
+
+            <!-- Harness -->
+            <rect x="245" y="40" width="160" height="100" rx="12" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.5"/>
+            <text x="325" y="80" text-anchor="middle" font-size="24">⛓️</text>
+            <text x="325" y="108" text-anchor="middle" font-size="13" fill="#c2410c" font-weight="700">Harness</text>
+            <text x="325" y="126" text-anchor="middle" font-size="12" fill="#ea580c">AGENTS.md</text>
+            <text x="325" y="142" text-anchor="middle" font-size="12" fill="#ea580c">+ 验证工具</text>
+
+            <!-- 箭头 -->
+            <path d="M410 90 L465 90" stroke="#22c55e" stroke-width="2" fill="none" marker-end="url(#arrowGreen)"/>
+            <text x="437" y="82" text-anchor="middle" font-size="11" fill="#166534">得到</text>
+
+            <!-- 受控 Agent -->
+            <rect x="470" y="40" width="190" height="100" rx="12" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
+            <text x="565" y="78" text-anchor="middle" font-size="22">🐎✅</text>
+            <text x="565" y="104" text-anchor="middle" font-size="13" fill="#166534" font-weight="700">可靠的 Agent</text>
+            <text x="565" y="122" text-anchor="middle" font-size="12" fill="#15803d">不重复犯同一个错误</text>
+            <text x="565" y="140" text-anchor="middle" font-size="12" fill="#15803d">可在无人值守下运行</text>
+
+            <defs>
+              <marker id="arrowAmber" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#f59e0b"/>
+              </marker>
+              <marker id="arrowGreen" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#22c55e"/>
+              </marker>
+            </defs>
+          </svg>
+        </div>
+
+        <p>就像驯马不是限制马的能力，而是让马的能量能被有效引导——Harness Engineering 不是限制 Agent，而是通过积累约束让 Agent 更可靠。</p>
+
+        <div class="callout callout-blue">
+          <strong>核心思路：</strong>把每一次"事故"转化为"永久规则"。不是在每次出问题后手动修复，而是建立一个系统，让错误变成无法再发生的约束。这是一种<strong>持续改进的工程哲学</strong>，类似于软件工程中每发现一个 bug 就写一个测试用例，防止回归。
+        </div>
+      </section>
+
+      <!-- § 二 概念的起源与传播 -->
+      <section class="section" id="origin">
+        <div class="section-title">
+          <div class="icon" style="background:#fef3c7;">📅</div>
+          <span>二、概念的起源与传播</span>
+        </div>
+        <p>这个词由 <strong>Mitchell Hashimoto</strong>（Ghostty 终端作者、前 HashiCorp 联合创始人）在 2026 年 2 月 5 日正式命名，随后业界头部机构相继跟进，短短 2 个月就成为 AI 工程圈的热词。</p>
+
+        <div class="timeline">
+          <div class="timeline-item">
+            <div class="tl-date">2026.02.05</div>
+            <div class="tl-title">Mitchell Hashimoto 命名</div>
+            <div class="tl-body">
+              在博客《My AI Adoption Journey》中正式提出"harness engineering"这个词。<br>
+              描述了他 6 个阶段的 AI 采用历程，第 5 步就是 Engineer the Harness。<br>
+              <span class="tag tag-amber">首次命名</span>
+            </div>
+          </div>
+          <div class="timeline-item">
+            <div class="tl-date">2026.02.11</div>
+            <div class="tl-title">OpenAI 官方博客跟进</div>
+            <div class="tl-body">
+              《Harness engineering: leveraging Codex in an agent-first world》<br>
+              以百万行级别真实代码库为案例，讲述如何用 Codex 做 harness engineering。<br>
+              提到团队曾每周 20% 时间在清理"AI slop"，通过 harness 彻底解决。<br>
+              <span class="tag tag-blue">OpenAI 背书</span>
+            </div>
+          </div>
+          <div class="timeline-item">
+            <div class="tl-date">2026.03.24</div>
+            <div class="tl-title">Anthropic 发布 Harness Design 深度文章</div>
+            <div class="tl-body">
+              《Harness design for long-running application development》<br>
+              系统性讲解 Planner + Generator + Evaluator 三 Agent 架构。<br>
+              披露了 6 小时/$200 构建完整游戏 vs 20 分钟/$9 单 Agent 失败的对比数据。<br>
+              <span class="tag tag-purple">Anthropic 实践</span>
+            </div>
+          </div>
+          <div class="timeline-item">
+            <div class="tl-date">2026.04.02</div>
+            <div class="tl-title">Martin Fowler 总结归纳</div>
+            <div class="tl-body">
+              《Harness engineering for coding agent users》<br>
+              架构圣经作者将其归纳进"Context Engineering + Harness Engineering"的完整心智模型。<br>
+              <span class="tag tag-green">学术背书</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-green">
+          <strong>为什么 2026 年初突然火了？</strong><br>
+          Claude Code、Cursor 等 IDE Agent、OpenAI Codex 在 2025 下半年大规模普及后，开发者开始遭遇一个共同的痛点：<em>Agent 总是在同一个地方犯同样的错误，而每次都要人工干预修复</em>。Harness Engineering 正是对这个痛点的系统性回答。
+        </div>
+      </section>
+
+      <!-- § 三 两种实践形式 -->
+      <section class="section" id="two-forms">
+        <div class="section-title">
+          <div class="icon" style="background:#dbeafe;">📝</div>
+          <span>三、两种实践形式</span>
+        </div>
+
+        <p>Mitchell Hashimoto 在原文中明确定义了 Harness Engineering 的两种具体形式，从简到复：</p>
+
+        <div class="diagram">
+          <svg width="680" height="240" viewBox="0 0 680 240" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif">
+            <!-- 形式1 -->
+            <rect x="20" y="20" width="300" height="200" rx="14" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+            <text x="170" y="52" text-anchor="middle" font-size="14" fill="#1e40af" font-weight="700">形式一：更好的隐式 Prompt</text>
+            <text x="170" y="72" text-anchor="middle" font-size="13" fill="#3b82f6">AGENTS.md 文件更新</text>
+            <rect x="40" y="90" width="260" height="110" rx="8" fill="#1e293b"/>
+            <text x="50" y="112" font-size="11.5" fill="#94a3b8" font-family="Consolas,monospace"># AGENTS.md</text>
+            <text x="50" y="130" font-size="11.5" fill="#6ee7b7" font-family="Consolas,monospace">- Never run `git push`</text>
+            <text x="50" y="147" font-size="11.5" fill="#6ee7b7" font-family="Consolas,monospace">  without user approval</text>
+            <text x="50" y="164" font-size="11.5" fill="#6ee7b7" font-family="Consolas,monospace">- Use `swift build`</text>
+            <text x="50" y="181" font-size="11.5" fill="#6ee7b7" font-family="Consolas,monospace">  not `xcodebuild`</text>
+            <text x="50" y="198" font-size="11.5" fill="#6ee7b7" font-family="Consolas,monospace">- Screenshot: ./scripts/...</text>
+            <text x="170" y="220" text-anchor="middle" font-size="12" fill="#6b7280">每一行 = 一次真实犯错的记录</text>
+
+            <!-- 分隔 -->
+            <text x="340" y="125" text-anchor="middle" font-size="22" fill="#d1d5db">或</text>
+
+            <!-- 形式2 -->
+            <rect x="360" y="20" width="300" height="200" rx="14" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
+            <text x="510" y="52" text-anchor="middle" font-size="14" fill="#166534" font-weight="700">形式二：真正写代码的工具</text>
+            <text x="510" y="72" text-anchor="middle" font-size="13" fill="#16a34a">给 Agent 配备专用验证脚本</text>
+            <rect x="380" y="90" width="260" height="110" rx="8" fill="#1e293b"/>
+            <text x="390" y="112" font-size="11" fill="#94a3b8" font-family="Consolas,monospace">def take_screenshot(url):</text>
+            <text x="390" y="129" font-size="11" fill="#fbbf24" font-family="Consolas,monospace">    """让 Agent 看到自己的 UI"""</text>
+            <text x="390" y="148" font-size="11" fill="#94a3b8" font-family="Consolas,monospace">def run_tests_filtered(pattern):</text>
+            <text x="390" y="165" font-size="11" fill="#fbbf24" font-family="Consolas,monospace">    """只跑相关测试，不全跑"""</text>
+            <text x="390" y="184" font-size="11" fill="#94a3b8" font-family="Consolas,monospace">def verify_api_response(url):</text>
+            <text x="390" y="201" font-size="11" fill="#fbbf24" font-family="Consolas,monospace">    """Agent 自验证 API 正确"""</text>
+            <text x="510" y="220" text-anchor="middle" font-size="12" fill="#6b7280">让 Agent 能自动知道自己对不对</text>
+          </svg>
+        </div>
+
+        <h3>形式一详解：AGENTS.md 的积累</h3>
+        <p><code>AGENTS.md</code>（或 <code>CLAUDE.md</code>、<code>CURSOR_RULES</code> 等）是告诉 Agent "在这个项目里你应该怎么行动"的配置文件。Harness Engineering 把它变成一个<strong>活的错误日志</strong>：</p>
+
+        <div class="compare-grid">
+          <div class="compare-card compare-bad">
+            <div class="compare-title">❌ 普通做法（没有 Harness）</div>
+            <ol style="font-size:13px;margin:0;padding-left:20px;">
+              <li>Agent 跑了 <code>xcodebuild</code>，失败</li>
+              <li>你手动纠正，告诉它用 <code>swift build</code></li>
+              <li>下一个 session，Agent 又跑 <code>xcodebuild</code></li>
+              <li>你再次纠正……无限循环</li>
+            </ol>
+          </div>
+          <div class="compare-card compare-good">
+            <div class="compare-title">✅ Harness 做法</div>
+            <ol style="font-size:13px;margin:0;padding-left:20px;">
+              <li>Agent 跑了 <code>xcodebuild</code>，失败</li>
+              <li>你在 <code>AGENTS.md</code> 加一行：<br><code style="font-size:11px;">- Use swift build, not xcodebuild</code></li>
+              <li>之后所有 session 永久生效</li>
+              <li>这个错误<strong>从此消失</strong></li>
+            </ol>
+          </div>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">📌 Ghostty 项目真实 AGENTS.md 示例（Mitchell Hashimoto 公开的）</div>
+          <pre style="margin:0;font-size:12px;"># Ghostty Inspector AGENTS.md
+# 下面每一行都来自一次真实的 Agent 犯错
+
+- Never run `git push` without explicit user approval
+- Use `swift build` not `xcodebuild` for command line builds
+- Screenshot tool is available at ./scripts/screenshot.sh
+- When adding a new feature, always check if Inspector.swift needs updating
+- The build directory is .build/, not build/
+- Tests are run with `swift test`, not `make test`</pre>
+          <p style="font-size:13px;color:#92400e;margin:8px 0 0;">→ 这个文件就像一个「事故报告数据库」，每一行都是一次血泪教训的结晶。</p>
+        </div>
+
+        <h3>形式二详解：专用验证工具</h3>
+        <p>某些错误用文字描述无法彻底解决，比如 Agent 生成了 UI 但不知道自己的 UI 长什么样。这时候就需要<strong>给 Agent 一个"感官"</strong>：</p>
+
+        <table>
+          <thead>
+            <tr><th>常见问题</th><th>工程化解决方案（工具）</th><th>原理</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Agent 不知道自己写的 UI 是否正常</td>
+              <td>提供截图工具 <code>take_screenshot(url)</code></td>
+              <td>让 Agent 能"看见"自己的输出</td>
+            </tr>
+            <tr>
+              <td>Agent 跑全套测试太慢，跳过验证</td>
+              <td>提供过滤测试工具 <code>run_tests_filtered(pattern)</code></td>
+              <td>低成本让 Agent 随时自验证</td>
+            </tr>
+            <tr>
+              <td>Agent 改了 API 但不知道是否 Breaking</td>
+              <td>提供 API 验证脚本</td>
+              <td>每次修改后自动检查兼容性</td>
+            </tr>
+            <tr>
+              <td>Agent 构建命令总是出错</td>
+              <td>提供包装好的 <code>build.sh</code> 脚本</td>
+              <td>统一入口，屏蔽工具差异</td>
+            </tr>
+            <tr>
+              <td>Agent 无法验证数据库状态</td>
+              <td>提供 DB 快照对比工具</td>
+              <td>让 Agent 能自我检查数据正确性</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout callout-orange">
+          <strong>🔑 关键洞察（来自 Mitchell 原文）：</strong><br>
+          "If you give an agent a way to verify its work, it more often than not fixes its own mistakes and prevents regressions."<br><br>
+          <strong>给 Agent 验证自己工作的方式，它往往能自己修复错误并防止回归。</strong><br>
+          工具不仅是约束，更是 Agent 的"感官"和"自检能力"。
+        </div>
+      </section>
+
+
+      <!-- § 四 为什么 Agent 会犯错 -->
+      <section class="section" id="problem">
+        <div class="section-title">
+          <div class="icon" style="background:#fee2e2;">🐛</div>
+          <span>四、为什么 Agent 总是犯错？根本原因分析</span>
+        </div>
+        <p>Anthropic 在多次长时间 Agent 测试中，总结出了两大类<strong>结构性失效模式</strong>：</p>
+
+        <h3>失效模式一：上下文窗口问题（Context Drift）</h3>
+        <div class="diagram">
+          <svg width="660" height="160" viewBox="0 0 660 160" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif">
+            <rect x="20" y="30" width="120" height="70" rx="10" fill="#d1fae5" stroke="#6ee7b7" stroke-width="1.5"/>
+            <text x="80" y="62" text-anchor="middle" font-size="13" fill="#166534" font-weight="700">开始阶段</text>
+            <text x="80" y="80" text-anchor="middle" font-size="11" fill="#166534">上下文充足</text>
+            <text x="80" y="96" text-anchor="middle" font-size="11" fill="#166534">✓ 工作正常</text>
+            <rect x="185" y="25" width="130" height="80" rx="10" fill="#fef3c7" stroke="#fcd34d" stroke-width="1.5"/>
+            <text x="250" y="58" text-anchor="middle" font-size="13" fill="#92400e" font-weight="700">中段阶段</text>
+            <text x="250" y="76" text-anchor="middle" font-size="11" fill="#b45309">上下文半满</text>
+            <text x="250" y="92" text-anchor="middle" font-size="11" fill="#b45309">⚠️ 开始飘移</text>
+            <rect x="363" y="18" width="140" height="94" rx="10" fill="#fee2e2" stroke="#fca5a5" stroke-width="1.5"/>
+            <text x="433" y="48" text-anchor="middle" font-size="13" fill="#991b1b" font-weight="700">Context Anxiety</text>
+            <text x="433" y="66" text-anchor="middle" font-size="11" fill="#991b1b">接近上限时</text>
+            <text x="433" y="82" text-anchor="middle" font-size="11" fill="#991b1b">Agent 误以为要超了</text>
+            <text x="433" y="98" text-anchor="middle" font-size="11" fill="#991b1b">❌ 提前收摊、草草了事</text>
+            <rect x="553" y="10" width="90" height="110" rx="10" fill="#fdf2f8" stroke="#f0abfc" stroke-width="1.5"/>
+            <text x="598" y="55" text-anchor="middle" font-size="13" fill="#701a75" font-weight="700">崩溃</text>
+            <text x="598" y="73" text-anchor="middle" font-size="11" fill="#701a75">上下文溢出</text>
+            <text x="598" y="89" text-anchor="middle" font-size="11" fill="#701a75">❌ 前功尽弃</text>
+            <text x="20" y="145" font-size="11" fill="#9ca3af">Context 占用:</text>
+            <rect x="95" y="135" width="55" height="10" rx="3" fill="#e5e7eb"/>
+            <rect x="95" y="135" width="18" height="10" rx="3" fill="#6ee7b7"/>
+            <rect x="215" y="135" width="55" height="10" rx="3" fill="#e5e7eb"/>
+            <rect x="215" y="135" width="36" height="10" rx="3" fill="#fcd34d"/>
+            <rect x="383" y="135" width="55" height="10" rx="3" fill="#e5e7eb"/>
+            <rect x="383" y="135" width="50" height="10" rx="3" fill="#fca5a5"/>
+            <rect x="553" y="135" width="55" height="10" rx="3" fill="#fca5a5"/>
+          </svg>
+        </div>
+        <div class="callout callout-red">
+          <strong>Context Anxiety（上下文焦虑）</strong>：某些模型在上下文接近它认为的上限时，会开始"草草收尾"——即使任务还没完成，也会输出"我已经完成了"。<br><br>
+          解决方案是 <strong>Context Reset（上下文重置）</strong>：完全清空上下文，通过结构化的"交接文档"让新 Agent 接续工作。不是压缩旧内容，而是给 Agent 一块全新的黑板。
+        </div>
+
+        <h3>失效模式二：自我评估偏差（Self-Evaluation Bias）</h3>
+        <div class="compare-grid">
+          <div class="compare-card compare-bad">
+            <div class="compare-title">❌ Agent 自我评估的实际表现</div>
+            <ol style="font-size:13px;margin:0;padding-left:18px;">
+              <li>Agent 写出了明显有问题的 UI</li>
+              <li>让它评估自己的工作</li>
+              <li>它<strong>充满信心地给出好评</strong></li>
+              <li>"这个设计非常好，色彩和谐……"</li>
+              <li>但人眼一看：<em>又丑又平庸的 AI 模板风</em></li>
+            </ol>
+          </div>
+          <div class="compare-card compare-good">
+            <div class="compare-title">✅ 根本原因</div>
+            <ul style="font-size:13px;margin:0;padding-left:18px;">
+              <li>被训练成 "helpful and harmless"</li>
+              <li>倾向于给 LLM 生成内容打高分</li>
+              <li>自评时没有外部参照标准</li>
+              <li>→ 同一个 Agent 无法既当运动员又当裁判</li>
+            </ul>
+          </div>
+        </div>
+        <div class="callout callout-amber">
+          <strong>Anthropic 原文洞察：</strong><br>
+          "Separating the agent doing the work from the agent judging it proves to be a strong lever."<br><br>
+          <strong>把做工作的 Agent 和评判工作的 Agent 分开，是解决这个问题的有力杠杆。单独训练一个挑剔的 Evaluator，比让 Generator 批评自己的工作容易得多。</strong>
+        </div>
+      </section>
+
+      <!-- § 五 Evaluator 设计 -->
+      <section class="section" id="self-eval" style="background:linear-gradient(135deg,#faf5ff 0%,#fdf4ff 100%);border:1.5px solid #d8b4fe;">
+        <div class="section-title">
+          <div class="icon" style="background:#ede9fe;">🪞</div>
+          <span>五、设计可靠 Evaluator：把主观标准变客观</span>
+        </div>
+        <p>Anthropic 工程师首先在<strong>前端设计领域</strong>实验 Evaluator，把"这好不好看"拆解成 4 个可打分的维度：</p>
+
+        <div class="agent-grid" style="grid-template-columns:repeat(2,1fr);margin-bottom:18px;">
+          <div class="agent-card" style="background:#fef3c7;border:1.5px solid #fcd34d;text-align:left;padding:16px;">
+            <div class="agent-name" style="color:#92400e;font-size:14px;margin-bottom:6px;">① 设计质量（Design Quality）</div>
+            <div class="agent-desc">整体感：色彩、排版、布局是否统一，创造出独特氛围和个性。</div>
+          </div>
+          <div class="agent-card" style="background:#eff6ff;border:1.5px solid #93c5fd;text-align:left;padding:16px;">
+            <div class="agent-name" style="color:#1e40af;font-size:14px;margin-bottom:6px;">② 原创性（Originality）</div>
+            <div class="agent-desc">是否有自定义决策？还是清一色库默认值 / AI 生成模板风（白卡片+紫渐变）？</div>
+          </div>
+          <div class="agent-card" style="background:#f0fdf4;border:1.5px solid #86efac;text-align:left;padding:16px;">
+            <div class="agent-name" style="color:#166534;font-size:14px;margin-bottom:6px;">③ 工艺（Craft）</div>
+            <div class="agent-desc">字体层级、间距一致性、色彩对比度——技术执行质量的基准检查。</div>
+          </div>
+          <div class="agent-card" style="background:#fdf4ff;border:1.5px solid #e9d5ff;text-align:left;padding:16px;">
+            <div class="agent-name" style="color:#7e22ce;font-size:14px;margin-bottom:6px;">④ 功能性（Functionality）</div>
+            <div class="agent-desc">用户能否理解界面？找到主要操作？无需猜测完成任务？</div>
+          </div>
+        </div>
+
+        <h3>Evaluator 调优过程</h3>
+        <div class="timeline">
+          <div class="timeline-item">
+            <div class="tl-title">初始：直接评估 → 全是好评</div>
+            <div class="tl-body">观察到 Evaluator 发现了真实问题，然后<em>自我说服说没关系</em>，最终批准劣质输出。</div>
+          </div>
+          <div class="timeline-item">
+            <div class="tl-title">调优 1：加入 Few-shot 示例 + 详细打分依据</div>
+            <div class="tl-body">用少量真实案例校准 Evaluator 口味，确保评分标准对齐，减少分数漂移。</div>
+          </div>
+          <div class="timeline-item">
+            <div class="tl-title">调优 2：给 Evaluator 配备 Playwright MCP</div>
+            <div class="tl-body">让 Evaluator 能<strong>真实点击运行中的页面</strong>，截图后仔细研究，而不只是看静态代码。</div>
+          </div>
+          <div class="timeline-item">
+            <div class="tl-title">调优 3：加入锚定语言</div>
+            <div class="tl-body">在 prompt 加入 "the best designs are museum quality" 后，Generator 输出向更高质量收敛。</div>
+          </div>
+          <div class="timeline-item">
+            <div class="tl-title">最终效果：5~15 次迭代后显著提升</div>
+            <div class="tl-body">荷兰艺术博物馆网站案例：第 9 次还是普通深色主题，第 10 次突然用 CSS 3D 透视做出了空间画廊体验——这种创意飞跃在单次生成中从未见过。</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- § 六 三 Agent 架构 -->
+      <section class="section" id="three-agent" style="border:1.5px solid #fbbf24;">
+        <div class="section-title">
+          <div class="icon" style="background:#fef3c7;">🏗️</div>
+          <span>六、三 Agent Harness 架构（Anthropic 实战方案）</span>
+        </div>
+        <p>将 Generator-Evaluator 模式推广到<strong>全栈代码生成</strong>，最终形成三 Agent 架构：</p>
+
+        <div class="diagram">
+          <svg width="660" height="310" viewBox="0 0 660 310" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif">
+            <defs>
+              <marker id="ag" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#94a3b8"/></marker>
+              <marker id="ar" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#ef4444"/></marker>
+              <marker id="agn" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#22c55e"/></marker>
+            </defs>
+            <!-- 用户输入 -->
+            <rect x="240" y="8" width="180" height="44" rx="10" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1.5"/>
+            <text x="330" y="28" text-anchor="middle" font-size="12" fill="#64748b">用户 Prompt (1句话)</text>
+            <text x="330" y="44" text-anchor="middle" font-size="11" fill="#94a3b8">"创建一个复古游戏制作器"</text>
+            <!-- 到Planner -->
+            <path d="M330 54 L330 82" stroke="#94a3b8" stroke-width="1.5" fill="none" marker-end="url(#ag)"/>
+            <!-- Planner -->
+            <rect x="175" y="82" width="310" height="70" rx="14" fill="#dbeafe" stroke="#93c5fd" stroke-width="2"/>
+            <text x="225" y="114" font-size="20">🗂️</text>
+            <text x="262" y="112" font-size="14" fill="#1e40af" font-weight="700">Planner Agent</text>
+            <text x="262" y="130" font-size="12" fill="#3b82f6">1句prompt → 完整产品spec：16特性 · 10 Sprint</text>
+            <text x="262" y="146" font-size="11" fill="#6b7280">设计语言、AI功能集成点、技术栈选择</text>
+            <!-- 到合同区 -->
+            <path d="M330 154 L330 178" stroke="#94a3b8" stroke-width="1.5" fill="none" marker-end="url(#ag)"/>
+            <!-- Sprint合同 -->
+            <rect x="90" y="178" width="480" height="44" rx="10" fill="#fffbeb" stroke="#fcd34d" stroke-width="1.5" stroke-dasharray="6,3"/>
+            <text x="330" y="198" text-anchor="middle" font-size="13" fill="#92400e" font-weight="700">⚡ Sprint 合同协商</text>
+            <text x="330" y="214" text-anchor="middle" font-size="11" fill="#b45309">Generator提案"做什么+怎么验收" → Evaluator审核 → 双方签字才开始写代码</text>
+            <!-- Generator -->
+            <path d="M200 224 L170 248" stroke="#94a3b8" stroke-width="1.5" fill="none" marker-end="url(#ag)"/>
+            <rect x="20" y="248" width="295" height="50" rx="12" fill="#d1fae5" stroke="#6ee7b7" stroke-width="2"/>
+            <text x="65" y="270" font-size="18">⚙️</text>
+            <text x="100" y="268" font-size="14" fill="#166534" font-weight="700">Generator Agent</text>
+            <text x="100" y="285" font-size="11" fill="#15803d">逐Sprint写代码 · React+Vite+FastAPI+SQLite</text>
+            <!-- Evaluator -->
+            <path d="M460 224 L490 248" stroke="#94a3b8" stroke-width="1.5" fill="none" marker-end="url(#ag)"/>
+            <rect x="345" y="248" width="295" height="50" rx="12" fill="#fef3c7" stroke="#fcd34d" stroke-width="2"/>
+            <text x="390" y="270" font-size="18">🔍</text>
+            <text x="425" y="268" font-size="14" fill="#92400e" font-weight="700">Evaluator Agent</text>
+            <text x="425" y="285" font-size="11" fill="#b45309">Playwright MCP点击运行App · PASS/FAIL反馈</text>
+            <!-- FAIL反馈循环 -->
+            <path d="M165 248 Q60 220 120 200" stroke="#ef4444" stroke-width="1.5" fill="none" stroke-dasharray="5,3" marker-end="url(#ar)"/>
+            <text x="58" y="238" font-size="11" fill="#ef4444">FAIL反馈</text>
+            <path d="M495 248 Q600 220 540 200" stroke="#ef4444" stroke-width="1.5" fill="none" stroke-dasharray="5,3" marker-end="url(#ar)"/>
+            <text x="548" y="238" font-size="11" fill="#ef4444">Sprint失败</text>
+            <!-- 最终输出 -->
+            <path d="M167 298 Q167 308 248 308" stroke="#22c55e" stroke-width="1.5" fill="none"/>
+            <path d="M493 298 Q493 308 412 308" stroke="#22c55e" stroke-width="1.5" fill="none"/>
+            <rect x="248" y="296" width="164" height="26" rx="8" fill="#dcfce7" stroke="#86efac"/>
+            <text x="330" y="314" text-anchor="middle" font-size="12" fill="#166534" font-weight="700">✓ 所有Sprint通过 → 交付</text>
+          </svg>
+        </div>
+
+        <h3>三个 Agent 职责速查表</h3>
+        <table>
+          <thead><tr><th>Agent</th><th>输入</th><th>输出</th><th>核心原则</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>🗂️ Planner</strong></td>
+              <td>1-4 句用户描述</td>
+              <td>完整产品 spec（16 特性、10 Sprint、设计语言）</td>
+              <td>只关注"做什么"，不干涉技术细节</td>
+            </tr>
+            <tr>
+              <td><strong>⚙️ Generator</strong></td>
+              <td>Spec + Sprint 合同</td>
+              <td>每个 Sprint 的完整代码实现</td>
+              <td>Sprint 结束前先自评，再交 QA</td>
+            </tr>
+            <tr>
+              <td><strong>🔍 Evaluator</strong></td>
+              <td>运行中的 App</td>
+              <td>PASS/FAIL + 精确到行号的 bug 描述</td>
+              <td>任一维度低于阈值 → Sprint FAIL</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout callout-blue">
+          <strong>通信机制：所有 Agent 间通过文件交接，而不是直接调用。</strong><br>
+          文件方式的优势：跨上下文窗口持久化、调试友好有完整日志、Agent 解耦只需关心读写格式。
+        </div>
+      </section>
+
+      <!-- § 七 Sprint 合同 -->
+      <section class="section" id="sprint-contract">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">📋</div>
+          <span>七、Sprint 合同机制：先"签合同"再写代码</span>
+        </div>
+        <p>在每个 Sprint 开始前，Generator 和 Evaluator 先<strong>协商并锁定验收标准</strong>，再动手写代码：</p>
+
+        <div class="diagram">
+          <svg width="660" height="120" viewBox="0 0 660 120" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif">
+            <defs>
+              <marker id="ba1" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#6b7280"/></marker>
+              <marker id="ba2" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#f59e0b"/></marker>
+              <marker id="ba3" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#22c55e"/></marker>
+            </defs>
+            <rect x="10" y="20" width="130" height="65" rx="10" fill="#dbeafe" stroke="#93c5fd" stroke-width="1.5"/>
+            <text x="75" y="48" text-anchor="middle" font-size="13" fill="#1e40af" font-weight="700">Generator</text>
+            <text x="75" y="66" text-anchor="middle" font-size="11" fill="#3b82f6">提案：我要做X</text>
+            <text x="75" y="82" text-anchor="middle" font-size="11" fill="#3b82f6">验收标准为Y</text>
+            <path d="M142 52 L195 52" stroke="#6b7280" stroke-width="1.5" fill="none" marker-end="url(#ba1)"/>
+            <rect x="197" y="20" width="130" height="65" rx="10" fill="#fef3c7" stroke="#fcd34d" stroke-width="1.5"/>
+            <text x="262" y="48" text-anchor="middle" font-size="13" fill="#92400e" font-weight="700">Evaluator</text>
+            <text x="262" y="66" text-anchor="middle" font-size="11" fill="#b45309">审核：标准</text>
+            <text x="262" y="82" text-anchor="middle" font-size="11" fill="#b45309">是否可测试？</text>
+            <path d="M262 87 Q262 108 75 108 Q75 87 75 87" stroke="#f59e0b" stroke-width="1.5" fill="none" stroke-dasharray="4,3" marker-end="url(#ba2)"/>
+            <text x="168" y="106" text-anchor="middle" font-size="11" fill="#f59e0b">需要时来回迭代修改</text>
+            <path d="M329 52 L382 52" stroke="#6b7280" stroke-width="1.5" fill="none" marker-end="url(#ba1)"/>
+            <text x="355" y="44" text-anchor="middle" font-size="10" fill="#6b7280">达成一致</text>
+            <rect x="384" y="20" width="140" height="65" rx="10" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
+            <text x="454" y="45" text-anchor="middle" font-size="12" fill="#166534" font-weight="700">Sprint 合同锁定</text>
+            <text x="454" y="63" text-anchor="middle" font-size="11" fill="#15803d">· 实现范围</text>
+            <text x="454" y="79" text-anchor="middle" font-size="11" fill="#15803d">· 27 条验收标准</text>
+            <path d="M526 52 L579 52" stroke="#22c55e" stroke-width="1.5" fill="none" marker-end="url(#ba3)"/>
+            <rect x="581" y="20" width="75" height="65" rx="10" fill="#dcfce7" stroke="#4ade80" stroke-width="1.5"/>
+            <text x="618" y="52" text-anchor="middle" font-size="13" fill="#166534" font-weight="700">写代码</text>
+            <text x="618" y="70" text-anchor="middle" font-size="11" fill="#15803d">按合同实现</text>
+          </svg>
+        </div>
+
+        <div class="example-box" style="border-color:#fcd34d;background:#fffbeb;">
+          <div class="ex-title" style="color:#92400e;">📌 真实 Sprint 3 合同（关卡编辑器）中，Evaluator 发现的 FAIL 示例</div>
+          <table style="font-size:12.5px;">
+            <thead><tr><th>合同条款</th><th>Evaluator 的精确 bug 描述</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>矩形填充工具支持拖拽填充区域</td>
+                <td><span class="tag tag-red" style="font-size:11px;">FAIL</span> <code>fillRectangle</code> 函数存在但 <code>mouseUp</code> 时未触发</td>
+              </tr>
+              <tr>
+                <td>用户可删除已放置的实体生成点</td>
+                <td><span class="tag tag-red" style="font-size:11px;">FAIL</span> Delete 键同时要求 <code>selection</code> 和 <code>selectedEntityId</code>，但点击只设置 <code>selectedEntityId</code></td>
+              </tr>
+              <tr>
+                <td>通过 API 重排动画帧</td>
+                <td><span class="tag tag-red" style="font-size:11px;">FAIL</span> <code>PUT /frames/reorder</code> 定义在 <code>/{frame_id}</code> 后，FastAPI 把 'reorder' 当整数 frame_id 解析，返回 422</td>
+              </tr>
+            </tbody>
+          </table>
+          <p style="font-size:12px;color:#92400e;margin:8px 0 0;">→ Evaluator 反馈精确到具体文件和 bug 原因，Generator 收到后无需额外排查即可修复。</p>
+        </div>
+      </section>
+
+      <!-- § 八 效果数据 -->
+      <section class="section" id="result" style="background:linear-gradient(135deg,#f0fdf4 0%,#eff6ff 100%);border:1.5px solid #6ee7b7;">
+        <div class="section-title">
+          <div class="icon" style="background:#d1fae5;">📊</div>
+          <span>八、效果数据：三 Agent vs 单 Agent</span>
+        </div>
+
+        <h3>实验一：复古游戏制作器（相同 prompt）</h3>
+        <table>
+          <thead><tr><th>方式</th><th>耗时</th><th>费用</th><th>游戏能玩吗？</th><th>功能完整度</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><span class="tag tag-red">单 Agent</span></td>
+              <td>20 分钟</td>
+              <td>$9</td>
+              <td>❌ 游戏核心功能损坏（输入无响应）</td>
+              <td>基础 UI + 大量 stub</td>
+            </tr>
+            <tr>
+              <td><span class="tag tag-green">三 Agent Harness</span></td>
+              <td>6 小时</td>
+              <td>$200</td>
+              <td>✅ 完全可玩，可控制角色移动</td>
+              <td>16 特性 + AI 集成 + 音效 + 分享</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>实验二：浏览器 DAW（数字音频工作站）</h3>
+        <table>
+          <thead><tr><th>阶段</th><th>耗时</th><th>费用</th></tr></thead>
+          <tbody>
+            <tr><td>Planner</td><td>4.7 分钟</td><td>$0.46</td></tr>
+            <tr><td>Build Round 1</td><td>2 小时 7 分</td><td>$71.08</td></tr>
+            <tr><td>QA Round 1</td><td>8.8 分钟</td><td>$3.24</td></tr>
+            <tr><td>Build Round 2</td><td>1 小时 2 分</td><td>$36.89</td></tr>
+            <tr><td>QA Round 2</td><td>6.8 分钟</td><td>$3.09</td></tr>
+            <tr><td>Build Round 3</td><td>10.9 分钟</td><td>$5.88</td></tr>
+            <tr><td>QA Round 3</td><td>9.6 分钟</td><td>$4.06</td></tr>
+            <tr style="font-weight:700;background:#fef3c7;"><td>总计</td><td>3 小时 50 分</td><td>$124.70</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout callout-green">
+          <strong>最终效果：</strong>完整浏览器 DAW，含编曲视图、混音台、传输控制，并内置 AI Agent——可通过自然语言提示 Agent 自动设置节拍、铺写旋律、构建鼓点、调整混响。整首歌完全通过提示词生成。
+        </div>
+      </section>
+
+      <!-- § 九 Context Engineering 关系 -->
+      <section class="section" id="context-eng">
+        <div class="section-title">
+          <div class="icon" style="background:#e0f2fe;">🌐</div>
+          <span>九、与 Context Engineering 的关系（Martin Fowler 模型）</span>
+        </div>
+        <p>Martin Fowler（架构圣经作者）在 2026 年 4 月 2 日将这两个概念系统化为完整心智模型：</p>
+
+        <div class="diagram">
+          <svg width="660" height="200" viewBox="0 0 660 200" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif">
+            <!-- 大圆：Context Engineering -->
+            <ellipse cx="330" cy="105" rx="310" ry="88" fill="#eff6ff" stroke="#93c5fd" stroke-width="2"/>
+            <text x="330" y="32" text-anchor="middle" font-size="15" fill="#1e40af" font-weight="700">Context Engineering（上下文工程）</text>
+            <text x="330" y="50" text-anchor="middle" font-size="12" fill="#3b82f6">告诉 Agent：你在什么环境、有哪些工具、任务背景是什么</text>
+            <text x="330" y="68" text-anchor="middle" font-size="11" fill="#6b7280">System Prompt · 工具描述 · 项目 README · 代码规范 · 示例</text>
+
+            <!-- 小圆：Harness Engineering -->
+            <ellipse cx="330" cy="140" rx="195" ry="48" fill="#fffbeb" stroke="#fcd34d" stroke-width="2"/>
+            <text x="330" y="128" text-anchor="middle" font-size="14" fill="#92400e" font-weight="700">Harness Engineering（约束工程）</text>
+            <text x="330" y="148" text-anchor="middle" font-size="12" fill="#b45309">告诉 Agent：你犯这些错误时如何自动纠正</text>
+            <text x="330" y="165" text-anchor="middle" font-size="11" fill="#6b7280">AGENTS.md · 验证工具 · 自检脚本</text>
+
+            <text x="50" y="115" font-size="11" fill="#93c5fd">（包含关系）</text>
+          </svg>
+        </div>
+
+        <table>
+          <thead><tr><th>维度</th><th>Context Engineering</th><th>Harness Engineering</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>解决的问题</strong></td>
+              <td>Agent 不了解环境和任务</td>
+              <td>Agent 反复犯同一类错误</td>
+            </tr>
+            <tr>
+              <td><strong>核心文件</strong></td>
+              <td>README、System Prompt、工具描述</td>
+              <td>AGENTS.md、验证脚本</td>
+            </tr>
+            <tr>
+              <td><strong>构建方式</strong></td>
+              <td>项目启动时一次性设计</td>
+              <td>每次 Agent 犯错后迭代积累</td>
+            </tr>
+            <tr>
+              <td><strong>作用时机</strong></td>
+              <td>Session 开始时加载</td>
+              <td>Agent 执行过程中持续约束</td>
+            </tr>
+            <tr>
+              <td><strong>类比</strong></td>
+              <td>入职培训手册</td>
+              <td>事故报告 + 流程改进规定</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout callout-blue">
+          <strong>结合使用效果 = 让 Agent 真正可靠</strong><br>
+          Context Engineering 告诉 Agent"你是谁、你在哪、你有什么"；Harness Engineering 告诉 Agent"你以前犯过这些错，永远别再犯"。两者缺一不可。
+        </div>
+      </section>
+
+      <!-- § 十 随模型演进 -->
+      <section class="section" id="evolve">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">🔄</div>
+          <span>十、随模型能力迭代的 Harness 演进</span>
+        </div>
+        <p>一个关键洞察：<strong>Harness 不是一成不变的，要随着底层模型能力的提升而简化。</strong></p>
+        <div class="callout callout-amber">
+          "Resist over-engineering early. A simpler harness that works for now is better than a complex one designed for hypothetical future capabilities."<br>
+          <strong>抵制过度工程化。一个现在能用的简单 Harness，比为假设的未来能力设计的复杂 Harness 更好。</strong>
+        </div>
+        <p>Anthropic 的实际经验：使用 Opus 4.6 版本后，Sprint 结构变得不再必要，直接改为单次最终 QA 检查就够了。</p>
+        <table>
+          <thead><tr><th>模型能力</th><th>Harness 复杂度</th><th>实际变化</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>早期模型（Sonnet 4.5 等）</td>
+              <td>复杂</td>
+              <td>需要 Sprint 结构 + 每步合同 + 多次迭代</td>
+            </tr>
+            <tr>
+              <td>升级版模型（Opus 4.6 等）</td>
+              <td>简化</td>
+              <td>可移除 Sprint 机制，改为单次最终 Evaluator 检查</td>
+            </tr>
+            <tr>
+              <td>未来更强模型</td>
+              <td>最简</td>
+              <td>可能只需要 AGENTS.md，不再需要独立 Evaluator</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="callout callout-green">
+          <strong>判断 Evaluator 是否还必要的标准：</strong><br>
+          "The value of an evaluator scales with the difficulty of the task relative to the model's capability."<br>
+          任务难度超出模型独立能力的部分越大，Evaluator 价值越高。随着模型越来越强，很多过去需要 Evaluator 的场景会逐渐变成模型自己就能搞定。
+        </div>
+      </section>
+
+      <!-- § 十一 总结 -->
+      <section class="section" id="summary" style="background:linear-gradient(135deg,#fffbeb 0%,#fef9f0 100%);border:1.5px solid #fcd34d;">
+        <div class="section-title">
+          <div class="icon" style="background:#fef3c7;">🎯</div>
+          <span>十一、总结与实践建议</span>
+        </div>
+
+        <h3>Harness Engineering 核心原则速查</h3>
+        <table>
+          <thead><tr><th>原则</th><th>具体做法</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>每错必录</strong></td>
+              <td>每次 Agent 犯错，立刻在 <code>AGENTS.md</code> 加一行规则</td>
+            </tr>
+            <tr>
+              <td><strong>先简后繁</strong></td>
+              <td>从 <code>AGENTS.md</code> 文字规则开始，确实不够用再写验证工具</td>
+            </tr>
+            <tr>
+              <td><strong>给 Agent 眼睛</strong></td>
+              <td>给它截图工具、测试工具，让它能自我验证</td>
+            </tr>
+            <tr>
+              <td><strong>分离职责</strong></td>
+              <td>复杂任务中，Generator 和 Evaluator 必须是独立 Agent</td>
+            </tr>
+            <tr>
+              <td><strong>先签合同</strong></td>
+              <td>每个 Sprint 开始前，先锁定验收标准，再动手写代码</td>
+            </tr>
+            <tr>
+              <td><strong>随模型简化</strong></td>
+              <td>底层模型能力增强后，主动评估哪些 Harness 可以去掉</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>实践路径建议</h3>
+        <div class="timeline">
+          <div class="timeline-item">
+            <div class="tl-title">第一步：建立 AGENTS.md，开始录错</div>
+            <div class="tl-body">新建 <code>AGENTS.md</code>，每次 Agent 犯了同一个错误，就加一条规则。这是成本最低、收益最稳定的开始。</div>
+          </div>
+          <div class="timeline-item">
+            <div class="tl-title">第二步：识别哪些错误需要工具解决</div>
+            <div class="tl-body">如果某类错误用文字描述不够（比如 UI 问题），就开始写对应的验证脚本：截图工具、测试过滤工具等。</div>
+          </div>
+          <div class="timeline-item">
+            <div class="tl-title">第三步：长任务引入独立 Evaluator</div>
+            <div class="tl-body">当任务超过单个上下文窗口、或者 Generator 开始给自己打高分时，引入独立 Evaluator Agent。</div>
+          </div>
+          <div class="timeline-item">
+            <div class="tl-title">第四步：随模型升级调整复杂度</div>
+            <div class="tl-body">每次换用更强的底层模型，重新评估 Harness 的复杂度，移除已经不再必要的约束。</div>
+          </div>
+        </div>
+
+        <h3>一句话定义（最后再记一遍）</h3>
+        <div class="callout callout-amber" style="font-size:16px;text-align:center;padding:24px;">
+          <strong>Harness Engineering</strong> = 每次发现 Agent 犯错，就工程化一个解决方案，让它永远不再犯这个错。<br>
+          <span style="font-size:13px;color:#b45309;margin-top:8px;display:block;">— Mitchell Hashimoto, 2026.02.05</span>
+        </div>
+
+        <h3>参考资料</h3>
+        <ul>
+          <li><a href="https://mitchellh.com/writing/my-ai-adoption-journey" target="_blank">My AI Adoption Journey — Mitchell Hashimoto (2026.02.05)</a></li>
+          <li><a href="https://openai.com/index/harness-engineering/" target="_blank">Harness engineering: leveraging Codex in an agent-first world — OpenAI (2026.02.11)</a></li>
+          <li><a href="https://www.anthropic.com/engineering/harness-design-long-running-apps" target="_blank">Harness design for long-running application development — Anthropic (2026.03.24)</a></li>
+          <li><a href="https://martinfowler.com/articles/harness-engineering.html" target="_blank">Harness engineering for coding agent users — Martin Fowler (2026.04.02)</a></li>
+        </ul>
+      </section>
+
+    </div><!-- /content -->
+  </div><!-- /layout -->
+
+  <footer>
+    <p>Harness Engineering 笔记 · 基于 Mitchell Hashimoto / OpenAI / Anthropic / Martin Fowler 一手资料整理 · 2026.04</p>
+  </footer>
+</div><!-- /page -->
+</body>
+</html>
