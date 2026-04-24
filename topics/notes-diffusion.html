@@ -1,0 +1,1496 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>视觉 Diffusion Model：从零开始完全图解</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false }
+          ],
+          throwOnError: false
+        });
+      }
+      const sections = document.querySelectorAll('section[id]');
+      const links = document.querySelectorAll('.toc-list a');
+      const obs = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+          if (e.isIntersecting) {
+            links.forEach(l => l.classList.remove('active'));
+            const a = document.querySelector('.toc-list a[href="#' + e.target.id + '"]');
+            if (a) a.classList.add('active');
+          }
+        });
+      }, { rootMargin: '-20% 0px -60% 0px' });
+      sections.forEach(s => obs.observe(s));
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #8b5cf6; --primary-soft: #faf5ff;
+      --accent: #2563eb; --shadow: 0 10px 30px rgba(15,23,42,0.08);
+      --radius: 18px; --max: 1120px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: linear-gradient(180deg,#fdf4ff 0%,var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      line-height: 1.85;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .page { max-width: var(--max); margin: 0 auto; padding: 32px 20px 80px; }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    .back-link:hover { color: var(--primary); text-decoration: none; }
+    .hero {
+      background: radial-gradient(circle at top right, rgba(139,92,246,0.12), transparent 30%),
+                  radial-gradient(circle at left bottom, rgba(37,99,235,0.08), transparent 24%),
+                  var(--card);
+      border: 1px solid rgba(139,92,246,0.15);
+      border-radius: 24px; box-shadow: var(--shadow);
+      padding: 34px 34px 28px; margin-bottom: 22px;
+    }
+    .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: #faf5ff; color: #6d28d9; font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+    h1 { margin: 0 0 10px; font-size: 32px; line-height: 1.25; letter-spacing: -0.02em; }
+    .subtitle { margin: 0; color: var(--muted); font-size: 15px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 24px; }
+    .meta-card { background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 16px; padding: 14px 16px; }
+    .meta-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .meta-value { font-size: 14px; font-weight: 600; word-break: break-word; }
+    .layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 22px; align-items: start; }
+    .toc { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; max-height: calc(100vh - 40px); overflow-y: auto; }
+    .toc h2 { margin: 0 0 12px; font-size: 15px; color: var(--text); }
+    .toc-list { list-style: none; margin: 0; padding: 0; }
+    .toc-list li { margin: 0; }
+    .toc-list a { display: block; padding: 5px 8px; border-radius: 8px; color: var(--muted); font-size: 13px; transition: all 0.15s; }
+    .toc-list a:hover { color: var(--primary); background: #faf5ff; text-decoration: none; }
+    .toc-list a.active { color: var(--primary); background: #eff6ff; font-weight: 600; border-left: 3px solid var(--primary); padding-left: 5px; }
+    .toc-sub { list-style: none; padding-left: 12px; margin: 0; }
+    .toc-sub a { font-size: 12px; padding: 3px 8px; }
+    .content { display: flex; flex-direction: column; gap: 18px; }
+    .section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 26px 28px; }
+    .section-title { display: flex; align-items: center; gap: 12px; margin: 0 0 20px; font-size: 20px; font-weight: 700; }
+    .icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+    h3 { margin: 28px 0 12px; font-size: 17px; color: #111827; border-left: 3px solid #e9d5ff; padding-left: 10px; }
+    h4 { margin: 20px 0 8px; font-size: 15px; color: #374151; }
+    p { margin: 0 0 12px; }
+    .callout-blue { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-amber { background: #fffbeb; border: 1px solid #fde68a; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-green { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-purple { background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-red { background: #fff1f2; border: 1px solid #fecdd3; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-cyan { background: #ecfeff; border: 1px solid #a5f3fc; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-title { font-weight: 700; font-size: 14px; margin-bottom: 8px; }
+    .callout-blue .callout-title { color: #1d4ed8; }
+    .callout-amber .callout-title { color: #92400e; }
+    .callout-green .callout-title { color: #166534; }
+    .callout-purple .callout-title { color: #6d28d9; }
+    .callout-red .callout-title { color: #9f1239; }
+    .callout-cyan .callout-title { color: #0e7490; }
+    .example-box { background: #f0fdf4; border: 1px solid #86efac; border-radius: 14px; padding: 18px 20px; margin: 18px 0; }
+    .ex-title { font-weight: 700; color: #166534; margin-bottom: 10px; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+    .analogy-box { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 14px; padding: 18px 20px; margin: 18px 0; }
+    .analogy-title { font-weight: 700; color: #92400e; margin-bottom: 10px; font-size: 14px; }
+    .formula-block { margin: 18px 0 8px; overflow-x: auto; background: #fafafa; border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px 16px; }
+    .formula-vars { background: #f8faff; border: 1px solid #dbeafe; border-radius: 12px; padding: 14px 16px; margin: 4px 0 18px; font-size: 14px; color: #374151; }
+    .formula-vars .var-title { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+    .formula-vars ul { margin: 0; padding-left: 18px; }
+    .formula-vars li { margin: 5px 0; }
+    .flow-diagram { border: 1px solid #e9d5ff; border-radius: 14px; padding: 18px; margin: 18px 0; background: #faf5ff; }
+    .flow-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 8px 0; }
+    .flow-box { background: #ede9fe; border: 1px solid #c4b5fd; border-radius: 10px; padding: 8px 14px; font-size: 13px; font-weight: 600; line-height: 1.4; text-align: center; }
+    .flow-box.green { background: #dcfce7; border-color: #86efac; }
+    .flow-box.blue { background: #dbeafe; border-color: #93c5fd; }
+    .flow-box.red { background: #fee2e2; border-color: #fca5a5; }
+    .flow-box.amber { background: #fef3c7; border-color: #fcd34d; }
+    .flow-arrow { color: #8b5cf6; font-weight: 700; font-size: 18px; }
+    .two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 14px 0; }
+    .three-col { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 14px 0; }
+    .mini-card { border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; background: #fff; }
+    .mini-card h4 { margin-top: 0; font-size: 14px; color: #111827; }
+    .mini-card p { font-size: 14px; }
+    .table-wrap { overflow-x: auto; margin: 16px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    thead th { background: #faf5ff; color: #4c1d95; text-align: left; font-weight: 700; padding: 10px 14px; border-bottom: 2px solid #e9d5ff; }
+    td { padding: 10px 14px; border-bottom: 1px solid #eef2f7; vertical-align: top; }
+    tbody tr:nth-child(even) { background: #fefaff; }
+    blockquote { margin: 18px 0; padding: 16px 20px; border-left: 4px solid var(--primary); background: rgba(139,92,246,0.05); border-radius: 0 12px 12px 0; color: #3f3f46; font-size: 15px; }
+    ul, ol { padding-left: 24px; margin: 8px 0 12px; }
+    li { margin: 6px 0; }
+    li + li { margin-top: 7px; }
+    code { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 6px; padding: 2px 7px; font-family: "SF Mono",Consolas,Monaco,monospace; font-size: 13px; color: #6d28d9; }
+    .step-box { display: flex; gap: 16px; align-items: flex-start; margin: 14px 0; padding: 16px 18px; background: #fafafa; border: 1px solid var(--line); border-radius: 14px; }
+    .step-num { width: 32px; height: 32px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; flex-shrink: 0; }
+    .step-content { flex: 1; }
+    .step-content strong { display: block; margin-bottom: 4px; font-size: 15px; }
+    .highlight { background: linear-gradient(180deg, transparent 60%, #fde68a 60%); font-weight: 600; }
+    .katex-display { overflow-x: auto; padding: 6px 0; }
+    .big-concept { background: linear-gradient(135deg, #faf5ff 0%, #eff6ff 100%); border: 2px solid #c4b5fd; border-radius: 16px; padding: 20px 24px; margin: 20px 0; }
+    .big-concept-title { font-size: 18px; font-weight: 800; color: #4c1d95; margin-bottom: 10px; }
+    footer { margin-top: 32px; text-align: center; color: var(--muted); font-size: 13px; }
+    @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } .toc { position: static; } .meta-grid, .two-col, .three-col { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 640px) { .page { padding: 18px 12px 56px; } .hero, .section { padding: 20px 18px; } h1 { font-size: 26px; } .meta-grid, .two-col, .three-col { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div class="page">
+  <a class="back-link" href="../index.html">← 返回笔记列表</a>
+
+  <header class="hero">
+    <div class="eyebrow">🎨 学习笔记 · 视觉生成模型 · 完全新手向</div>
+    <h1>视觉 Diffusion Model：从零开始完全图解</h1>
+    <p class="subtitle">DDPM / Stable Diffusion / U-Net / Cross-Attention / CFG / ControlNet — 每个概念都有类比 + 具体例子，不需要任何生成模型背景</p>
+    <div class="meta-grid">
+      <div class="meta-card"><div class="meta-label">前置知识</div><div class="meta-value">只需要知道"神经网络可以做回归任务"即可</div></div>
+      <div class="meta-card"><div class="meta-label">涵盖模型</div><div class="meta-value">DDPM · Latent Diffusion · Stable Diffusion · DALL-E 2</div></div>
+      <div class="meta-card"><div class="meta-label">核心问题</div><div class="meta-value">怎么让AI从"噪声"中"雕刻"出一张图片？</div></div>
+      <div class="meta-card"><div class="meta-label">阅读时长</div><div class="meta-value">约 50–70 分钟</div></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="toc">
+      <h2>目录</h2>
+      <ul class="toc-list">
+        <li><a href="#tldr">一句话总结</a></li>
+        <li><a href="#intuition">§1 核心直觉：故意弄脏再洗白</a></li>
+        <li><a href="#forward">§2 前向扩散：一步步加噪声</a>
+          <ul class="toc-sub">
+            <li><a href="#forward-process">2.1 数学公式</a></li>
+            <li><a href="#forward-example">2.2 举例说明</a></li>
+          </ul>
+        </li>
+        <li><a href="#reverse">§3 逆向去噪：训练AI"洗图"</a>
+          <ul class="toc-sub">
+            <li><a href="#reverse-loss">3.1 Loss函数</a></li>
+            <li><a href="#reverse-example">3.2 举例说明</a></li>
+          </ul>
+        </li>
+        <li><a href="#why-generate">§3.5 关键跨越：为什么去噪 = 学会了生成？</a></li>
+        <li><a href="#unet">§4 U-Net：去噪网络的主力</a>
+          <ul class="toc-sub">
+            <li><a href="#unet-structure">4.1 结构详解</a></li>
+            <li><a href="#unet-example">4.2 举例：完整走一遍</a></li>
+            <li><a href="#time-embed">4.3 时间步编码：怎么告诉网络"现在有多模糊"</a></li>
+          </ul>
+        </li>
+        <li><a href="#condition">§5 条件生成：告诉AI画什么</a>
+          <ul class="toc-sub">
+            <li><a href="#two-stage-training">5.0 两种训练，两种数据</a></li>
+            <li><a href="#condition-pipeline">5.1 端到端流程</a></li>
+            <li><a href="#clip-role">5.2 CLIP 的角色</a></li>
+            <li><a href="#cross-attention">5.3 Cross-Attention</a></li>
+            <li><a href="#condition-example">5.4 完整举例</a></li>
+            <li><a href="#condition-when">5.5 条件在哪步作用最大</a></li>
+          </ul>
+        </li>
+        <li><a href="#latent">§6 Latent Diffusion：算力优化之道</a>
+          <ul class="toc-sub">
+            <li><a href="#latent-intuition">6.1 核心思想</a></li>
+            <li><a href="#latent-denoise">6.2 隐空间去噪</a></li>
+            <li><a href="#latent-example">6.3 数字对比</a></li>
+          </ul>
+        </li>
+        <li><a href="#cfg">§7 Classifier-Free Guidance</a>
+          <ul class="toc-sub">
+            <li><a href="#cfg-training">7.1 怎么训练</a></li>
+            <li><a href="#cfg-formula">7.2 公式与直觉</a></li>
+            <li><a href="#cfg-example">7.3 完整举例</a></li>
+          </ul>
+        </li>
+        <li><a href="#classic">§8 架构演进：U-Net → DiT → 文生视频</a>
+          <ul class="toc-sub">
+            <li><a href="#unet-to-dit">8.1 为什么换成 DiT</a></li>
+            <li><a href="#t2i-modern">8.2 现代文生图</a></li>
+            <li><a href="#t2v-modern">8.3 现代文生视频</a></li>
+            <li><a href="#arch-summary">8.4 架构总结</a></li>
+          </ul>
+        </li>
+        <li><a href="#applications">§9 应用场景</a></li>
+        <li><a href="#compare">§10 Diffusion vs 其他生成模型</a></li>
+        <li><a href="#summary">§11 总结与学习路线</a></li>
+      </ul>
+    </aside>
+
+    <main class="content">
+
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!--  一句话总结                                                  -->
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <section class="section" id="tldr">
+        <div class="section-title">
+          <div class="icon" style="background:#faf5ff;">💬</div>
+          一句话总结
+        </div>
+        <blockquote>
+          Diffusion model 就是在做一件事情：<strong>故意把图片加噪声弄模糊，再训练AI学会如何一步步把模糊的图"复原"回去。</strong><br><br>
+          训练时：让AI学会"洗图"（预测噪声位置）；<br>
+          推理时：从纯噪声开始，逐步"雕刻"出清晰的图片。
+        </blockquote>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!--  §1 核心直觉                                                 -->
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <section class="section" id="intuition">
+        <div class="section-title">
+          <div class="icon" style="background:#eff6ff;">🎨</div>
+          §1 核心直觉：故意弄脏再洗白
+        </div>
+
+        <p>Diffusion model的核心思想可以用一个简单的类比来理解：</p>
+
+        <div class="analogy-box">
+          <div class="analogy-title">🧽 类比：污渍去除法</div>
+          <p>想象你有一张干净的画：</p>
+          <ul>
+            <li><strong>Step 1: 故意弄脏</strong> - 你拿橡皮擦在上面涂抹，一次比一次重，最终变成完全看不清的白噪声</li>
+            <li><strong>Step 2: 学会清洗</strong> - 训练一个AI："如果图片现在这么模糊，应该怎么恢复上一步？"</li>
+            <li><strong>Step 3: 逐步复原</strong> - AI从完全模糊的状态开始，一步步去掉噪声，最终变回清晰的画</li>
+          </ul>
+        </div>
+
+        <div class="big-concept">
+          <div class="big-concept-title">🔑 为什么这样设计？</div>
+          <p><strong>直接生成太难了！</strong>让AI一步到位从"虚无"中生成一张清晰的图，难度极大。但让AI学会"每步只去掉一点点噪声"，这个任务就简单多了。</p>
+          <p style="margin-top:10px;font-size:14px;color:#6d28d9;">类比：雕塑家从一块大理石开始，每次只凿掉一点点，最终雕刻出作品。而不是直接让AI"凭空变出雕塑"。</p>
+        </div>
+
+        <figure style="margin:24px 0;">
+          <img src="https://lilianweng.github.io/posts/2021-07-11-diffusion-models/DDPM.png"
+               alt="DDPM前向扩散与逆向去噪过程示意图"
+               style="width:100%;border-radius:12px;border:1px solid #e5e7eb;"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div style='background:#f8faff;border:1px solid #dbeafe;border-radius:12px;padding:24px;text-align:center;color:#6b7280;font-size:13px;'><b>Figure 1: DDPM 前向扩散与逆向去噪过程</b><br><br>图示：左→右为前向扩散（加噪声，$x_0$→$x_T$）；右→左为逆向去噪（AI重建，$x_T$→$x_0$）</div>`" />
+          <figcaption style="font-size:12px;color:var(--muted);margin-top:8px;text-align:center;"><strong>Figure 1（Ho et al. 2020 原图）：</strong>Markov Chain of forward (reverse) diffusion process — 前向（蓝）每步加噪声，逆向（绿）每步去噪</figcaption>
+        </figure>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!--  §2 前向扩散                                                 -->
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <section class="section" id="forward">
+        <div class="section-title">
+          <div class="icon" style="background:#fffbeb;">➡️</div>
+          §2 前向扩散：一步步加噪声
+        </div>
+
+        <p>前向扩散的目标很简单：<strong>把清晰的图 $x_0$ 变成纯噪声 $x_T$</strong>。</p>
+
+        <div class="flow-diagram">
+          <div class="flow-row">
+            <div class="flow-box green">x_0 (原图)</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box">x_1</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box">x_2</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box">...</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box red">x_T (纯噪声)</div>
+          </div>
+          <p style="text-align:center;font-size:12px;color:var(--muted);margin-top:10px;">每一步加一点点高斯噪声</p>
+        </div>
+
+        <h3 id="forward-process">2.1 数学公式</h3>
+
+        <div class="formula-block">$$x_t = \sqrt{1 - \beta_t} \cdot x_{t-1} + \sqrt{\beta_t} \cdot \epsilon$$</div>
+
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$x_t$：第 $t$ 步的图片（越来越模糊）</li>
+            <li>$\beta_t$：噪声强度调度（$t$ 越大，噪声越多，通常从 0.0001 增到 0.02）</li>
+            <li>$\epsilon$：随机高斯噪声（就像电视雪花屏，从 $\mathcal{N}(0, I)$ 采样）</li>
+            <li>$\sqrt{1-\beta_t}$：保留原信息的比例</li>
+          </ul>
+        </div>
+
+        <div class="callout-cyan">
+          <div class="callout-title">📌 重要性质</div>
+          <p>通过重参数化技巧，可以直接从 $x_0$ 跳到任意步 $x_t$：</p>
+          <div class="formula-block" style="margin-top:10px;">$$x_t = \sqrt{\bar{\alpha}_t} \cdot x_0 + \sqrt{1 - \bar{\alpha}_t} \cdot \epsilon$$</div>
+          <p style="font-size:13px;margin-top:8px;">其中 $\bar{\alpha}_t = \prod_{s=1}^t (1 - \beta_s)$，表示累计保留的原始信息比例。</p>
+        </div>
+
+        <h3 id="forward-example">2.2 举例说明</h3>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：前向扩散过程</div>
+          <p>假设我们有一张猫咪图片：</p>
+          <ul>
+            <li><strong>x_0</strong>：清晰的猫咪照片（像素值如 [0.8, 0.2, 0.5, ...]）</li>
+            <li><strong>x_{250}</strong>：猫咪轮廓还在，但细节模糊，像雾里看花</li>
+            <li><strong>x_{500}</strong>：只能隐约看到有个物体，已经看不出是猫</li>
+            <li><strong>x_{1000}</strong>：完全看不出是猫，像老电视的雪花屏（纯噪声）</li>
+          </ul>
+          <p><strong>如果 $\beta_t=0.01$</strong>，那么每一步保留 99% 的原图信息，添加 1% 的噪声。</p>
+          <p><strong>数学上</strong>：$\bar{\alpha}_{1000} \approx 0$（信息几乎完全扩散），$x_{1000} \approx \epsilon$（纯噪声）。</p>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!--  §3 逆向去噪                                                 -->
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <section class="section" id="reverse">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">⬅️</div>
+          §3 逆向去噪：训练AI"洗图"
+        </div>
+
+        <p>逆向去噪的目标：<strong>让AI学会从 $x_t$ 预测"刚刚加了什么噪声"</strong>。</p>
+
+        <div class="flow-diagram">
+          <div class="flow-row">
+            <div class="flow-box red">x_T (纯噪声)</div>
+            <div class="flow-arrow">←</div>
+            <div class="flow-box">x_{T-1}</div>
+            <div class="flow-arrow">←</div>
+            <div class="flow-box">x_{T-2}</div>
+            <div class="flow-arrow">←</div>
+            <div class="flow-box">...</div>
+            <div class="flow-arrow">←</div>
+            <div class="flow-box green">x_0 (清晰图)</div>
+          </div>
+          <p style="text-align:center;font-size:12px;color:var(--muted);margin-top:10px;">每步预测并去掉噪声</p>
+        </div>
+
+        <h3 id="reverse-loss">3.1 Loss函数</h3>
+
+        <div class="formula-block">$$\mathcal{L} = \mathbb{E}_{t,x_0,\epsilon} \left[ \| \epsilon - \epsilon_\theta(x_t, t) \|^2 \right]$$</div>
+
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\epsilon$：真实加的噪声（训练时已知）</li>
+            <li>$\epsilon_\theta(x_t, t)$：AI预测的噪声（U-Net输出）</li>
+            <li>$\|\cdot\|^2$：均方误差（像素级对比）</li>
+          </ul>
+        </div>
+
+        <div class="callout-purple">
+          <div class="callout-title">🔑 训练流程</div>
+          <ol style="margin:0;padding-left:20px;">
+            <li><strong>采样</strong>：从数据集随机取一张图 $x_0$</li>
+            <li><strong>采样时间步</strong>：随机取 $t \in [1, T]$</li>
+            <li><strong>加噪声</strong>：用公式生成 $x_t = \sqrt{\bar{\alpha}_t} x_0 + \sqrt{1-\bar{\alpha}_t} \epsilon$</li>
+            <li><strong>预测</strong>：让U-Net看 $(x_t, t)$，输出 $\epsilon_\theta(x_t, t)$</li>
+            <li><strong>计算Loss</strong>：$\|\epsilon - \epsilon_\theta\|^2$，反向传播更新参数</li>
+          </ol>
+        </div>
+
+        <figure style="margin:24px 0;">
+          <img src="https://lilianweng.github.io/posts/2021-07-11-diffusion-models/DDPM-algo.png"
+               alt="DDPM训练和采样算法流程图"
+               style="width:100%;border-radius:12px;border:1px solid #e5e7eb;"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div style='background:#f8faff;border:1px solid #dbeafe;border-radius:12px;padding:24px;text-align:center;color:#6b7280;font-size:13px;'><b>Figure 2: DDPM 训练与采样算法</b><br><br>训练：随机采样图和时间步，加噪，预测噪声，最小化MSE；采样：从纯噪声开始，逐步去噪1000步</div>`" />
+          <figcaption style="font-size:12px;color:var(--muted);margin-top:8px;text-align:center;"><strong>Figure 2（Ho et al. 2020 原图）：</strong>DDPM 训练算法（Algorithm 1）与采样算法（Algorithm 2）伪代码</figcaption>
+        </figure>
+
+        <h3 id="reverse-example">3.2 举例说明</h3>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：逆向去噪过程（推理时）</div>
+          <p><strong>场景</strong>：无条件生成一张猫咪图（先不考虑"告诉AI画什么"，那是后面 §5 的内容）</p>
+          <ol>
+            <li><strong>起点</strong>：随机生成一张纯噪声图 $x_{1000}$（雪花屏）</li>
+            <li><strong>第1000步→999步</strong>：
+              <ul>
+                <li>U-Net看 $x_{1000}$ 和 $t=1000$，预测噪声位置</li>
+                <li>去掉预测的噪声：$x_{999} = x_{1000} - \epsilon_\theta(x_{1000}, 1000)$</li>
+              </ul>
+            </li>
+            <li><strong>第999步→998步</strong>：
+              <ul>
+                <li>图稍微清晰了点，U-Net继续预测并去噪</li>
+              </ul>
+            </li>
+            <li><strong>重复1000步</strong>：最终从雪花屏变成清晰猫咪</li>
+          </ol>
+          <p><strong>类比</strong>：就像雕塑家从一块大理石开始，每次凿掉一点多余的石头，最终雕刻出作品。</p>
+          <p style="margin-top:12px;font-size:13px;background:#fffbeb;border-left:3px solid #f59e0b;padding:10px 14px;border-radius:8px;"><strong>❓ 等等，这里没有说"画猫咪"，AI怎么知道生成的是猫？</strong><br>因为训练集里全是真实图片（包括猫）。模型学到了"真实图像的分布"，逆向去噪就是沿着分布走——最终落点是真实图像空间里的某个点。至于如何控制生成内容，继续看 §3.5 和 §5。</p>
+        </div>
+
+        <div class="callout-amber">
+          <div class="callout-title">⚠️ 为什么不能一步到位？</div>
+          <p><strong>你可能会问</strong>：为什么不直接训练一个模型，输入噪声直接输出清晰图？</p>
+          <p><strong>答案</strong>：一步到位的难度太大了！</p>
+          <div class="two-col" style="margin-top:12px;">
+            <div class="mini-card" style="background:#fee2e2;border-left:3px solid #ef4444;">
+              <h4 style="margin-top:0;">❌ 一步生成</h4>
+              <p style="font-size:13px;margin:0;">纯噪声→清晰图<br>难度：😱 极难</p>
+              <p style="font-size:12px;color:var(--muted);margin-top:6px;">像让小学生直接写博士论文</p>
+            </div>
+            <div class="mini-card" style="background:#dcfce7;border-left:3px solid #22c55e;">
+              <h4 style="margin-top:0;">✅ 渐进去噪</h4>
+              <p style="font-size:13px;margin:0;">每步去掉一点点噪声<br>难度：😊 可行</p>
+              <p style="font-size:12px;color:var(--muted);margin-top:6px;">像让小学生每次只改一个错别字</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!--  §3.5 关键跨越：为什么去噪 = 学会了生成                        -->
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <section class="section" id="why-generate">
+        <div class="section-title">
+          <div class="icon" style="background:#fef3c7;">🌉</div>
+          §3.5 关键跨越：为什么去噪 = 学会了生成？
+        </div>
+
+        <div class="callout-amber">
+          <div class="callout-title">⚠️ 你可能有的困惑</div>
+          <p style="margin:0;">前面讲了前向加噪、逆向去噪，训练时用的是真实图片……但我想<strong>生成一张从没存在过的新图</strong>，这两件事有什么关系？</p>
+        </div>
+
+        <h3>先搞清楚：生成模型在做什么</h3>
+
+        <p>图像生成的本质是：<strong>从一个概率分布中采样</strong>。</p>
+
+        <p>想象世界上所有猫咪照片构成一个分布，每张猫咪图都是这个分布里的一个点。<strong>生成模型要做的事，就是学会这个分布的"形状"，然后从里面随机采一个新点出来。</strong></p>
+
+        <div class="analogy-box">
+          <div class="analogy-title">🗺️ 类比：学地图 vs 画地图</div>
+          <p>把"所有猫咪图像"想象成一块地形图，猫咪图聚集的地方是山峰，不像猫的图是山谷。</p>
+          <ul>
+            <li><strong>传统方法</strong>：需要直接描述这个地形的形状（非常复杂）</li>
+            <li><strong>Diffusion的思路</strong>：不直接描述地形，而是学习<strong>"地形的引力场"</strong>——知道了任意一点的引力方向，就能从随机位置顺着引力"爬山"，最终落在山峰上</li>
+          </ul>
+        </div>
+
+        <h3>去噪 = 学习数据分布的"引力场"</h3>
+
+        <p>这是 Diffusion 最核心的数学洞察，用人话来说：</p>
+
+        <div class="big-concept">
+          <div class="big-concept-title">🔑 核心等价关系</div>
+          <p><strong>训练一个"预测噪声"的网络 ≈ 学习了"如何从任意噪声位置，往真实图像方向走一步"</strong></p>
+          <p style="margin-top:10px;font-size:14px;color:#6d28d9;">换句话说：模型在训练时看了无数张真实图片的"各种模糊程度"，学会的不只是"去噪"这个动作，而是<strong>所有真实图像组成的分布长什么样</strong>。</p>
+        </div>
+
+        <p>为什么？因为训练时给模型看的 $x_t$ 是从<strong>真实图片加噪声</strong>来的。所以模型学到的每一步"去噪方向"，都指向真实图像分布。</p>
+
+        <h3>推理时发生了什么（这才是生成！）</h3>
+
+        <p>训练结束后，你完全不需要任何真实图片。推理时：</p>
+
+        <div class="step-box">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <strong>随机采一个纯噪声 $x_T \sim \mathcal{N}(0, I)$</strong>
+            <p style="font-size:13px;margin:4px 0 0;color:#6b7280;">这是一个完全随机的点，不对应任何真实图片</p>
+          </div>
+        </div>
+        <div class="step-box">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <strong>用去噪网络预测：从这里应该往哪个方向走一步？</strong>
+            <p style="font-size:13px;margin:4px 0 0;color:#6b7280;">模型输出"这个噪声点里有多少噪声"，等价于"真实图像方向在哪里"</p>
+          </div>
+        </div>
+        <div class="step-box">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <strong>走一小步，得到 $x_{T-1}$</strong>
+            <p style="font-size:13px;margin:4px 0 0;color:#6b7280;">往真实图像分布的方向靠近了一点点</p>
+          </div>
+        </div>
+        <div class="step-box">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <strong>重复1000步，最终落在真实图像分布里的某个点 $x_0$</strong>
+            <p style="font-size:13px;margin:4px 0 0;color:#6b7280;">这个点是训练集里没有的<strong>全新图片</strong>，但它符合真实图像的规律</p>
+          </div>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：从噪声到猫咪的完整推理</div>
+          <p><strong>类比LLM</strong>：你作为LLM背景的人可以这样理解——</p>
+          <ul>
+            <li>GPT 的训练目标是"预测下一个 token"，但推理时它能<strong>生成从没存在过的句子</strong></li>
+            <li>Diffusion 的训练目标是"预测加了什么噪声"，但推理时它能<strong>生成从没存在过的图片</strong></li>
+          </ul>
+          <p style="margin-top:12px;">两者的共同点：<strong>通过预测任务学到了数据分布，采样时就能从分布里生成新内容。</strong></p>
+          <p style="margin-top:12px;"><strong>具体过程</strong>（以生成猫咪为例）：</p>
+          <ol>
+            <li>随机噪声 $x_{1000}$：像一团乱码，不像任何东西</li>
+            <li>去噪50步后 $x_{950}$：开始有了一些纹理，但还不清晰</li>
+            <li>去噪500步后 $x_{500}$：隐约有个动物的轮廓</li>
+            <li>去噪900步后 $x_{100}$：能看出是猫，细节逐渐清晰</li>
+            <li>去噪完成 $x_0$：一张<strong>从未存在过的、全新的猫咪图片</strong></li>
+          </ol>
+          <p style="font-size:13px;color:#166534;margin-top:10px;">每次随机采样不同的 $x_T$，就会生成不同的猫咪。这就是生成的随机性来源。</p>
+        </div>
+
+        <h3>前向扩散的作用：它只在训练时用！</h3>
+
+        <div class="callout-blue">
+          <div class="callout-title">📌 很多人忽略的关键</div>
+          <p style="margin:0;"><strong>前向扩散（§2）只在训练阶段使用，推理时完全不用它。</strong></p>
+          <ul style="margin-top:10px;padding-left:20px;">
+            <li><strong>训练时</strong>：用前向扩散给真实图片加噪声，制造训练样本 $(x_t, \epsilon)$</li>
+            <li><strong>推理时</strong>：直接随机采样纯噪声，用逆向去噪生成图片</li>
+          </ul>
+          <p style="margin-top:10px;font-size:13px;color:#1d4ed8;">前向扩散是"制造训练数据的工具"，不是推理流程的一部分。</p>
+        </div>
+
+        <div class="callout-green">
+          <div class="callout-title">✅ 总结：三步理解 Diffusion 生成</div>
+          <ol style="margin:0;padding-left:20px;">
+            <li><strong>训练阶段</strong>：见过海量真实图片 → 学会了"真实图像分布的形状"（体现为去噪能力）</li>
+            <li><strong>推理起点</strong>：随机采样纯噪声（任意起点）</li>
+            <li><strong>推理过程</strong>：用学到的分布知识，逐步把噪声"拉向"真实图像分布 → 输出全新图片</li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!--  §4 U-Net详解                                                -->
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <section class="section" id="unet">
+        <div class="section-title">
+          <div class="icon" style="background:#faf5ff;">🏗️</div>
+          §4 U-Net：去噪网络的主力
+        </div>
+
+        <p>明确一下 U-Net 在 Diffusion 里的<strong>输入和输出</strong>：</p>
+
+        <div class="two-col" style="margin:16px 0;">
+          <div class="mini-card" style="border-left:4px solid #8b5cf6;background:#faf5ff;">
+            <h4 style="margin-top:0;color:#4c1d95;">📥 输入（两个）</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li><strong>含噪图片 $x_t$</strong>：一张被加了噪声的图，形状和原图一样（如 64×64×3）</li>
+              <li><strong>时间步 $t$</strong>：一个整数，告诉网络"现在噪声有多严重"（如 $t=500$）</li>
+            </ul>
+          </div>
+          <div class="mini-card" style="border-left:4px solid #22c55e;background:#f0fdf4;">
+            <h4 style="margin-top:0;color:#14532d;">📤 输出（一个）</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li><strong>预测的噪声 $\hat{\epsilon}$</strong>：和输入图片形状完全相同（64×64×3），表示"刚才加的是什么噪声"</li>
+            </ul>
+            <p style="font-size:12px;color:var(--muted);margin:8px 0 0;">用输入减去输出噪声，就能还原上一步的图片</p>
+          </div>
+        </div>
+
+        <div class="callout-amber">
+          <div class="callout-title">⚠️ 注意：不是输出"清晰的图片"！</div>
+          <p style="margin:0;">很多人以为 U-Net 直接输出最终清晰图片——<strong>不是</strong>。它输出的是"噪声"（即加进去的那部分），然后用<strong>输入减去噪声</strong>才得到去了一步噪的图片。这个去噪过程要重复1000次，最终才得到清晰图。</p>
+        </div>
+
+        <h3 id="unet-structure">4.1 结构详解</h3>
+
+        <div class="flow-diagram">
+          <div style="font-size:12px;color:#6d28d9;font-weight:700;margin-bottom:12px;">U-Net 完整数据流：从含噪图 → 预测噪声</div>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <div style="display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;">
+              <div style="border:2px solid #c4b5fd;border-radius:12px;padding:10px 14px;text-align:center;background:#ede9fe;">
+                <div style="font-weight:700;font-size:12px;color:#4c1d95;">输入</div>
+                <div style="font-size:10px;color:var(--muted);margin-top:4px;">含噪图 x_t (64×64×3)<br/>+ 时间步 t</div>
+              </div>
+              <span style="color:#8b5cf6;font-size:18px;">→</span>
+              <div style="border:2px solid #93c5fd;border-radius:12px;padding:10px 14px;text-align:center;background:#dbeafe;">
+                <div style="font-weight:700;font-size:12px;color:#1e3a8a;">编码器</div>
+                <div style="font-size:10px;color:var(--muted);margin-top:4px;">64×64 → 32×32 → 16×16<br/>↑每层都注入时间步</div>
+              </div>
+              <span style="color:#8b5cf6;font-size:18px;">→</span>
+              <div style="border:2px solid #fde68a;border-radius:12px;padding:10px 14px;text-align:center;background:#fef3c7;">
+                <div style="font-weight:700;font-size:12px;color:#92400e;">瓶颈层</div>
+                <div style="font-size:10px;color:var(--muted);margin-top:4px;">最抽象特征<br/>（8×8×512）</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;">
+              <div style="border:2px solid #86efac;border-radius:12px;padding:10px 14px;text-align:center;background:#dcfce7;">
+                <div style="font-weight:700;font-size:12px;color:#14532d;">输出</div>
+                <div style="font-size:10px;color:var(--muted);margin-top:4px;">预测噪声 ε̂ (64×64×3)<br/>形状与输入完全相同</div>
+              </div>
+              <span style="color:#22c55e;font-size:18px;">←</span>
+              <div style="border:2px solid #93c5fd;border-radius:12px;padding:10px 14px;text-align:center;background:#dbeafe;">
+                <div style="font-weight:700;font-size:12px;color:#1e3a8a;">解码器</div>
+                <div style="font-size:10px;color:var(--muted);margin-top:4px;">16×16 → 32×32 → 64×64<br/>拼接编码器的跳跃连接</div>
+              </div>
+              <span style="color:#22c55e;font-size:18px;">←</span>
+              <div style="border:2px solid #fde68a;border-radius:12px;padding:10px 14px;text-align:center;background:#fef3c7;">
+                <div style="font-weight:700;font-size:12px;color:#92400e;">瓶颈层</div>
+                <div style="font-size:10px;color:var(--muted);margin-top:4px;">+跳跃连接</div>
+              </div>
+            </div>
+            <div style="text-align:center;font-size:12px;color:var(--muted);margin-top:4px;">
+              ↓<br/>
+              <code style="font-size:12px;">x_{t-1} = x_t - ε̂</code> （一步去噪）
+            </div>
+          </div>
+        </div>
+
+        <p><strong>三个核心机制</strong>：</p>
+        <ul>
+          <li><strong>编码器（下采样）</strong>：用卷积逐层压缩空间尺寸（64→32→16→8），同时提取语义特征</li>
+          <li><strong>解码器（上采样）</strong>：逐层恢复空间尺寸，但需要知道细节在哪里</li>
+          <li><strong>跳跃连接</strong>：把编码器每层的特征图直接拼接给对应的解码器层——这样解码器既有抽象语义（来自瓶颈），又有精确位置（来自跳跃连接）</li>
+        </ul>
+
+        <figure style="margin:24px 0;">
+          <img src="https://lilianweng.github.io/posts/2021-07-11-diffusion-models/U-net.png"
+               alt="U-Net架构图"
+               style="width:100%;border-radius:12px;border:1px solid #e5e7eb;"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div style='background:#f8faff;border:1px solid #dbeafe;border-radius:12px;padding:24px;text-align:center;color:#6b7280;font-size:13px;'><b>Figure 3: U-Net 架构</b><br><br>左半（蓝色）：编码器下采样路径；右半（绿色）：解码器上采样路径；灰色箭头：跳跃连接，将编码器特征图直接传给对应层解码器</div>`" />
+          <figcaption style="font-size:12px;color:var(--muted);margin-top:8px;text-align:center;"><strong>Figure 3（Ronneberger et al. 2015 原图）：</strong>U-Net 完整架构——蓝色方块为特征图（上方标通道数），灰色箭头为跳跃连接</figcaption>
+        </figure>
+
+        <h3 id="unet-example">4.2 举例：完整走一遍</h3>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：U-Net 处理一张含噪猫咪图（t=500）</div>
+          <p><strong>输入</strong>：$x_{500}$（一张模糊的猫咪，噪声很重，隐约能看出轮廓）+ $t=500$</p>
+          <ul>
+            <li><strong>编码器第1层</strong>（64×64）：检测到"有一些模糊的毛发纹理"，同时把 $t=500$ 的时间信息加进去（详见4.3节）</li>
+            <li><strong>编码器第2层</strong>（32×32）：检测到"有一个模糊的圆形轮廓（头部）"</li>
+            <li><strong>瓶颈层</strong>（8×8）：最抽象的理解："这大概是一个动物"</li>
+            <li><strong>解码器第2层</strong>：用瓶颈层的语义 + 编码器第2层的跳跃连接，推断出"猫耳朵这里有多少噪声"</li>
+            <li><strong>解码器第1层</strong>：用更精细的跳跃连接，推断毛发纹理处的噪声分布</li>
+            <li><strong>输出</strong>：一张 64×64×3 的"噪声图" $\hat{\epsilon}$，表示"这张图里加了这么多噪声"</li>
+          </ul>
+          <p style="margin-top:12px;"><strong>去噪计算</strong>：$x_{499} = x_{500} - \hat{\epsilon}$，得到稍微清晰一点点的猫咪图</p>
+        </div>
+
+        <h3 id="time-embed">4.3 时间步编码：怎么告诉网络"现在有多模糊"</h3>
+
+        <p>U-Net 要处理1000种不同程度的噪声图（$t$ 从1到1000），<strong>同一张图在 $t=100$ 和 $t=900$ 时需要完全不同的去噪策略</strong>：</p>
+
+        <ul>
+          <li>$t=100$：噪声很少，图片基本清晰 → 要细心保留细节，小幅度去噪</li>
+          <li>$t=900$：噪声极多，几乎全是杂乱信号 → 要大胆"猜"出大致内容，忽略细节</li>
+        </ul>
+
+        <p>但时间步 $t$ 只是一个整数，怎么让神经网络理解它？<strong>和 LLM 的位置编码一模一样的思路：正弦编码。</strong></p>
+
+        <div class="formula-block">$$e(t) = \left[\sin\!\left(\frac{t}{10000^{0/d}}\right), \cos\!\left(\frac{t}{10000^{0/d}}\right), \sin\!\left(\frac{t}{10000^{2/d}}\right), \cos\!\left(\frac{t}{10000^{2/d}}\right), \ldots\right]$$</div>
+
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$t$：时间步整数（1 到 1000）</li>
+            <li>$d$：编码维度（如 512 维，和 U-Net 特征维度相同）</li>
+            <li>$e(t)$：最终的时间步向量，长度为 $d$，每个分量都是不同频率的正余弦值</li>
+          </ul>
+        </div>
+
+        <div class="callout-blue">
+          <div class="callout-title">📌 时间步编码怎么"注入"到 U-Net 里？</div>
+          <p>这是关键——不是只在输入层加一次，而是<strong>在 U-Net 的每一个 ResBlock 里都加进去</strong>：</p>
+          <ol style="margin:10px 0 0;padding-left:20px;">
+            <li>把 $t$ 转成 $d$ 维向量 $e(t)$（如 512 维）</li>
+            <li>再过一个小 MLP，得到 scale $\gamma$ 和 shift $\beta$ 各一个向量</li>
+            <li>在每个 ResBlock 内部，对特征图做：<code>feature = feature × γ + β</code>（相当于 LayerNorm + 条件调制）</li>
+          </ol>
+          <p style="margin-top:10px;font-size:13px;color:#1d4ed8;"><strong>效果</strong>：每一层都"知道"现在是第几步，从而调整自己的行为。这和 Transformer 中位置编码注入到每层 Attention 是同样的道理。</p>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：时间步编码如何改变网络行为</div>
+          <p><strong>关键澄清</strong>：DDPM 每步要预测的噪声 $\epsilon \sim \mathcal{N}(0, I)$，分布与 $t$ 无关，幅度并没有"越大越小"之分。时间步 $t$ 告诉网络的是<strong>当前输入 $x_t$ 的信噪比（SNR）</strong>，进而影响网络提取特征的策略：</p>
+          <div class="two-col" style="margin-top:12px;">
+            <div class="mini-card" style="border-left:3px solid #22c55e;">
+              <h4 style="margin-top:0;color:#14532d;">$t = 50$（SNR 高，图片清晰）</h4>
+              <p style="font-size:13px;margin:0;">$x_{50}$ 已经很清晰，图片结构清晰可见</p>
+              <p style="font-size:12px;color:var(--muted);margin-top:6px;">→ 网络可以看清细节，做<strong>精细、局部</strong>的噪声预测（如毛发纹理处的微小修正）</p>
+            </div>
+            <div class="mini-card" style="border-left:3px solid #ef4444;">
+              <h4 style="margin-top:0;color:#9f1239;">$t = 950$（SNR 低，几乎全是噪声）</h4>
+              <p style="font-size:13px;margin:0;">$x_{950} \approx \epsilon$，几乎看不出任何图像结构</p>
+              <p style="font-size:12px;color:var(--muted);margin-top:6px;">→ 网络几乎没有可用信号，只能依赖<strong>全局先验</strong>猜测噪声（任务更难，误差更大）</p>
+            </div>
+          </div>
+          <p style="font-size:13px;color:#166534;margin-top:12px;"><strong>类比 LLM</strong>：就像 Transformer 里的位置编码让模型知道"这是第几个 token"，时间步编码让 U-Net 知道"当前输入有多'脏'（信噪比多低）"，从而调整用什么特征来做预测。</p>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!--  §5 条件生成                                                 -->
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <section class="section" id="condition">
+        <div class="section-title">
+          <div class="icon" style="background:#eff6ff;">🎯</div>
+          §5 条件生成：告诉AI画什么
+        </div>
+
+        <div class="two-col" style="margin-bottom:16px;">
+          <div class="mini-card" style="border-left:4px solid #94a3b8;background:#f8fafc;">
+            <h4 style="margin-top:0;color:#475569;">无条件生成</h4>
+            <p style="font-size:13px;margin:0;">输入随机噪声 → 输出随机图片（不可控，只知道"生成符合训练集的图"）</p>
+          </div>
+          <div class="mini-card" style="border-left:4px solid #3b82f6;background:#eff6ff;">
+            <h4 style="margin-top:0;color:#1d4ed8;">条件生成</h4>
+            <p style="font-size:13px;margin:0;">输入噪声 + 文本条件 → 输出<strong>符合文本描述</strong>的图片（可控）</p>
+          </div>
+        </div>
+
+        <h3 id="two-stage-training">5.0 两种训练，两种数据</h3>
+
+        <div class="callout-amber">
+          <div class="callout-title">⚠️ 常见困惑：DDPM 训的 U-Net 和条件生成 U-Net 是同一个模型吗？</div>
+          <p style="margin:0;">不是。它们目标不同、数据不同、架构也不同。</p>
+        </div>
+
+        <div class="two-col" style="margin:16px 0;">
+          <div class="mini-card" style="border-left:4px solid #94a3b8;">
+            <h4 style="margin-top:0;">阶段一：无条件去噪（纯图像）</h4>
+            <p style="font-size:13px;margin:0;"><strong>训练数据</strong>：只需要图片，无需文字描述</p>
+            <p style="font-size:13px;margin:6px 0 0;"><strong>目的</strong>：让 U-Net 学会"什么样的像素排列是真实图像"（学图像分布）</p>
+            <p style="font-size:13px;margin:6px 0 0;"><strong>结果</strong>：能从随机噪声生成图片，但无法控制内容</p>
+            <p style="font-size:12px;color:var(--muted);margin:6px 0 0;">这是独立完整的成果，有自己用途（无条件生成、图像补全等）</p>
+          </div>
+          <div class="mini-card" style="border-left:4px solid #3b82f6;">
+            <h4 style="margin-top:0;">阶段二：条件生成（图文对）</h4>
+            <p style="font-size:13px;margin:0;"><strong>训练数据</strong>：需要 (图片, 文字描述) 对，如 LAION-5B（50亿图文对）</p>
+            <p style="font-size:13px;margin:6px 0 0;"><strong>目的</strong>：让 U-Net 学会"给定文本条件时，朝符合描述的方向去噪"</p>
+            <p style="font-size:13px;margin:6px 0 0;"><strong>架构</strong>：新增 Cross-Attention 层，不是原来 DDPM U-Net 的结构</p>
+          </div>
+        </div>
+
+        <div class="callout-blue">
+          <div class="callout-title">📌 那阶段一的训练有什么意义？</div>
+          <p>实践上的常见做法：先在<strong>纯图像上预训练</strong>（无条件），让网络学好图像特征表示；再加入 Cross-Attention 层，在<strong>图文对上 fine-tune</strong>。好处是收敛更快、图像质量更好，因为图像特征不用从零学。</p>
+          <p style="margin-top:10px;font-size:13px;color:#1d4ed8;">类比 LLM：先在纯文本上预训练（学语言能力），再用对话数据做指令微调（学遵从指令）——前者的特征表示对后者有帮助，但两个阶段目标完全不同。</p>
+          <p style="margin-top:10px;font-size:13px;">当然也可以直接用图文对从头训（跳过阶段一），效果相近，只是需要更多数据和算力。</p>
+        </div>
+
+        <h3 id="condition-pipeline">5.1 端到端流程：文本如何变成图像</h3>
+
+        <p>条件生成不是"在最后加一个文本"，而是<strong>在每一步去噪时都把文本信息注入进去</strong>。整体流程分三步：</p>
+
+        <div class="step-box">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <strong>文本编码：把文字变成向量序列</strong>
+            <p style="font-size:13px;margin:6px 0 0;">用文本编码器（如 CLIP 的 Text Encoder）把 prompt 变成一组向量 $c \in \mathbb{R}^{L \times d}$，其中 $L$ 是 token 数量，$d$ 是向量维度（如 768）。</p>
+            <p style="font-size:12px;color:var(--muted);margin:4px 0 0;">例："一只戴着红围巾的猫咪" → [token_1: 一只, token_2: 戴着, token_3: 红围巾, token_4: 的, token_5: 猫咪] → 每个 token 变成 768 维向量</p>
+          </div>
+        </div>
+        <div class="step-box">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <strong>U-Net 每步去噪时注入文本：Cross-Attention</strong>
+            <p style="font-size:13px;margin:6px 0 0;">在 U-Net 的每个 ResBlock 里，有一个 Cross-Attention 层。图像特征"问" ($Q$) 文本特征"答" ($K, V$)，让图像每个位置都能感知文本描述。</p>
+          </div>
+        </div>
+        <div class="step-box">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <strong>去噪方向被文本"引导"</strong>
+            <p style="font-size:13px;margin:6px 0 0;">经过 Cross-Attention 调制后，U-Net 预测的噪声 $\hat{\epsilon}$ 会偏向"去掉后更符合文本描述的方向"。重复1000步，最终落在符合 prompt 的图像上。</p>
+          </div>
+        </div>
+
+        <h3 id="clip-role">5.2 CLIP 的角色：文图对齐的翻译器</h3>
+
+        <div class="big-concept">
+          <div class="big-concept-title">🔑 CLIP 的角色，以及 U-Net 怎么用它</div>
+          <p><strong>重要澄清</strong>：带条件生成能力的 U-Net（如 Stable Diffusion 里的）<strong>不是把 CLIP 插到一个已有 U-Net 上</strong>，而是从头训练一个专门包含 Cross-Attention 层的新 U-Net，训练目标就是"给定 $x_t$ + CLIP 文本 embedding $c$，预测 $\epsilon$"。</p>
+          <ul style="margin-top:10px;">
+            <li><strong>CLIP 文本编码器</strong>：训练时<strong>冻结权重</strong>，只做特征提取——把文本变成 embedding 序列 $c$</li>
+            <li><strong>U-Net 的 Cross-Attention 投影矩阵（$W_Q, W_K, W_V$）</strong>：从零训练，专门学"如何把 CLIP 的语义向量和图像特征关联"</li>
+          </ul>
+          <p style="margin-top:10px;font-size:13px;color:#6d28d9;">训练和推理都用同一个冻结的 CLIP，没有训练/推理不一致。</p>
+          <div class="two-col" style="margin-top:12px;">
+            <div class="mini-card" style="border-left:3px solid #94a3b8;background:#f8fafc;">
+              <h4 style="margin-top:0;font-size:13px;">CLIP vs 普通语言模型（如 BERT）</h4>
+              <p style="font-size:12px;margin:0;">CLIP 是用图文对训练的，"猫咪"的文本向量和猫咪图像的向量在同一对齐空间里。BERT 没有对齐图像空间，直接用效果差很多。</p>
+            </div>
+            <div class="mini-card" style="border-left:3px solid #3b82f6;background:#eff6ff;">
+              <h4 style="margin-top:0;font-size:13px;">更新：现代模型用 T5/LLM</h4>
+              <p style="font-size:12px;margin:0;">Imagen 用 T5-XXL，FLUX 用 T5+CLIP 双编码器。纯语言模型对复杂 prompt 的理解更强，但需要更大的 Cross-Attention 层来桥接。</p>
+            </div>
+          </div>
+        </div>
+
+        <h3 id="cross-attention">5.3 Cross-Attention：图像"问"文本"答"</h3>
+
+        <p>Cross-Attention 在 U-Net 里的位置：<strong>编码器和解码器的每个 ResBlock 之后都有一个</strong>（不只在瓶颈层）。</p>
+
+        <div class="formula-block">$$\text{Attention}(Q, K, V) = \text{softmax}\!\left(\frac{QK^T}{\sqrt{d_k}}\right) V$$</div>
+
+        <div class="formula-vars">
+          <div class="var-title">符号说明（关键：Q 和 K/V 来源不同）</div>
+          <ul>
+            <li>$Q = W_Q \cdot z$：由<strong>图像特征</strong>线性投影而来（$z$ 是 U-Net 当前层的特征图，展平后）</li>
+            <li>$K = W_K \cdot c$：由<strong>文本向量</strong>投影而来（$c$ 是 CLIP 输出的 token 序列，固定不变）</li>
+            <li>$V = W_V \cdot c$：同样来自<strong>文本向量</strong></li>
+            <li>$d_k$：$K$ 的维度，用于缩放防止点积过大</li>
+          </ul>
+        </div>
+
+        <div class="callout-blue">
+          <div class="callout-title">📌 Cross-Attention 做了什么</div>
+          <ol style="margin:0;padding-left:20px;">
+            <li>图像每个空间位置（展平为 token）生成一个 Query $Q_i$，相当于<strong>"我这里是什么区域，应该有什么内容？"</strong></li>
+            <li>计算 $Q_i$ 和所有文本 token 的 $K_j$ 的相似度 → 得到注意力权重 $\alpha_{ij}$</li>
+            <li>用权重对文本 $V_j$ 加权求和 → 输出"这个图像位置应该关注的文本信息"</li>
+            <li>把这个信息加回图像特征，调制 U-Net 的去噪方向</li>
+          </ol>
+          <p style="margin-top:10px;font-size:13px;color:#1d4ed8;"><strong>类比 LLM 里的 Cross-Attention</strong>：机器翻译里解码器生成每个词时，会 attend 到编码器的输出——原理完全一样，这里换成"图像生成每个位置时，attend 到文本的 token"。</p>
+        </div>
+
+        <h3 id="condition-example">5.4 完整举例：生成"一只戴着红围巾的猫咪"</h3>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：从 prompt 到图像，第 t=500 步的去噪</div>
+          <p><strong>输入</strong>：$x_{500}$（模糊图）+ $t=500$ + 文本 $c$（"一只戴着红围巾的猫咪" 的 CLIP 向量）</p>
+
+          <p><strong>Step 1：CLIP 编码文本（只做一次，整个推理过程共享）</strong></p>
+          <ul>
+            <li>"一只" → $c_1 = [0.1, 0.3, ...]$</li>
+            <li>"红围巾" → $c_3 = [0.8, -0.2, ...]$（在 CLIP 空间里，和红色、围巾相关的图像特征相近）</li>
+            <li>"猫咪" → $c_5 = [0.5, 0.7, ...]$</li>
+          </ul>
+
+          <p><strong>Step 2：U-Net 编码器处理 $x_{500}$，某一层的图像特征（局部区域）：</strong></p>
+          <ul>
+            <li>脖子区域的特征 $z_{\text{neck}}$ → 投影为 $Q_{\text{neck}}$：<em>"这里是脖子/胸口附近，应该有什么？"</em></li>
+            <li>脸部区域的特征 $z_{\text{face}}$ → 投影为 $Q_{\text{face}}$：<em>"这里是头部，应该有什么？"</em></li>
+          </ul>
+
+          <p><strong>Step 3：Cross-Attention 计算</strong></p>
+          <ul>
+            <li>$Q_{\text{neck}} \cdot K_{\text{红围巾}}$ 相似度高 → $\alpha_{\text{neck, 红围巾}}$ 大 → 脖子位置的输出大量参考"红围巾"的 $V$</li>
+            <li>$Q_{\text{face}} \cdot K_{\text{猫咪}}$ 相似度高 → 脸部区域参考"猫咪"的 $V$</li>
+          </ul>
+
+          <p><strong>Step 4：调制后的 U-Net 输出噪声 $\hat{\epsilon}$</strong></p>
+          <ul>
+            <li>预测的噪声在脖子位置会"偏向"去除与红围巾不一致的噪声</li>
+            <li>去噪后：$x_{499}$ 在脖子区域的红色信号比 $x_{500}$ 稍微清晰一点点</li>
+          </ul>
+
+          <p style="font-size:13px;color:#166534;margin-top:12px;"><strong>重复1000步</strong>：每一步都用同样的文本 $c$ 做 Cross-Attention，每步都把图像往"符合描述"的方向推一点。最终 $x_0$ = 一只清晰的、脖子上有红围巾的猫咪。</p>
+        </div>
+
+        <h3 id="condition-when">5.5 一个关键问题：条件在哪一步起作用最大？</h3>
+
+        <div class="callout-amber">
+          <div class="callout-title">⚠️ 不同去噪阶段，条件的作用不同</div>
+          <div class="two-col" style="margin-top:12px;">
+            <div class="mini-card" style="border-left:3px solid #ef4444;">
+              <h4 style="margin-top:0;color:#9f1239;">早期步骤（$t$ 大，如 900→700）</h4>
+              <p style="font-size:13px;margin:0;">图片还几乎全是噪声，条件主要决定<strong>整体构图和语义</strong>：这是猫还是狗？有没有围巾？</p>
+            </div>
+            <div class="mini-card" style="border-left:3px solid #22c55e;">
+              <h4 style="margin-top:0;color:#14532d;">后期步骤（$t$ 小，如 100→0）</h4>
+              <p style="font-size:13px;margin:0;">图片已经大致成形，条件主要决定<strong>细节和纹理</strong>：围巾的花纹、毛发的颜色深浅</p>
+            </div>
+          </div>
+          <p style="margin-top:10px;font-size:13px;">这也是为什么去噪步数不够（如只做200步）时，图像细节会差——早期定了形，后期精修同样重要。</p>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!--  §6 Latent Diffusion                                        -->
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <section class="section" id="latent">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">⚡</div>
+          §6 Latent Diffusion：算力优化之道
+        </div>
+
+        <p><strong>核心创新</strong>：不在像素空间扩散，而是在<strong>隐空间</strong>扩散。</p>
+
+        <h3 id="latent-intuition">6.1 核心思想</h3>
+
+        <div class="flow-diagram">
+          <div style="font-size:12px;font-weight:700;color:#059669;margin-bottom:12px;text-align:center;">推理完整流程（VAE Decoder 只跑一次！）</div>
+          <div class="flow-row">
+            <div class="flow-box red">纯噪声 z_T<br/><span style="font-size:10px;">(64×64×4，隐空间)</span></div>
+            <div class="flow-arrow">↓ U-Net去噪 ×50步<br/><span style="font-size:10px;">全程 64×64×4</span></div>
+          </div>
+          <div class="flow-row">
+            <div class="flow-box blue">干净隐向量 z_0<br/><span style="font-size:10px;">(64×64×4)</span></div>
+            <div class="flow-arrow">↓ VAE解码器（只用一次）</div>
+          </div>
+          <div class="flow-row">
+            <div class="flow-box green">最终图片<br/><span style="font-size:10px;">(512×512×3，像素空间)</span></div>
+          </div>
+        </div>
+
+        <div class="callout-amber">
+          <div class="callout-title">⚠️ 常见误区：去噪过程不会变回图像</div>
+          <p style="margin:0;">去噪的每一步输入和输出都是 <code>64×64×4</code> 的隐向量，<strong>永远不会在中间变成图像大小</strong>。VAE Decoder 只在最后跑一次，把最终干净的隐向量还原成像素图。</p>
+        </div>
+
+        <div class="two-col" style="margin:16px 0;">
+          <div class="mini-card" style="border-left:3px solid #ef4444;">
+            <h4 style="color:#9f1239;margin-top:0;">❌ 像素空间扩散（DDPM）</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li>每步 U-Net 处理：512×512×3 = <strong>786,432</strong> 个值</li>
+              <li>×1000步 = 极大计算量</li>
+            </ul>
+          </div>
+          <div class="mini-card" style="border-left:3px solid #22c55e;">
+            <h4 style="color:#14532d;margin-top:0;">✅ 隐空间扩散（Stable Diffusion）</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li>每步 U-Net 处理：64×64×4 = <strong>16,384</strong> 个值（少 48x）</li>
+              <li>省的是每步的计算量，×50步，总省约 <strong>960 倍</strong></li>
+            </ul>
+          </div>
+        </div>
+
+        <h3 id="latent-denoise">6.2 隐空间去噪：和 DDPM 完全一样的操作</h3>
+
+        <p>U-Net 本质上是一个函数：<strong>输入一个张量，输出同形状的张量</strong>。它不关心输入是"图像像素"还是"隐向量"，只做卷积/Attention 运算。</p>
+
+        <div class="two-col" style="margin:16px 0;">
+          <div class="mini-card" style="border-left:4px solid #94a3b8;">
+            <h4 style="margin-top:0;font-size:13px;">DDPM（像素空间）</h4>
+            <code style="font-size:12px;display:block;background:#f8fafc;padding:8px;border-radius:6px;margin-top:8px;">
+              x_t (512×512×3)<br/>→ [U-Net]<br/>→ ε̂ (512×512×3)<br/>→ x_{t-1} = x_t - ε̂
+            </code>
+          </div>
+          <div class="mini-card" style="border-left:4px solid #22c55e;">
+            <h4 style="margin-top:0;font-size:13px;">LDM（隐空间）</h4>
+            <code style="font-size:12px;display:block;background:#f8fafc;padding:8px;border-radius:6px;margin-top:8px;">
+              z_t (64×64×4)<br/>→ [U-Net]<br/>→ ε̂ (64×64×4)<br/>→ z_{t-1} = z_t - ε̂
+            </code>
+          </div>
+        </div>
+
+        <p>唯一的区别是<strong>训练目标变了</strong>：DDPM 预测加在像素上的噪声；LDM 预测加在隐向量上的噪声。两者数学上完全等价。</p>
+
+        <div class="callout-blue">
+          <div class="callout-title">📌 "隐向量"是什么</div>
+          <p>VAE Encoder 把图像压缩成 <code>64×64×4</code> 的浮点数矩阵，每个数字都是图像语义的抽象编码（颜色、纹理、形状信息）。你可以直接对这些浮点数加高斯噪声、做加减运算——它们是普通数字，不需要解码回图像就能操作。</p>
+          <p style="margin-top:8px;font-size:13px;color:#1d4ed8;">VAE Decoder 只在最后用：1000步去噪结束，得到干净的 $z_0$ 后，才调用 Decoder 还原成像素图，给人看。</p>
+        </div>
+
+        <figure style="margin:24px 0;">
+          <img src="https://lilianweng.github.io/posts/2021-07-11-diffusion-models/latent-diffusion-arch.png"
+               alt="Latent Diffusion Model架构图"
+               style="width:100%;border-radius:12px;border:1px solid #e5e7eb;"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div style='background:#f8faff;border:1px solid #dbeafe;border-radius:12px;padding:24px;text-align:center;color:#6b7280;font-size:13px;'><b>Figure 4: Latent Diffusion Model 架构</b><br><br>Encoder（蓝）把像素图压缩为隐表示；Diffusion 过程在隐空间进行（全程 64×64×4）；Decoder（橙）将最终隐表示解码回像素图（只跑一次）；Conditioning（绿）通过Cross-Attention注入文本或其他条件</div>`" />
+          <figcaption style="font-size:12px;color:var(--muted);margin-top:8px;text-align:center;"><strong>Figure 4（Rombach et al. 2022 原图）：</strong>扩散过程全程在 VAE 压缩后的低维隐空间进行，VAE Decoder 只在最后执行一次</figcaption>
+        </figure>
+
+        <h3 id="latent-example">6.3 数字对比</h3>
+
+        <div class="example-box">
+          <div class="ex-title">💡 生成一张 512×512 猫咪图：计算量对比</div>
+          <table style="font-size:13px;margin-top:10px;">
+            <thead>
+              <tr><th>方法</th><th>每步数据量</th><th>步数</th><th>U-Net 总计算量（相对）</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>DDPM（像素空间）</td><td>786,432 值</td><td>1000步</td><td>1x（基准）</td></tr>
+              <tr><td>Stable Diffusion（隐空间）</td><td>16,384 值（少48x）</td><td>50步（少20x）</td><td>约 1/960x</td></tr>
+            </tbody>
+          </table>
+          <p style="margin-top:12px;font-size:13px;color:#166534;">节省来自两处：① 每步数据量小 48x；② 去噪步数可以少（隐空间更平滑，50步已足够）。VAE Encoder/Decoder 只各跑一次，开销相比 U-Net 几乎忽略不计。</p>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!--  §7 Classifier-Free Guidance                               -->
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <section class="section" id="cfg">
+        <div class="section-title">
+          <div class="icon" style="background:#fffbeb;">🚀</div>
+          §7 Classifier-Free Guidance
+        </div>
+
+        <p><strong>问题</strong>：普通的条件生成，模型会"偷懒"——只依赖图像自身特征，部分忽略文本条件，生成的图与 prompt 不够贴合。</p>
+        <p><strong>解决方案</strong>：用同一个模型同时学条件和无条件去噪，推理时把条件方向"放大"。</p>
+
+        <h3 id="cfg-training">7.1 怎么训练：一个模型，随机 Drop 条件</h3>
+
+        <div class="callout-blue">
+          <div class="callout-title">📌 不是两个分开的模型</div>
+          <p>"同时训练条件和无条件"听起来像两个模型，实际上<strong>是同一个模型</strong>，训练技巧如下：</p>
+          <ul style="margin-top:8px;padding-left:20px;">
+            <li>训练时，随机有 <strong>10%~20% 的概率</strong>把文本条件 $c$ 替换成空（$\emptyset$，即 null token）</li>
+            <li>其余时候正常传入文本条件</li>
+          </ul>
+          <p style="margin-top:8px;">这样同一个模型在有条件和无条件两种情况下都被训练到，权重是共享的。</p>
+          <p style="margin-top:8px;font-size:13px;color:#1d4ed8;"><strong>推理时</strong>：用这一个模型跑<strong>两次</strong>——一次传条件 $c$，一次传空 $\emptyset$，分别得到两个噪声预测，再做加权组合。</p>
+        </div>
+
+        <h3 id="cfg-formula">7.2 公式与直觉</h3>
+
+        <div class="formula-block">$$\tilde{\epsilon}_\theta = \epsilon_\theta(x_t, \emptyset) + s \cdot (\epsilon_\theta(x_t, c) - \epsilon_\theta(x_t, \emptyset))$$</div>
+
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\epsilon_\theta(x_t, c)$：条件去噪预测（传入文本 $c$）</li>
+            <li>$\epsilon_\theta(x_t, \emptyset)$：无条件去噪预测（传入空条件）</li>
+            <li>$\epsilon_\theta(x_t, c) - \epsilon_\theta(x_t, \emptyset)$：条件带来的"额外噪声方向"</li>
+            <li>$s$：引导强度（通常 7.5~15，越大越听话于 prompt）</li>
+          </ul>
+        </div>
+
+        <div class="big-concept">
+          <div class="big-concept-title">🔑 直觉：为什么去掉更多"某个方向的噪声"，图反而更符合描述？</div>
+          <p>去噪 = 从图里"抠掉"噪声，抠掉什么，剩下的就是什么。</p>
+          <ul style="margin-top:10px;">
+            <li>$\epsilon_\theta(x_t, c)$（红猫条件）预测的噪声：抠掉后，剩下红猫信号</li>
+            <li>$\epsilon_\theta(x_t, \emptyset)$（无条件）预测的噪声：抠掉后，剩下普通猫信号</li>
+            <li><strong>差值</strong> = 让图"变红"需要额外多抠的那部分噪声方向</li>
+            <li>乘以 $s > 1$：放大这个方向，抠掉更多"红色对应的噪声"→ 剩下的红色信号更强→ 图更红</li>
+          </ul>
+          <p style="margin-top:10px;font-size:13px;color:#6d28d9;">换个说法：CFG 在"条件方向"上做了线性外推（extrapolation），$s=1$ 是正常条件，$s>1$ 是往条件方向"过冲"。</p>
+        </div>
+
+        <h3 id="cfg-example">7.3 举例：生成"一只红色的猫"</h3>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：CFG 如何让猫更红（$s = 7.5$）</div>
+          <p><strong>第 $t=500$ 步，同一个模型跑两次：</strong></p>
+          <div class="two-col" style="margin:12px 0;">
+            <div class="mini-card" style="border-left:3px solid #94a3b8;">
+              <h4 style="margin-top:0;font-size:13px;">无条件预测 $\epsilon_\theta(x_t, \emptyset)$</h4>
+              <p style="font-size:12px;margin:0;">传入空 token，模型"自由发挥"<br/>→ 预测的噪声只管把图变成"像真实图片"的方向（可能是橙猫、灰猫、任何猫）</p>
+            </div>
+            <div class="mini-card" style="border-left:3px solid #ef4444;">
+              <h4 style="margin-top:0;font-size:13px;">条件预测 $\epsilon_\theta(x_t, c)$</h4>
+              <p style="font-size:12px;margin:0;">传入"红色的猫"<br/>→ 预测的噪声在无条件基础上，额外去掉了"不是红色"对应的噪声成分</p>
+            </div>
+          </div>
+          <p><strong>CFG 组合：</strong></p>
+          <p style="font-family:monospace;font-size:13px;background:#f8fafc;padding:10px;border-radius:8px;">
+            $\tilde{\epsilon}$ = 无条件噪声 + 7.5 × (条件噪声 − 无条件噪声)<br/>
+            = 无条件噪声 + 7.5 × (那个"让图变红"的方向)
+          </p>
+          <p>→ 相当于在"红猫方向"上走了 7.5 倍的步长，最终图里红色信号被大幅放大</p>
+          <p style="font-size:13px;color:#166534;margin-top:10px;">你的理解完全对：<strong>"噪声里不要红了，那生成的图片就是很红了"</strong>——抠掉更多"非红"噪声，剩下的红色信号就更强。</p>
+        </div>
+
+        <div class="callout-amber">
+          <div class="callout-title">⚠️ 调参建议</div>
+          <ul style="margin:0;padding-left:20px;">
+            <li><strong>s = 1</strong>：等于纯粹条件模型，不放大</li>
+            <li><strong>s = 7.5</strong>：Stable Diffusion 默认值，平衡质量和多样性</li>
+            <li><strong>s = 15+</strong>：非常听话于 prompt，但可能过度饱和、颜色失真</li>
+          </ul>
+        </div>
+
+        <figure style="margin:24px 0;">
+          <img src="https://lilianweng.github.io/posts/2021-07-11-diffusion-models/conditioned-DDPM.png"
+               alt="基于引导的条件生成DDPM算法"
+               style="width:100%;border-radius:12px;border:1px solid #e5e7eb;"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div style='background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:24px;text-align:center;color:#6b7280;font-size:13px;'><b>Figure 5: 基于引导的条件生成采样算法</b><br><br>每步去噪时用同一个模型跑两次（有条件/无条件），按引导强度 s 做线性外推</div>`" />
+          <figcaption style="font-size:12px;color:var(--muted);margin-top:8px;text-align:center;"><strong>Figure 5（Dhariwal & Nichol 2021）：</strong>Classifier-Free Guidance 采样——每步用同一模型跑两次，线性外推放大条件方向</figcaption>
+        </figure>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!--  §8 经典模型演进                                             -->
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <section class="section" id="classic">
+        <div class="section-title">
+          <div class="icon" style="background:#ecfeff;">📚</div>
+          §8 架构演进：U-Net → DiT，以及现代文生图/文生视频
+        </div>
+
+        <h3 id="unet-to-dit">8.1 为什么从 U-Net 换成 Transformer（DiT）</h3>
+
+        <p>你说得对——CV 领域现在基本是 Transformer 天下（ViT、Swin 等）。那为什么早期 Diffusion 还在用 U-Net 这种卷积范式？</p>
+
+        <div class="two-col" style="margin:16px 0;">
+          <div class="mini-card" style="border-left:4px solid #94a3b8;">
+            <h4 style="margin-top:0;">U-Net（卷积）为什么曾经是主流</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li>医学图像分割领域早已验证，成熟稳定</li>
+              <li>跳跃连接天然保留局部细节，适合像素级任务</li>
+              <li>卷积的归纳偏置（平移等变性）对图像有效</li>
+              <li>早期（2020-2022）算力不足，Transformer 太贵</li>
+            </ul>
+          </div>
+          <div class="mini-card" style="border-left:4px solid #8b5cf6;">
+            <h4 style="margin-top:0;">U-Net 的问题</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li>Attention 只在局部感受野内有效，全局建模弱</li>
+              <li>Cross-Attention 是"后插"的，与卷积特征的融合不够自然</li>
+              <li>扩展性差：想扩大模型规模，卷积层结构难以统一 scale</li>
+              <li>视频/3D 场景下时序建模更笨重</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="big-concept">
+          <div class="big-concept-title">🔑 DiT（Diffusion Transformer）：2022 年后的趋势</div>
+          <p>DiT（Peebles & Xie, 2022）的核心想法：<strong>把 U-Net 完全换成 Transformer</strong>。</p>
+          <ul style="margin-top:10px;">
+            <li><strong>输入处理</strong>：把含噪图片（或隐向量）切成 patch，每个 patch 当成一个 token（和 ViT 一样）</li>
+            <li><strong>时间步和条件注入</strong>：用 adaLN-Zero（自适应 LayerNorm）把 $t$ 和文本 embedding 调制进每个 Transformer block，替代 U-Net 的 ResBlock + Cross-Attention</li>
+            <li><strong>没有跳跃连接</strong>：Transformer 靠 Self-Attention 的全局建模来保留细节，不需要编码器-解码器结构</li>
+            <li><strong>可扩展性极强</strong>：直接 scale 层数/头数，性能随参数量稳定提升（scaling law 成立）</li>
+          </ul>
+          <p style="margin-top:10px;font-size:13px;color:#6d28d9;">结论：<strong>现代主流文生图/文生视频模型（SD3、FLUX、Sora）全部基于 DiT 或 DiT 变体，U-Net 架构基本退出主流。</strong></p>
+        </div>
+
+        <h3 id="t2i-modern">8.2 现代文生图：SD3 / FLUX / DALL-E 3</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>模型</th><th>年份</th><th>骨干网络</th><th>文本编码器</th><th>核心创新</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>DDPM</strong></td>
+                <td>2020</td>
+                <td>U-Net（像素空间）</td>
+                <td>无条件</td>
+                <td>奠定数学框架</td>
+              </tr>
+              <tr>
+                <td><strong>Stable Diffusion v1</strong></td>
+                <td>2022</td>
+                <td>U-Net（隐空间）</td>
+                <td>CLIP ViT-L</td>
+                <td>开源 LDM，社区生态</td>
+              </tr>
+              <tr>
+                <td><strong>DALL-E 3</strong></td>
+                <td>2023</td>
+                <td>U-Net（隐空间）</td>
+                <td>T5-XXL + CLIP</td>
+                <td>重新标注训练数据，prompt 遵从度大幅提升</td>
+              </tr>
+              <tr>
+                <td><strong>SD3</strong></td>
+                <td>2024</td>
+                <td><strong>DiT（MMDiT）</strong></td>
+                <td>T5-XXL + CLIP×2</td>
+                <td>文本 token 和图像 token 在同一 Transformer 里做双流 Attention</td>
+              </tr>
+              <tr>
+                <td><strong>FLUX.1</strong></td>
+                <td>2024</td>
+                <td><strong>DiT（Flow Matching）</strong></td>
+                <td>T5-XXL + CLIP-L</td>
+                <td>Flow Matching 替代 DDPM 训练目标，更快收敛；12B 参数开源</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout-blue">
+          <div class="callout-title">📌 SD3 的 MMDiT：为什么要"双流 Attention"</div>
+          <p>SD3（Stable Diffusion 3）的核心架构是 <strong>MMDiT（Multimodal DiT）</strong>，和之前 U-Net 架构最大的区别：</p>
+          <ul style="margin-top:8px;">
+            <li>旧方案（U-Net + Cross-Attention）：图像特征做 Self-Attention，再 Cross-Attend 到固定的文本 embedding——文本是"旁观者"，不随图像更新</li>
+            <li>MMDiT：图像 token 和文本 token <strong>拼在一起</strong>进同一个 Transformer block，文本和图像可以相互 Attend——文字和图像信息双向融合，文本理解大幅增强</li>
+          </ul>
+        </div>
+
+        <h3 id="t2v-modern">8.3 现代文生视频：从 U-Net 到 3D DiT</h3>
+
+        <p>视频生成的难点：除了空间维度（H×W），还有时间维度（T 帧），需要同时建模<strong>空间一致性</strong>（每帧的图像质量）和<strong>时序一致性</strong>（帧间运动流畅）。</p>
+
+        <div class="callout-amber">
+          <div class="callout-title">⚠️ 为什么 U-Net 更难做视频</div>
+          <ul style="margin:0;padding-left:20px;">
+            <li>卷积的感受野是局部的，帧间的长距离时序依赖很难捕捉</li>
+            <li>原始 U-Net 没有时间维度，需要额外加 temporal attention 层，结构复杂</li>
+            <li>U-Net 的跳跃连接在 3D（T×H×W）上显存开销极大</li>
+          </ul>
+        </div>
+
+        <p>现代文生视频的主流范式：<strong>3D DiT + 隐空间</strong></p>
+
+        <div class="step-box">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <strong>3D VAE 压缩</strong>
+            <p style="font-size:13px;margin:4px 0 0;">用 3D VAE（含时间维度的 VAE）把视频从像素空间 $(T \times H \times W \times 3)$ 压缩到隐空间 $(T' \times H' \times W' \times C)$，大幅降低计算量</p>
+          </div>
+        </div>
+        <div class="step-box">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <strong>时空 patch 化</strong>
+            <p style="font-size:13px;margin:4px 0 0;">把 3D 隐向量切成时空 patch（如 $2 \times 2 \times 2$ 的小块），每块是一个 token——空间和时间都被统一成 token 序列</p>
+          </div>
+        </div>
+        <div class="step-box">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <strong>3D DiT 去噪</strong>
+            <p style="font-size:13px;margin:4px 0 0;">Transformer 在所有时空 token 上做 Full Attention（或分解的 Spatial + Temporal Attention），同时建模帧内空间关系和帧间时序关系</p>
+          </div>
+        </div>
+        <div class="step-box">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <strong>文本条件注入</strong>
+            <p style="font-size:13px;margin:4px 0 0;">和图像生成一样：文本 token（T5 / LLM 编码）通过 Cross-Attention 或双流 Attention 注入，每步去噪都受文本引导</p>
+          </div>
+        </div>
+
+        <div class="table-wrap" style="margin-top:16px;">
+          <table>
+            <thead>
+              <tr><th>模型</th><th>机构</th><th>年份</th><th>架构</th><th>核心特点</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Sora</strong></td>
+                <td>OpenAI</td>
+                <td>2024</td>
+                <td>3D DiT（spacetime patches）</td>
+                <td>统一图像/视频为 patch token，可变时长/分辨率，60秒高质量视频</td>
+              </tr>
+              <tr>
+                <td><strong>CogVideoX</strong></td>
+                <td>智谱</td>
+                <td>2024</td>
+                <td>3D DiT + Expert Transformer</td>
+                <td>开源；3D VAE + Expert AdaLN；视频文本双流融合</td>
+              </tr>
+              <tr>
+                <td><strong>HunyuanVideo</strong></td>
+                <td>腾讯</td>
+                <td>2024</td>
+                <td>3D DiT（双流+单流混合）</td>
+                <td>开源；13B参数；图像/视频统一训练；full attention</td>
+              </tr>
+              <tr>
+                <td><strong>Wan2.1</strong></td>
+                <td>阿里</td>
+                <td>2025</td>
+                <td>3D DiT + Flow Matching</td>
+                <td>开源；14B；支持文生视频/图生视频；中文 prompt 友好</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 Sora 的核心思路（一句话）</div>
+          <p>把视频看成"时空 patch 的序列"，和 LLM 把文本看成"token 序列"是同一个范式——<strong>生成视频 = 在 token 序列上做扩散，而不是逐帧生成</strong>。这样模型天然能建模帧间一致性，也能任意扩展时长和分辨率。</p>
+          <p style="margin-top:10px;font-size:13px;color:#166534;">类比 LLM：GPT 不是"逐词独立生成"，而是在整个 token 序列上建模上下文。Sora 也不是"逐帧独立生成"，而是在整个时空 token 序列上建模一致性。</p>
+        </div>
+
+        <h3 id="arch-summary">8.4 架构总结</h3>
+
+        <div class="flow-diagram">
+          <div style="font-size:12px;font-weight:700;color:#4c1d95;margin-bottom:12px;text-align:center;">Diffusion 骨干网络演进路线</div>
+          <div class="flow-row">
+            <div class="flow-box" style="background:#dbeafe;border-color:#93c5fd;">DDPM U-Net<br/><span style="font-size:10px;color:#6b7280;">像素空间，纯卷积</span></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box" style="background:#ede9fe;border-color:#c4b5fd;">LDM U-Net<br/><span style="font-size:10px;color:#6b7280;">隐空间 + Cross-Attn</span></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box" style="background:#dcfce7;border-color:#86efac;">DiT<br/><span style="font-size:10px;color:#6b7280;">图像 patch → token</span></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box green">3D DiT<br/><span style="font-size:10px;color:#6b7280;">时空 patch → 视频</span></div>
+          </div>
+          <div style="text-align:center;font-size:11px;color:var(--muted);margin-top:8px;">2020 → 2022 → 2022 → 2024</div>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!--  §9 应用场景                                                 -->
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <section class="section" id="applications">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">🎯</div>
+          §9 应用场景
+        </div>
+
+        <div class="three-col">
+          <div class="mini-card">
+            <h4>🎨 文生图</h4>
+            <p style="font-size:13px;margin:0;">输入文本描述，输出对应图片</p>
+            <p style="font-size:12px;color:var(--muted);margin-top:6px;">应用：艺术创作、游戏原画、广告设计</p>
+          </div>
+          <div class="mini-card">
+            <h4>🖼️ 图生图</h4>
+            <p style="font-size:13px;margin:0;">输入参考图+文本，输出风格转换后的图片</p>
+            <p style="font-size:12px;color:var(--muted);margin-top:6px;">应用：照片转油画、白天转夜晚</p>
+          </div>
+          <div class="mini-card">
+            <h4>🔧 Inpainting</h4>
+            <p style="font-size:13px;margin:0;">图片+遮罩+文本，AI重新生成遮罩区域</p>
+            <p style="font-size:12px;color:var(--muted);margin-top:6px;">应用：去除路人、修复破损照片</p>
+          </div>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：Inpainting应用</div>
+          <p><strong>场景</strong>：照片里有路人抢镜</p>
+          <ol>
+            <li>用画笔遮住路人区域</li>
+            <li>输入文本："蓝天白云下的草地"</li>
+            <li>AI自动填充该区域，完美融合背景</li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!--  §10 Diffusion vs 其他生成模型                               -->
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <section class="section" id="compare">
+        <div class="section-title">
+          <div class="icon" style="background:#fffbeb;">⚖️</div>
+          §10 Diffusion vs 其他生成模型
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>对比维度</th><th>Diffusion</th><th>GAN</th><th>VAE</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>生成质量</strong></td>
+                <td>⭐⭐⭐⭐⭐</td>
+                <td>⭐⭐⭐⭐</td>
+                <td>⭐⭐</td>
+              </tr>
+              <tr>
+                <td><strong>训练稳定性</strong></td>
+                <td>⭐⭐⭐⭐⭐</td>
+                <td>⭐⭐</td>
+                <td>⭐⭐⭐⭐</td>
+              </tr>
+              <tr>
+                <td><strong>生成多样性</strong></td>
+                <td>⭐⭐⭐⭐⭐</td>
+                <td>⭐⭐⭐</td>
+                <td>⭐⭐⭐⭐</td>
+              </tr>
+              <tr>
+                <td><strong>生成速度</strong></td>
+                <td>⭐⭐</td>
+                <td>⭐⭐⭐⭐⭐</td>
+                <td>⭐⭐⭐⭐⭐</td>
+              </tr>
+              <tr>
+                <td><strong>可控性</strong></td>
+                <td>⭐⭐⭐⭐⭐</td>
+                <td>⭐⭐⭐</td>
+                <td>⭐⭐⭐</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout-red">
+          <div class="callout-title">⚠️ Diffusion的最大缺点</div>
+          <p style="margin:0;"><strong>生成速度慢</strong>：需要逐步去噪（通常50-1000步）</p>
+          <ul style="margin-top:8px;padding-left:20px;">
+            <li>Stable Diffusion生成一张图：1-5秒</li>
+            <li>GAN生成一张图：0.1秒以内</li>
+          </ul>
+          <p style="margin-top:8px;font-size:13px;color:var(--muted);"><strong>解决方案</strong>：DDIM（减少到20-50步）、Consistency Models（1-2步）</p>
+        </div>
+
+        <figure style="margin:24px 0;">
+          <img src="https://lilianweng.github.io/posts/2021-07-11-diffusion-models/generative-overview.png"
+               alt="生成模型全景图"
+               style="width:100%;border-radius:12px;border:1px solid #e5e7eb;"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div style='background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:24px;text-align:center;color:#6b7280;font-size:13px;'><b>Figure 6: 生成模型全景对比</b><br><br>展示GAN、VAE、Flow、Diffusion四种主流生成模型的建模方式和采样路径对比</div>`" />
+          <figcaption style="font-size:12px;color:var(--muted);margin-top:8px;text-align:center;"><strong>Figure 6（Lilian Weng 2021）：</strong>四种主流生成模型对比——GAN（对抗博弈）、VAE（变分推断）、Flow（可逆变换）、Diffusion（逐步去噪）</figcaption>
+        </figure>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!--  §11 总结与学习路线                                          -->
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <section class="section" id="summary">
+        <div class="section-title">
+          <div class="icon" style="background:#faf5ff;">🗺️</div>
+          §11 总结与学习路线
+        </div>
+
+        <h3>11.1 为什么Diffusion能成功？</h3>
+
+        <div class="three-col">
+          <div class="mini-card">
+            <h4>📐 理论扎实</h4>
+            <p style="font-size:13px;margin:0;">有完善的概率论和统计物理支撑</p>
+          </div>
+          <div class="mini-card">
+            <h4>🏋️ 训练稳定</h4>
+            <p style="font-size:13px;margin:0;">不像GAN有模式崩溃问题</p>
+          </div>
+          <div class="mini-card">
+            <h4>🎛️ 可控性强</h4>
+            <p style="font-size:13px;margin:0;">文本、图像、姿态等多种条件可控</p>
+          </div>
+        </div>
+
+        <h3>11.2 学习路线</h3>
+
+        <div class="flow-diagram">
+          <div style="font-size:12px;color:#6d28d9;font-weight:700;margin-bottom:12px;">三阶段学习路径</div>
+          <div class="step-box">
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <strong>理解基础</strong>
+              <p style="font-size:12px;margin:4px 0 0;color:var(--muted);">阅读DDPM论文 + 跑通minimist代码 + 理解U-Net架构</p>
+            </div>
+          </div>
+          <div class="step-box">
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <strong>动手实践</strong>
+              <p style="font-size:12px;margin:4px 0 0;color:var(--muted);">微调Stable Diffusion（用LoRA） + 尝试ControlNet控制生成</p>
+            </div>
+          </div>
+          <div class="step-box">
+            <div class="step-num">3</div>
+            <div class="step-content">
+              <strong>深入原理</strong>
+              <p style="font-size:12px;margin:4px 0 0;color:var(--muted);">研读Score-based models + 理解SDE/ODE形式化 + 探索采样优化</p>
+            </div>
+          </div>
+        </div>
+
+        <h3>11.3 推荐资源</h3>
+
+        <div class="callout-cyan">
+          <div class="callout-title">📚 经典论文</div>
+          <ul style="margin:0;padding-left:20px;">
+            <li><strong>DDPM</strong> (2020): <a href="https://arxiv.org/abs/2006.11239" target="_blank">arxiv.org/abs/2006.11239</a></li>
+            <li><strong>Stable Diffusion</strong> (2022): <a href="https://arxiv.org/abs/2112.10752" target="_blank">arxiv.org/abs/2112.10752</a></li>
+            <li><strong>CFG</strong> (2022): <a href="https://arxiv.org/abs/2207.12598" target="_blank">arxiv.org/abs/2207.12598</a></li>
+          </ul>
+        </div>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>💻 开源代码</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li><a href="https://github.com/CompVis/stable-diffusion" target="_blank">Stable Diffusion</a></li>
+              <li><a href="https://github.com/huggingface/diffusers" target="_blank">Diffusers库（HuggingFace）</a></li>
+            </ul>
+          </div>
+          <div class="mini-card">
+            <h4>📖 教程博客</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li><a href="https://lilianweng.github.io/posts/2021-07-11-diffusion-models/" target="_blank">Lilian Weng博客</a></li>
+              <li><a href="https://huggingface.co/learn/diffusion-models" target="_blank">HuggingFace课程</a></li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+  <footer>
+    <p>本文档基于学习笔记整理，仅供学习参考</p>
+  </footer>
+</div>
+</body>
+</html>

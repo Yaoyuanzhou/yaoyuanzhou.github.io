@@ -1,0 +1,1831 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RoleGen: 通过反事实功能角色推理唤醒沉默用户的生成式推荐</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false }
+          ],
+          throwOnError: false
+        });
+      }
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #2563eb; --primary-soft: #eff6ff;
+      --accent: #7c3aed; --accent-soft: rgba(124,58,237,0.06);
+      --green: #16a34a; --green-soft: #f0fdf4;
+      --amber: #d97706; --amber-soft: #fffbeb;
+      --red: #dc2626; --red-soft: #fef2f2;
+      --shadow: 0 10px 30px rgba(15,23,42,0.08); --radius: 18px; --max: 1120px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: linear-gradient(180deg,#f8fbff 0%,var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      line-height: 1.85;
+      font-size: 15px;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── layout ── */
+    .page { max-width: var(--max); margin: 0 auto; padding: 32px 20px 100px; }
+    .back-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      color: var(--muted); font-size: 14px; margin-bottom: 20px;
+    }
+    .back-link:hover { color: var(--primary); text-decoration: none; }
+
+    /* ── hero ── */
+    .hero {
+      background: radial-gradient(circle at top right, rgba(37,99,235,0.12), transparent 40%),
+                  radial-gradient(circle at left bottom,  rgba(124,58,237,0.08), transparent 30%),
+                  var(--card);
+      border: 1px solid rgba(37,99,235,0.12);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      padding: 40px 40px 32px;
+      margin-bottom: 28px;
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 14px; border-radius: 999px;
+      background: var(--primary-soft); color: var(--primary);
+      font-size: 13px; font-weight: 600; margin-bottom: 18px;
+    }
+    h1 { margin: 0 0 10px; font-size: 34px; line-height: 1.2; letter-spacing: -0.02em; }
+    .subtitle { margin: 0 0 24px; color: var(--muted); font-size: 15px; }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px; margin-top: 16px;
+    }
+    .meta-item {
+      padding: 10px 14px; border-radius: 10px; background: rgba(37,99,235,0.04);
+      border: 1px solid rgba(37,99,235,0.08);
+    }
+    .meta-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+    .meta-value { margin-top: 2px; font-size: 14px; font-weight: 600; color: var(--text); }
+
+    /* ── two-col layout ── */
+    .layout {
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr);
+      gap: 24px;
+      align-items: start;
+    }
+
+    /* ── TOC ── */
+    .toc {
+      position: sticky; top: 20px;
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px;
+    }
+    .toc h2 { margin: 0 0 12px; font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+    .toc-list { list-style: none; margin: 0; padding: 0; }
+    .toc-list li { margin: 0; }
+    .toc-list a {
+      display: block; padding: 5px 8px; border-radius: 8px;
+      color: var(--muted); font-size: 13px; transition: all 0.15s;
+    }
+    .toc-list a:hover { color: var(--primary); background: #f0f6ff; text-decoration: none; }
+    .toc-list a.active {
+      color: var(--primary); background: #eff6ff; font-weight: 600;
+      border-left: 3px solid var(--primary); padding-left: 5px;
+    }
+    .toc-sub { list-style: none; padding-left: 12px; margin: 2px 0; }
+    .toc-sub a { font-size: 12px; padding: 3px 8px; }
+
+    /* ── content sections ── */
+    .content { display: flex; flex-direction: column; gap: 22px; }
+    .section {
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: var(--radius); box-shadow: var(--shadow);
+      padding: 30px 32px;
+    }
+    .section-title {
+      display: flex; align-items: center; gap: 12px;
+      margin: 0 0 22px; font-size: 21px; font-weight: 700;
+    }
+    .icon {
+      width: 38px; height: 38px; border-radius: 11px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 19px; flex-shrink: 0;
+    }
+    h3 { margin: 26px 0 12px; font-size: 17px; color: #111827; }
+    h4 { margin: 18px 0 8px; font-size: 15px; color: #374151; font-weight: 700; }
+
+    /* ── callouts ── */
+    .callout {
+      border-radius: 14px; padding: 15px 18px; margin: 16px 0;
+    }
+    .callout-blue   { background: #eff6ff; border: 1px solid #bfdbfe; }
+    .callout-green  { background: var(--green-soft); border: 1px solid #bbf7d0; }
+    .callout-amber  { background: var(--amber-soft); border: 1px solid #fde68a; }
+    .callout-purple { background: #faf5ff; border: 1px solid #e9d5ff; }
+    .callout-red    { background: var(--red-soft); border: 1px solid #fecaca; }
+    .callout strong:first-child { display: block; margin-bottom: 6px; }
+
+    /* ── example box ── */
+    .example-box {
+      background: #f0fdf4; border: 1px solid #86efac;
+      border-radius: 14px; padding: 16px 18px; margin: 14px 0;
+    }
+    .ex-title { font-weight: 700; color: #166534; margin-bottom: 8px; font-size: 14px; }
+
+    /* ── formula ── */
+    .formula-block { margin: 16px 0 8px; overflow-x: auto; }
+    .formula-vars {
+      background: #f8faff; border: 1px solid #dbeafe;
+      border-radius: 12px; padding: 12px 16px; margin: 4px 0 16px; font-size: 13.5px;
+    }
+    .formula-vars .var-title {
+      font-size: 11px; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px;
+    }
+    .formula-vars ul { margin: 0; padding-left: 18px; }
+    .formula-vars li { margin: 4px 0; }
+    .katex-display { overflow-x: auto; padding: 6px 0; }
+
+    /* ── flow diagram ── */
+    .flow {
+      border: 1px solid #bfdbfe; border-radius: 14px;
+      padding: 18px 20px; margin: 16px 0; background: #f8fbff;
+    }
+    .flow-title { font-weight: 700; font-size: 14px; margin-bottom: 12px; }
+    .flow-row {
+      display: flex; align-items: center; gap: 8px;
+      flex-wrap: wrap; margin: 6px 0;
+    }
+    .flow-box {
+      background: #eff6ff; border: 1px solid #93c5fd;
+      border-radius: 8px; padding: 7px 13px;
+      font-size: 13px; font-weight: 600; line-height: 1.4; text-align: center;
+    }
+    .flow-box.green { background: #dcfce7; border-color: #86efac; }
+    .flow-box.amber { background: #fef3c7; border-color: #fcd34d; }
+    .flow-box.purple { background: #ede9fe; border-color: #c4b5fd; }
+    .flow-box.red { background: #fee2e2; border-color: #fca5a5; }
+    .flow-arrow { color: #60a5fa; font-weight: 700; font-size: 18px; flex-shrink: 0; }
+
+    /* ── step list ── */
+    .step-list { list-style: none; padding: 0; margin: 12px 0; }
+    .step-list > li {
+      display: flex; gap: 14px; margin: 0 0 18px; align-items: flex-start;
+    }
+    .step-num {
+      flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%;
+      background: var(--primary); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 700; margin-top: 2px;
+    }
+    .step-body { flex: 1; }
+    .step-body strong { display: block; margin-bottom: 4px; }
+
+    /* ── two-col cards ── */
+    .two-col { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px; }
+    .mini-card {
+      border: 1px solid var(--line); border-radius: 14px;
+      padding: 16px 18px; background: #fff;
+    }
+    .mini-card h4 { margin-top: 0; }
+
+    /* ── table ── */
+    .table-wrap { overflow-x: auto; margin: 16px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    thead th {
+      background: #f3f6fb; color: #334155; text-align: left;
+      font-weight: 700; padding: 10px 14px; border-bottom: 1px solid var(--line);
+    }
+    td { padding: 10px 14px; border-bottom: 1px solid #eef2f7; vertical-align: top; }
+    tbody tr:nth-child(even) { background: #fcfdff; }
+
+    /* ── figure ── */
+    figure {
+      margin: 20px 0; border-radius: 12px; overflow: hidden;
+      border: 1px solid var(--line); background: #fff;
+    }
+    figure img { width: 100%; display: block; }
+    .fig-placeholder {
+      padding: 30px 20px; text-align: center;
+      background: #f8fafc; color: var(--muted); font-size: 14px;
+    }
+    figcaption {
+      padding: 12px 16px; background: #f8fafc;
+      font-size: 13px; color: var(--muted); border-top: 1px solid var(--line);
+    }
+    figcaption strong { color: var(--text); }
+
+    /* ── misc ── */
+    blockquote {
+      margin: 16px 0; padding: 14px 18px;
+      border-left: 4px solid var(--accent);
+      background: rgba(124,58,237,0.05);
+      border-radius: 0 12px 12px 0; color: #3f3f46;
+    }
+    ul, ol { padding-left: 22px; }
+    li + li { margin-top: 5px; }
+    code {
+      background: #f3f4f6; border-radius: 5px;
+      padding: 1px 6px; font-size: 13px; font-family: "Fira Code", monospace;
+    }
+    .tag {
+      display: inline-block; padding: 2px 9px; border-radius: 999px;
+      font-size: 12px; font-weight: 600;
+    }
+    .tag-blue { background: #dbeafe; color: #1d4ed8; }
+    .tag-green { background: #dcfce7; color: #15803d; }
+    .tag-amber { background: #fef3c7; color: #b45309; }
+    .tag-red { background: #fee2e2; color: #b91c1c; }
+
+    footer { margin-top: 40px; text-align: center; color: var(--muted); font-size: 13px; }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .toc { position: static; }
+      .two-col { grid-template-columns: 1fr; }
+      .meta-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 640px) {
+      .hero, .section { padding: 20px 18px; }
+      h1 { font-size: 26px; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+  <a class="back-link" href="index.html">← 返回论文列表</a>
+
+  <!-- hero -->
+  <header class="hero">
+    <div class="eyebrow">🎯 推荐系统 · 生成式推荐 · LLM 增强</div>
+    <h1>RoleGen: 唤醒沉默用户的生成式推荐</h1>
+    <p class="subtitle">
+      Awakening Dormant Users: Generative Recommendation with Counterfactual Functional Role Reasoning
+    </p>
+
+    <div class="meta-grid">
+      <div class="meta-item">
+        <div class="meta-label">作者单位</div>
+        <div class="meta-value">北航 + 快手科技</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">会议/年份</div>
+        <div class="meta-value">Under Review / 2025</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">核心亮点</div>
+        <div class="meta-value">功能角色推理 + 反事实推断</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">在线效果</div>
+        <div class="meta-value">订单量 +7.3%</div>
+      </div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- TOC -->
+    <aside class="toc">
+      <h2>目录</h2>
+      <ul class="toc-list">
+        <li><a href="#s1">§1 问题与背景</a></li>
+        <li><a href="#s2">§2 核心洞察</a></li>
+        <li><a href="#s3">§3 方法详解</a>
+          <ul class="toc-sub">
+            <li><a href="#s3-1">3.1 整体框架</a></li>
+            <li><a href="#s3-2">3.2 Semantic-ID 对齐</a></li>
+            <li><a href="#s3-3">3.3 功能角色建模</a></li>
+            <li><a href="#s3-4">3.4 FR-CoT 指令微调</a></li>
+            <li><a href="#s3-5">3.5 反事实推理</a></li>
+            <li><a href="#s3-6">3.6 生成式骨干</a></li>
+            <li><a href="#s3-7">3.7 闭环协同训练</a></li>
+          </ul>
+        </li>
+        <li><a href="#s4">§4 实验结果</a></li>
+        <li><a href="#s5">§5 总结与启发</a></li>
+      </ul>
+    </aside>
+
+    <!-- main content -->
+    <main class="content">
+
+      <!-- §1 问题与背景 -->
+      <section class="section" id="s1">
+        <div class="section-title">
+          <div class="icon" style="background:#eff6ff;">🎯</div>
+          §1 问题与背景
+        </div>
+
+        <h3>1.1 沉默用户（Dormant Users）</h3>
+
+        <blockquote>
+          <strong>定义</strong>：在电商平台上保持活跃（浏览、点击），但在过去 30 天内<strong>没有任何购买行为</strong>的用户。
+        </blockquote>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>🔴 沉默用户的现状</h4>
+            <p><strong>快手电商平台数据：</strong></p>
+            <ul>
+              <li>占 DAU（日活）的 <strong>40%+</strong></li>
+              <li>贡献 PV（页面浏览）的 <strong>35%+</strong></li>
+              <li>但订单占比 <strong>&lt;20%</strong></li>
+            </ul>
+            <p style="margin-top:12px;color:#dc2626;font-weight:600;">高参与度，低转化率 → 巨大的潜在 GMV 增长空间</p>
+          </div>
+          <div class="mini-card">
+            <h4>⚠️ 与冷启动用户的区别</h4>
+            <p><strong>冷启动用户</strong>：几乎没有交互历史（$|S_u| \approx 0$）</p>
+            <p><strong>沉默用户</strong>：</p>
+            <ul>
+              <li>有中等程度的浏览行为</li>
+              <li>点击序列长度约为普通用户的 <strong>14%</strong></li>
+              <li>存在严重的<strong>数据稀疏性</strong></li>
+              <li>陷入<strong>自我强化反馈循环</strong></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="formula-block">
+          $$\mathcal{U}_0 = \left\{ u \in \mathcal{U} \mid \nexists (i_k, b_k, t_k) \in S_u : b_k = \text{purchase} \land t_k \in [t_{\text{now}} - \Delta T, t_{\text{now}}] \right\}$$
+        </div>
+
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\mathcal{U}_0$：沉默用户集合（$\mathcal{U}_0 \subset \mathcal{U}$）</li>
+            <li>$S_u$：用户 $u$ 的历史交互序列，$S_u = [(i_1, b_1, t_1), (i_2, b_2, t_2), \ldots, (i_{N_u}, b_{N_u}, t_{N_u})]$</li>
+            <li>$i_k$：物品 ID；$b_k$：行为类型（view/click/purchase）；$t_k$：时间戳</li>
+            <li>$\Delta T = 30$ 天：定义沉默用户的时间窗口</li>
+          </ul>
+        </div>
+
+        <h3>1.2 现有方法的局限</h3>
+
+        <p>传统方法通常将沉默用户唤醒问题当作<strong>冷启动推荐的变体</strong>，采用以下策略：</p>
+
+        <ul>
+          <li>基于内容的特征丰富</li>
+          <li>知识迁移（元学习、领域自适应）</li>
+          <li>LLM 语义增强（生成伪交互、静态 Profile 补全）</li>
+        </ul>
+
+        <div class="callout callout-red">
+          <strong>⚠️ 根本问题：只建模单步物品的固有价值（intrinsic value）</strong>
+          <p>这些方法只关注<strong>单步、点级的物品推荐</strong>，即预测用户对某个物品的即时反应（immediate CTR）。</p>
+          <p>然而，这忽视了真实消费旅程中物品的<strong>工具性效应</strong>（instrumental effect）：</p>
+          <ul>
+            <li>某些物品即使不被购买，也能作为<strong>触发器</strong>改变用户的潜在意图</li>
+            <li>推动后续物品的转化</li>
+          </ul>
+        </div>
+
+      </section>
+
+      <!-- §2 核心洞察 -->
+      <section class="section" id="s2">
+        <div class="section-title">
+          <div class="icon" style="background:#dcfce7;">💡</div>
+          §2 核心洞察：物品的工具性效应
+        </div>
+
+        <div style="background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);padding:20px;border-radius:12px;margin:0 0 24px;color:#fff;box-shadow:0 8px 20px rgba(102,126,234,0.3);">
+          <h4 style="margin:0 0 12px;color:#fff;font-size:17px;">💎 RoleGen 核心创新：不是「提取兴趣」，而是「推理决策模式」</h4>
+          
+          <div style="background:rgba(255,255,255,0.15);padding:14px;border-radius:8px;margin:10px 0;backdrop-filter:blur(10px);">
+            <p style="margin:0 0 8px;font-size:14px;font-weight:600;">❌ 常见误解</p>
+            <p style="margin:0;font-size:13px;opacity:0.95;">
+              "LLM 提取用户兴趣 → 生成可能购买的 SID → 作为特征注入生成模型"<br/>
+              <span style="opacity:0.8;">→ 这样理解会误认为 LLM 只是在做「兴趣标签提取」</span>
+            </p>
+          </div>
+
+          <div style="background:rgba(255,255,255,0.2);padding:14px;border-radius:8px;margin:10px 0;backdrop-filter:blur(10px);">
+            <p style="margin:0 0 8px;font-size:14px;font-weight:600;">✅ 精确理解（本文核心）</p>
+            <p style="margin:0;font-size:13px;line-height:1.8;">
+              <strong>1. LLM 推理「功能角色演化轨迹」</strong>（不只是兴趣）<br/>
+              &nbsp;&nbsp;&nbsp;• 不是推理"用户喜欢健康食品"<br/>
+              &nbsp;&nbsp;&nbsp;• 而是推理"用户正在从 Core（燕麦奶）→ Trial（蔬菜汁）→ Premium（榨汁机）升级"<br/>
+              &nbsp;&nbsp;&nbsp;• <strong>关键</strong>：捕捉的是<strong>决策模式</strong>（升级路径、场景构建），不只是静态兴趣<br/><br/>
+              
+              <strong>2. 基于角色推理生成「方向性候选 SID」</strong>（不只是可能购买）<br/>
+              &nbsp;&nbsp;&nbsp;• 不是简单预测"用户可能买面膜"<br/>
+              &nbsp;&nbsp;&nbsp;• 而是推理"基于 Audience Overlap 角色，应该探索面部护理方向"<br/>
+              &nbsp;&nbsp;&nbsp;• <strong>关键</strong>：输出的是<strong>推理方向</strong>（语义导航），不是最终推荐<br/><br/>
+              
+              <strong>3. 将候选转为「引导特征」注入生成模型</strong>（软约束）<br/>
+              &nbsp;&nbsp;&nbsp;• 不是硬性规定"必须推荐面膜"<br/>
+              &nbsp;&nbsp;&nbsp;• 而是在解码时提高面部护理方向的生成概率<br/>
+              &nbsp;&nbsp;&nbsp;• <strong>关键</strong>：LLM 提供<strong>语义引导</strong>，生成模型结合<strong>协同信号</strong>做最终决策<br/><br/>
+              
+              <strong>4. 融合 LLM 泛化能力 + 生成模型精度</strong><br/>
+              &nbsp;&nbsp;&nbsp;• LLM：理解"化妆品 → 面膜"的语义联系（世界知识）<br/>
+              &nbsp;&nbsp;&nbsp;• 生成模型：知道哪个品牌、哪个价位的面膜最符合协同信号（平台数据）<br/>
+              &nbsp;&nbsp;&nbsp;• <strong>关键</strong>：不是用 LLM 替代推荐，而是<strong>协同工作</strong>
+            </p>
+          </div>
+
+          <div style="background:rgba(255,255,255,0.25);padding:12px;border-radius:8px;margin:10px 0;backdrop-filter:blur(10px);">
+            <p style="margin:0 0 6px;font-size:13px;font-weight:600;">🎯 类比理解</p>
+            <table style="width:100%;margin-top:8px;font-size:12px;border-collapse:collapse;">
+              <tr>
+                <td style="padding:6px;opacity:0.9;width:25%;"></td>
+                <td style="padding:6px;font-weight:600;">传统方法</td>
+                <td style="padding:6px;font-weight:600;">RoleGen</td>
+              </tr>
+              <tr style="background:rgba(255,255,255,0.1);">
+                <td style="padding:6px;font-weight:600;">LLM做什么</td>
+                <td style="padding:6px;">提取兴趣标签</td>
+                <td style="padding:6px;">推理决策模式</td>
+              </tr>
+              <tr>
+                <td style="padding:6px;font-weight:600;">输出性质</td>
+                <td style="padding:6px;">可能购买的物品</td>
+                <td style="padding:6px;">推理方向（引导信号）</td>
+              </tr>
+              <tr style="background:rgba(255,255,255,0.1);">
+                <td style="padding:6px;font-weight:600;">使用方式</td>
+                <td style="padding:6px;">硬约束（召回）</td>
+                <td style="padding:6px;">软约束（引导解码）</td>
+              </tr>
+              <tr>
+                <td style="padding:6px;font-weight:600;">最终推荐</td>
+                <td style="padding:6px;">直接使用LLM输出</td>
+                <td style="padding:6px;">生成模型融合后输出</td>
+              </tr>
+            </table>
+          </div>
+
+          <p style="margin:14px 0 0;padding:12px;background:rgba(255,255,255,0.2);border-radius:8px;font-size:13px;backdrop-filter:blur(10px);">
+            <strong>🌟 本质突破</strong>：从"LLM 做推荐"进化到"LLM 引导推荐"<br/>
+            不是让 LLM 直接告诉你买什么，而是让 LLM 理解你的<strong>决策逻辑</strong>（从试用到投资、从单品到场景），然后用这个逻辑<strong>引导</strong>协同过滤模型生成更精准、更泛化的推荐。
+          </p>
+        </div>
+
+        <h3>2.1 工具性效应（Instrumental Effect）</h3>
+
+        <blockquote>
+          物品的价值不止于其<strong>直接转化概率</strong>（固有价值），更在于它如何<strong>塑造用户意图</strong>，推动转化路径上的后续决策。
+        </blockquote>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：健康生活方式的转化路径（Figure 1）</div>
+          <p><strong>场景</strong>：用户追求健康生活方式</p>
+          <ol>
+            <li>用户点击了 <strong>"高端燕麦奶"</strong>（Premium Oat Milk）</li>
+            <li>用户点击了 <strong>"无糖蔬菜汁"</strong>（Sugar-free Vegetable Juice）—— <span style="color:#dc2626;font-weight:600;">虽然没有购买</span></li>
+            <li>用户最终购买了 <strong>"高速榨汁机"</strong>（High-speed Blender）</li>
+          </ol>
+          <p style="margin-top:12px;"><strong>关键洞察</strong>：</p>
+          <ul>
+            <li>蔬菜汁虽然没有转化，但它<strong>触发了意图转变</strong>：自制鲜榨汁 → 更健康 + 更经济</li>
+            <li>这个意图转变<strong>直接促成了榨汁机的购买</strong></li>
+            <li>蔬菜汁在转化路径中扮演的角色是<strong>互补品/触发器</strong>（Complementarity）</li>
+          </ul>
+          <p style="margin-top:12px;padding:10px;background:#fef3c7;border-radius:8px;font-size:13px;">
+            <strong>对比：传统方法</strong>只会关注蔬菜汁的 CTR（点击但未购买 = 负信号），完全忽视它的工具性作用。
+          </p>
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2602.13134v1/x1.png" alt="Figure 1: 转化路径中的工具性效应" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />
+          <div class="fig-placeholder" style="display:none;">
+            <b>Figure 1: 转化路径中的工具性效应</b><br><br>
+            展示了三种功能角色：Substitution（替代）、Complementarity（互补）、Audience Overlap（受众重叠）
+          </div>
+          <figcaption><strong>Figure 1：</strong>物品的工具性效应示意图。展示了健康生活方式用户的转化路径和不同物品的功能角色（Substitution, Complementarity, Audience Overlap）。</figcaption>
+        </figure>
+
+        <div class="callout callout-blue">
+          <strong>📊 Figure 1 详细图解</strong>
+          <p style="margin-bottom:10px;"><strong>图片结构：</strong>两个并列场景，展示同一物品（Sugar-free Vegetable Juice）在不同上下文中的不同功能角色。</p>
+          
+          <p><strong>场景 1：健康生活方式用户（Healthy-Lifestyle）</strong></p>
+          <div class="flow">
+            <div class="flow-row">
+              <div class="flow-box">Premium Oat Milk<br/><small>高端燕麦奶</small></div>
+              <div class="flow-arrow">→</div>
+              <div class="flow-box green">Complementarity<br/><small>互补关系</small></div>
+              <div class="flow-arrow">→</div>
+              <div class="flow-box">Sugar-free Vegetable Juice<br/><small>无糖蔬菜汁</small></div>
+            </div>
+            <div class="flow-row">
+              <div class="flow-box amber" style="max-width:100%;">
+                <strong>触发意图转变</strong>：自制鲜榨汁 → 更健康 + 更经济
+              </div>
+            </div>
+            <div class="flow-row">
+              <div class="flow-box purple">High-speed Blender<br/><small>高速榨汁机</small></div>
+              <span style="margin-left:10px;color:#16a34a;font-weight:700;">✅ 购买</span>
+            </div>
+          </div>
+          <p style="font-size:13px;color:#667085;">虽然蔬菜汁没有购买，但它<strong>触发了意图转变</strong>，直接促成了榨汁机的购买。蔬菜汁的"工具性效应" > 直接转化价值。</p>
+
+          <p style="margin-top:14px;"><strong>场景 2：忙碌白领（Busy Office Worker）</strong></p>
+          <div class="flow">
+            <div class="flow-row">
+              <div class="flow-box">Sugar-free Vegetable Juice<br/><small>无糖蔬菜汁</small></div>
+              <div class="flow-arrow">→</div>
+              <div class="flow-box green">Substitution<br/><small>替代关系</small></div>
+              <div class="flow-arrow">→</div>
+              <div class="flow-box">Fish Oil<br/><small>鱼油</small></div>
+            </div>
+            <div class="flow-row">
+              <div class="flow-arrow">↓</div>
+            </div>
+            <div class="flow-row">
+              <div class="flow-box green">Complementarity<br/><small>互补关系</small></div>
+              <div class="flow-arrow">→</div>
+              <div class="flow-box">Melatonin Gummies<br/><small>褪黑素软糖</small></div>
+            </div>
+          </div>
+          <p style="font-size:13px;color:#667085;">同一个物品（蔬菜汁）在不同用户群体中扮演不同角色：与鱼油是<strong>替代品</strong>（功能相似的营养补充），与褪黑素是<strong>互补品</strong>（共同服务"健康管理"场景）。</p>
+
+          <p style="margin-top:14px;padding:10px;background:#dcfce7;border-radius:8px;font-size:13px;">
+            <strong>🔑 核心洞察</strong>：物品的功能角色<strong>不是静态的</strong>，而是<strong>动态依赖</strong>于：<br/>
+            1️⃣ 用户当前意图（健康生活 vs 工作压力管理）<br/>
+            2️⃣ 上下文（已浏览的其他物品）<br/>
+            3️⃣ 转化路径的阶段（探索期 vs 决策期）
+          </p>
+        </div>
+
+        <h3>2.2 功能角色轨迹（Functional Role Trajectory）</h3>
+
+        <p>为了建模工具性效应，RoleGen 引入了<strong>功能角色轨迹</strong>的概念：</p>
+
+        <div class="formula-block">
+          $$I^{\text{key}}_u = [\tilde{i}_1, \tilde{i}_2, \ldots, \tilde{i}_{M_u}]$$
+        </div>
+
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$I^{\text{key}}_u$：从用户交互序列 $S_u$ 中提取的<strong>关键物品子序列</strong></li>
+            <li>$\tilde{i}_m$：第 $m$ 个关键物品（驱动用户决策的物品）</li>
+            <li>$M_u$：关键物品的数量（$M_u \leq N_u$）</li>
+          </ul>
+        </div>
+
+        <p>将关键物品抽象为功能角色轨迹：</p>
+
+        <div class="formula-block">
+          $$R_u = [\mathbf{r}_u(\tilde{i}_m)]_{m=1}^{M_u}$$
+        </div>
+
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$R_u$：用户 $u$ 的<strong>功能角色轨迹</strong></li>
+            <li>$\mathbf{r}_u(\tilde{i}_m) \in \mathcal{R}$：物品 $\tilde{i}_m$ 的<strong>上下文相关功能角色</strong></li>
+            <li>$\mathcal{R}$：功能角色空间（如 Complement, Substitute, Audience Overlap 等）</li>
+          </ul>
+        </div>
+
+        <div class="callout callout-blue">
+          <strong>💡 为什么功能角色轨迹有效？</strong>
+          <ol>
+            <li><strong>直觉可解释性</strong>：符合人类购买决策的推理方式</li>
+            <li><strong>统计高效性</strong>：功能角色空间比物品空间小得多，模式复现率更高</li>
+            <li><strong>可迁移性</strong>：跨用户和物品的决策模式可以抽象和迁移</li>
+          </ol>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：功能角色的抽象与迁移</div>
+          <p><strong>原始点击序列</strong>：早餐牛奶 → 咖啡 → 咖啡机</p>
+          <p><strong>功能角色轨迹</strong>：日常必需品 → 场景互补品 → 高价值延伸品</p>
+          <p style="margin-top:10px;"><strong>可迁移模式</strong>：虽然"牛奶"和"厨房纸巾"在视觉上完全不同，但它们在决策路径中都扮演<strong>"日常必需品"</strong>的功能角色。</p>
+        </div>
+
+      </section>
+
+      <!-- §3 方法详解 -->
+      <section class="section" id="s3">
+        <div class="section-title">
+          <div class="icon" style="background:#fef3c7;">🛠️</div>
+          §3 方法详解
+        </div>
+
+        <h3 id="s3-1">3.1 整体框架</h3>
+
+        <p>RoleGen 是一个<strong>双模块协同框架</strong>，由以下两部分组成：</p>
+
+        <div class="flow">
+          <div class="flow-title">RoleGen 整体架构</div>
+          <div class="flow-row">
+            <div class="flow-box purple">Conversion Trajectory Reasoner<br/><small>（转化路径推理器）</small></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box green">Generative Behavioral Backbone<br/><small>（生成式行为骨干）</small></div>
+          </div>
+          <div class="flow-row" style="margin-top:10px;">
+            <div class="flow-box amber">Closed-loop Training<br/><small>（闭环训练：Reasoning → Execution → Feedback → Reflection）</small></div>
+          </div>
+        </div>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>① Conversion Trajectory Reasoner</h4>
+            <p><strong>角色</strong>：意图规划器（Intent Planner）</p>
+            <p><strong>基础</strong>：基于 LLM 的多任务 SFT</p>
+            <p><strong>核心能力</strong>：</p>
+            <ul>
+              <li>建模物品的<strong>功能角色</strong>（Functional Role）</li>
+              <li><strong>反事实推理</strong>（Counterfactual Inference）探索多样化转化路径</li>
+              <li>生成候选物品的 <strong>Semantic ID（SID）</strong></li>
+            </ul>
+          </div>
+          <div class="mini-card">
+            <h4>② Generative Behavioral Backbone</h4>
+            <p><strong>角色</strong>：执行引擎（Execution Engine）</p>
+            <p><strong>基础</strong>：纯交互日志训练的 decoder-only 生成模型</p>
+            <p><strong>核心能力</strong>：</p>
+            <ul>
+              <li>将 Reasoner 的语义预测<strong>grounded 到协同信号</strong></li>
+              <li>接收 Reasoner 的 SID 级输出作为<strong>显式引导</strong></li>
+              <li>缓解 LLM 推理的<strong>语义偏差</strong></li>
+            </ul>
+          </div>
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2602.13134v1/x2.png" alt="Figure 2: RoleGen 整体架构" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />
+          <div class="fig-placeholder" style="display:none;">
+            <b>Figure 2: RoleGen 整体架构</b>
+          </div>
+          <figcaption><strong>Figure 2：</strong>RoleGen 整体架构图。展示了 Conversion Trajectory Reasoner（Item Semantic-ID Alignment + FR-CoT + Counterfactual Inference）和 Generative Behavioral Backbone（Reasoning Injection + Lazy Cross-Attention）的协同机制及闭环训练流程（Reasoning → Execution → Feedback → Reflection）。</figcaption>
+        </figure>
+
+        <div class="callout callout-purple" style="background:#faf5ff;border-color:#e9d5ff;">
+          <strong>🏗️ Figure 2 详细架构图解</strong>
+          
+          <h4 style="margin-top:12px;color:#7c3aed;">上半部分：Conversion Trajectory Reasoner（推理器）</h4>
+          
+          <p><strong>① Item Semantic-ID Alignment（物品-SID 对齐）</strong></p>
+          <div style="background:#f8fafc;padding:10px;border-radius:8px;margin:8px 0;font-size:13px;">
+            <strong>输入</strong>：物品元数据（标题、价格、类目）<br/>
+            <strong>输出</strong>：三层 SID <code>&lt;s_a_*&gt;&lt;s_b_*&gt;&lt;s_c_*&gt;</code><br/>
+            <strong>训练任务</strong>：Item Indexing（元数据 → SID）、Item Profiling（SID → 标题/类目）<br/>
+            <strong>作用</strong>：让 LLM 理解 SID 代表的物品语义
+          </div>
+
+          <p style="margin-top:12px;"><strong>② Functional Role-guided Chain-of-Thought（FR-CoT）</strong></p>
+          <div style="background:#f8fafc;padding:10px;border-radius:8px;margin:8px 0;font-size:13px;">
+            <strong>推理流程</strong>（<code>&lt;think&gt; ... &lt;/think&gt;</code>）：
+            <ol style="margin:6px 0;padding-left:20px;">
+              <li><strong>Step 1</strong>: 提取用户兴趣 Profile → $C_u$ = [化妆品, 护肤品, ...]</li>
+              <li><strong>Step 2</strong>: 识别关键物品 → $I^{\text{key}}_u$ = [面霜, 精华液, ...]</li>
+              <li><strong>Step 3</strong>: 标注功能角色 → 面霜: (Evergreen, Core, FMCG, Complementarity)</li>
+              <li><strong>Step 4</strong>: 推理目标角色 → $\hat{\mathbf{r}}^{\text{tgt}}_u$ = (Booming, Trial, ...)</li>
+            </ol>
+            <strong>输出</strong>：Target SID（符合推理角色的候选物品）
+          </div>
+
+          <p style="margin-top:12px;"><strong>③ Counterfactual Functional Role Inference（反事实推理）</strong></p>
+          <div style="background:#f8fafc;padding:10px;border-radius:8px;margin:8px 0;font-size:13px;">
+            <strong>干预操作</strong>：$\text{do}(\mathbf{r}^{\text{tgt}}_u = \mathbf{r}')$<br/>
+            <strong>逻辑</strong>："如果用户想要 Trial 试用品 → 生成候选 A"<br/>
+            <strong>逻辑</strong>："如果用户想要 Premium 高端品 → 生成候选 B"<br/>
+            <strong>输出</strong>：$\{\hat{y}^{\text{rea}}_u\}$ = 多样化候选物品 SID 列表<br/>
+            <strong>优势</strong>：在<strong>意图级别</strong>探索，比 token 级 Beam Search 更结构化
+          </div>
+
+          <h4 style="margin-top:14px;color:#16a34a;">下半部分：Generative Behavioral Backbone（执行引擎）</h4>
+
+          <p><strong>① Reasoning Injection（推理注入）</strong></p>
+          <div style="background:#f8fafc;padding:10px;border-radius:8px;margin:8px 0;font-size:13px;">
+            <strong>输入特征</strong>：用户 Profile + 历史序列 + Reasoning Guidance Features（Reasoner 的预测）<br/>
+            <strong>形式</strong>：候选物品 SID 列表、层次化统计特征（SID₁, SID₂ 的位置分布）<br/>
+            <strong>作用</strong>：为 Backbone 提供<strong>语义导航</strong>，缓解沉默用户数据稀疏
+          </div>
+
+          <p style="margin-top:12px;"><strong>② Lazy Cross-Attention + Autoregressive Generation</strong></p>
+          <div style="background:#f8fafc;padding:10px;border-radius:8px;margin:8px 0;font-size:13px;">
+            <strong>编码</strong>：Context → RMSNorm → Static (k, v) cache<br/>
+            <strong>解码</strong>：每个 Decoder Block 包含 Lazy Cross-Attention（访问静态 cache）、Causal Self-Attention（自回归生成）、FFN（前馈网络）<br/>
+            <strong>生成</strong>：逐层生成 SID₁ → SID₂ → SID₃（从粗到细）
+          </div>
+
+          <h4 style="margin-top:14px;color:#d97706;">闭环机制：Reasoning → Execution → Feedback → Reflection</h4>
+
+          <div style="background:#fffbeb;padding:12px;border-radius:8px;margin:8px 0;font-size:13px;border:1px solid #fcd34d;">
+            <div style="margin-bottom:8px;">
+              <strong>1. Reasoning</strong>：Reasoner 预测 $\{\hat{y}^{\text{rea}}\}$
+              <span style="float:right;color:#d97706;">→</span>
+            </div>
+            <div style="margin-bottom:8px;">
+              <strong>2. Execution</strong>：Backbone 生成推荐 $\{\hat{y}^{\text{gr}}\}$
+              <span style="float:right;color:#d97706;">→</span>
+            </div>
+            <div style="margin-bottom:8px;">
+              <strong>3. Feedback</strong>：用户点击/购买 → $i_{\text{gt}}$ (ground-truth item)
+              <span style="float:right;color:#d97706;">→</span>
+            </div>
+            <div>
+              <strong>4. Reflection</strong>：用 $(S_u, \{\hat{y}^{\text{rea}}\}, \{\hat{y}^{\text{gr}}\}, i_{\text{gt}})$ 微调 Reasoner
+              <span style="float:right;color:#d97706;">↻</span>
+            </div>
+            <p style="margin-top:10px;padding-top:10px;border-top:1px dashed #fcd34d;">
+              <strong>目的</strong>：让 Reasoner 从<strong>协同信号</strong>中学习，校准语义推理的准确性
+            </p>
+          </div>
+
+          <p style="margin-top:14px;padding:10px;background:#eff6ff;border-radius:8px;font-size:13px;">
+            <strong>🔑 图的核心信息</strong>：<br/>
+            1️⃣ <strong>双模块协同</strong>：Reasoner 提供语义导航，Backbone 执行协同过滤<br/>
+            2️⃣ <strong>显式引导</strong>：Reasoner 的 SID 级输出直接注入 Backbone 输入<br/>
+            3️⃣ <strong>闭环学习</strong>：在线反馈持续优化 Reasoner 的推理质量<br/>
+            4️⃣ <strong>异步解耦</strong>：Reasoner（周级更新）和 Backbone（实时服务）通过特征服务解耦
+          </p>
+        </div>
+
+        <h3 id="s3-2">3.2 Item Semantic-ID Alignment</h3>
+
+        <p>LLM-based 推荐的前提：让 LLM 能够<strong>识别平台物品</strong>，即将 LLM 的通用语义空间与平台的离散 ID 空间对齐。</p>
+
+        <h4>Step 1: 词表扩展</h4>
+
+        <p>采用快手生产环境的 <strong>RQ-KMeans 生成的 Semantic ID（SID）</strong> 作为物品唯一表示：</p>
+
+        <ul>
+          <li>SID 编码了<strong>多模态特征</strong>（标题、图片）+ <strong>协同信号</strong></li>
+          <li>通过 RQ-KMeans 得到<strong>三层层次化编码</strong>：<code>&lt;s_a_306&gt;&lt;s_b_24&gt;&lt;s_c_730&gt;</code></li>
+        </ul>
+
+        <h4>Step 2: 多任务指令微调</h4>
+
+        <p>构建双向对齐任务，使用物品元数据（标题、价格、类目路径）：</p>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>Task 1: Item Indexing</h4>
+            <p>物品元数据 → SID</p>
+            <p style="font-size:12px;color:#667085;margin-top:8px;">
+              输入：<code>[Brand] Barista Edition Oat Milk, Unsweetened & Gluten-Free, Non-GMO, 1L (Pack of 6)</code><br/>
+              输出：<code>&lt;s_a_306&gt;&lt;s_b_24&gt;&lt;s_c_730&gt;</code>
+            </p>
+          </div>
+          <div class="mini-card">
+            <h4>Task 2: Item Profiling</h4>
+            <p>SID → 物品标题 / 类目</p>
+            <p style="font-size:12px;color:#667085;margin-top:8px;">
+              输入：<code>&lt;s_a_306&gt;&lt;s_b_24&gt;&lt;s_c_730&gt;</code><br/>
+              输出：<code>Barista Edition Oat Milk</code> 或 <code>Grocery > Beverages > Plant-based Milk</code>
+            </p>
+          </div>
+        </div>
+
+        <div class="callout callout-amber">
+          <strong>⚠️ 防止灾难性遗忘</strong>
+          <p>在 SID 对齐训练时，混入<strong>通用指令数据</strong>（如 Alpaca、ShareGPT），防止 LLM 失去通用语言能力。</p>
+        </div>
+
+        <div class="callout callout-blue">
+          <strong>🤔 为什么需要 Item Semantic-ID Alignment？</strong>
+          <p><strong>核心问题：语义鸿沟</strong></p>
+          <p>商品确实已经有 SID 了（通过 RQ-KMeans 生成），但 LLM 并不认识这些 SID。SID 本质上是平台特定的离散 token（如 <code>&lt;s_a_306&gt;</code>），对 LLM 来说只是陌生符号。</p>
+          <p style="margin-top:10px;"><strong>Alignment 的三大作用：</strong></p>
+          <ol>
+            <li><strong>词表扩展</strong>：将 SID token 加入 LLM 词表（LLM 预训练时没见过这些 token）</li>
+            <li><strong>建立语义连接</strong>：让 LLM 知道 <code>&lt;s_a_306&gt;</code> = "高端燕麦奶"（物品语义）</li>
+            <li><strong>支持推理</strong>：后续的功能角色推理需要 LLM 理解"燕麦奶"的语义（健康、植物基、饮品），才能推断它在健康场景中的作用</li>
+          </ol>
+          <p style="margin-top:10px;padding:10px;background:#eff6ff;border-radius:8px;font-size:13px;">
+            <strong>类比</strong>：就像教一个外国人中文。即使你告诉他"苹果"的拼音是 pingguo，他也不知道 pingguo 是什么。你需要：<br/>
+            1️⃣ 教他拼音系统（词表扩展）<br/>
+            2️⃣ 告诉他 pingguo = 红色的水果（语义连接）<br/>
+            3️⃣ 让他理解苹果的各种用法（支持推理）
+          </p>
+        </div>
+
+        <h3 id="s3-3">3.3 功能角色建模（Functional Role Modeling）</h3>
+
+        <h4>动机</h4>
+
+        <p>直接让 LLM 从稀疏交互序列预测目标物品对沉默用户来说非常困难。引入<strong>功能角色</strong>作为结构化推理中间层，提供两大优势：</p>
+
+        <ol>
+          <li><strong>可解释性</strong>：符合人类购买决策逻辑</li>
+          <li><strong>统计高效</strong>：功能角色空间紧凑，模式复现率高</li>
+        </ol>
+
+        <h4>功能角色定义</h4>
+
+        <p>物品 $i$ 在用户 $u$ 序列中的功能角色 $\mathbf{r}_u(i) \in \mathcal{R}$ 是一个<strong>多维离散向量</strong>：</p>
+
+        <div class="formula-block">
+          $$\mathbf{r}_u(i) = \left( r^{\text{pop}}(i), r^{\text{cost}}(i), r^{\text{repl}}(i), r^{\text{rel}}(i; C_u) \right)$$
+        </div>
+
+        <div class="formula-vars">
+          <div class="var-title">四个维度</div>
+          <ul>
+            <li><strong>$r^{\text{pop}}(i)$：市场热度</strong>（Market Popularity）—— Booming / Evergreen / Long-tail</li>
+            <li><strong>$r^{\text{cost}}(i)$：决策成本</strong>（Decision Cost）—— Trial（试用）/ Core（标品）/ Premium（高价）</li>
+            <li><strong>$r^{\text{repl}}(i)$：复购性质</strong>（Replenishment Nature）—— FMCG（快消品）/ Durables（耐用品）</li>
+            <li><strong>$r^{\text{rel}}(i; C_u)$：上下文意图角色</strong>（Contextual Intent Role）—— Complementarity / Substitution / Audience Overlap</li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：空气炸锅的功能角色</div>
+          <p>假设一个用户最近浏览了健康食品类目，然后点击了空气炸锅：</p>
+          <ul>
+            <li>$r^{\text{pop}} = \text{Booming}$（当前热门品类）</li>
+            <li>$r^{\text{cost}} = \text{Premium}$（价格较高，需要决策考量）</li>
+            <li>$r^{\text{repl}} = \text{Durables}$（耐用品，非快消）</li>
+            <li>$r^{\text{rel}} = \text{Complementarity}$（与用户兴趣 Profile 中的"健康饮食"类目互补）</li>
+          </ul>
+        </div>
+
+        <div class="callout callout-green">
+          <strong>🎯 功能角色建模：完整输入输出示例</strong>
+          
+          <h4 style="margin-top:10px;">Example 1: 健康生活方式用户</h4>
+          
+          <p><strong>输入：用户交互序列</strong></p>
+          <div style="background:#f8fafc;padding:10px;border-radius:8px;margin:8px 0;font-size:13px;">
+            <code>S_u = [(燕麦奶, click, t₁), (蔬菜汁, click, t₂), (榨汁机, purchase, t₃)]</code>
+          </div>
+
+          <p style="margin-top:10px;"><strong>Step 1: 提取用户兴趣 Profile</strong></p>
+          <div style="background:#f8fafc;padding:10px;border-radius:8px;margin:8px 0;font-size:13px;">
+            从历史行为聚合：<br/>
+            <code>C_u = [("Plant-based Milk", 0.8), ("Healthy Beverages", 0.7), ("Kitchen Appliances", 0.3)]</code>
+          </div>
+
+          <p style="margin-top:10px;"><strong>Step 2: 标注关键物品的功能角色</strong></p>
+          <div class="table-wrap" style="margin:8px 0;">
+            <table style="font-size:12px;">
+              <thead>
+                <tr>
+                  <th>物品</th>
+                  <th>$r^{\text{pop}}$</th>
+                  <th>$r^{\text{cost}}$</th>
+                  <th>$r^{\text{repl}}$</th>
+                  <th>$r^{\text{rel}}(i; C_u)$</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>燕麦奶</td>
+                  <td>Evergreen</td>
+                  <td>Core</td>
+                  <td>FMCG</td>
+                  <td>(Plant-based Milk, -)</td>
+                </tr>
+                <tr>
+                  <td>蔬菜汁</td>
+                  <td>Booming</td>
+                  <td>Trial</td>
+                  <td>FMCG</td>
+                  <td>(Healthy Beverages, <strong>Complementarity</strong>)</td>
+                </tr>
+                <tr>
+                  <td>榨汁机</td>
+                  <td>Evergreen</td>
+                  <td>Premium</td>
+                  <td>Durables</td>
+                  <td>(Kitchen Appliances, <strong>Complementarity</strong>)</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p style="margin-top:10px;"><strong>Step 3: 构建功能角色轨迹</strong></p>
+          <div style="background:#f8fafc;padding:10px;border-radius:8px;margin:8px 0;font-size:13px;">
+            <code>R_u = [</code><br/>
+            <code>&nbsp;&nbsp;(Evergreen, Core, FMCG, -),&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# 燕麦奶</code><br/>
+            <code>&nbsp;&nbsp;(Booming, Trial, FMCG, Complementarity),&nbsp;&nbsp;&nbsp;# 蔬菜汁</code><br/>
+            <code>&nbsp;&nbsp;(Evergreen, Premium, Durables, Complementarity) # 榨汁机</code><br/>
+            <code>]</code>
+          </div>
+
+          <div style="background:#fff7ed;padding:12px;border-radius:8px;margin:10px 0;border:1px solid #fed7aa;">
+            <strong>🔗 R_u 如何在 Step 4 中使用？</strong>
+            <p style="font-size:13px;margin:8px 0 0;">功能角色轨迹 R_u 会作为 <strong>LLM 的推理上下文</strong>，用于：</p>
+            <ol style="font-size:13px;margin:6px 0;padding-left:20px;">
+              <li><strong>识别转化模式</strong>：看到 (Evergreen, Core, FMCG) → (Booming, Trial, FMCG) → (Evergreen, Premium, Durables)，LLM 识别出 Core → Trial → Premium（价格递进）+ FMCG → Durables（品类跃迁）</li>
+              <li><strong>捕捉意图演化</strong>：连续两个 Complementarity 表明用户在构建完整消费场景；Trial（蔬菜汁）没有购买，但作为"意图触发器"推动了 Premium（榨汁机）转化</li>
+              <li><strong>推断下一步角色</strong>：基于轨迹模式，LLM 推理"下一个物品应该也是 (*, Premium, Durables, Complementarity)"，或者反事实"如果用户想要 Trial 试用品呢？→ (*, Trial, *, Complementarity)"</li>
+            </ol>
+            <p style="font-size:13px;margin:8px 0 0;padding:8px;background:#fff;border-radius:6px;">
+              <strong>类比</strong>：R_u 就像一个<strong>决策路径的"脚本"</strong>。LLM 看到这个脚本后，能理解：<br/>
+              "用户正在从日常消费（燕麦奶）→ 场景探索（蔬菜汁）→ 设备投资（榨汁机）的升级路径"<br/>
+              然后预测："下一步可能继续这个场景（如水果刀、保鲜盒）或升级到更高端设备"
+            </p>
+          </div>
+
+          <p style="margin-top:10px;"><strong>Step 4: FR-CoT 推理（Reasoner 内部思考）</strong></p>
+          <div style="background:#fffbeb;padding:12px;border-radius:8px;margin:8px 0;font-size:13px;border:1px solid #fcd34d;">
+            <code>&lt;think&gt;</code><br/>
+            <strong>输入轨迹</strong>: R_u = [(Evergreen,Core,FMCG,-), (Booming,Trial,FMCG,Comp), (Evergreen,Premium,Durables,Comp)]<br/>
+            <strong>用户兴趣</strong>: Plant-based Milk, Healthy Beverages<br/><br/>
+            <strong>轨迹解读</strong>:<br/>
+            &nbsp;&nbsp;• 燕麦奶 (Evergreen, Core, FMCG) → 日常必需品，建立基础需求<br/>
+            &nbsp;&nbsp;• 蔬菜汁 (Booming, Trial, FMCG, <span style="color:#d97706;">Complementarity</span>) → 健康场景互补品，触发"自制更健康"意图<br/>
+            &nbsp;&nbsp;• 榨汁机 (Evergreen, Premium, Durables, <span style="color:#d97706;">Complementarity</span>) → 高价值延伸，实现自制场景<br/><br/>
+            <strong>模式识别</strong>:<br/>
+            &nbsp;&nbsp;✓ 价格路径：Core → Trial → <strong>Premium</strong>（用户愿意为场景投资）<br/>
+            &nbsp;&nbsp;✓ 连续 Complementarity → 构建完整<strong>"自制健康饮品"</strong>场景<br/>
+            &nbsp;&nbsp;✓ FMCG → Durables → 从消费品到设备投资<br/><br/>
+            <strong>推理逻辑</strong>:<br/>
+            &nbsp;&nbsp;基于 R_u 的模式，用户下一步可能：<br/>
+            &nbsp;&nbsp;方案 A: 继续 Premium + Complementarity → 高端榨汁机配件<br/>
+            &nbsp;&nbsp;方案 B: 回到 Trial → 新的健康食材试用装<br/>
+            &nbsp;&nbsp;方案 C: 保持 Durables + Complementarity → 其他厨房设备<br/><br/>
+            <strong>选择方案 A</strong>: r_tgt = (Evergreen, Premium, Durables, Complementarity)<br/>
+            <code>&lt;/think&gt;</code><br/><br/>
+            <strong>→ 预测</strong>: 高速榨汁机配件 <code>&lt;s_a_4&gt;&lt;s_b_259&gt;&lt;s_c_758&gt;</code> ✅
+          </div>
+
+          <h4 style="margin-top:14px;">Example 2: 沉默用户跨类目推荐</h4>
+
+          <p><strong>输入：稀疏交互序列</strong></p>
+          <div style="background:#f8fafc;padding:10px;border-radius:8px;margin:8px 0;font-size:13px;">
+            <code>S_u = [(粉底液, click), (口红, click), (内衣, click), (精华液, click)]</code><br/>
+            <code>C_u = [("Cosmetics", 0.9), ("Intimate Apparel", 0.6), ("Skin Care", 0.4)]</code><br/>
+            <strong>Ground Truth</strong>: 用户实际购买了<strong>面膜</strong>（新类目！）
+          </div>
+
+          <p style="margin-top:10px;"><strong>对比：w/o Reasoner vs RoleGen</strong></p>
+
+          <div class="two-col" style="margin:10px 0;">
+            <div style="background:#fee2e2;padding:10px;border-radius:8px;border:1px solid #fca5a5;">
+              <h4 style="margin:0 0 8px;">❌ w/o Reasoner</h4>
+              <p style="font-size:13px;margin:0;">
+                <strong>方法</strong>：协同过滤<br/>
+                <strong>逻辑</strong>：找相似用户，推荐重复类目<br/>
+                <strong>预测</strong>：内衣（重复历史）<br/>
+                <strong>问题</strong>：陷入自我强化循环
+              </p>
+            </div>
+
+            <div style="background:#dcfce7;padding:10px;border-radius:8px;border:1px solid #86efac;">
+              <h4 style="margin:0 0 8px;">✅ RoleGen</h4>
+              <p style="font-size:13px;margin:0;">
+                <strong>推理</strong>：<br/>
+                化妆品 + 精华液 → 女性护肤人群<br/>
+                意图转变：日常化妆 → 深度自我护理<br/>
+                <strong>目标角色</strong>：(Booming, Trial, FMCG, <strong>Audience Overlap</strong>)<br/>
+                <strong>预测</strong>：面膜 ✅<br/>
+                <strong>关键</strong>：与 Cosmetics 有受众重叠
+              </p>
+            </div>
+          </div>
+
+          <p style="margin-top:10px;"><strong>Step 5: 反事实推理（多样化探索）</strong></p>
+          <div style="background:#f8fafc;padding:10px;border-radius:8px;margin:8px 0;font-size:13px;">
+            <strong>路径 1</strong>: <code>do(r_tgt = (*, Trial, *, Audience Overlap))</code><br/>
+            &nbsp;&nbsp;→ 候选：面膜（9.9元试用装）<br/><br/>
+            <strong>路径 2</strong>: <code>do(r_tgt = (*, Premium, *, Complementarity))</code><br/>
+            &nbsp;&nbsp;→ 候选：高端面霜<br/><br/>
+            <strong>路径 3</strong>: <code>do(r_tgt = (*, *, *, Complementarity to Skin Care))</code><br/>
+            &nbsp;&nbsp;→ 候选：护肤套装<br/><br/>
+            <strong>最终输出</strong>: {ŷ_rea} = [面膜, 面霜, 护肤套装]
+          </div>
+
+          <div style="background:#fef3c7;padding:14px;border-radius:8px;margin:12px 0;border:2px solid #fcd34d;">
+            <h4 style="margin:0 0 10px;color:#92400e;">🔑 关键问题：Reasoner 输出的 SID 有什么用？</h4>
+            
+            <p style="font-size:13px;margin:0 0 10px;"><strong>❌ 常见误解</strong>：Reasoner 的输出 = 最终推荐结果</p>
+            
+            <p style="font-size:13px;margin:0 0 10px;"><strong>✅ 正确理解</strong>：Reasoner 的输出是给 <strong>Generative Behavioral Backbone 的引导信号</strong>（Reasoning Guidance Features）</p>
+
+            <div style="background:#fff;padding:10px;border-radius:6px;margin:10px 0;font-size:13px;">
+              <strong>完整流程（双模块协同）：</strong>
+              <ol style="margin:8px 0;padding-left:20px;line-height:1.8;">
+                <li><strong>Reasoner 推理</strong>（近线，每周批量）：
+                  <br/>输入：用户序列 S_u
+                  <br/>输出：{ŷ_rea} = [面膜_SID, 面霜_SID, 护肤套装_SID] <span style="color:#d97706;">← 这不是最终推荐！</span>
+                </li>
+                <li><strong>特征注入</strong>（存储到 Feature Store）：
+                  <br/>将 {ŷ_rea} 转换为 <strong>Reasoning Guidance Features</strong>：
+                  <ul style="margin:4px 0;padding-left:20px;">
+                    <li>候选 SID 列表：[&lt;s_a_4&gt;, &lt;s_a_179&gt;, &lt;s_a_88&gt;]</li>
+                    <li>层次化统计：SID₁ 分布 {&lt;s_a_4&gt;: 0.6, &lt;s_a_179&gt;: 0.3, ...}</li>
+                  </ul>
+                </li>
+                <li><strong>Backbone 生成</strong>（在线，实时服务）：
+                  <br/>输入：用户实时序列 + <strong>Reasoning Guidance Features</strong>
+                  <br/>解码：自回归生成，在每一层 SID 生成时，<strong>参考 Reasoner 的引导</strong>
+                  <br/>输出：<strong>最终推荐</strong> {ŷ_gr} = [面膜_A, 面膜_B, 精华液_C, 面霜_D, ...] <span style="color:#16a34a;">← 这才是用户看到的推荐！</span>
+                </li>
+              </ol>
+            </div>
+
+            <div style="background:#eff6ff;padding:10px;border-radius:6px;margin-top:10px;font-size:13px;">
+              <strong>🎯 Reasoner 输出的三大作用：</strong>
+              <ol style="margin:6px 0;padding-left:20px;">
+                <li><strong>方向引导</strong>：告诉 Backbone "应该往面部护理方向生成"（语义导航）</li>
+                <li><strong>概率约束</strong>：在解码时提高 &lt;s_a_4&gt; 这个 SID₁ 的生成概率（软约束）</li>
+                <li><strong>多样性探索</strong>：通过反事实推理提供多条路径，避免 Backbone 陷入单一模式</li>
+              </ol>
+            </div>
+
+            <div style="background:#fee2e2;padding:10px;border-radius:6px;margin-top:10px;font-size:13px;">
+              <strong>❓ 为什么不直接用 Reasoner 的输出作为推荐？</strong>
+              <ol style="margin:6px 0;padding-left:20px;">
+                <li><strong>语义偏差</strong>：LLM 推理基于"世界知识"，可能不符合平台的<strong>协同信号</strong></li>
+                <li><strong>延迟问题</strong>：LLM 推理慢（秒级），无法实时服务</li>
+                <li><strong>精度不足</strong>：Reasoner 只推理"大方向"（面部护理），Backbone 结合协同信号给出精准 SKU（哪个品牌的面膜）</li>
+              </ol>
+            </div>
+
+            <p style="margin:12px 0 0;padding:10px;background:#dcfce7;border-radius:6px;font-size:13px;">
+              <strong>💡 类比</strong>：<br/>
+              <strong>Reasoner</strong> = GPS 导航，告诉你"往东走，去商场"（语义级引导）<br/>
+              <strong>Backbone</strong> = 真正开车的司机，结合实时路况（协同信号），决定具体走哪条路、在哪个路口转弯（精准 SKU 级推荐）<br/><br/>
+              两者协同，才能又快又准地到达目的地！
+            </p>
+          </div>
+
+          <p style="margin-top:14px;padding:10px;background:#eff6ff;border-radius:8px;font-size:13px;">
+            <strong>🔑 为什么功能角色建模有效？</strong><br/>
+            1️⃣ <strong>抽象层次更高</strong>：物品空间（1000万 SKU）→ 功能角色空间（54 种组合），模式密集易泛化<br/>
+            2️⃣ <strong>捕捉动态关系</strong>：物品在上下文中的"工具性作用"，而非静态关联<br/>
+            3️⃣ <strong>可迁移性</strong>："牛奶"和"厨房纸巾"在物品空间无关，但都是 (Evergreen, Trial, FMCG, -)，决策模式可迁移<br/>
+            4️⃣ <strong>可解释性</strong>：推荐理由从"其他用户也买了"→"符合你从 Trial 到 Premium 的升级路径"
+          </p>
+        </div>
+
+        <h4>上下文意图角色的构建（Contextual Intent Role）</h4>
+
+        <p>前三个维度是<strong>固有属性</strong>（intrinsic），第四个维度 $r^{\text{rel}}$ 是<strong>上下文相关</strong>的，需要结合用户的累积兴趣 Profile $C_u$：</p>
+
+        <div class="formula-block">
+          $$r^{\text{rel}}(i; C_u) = (c^*, \text{Rel}_{c^* \to c(i)})$$
+        </div>
+
+        <p>其中：</p>
+
+        <div class="formula-block">
+          $$c^* = \arg\max_{c \in C_u} \left[ \text{Score}_u(c) \cdot \mathbb{I}[\exists \text{Rel}_{c \to c(i)}] \right]$$
+        </div>
+
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$C_u = [c_k]_{k=1}^{L_u}$：用户的<strong>兴趣 Profile</strong>（按行为权重排序的类目列表）</li>
+            <li>$c(i)$：物品 $i$ 的类目</li>
+            <li>$\text{Rel}_{c \to c(i)}$：从类目 $c$ 到 $c(i)$ 的<strong>关系类型</strong>（Complementarity / Substitution / Audience Overlap）</li>
+            <li>$\text{Score}_u(c)$：用户对类目 $c$ 的行为加权兴趣分数</li>
+          </ul>
+        </div>
+
+        <div class="callout callout-blue">
+          <strong>💡 决策知识图谱（Decision Knowledge Graph）</strong>
+          <p>RoleGen 从大规模交互日志中构建了<strong>电商领域决策知识图谱</strong>，编码类目之间的三种关系：</p>
+          <ul>
+            <li><strong>Complementarity（互补）</strong>：场景完成所需的补充品（如 手机 → 手机支架）</li>
+            <li><strong>Substitution（替代）</strong>：功能相似的替代品（如 牛奶 → 豆奶）</li>
+            <li><strong>Audience Overlap（受众重叠）</strong>：吸引相似用户群体的物品（如 瑜伽垫 → 运动水杯）</li>
+          </ul>
+        </div>
+
+        <h3 id="s3-4">3.4 FR-CoT 指令微调（Functional Role-guided Chain-of-Thought）</h3>
+
+        <p>基于功能角色轨迹 $R_u$，设计<strong>FR-CoT</strong> 目标，将沉默用户转化建模为结构化推理问题。</p>
+
+        <h4>FR-CoT 的三步推理逻辑</h4>
+
+        <p>LLM 的输出被包裹在 <code>&lt;think&gt;</code> 标签中，遵循三步推理：</p>
+
+        <div class="flow">
+          <div class="flow-title">FR-CoT 推理流程</div>
+          <div class="flow-row">
+            <div class="flow-box">Step 1<br/>提炼用户兴趣 Profile $C_u$</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box green">Step 2<br/>识别关键物品 $I^{\text{key}}_u$ 及角色 $R_u$</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box purple">Step 3<br/>推理目标物品角色 $\hat{\mathbf{r}}^{\text{tgt}}_u$</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box amber">输出 SID</div>
+          </div>
+        </div>
+
+        <div class="callout callout-purple">
+          <strong>🔑 关键设计：角色先行（Role-first Decoding）</strong>
+          <p>在生成物品 ID 之前，先预测<strong>目标物品的功能角色</strong> $\hat{\mathbf{r}}^{\text{tgt}}_u$。</p>
+          <p><strong>作用</strong>：</p>
+          <ul>
+            <li>作为<strong>意图锚点</strong>（Intent Anchor），剪枝搜索空间</li>
+            <li>约束生成的物品与推理逻辑一致（如 Trial → Premium 升级）</li>
+          </ul>
+        </div>
+
+        <h4>联合辅助任务</h4>
+
+        <p>为了增强推理鲁棒性，FR-CoT 与以下辅助任务联合优化：</p>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>① 标准行为预测</h4>
+            <p>$S_u \to \text{target SID}$</p>
+            <p>$S_u \to \text{target title}$</p>
+            <p style="font-size:12px;color:#667085;margin-top:8px;">保留直接协同过滤能力</p>
+          </div>
+          <div class="mini-card">
+            <h4>② 逐步推理子任务</h4>
+            <p>$S_u \to I^{\text{key}}_u$（定位关键物品）</p>
+            <p>$(S_u, I^{\text{key}}_u) \to R_u$（重建角色轨迹）</p>
+            <p>$(S_u, R_u, \mathbf{r}^{\text{tgt}}) \to \text{SID}$（基于角色生成）</p>
+          </div>
+        </div>
+
+        <div class="mini-card" style="margin-top:16px;">
+          <h4>③ 语义对齐回放</h4>
+          <p>重放 Item Indexing 和 Item Profiling 任务，防止灾难性遗忘。</p>
+        </div>
+
+        <h3 id="s3-5">3.5 反事实功能角色推理（Counterfactual Functional Role Inference）</h3>
+
+        <h4>动机：打破自我强化循环</h4>
+
+        <p>即使有 FR-CoT，沉默用户的预测角色 $\hat{\mathbf{r}}^{\text{tgt}}_u$ 仍可能陷入<strong>自我强化循环</strong>：</p>
+
+        <ul>
+          <li>稀疏交互 → MLE 倾向于拟合主导但可能过时的兴趣</li>
+          <li>导致<strong>兴趣坍塌</strong>（Interest Collapse）和马太效应</li>
+          <li>标准 Beam Search 只在 token 级操作，一旦高层意图锚点确定，多样性就结构性受限</li>
+        </ul>
+
+        <div class="callout callout-red">
+          <strong>⚠️ 关键洞察</strong>
+          <p>探索必须发生在<strong>意图层级</strong>（intent level），而非物品层级（item level）。</p>
+        </div>
+
+        <h4>解决方案：反事实干预</h4>
+
+        <p>不直接使用 FR-CoT 预测的 $\hat{\mathbf{r}}^{\text{tgt}}_u$，而是施加<strong>反事实干预</strong>：</p>
+
+        <div class="formula-block">
+          $$\text{do}(\mathbf{r}^{\text{tgt}}_u = \mathbf{r}')$$
+        </div>
+
+        <p>其中 $\mathbf{r}'$ 从候选角色集 $\tilde{\mathcal{R}}^{\text{tgt}}_u$ 中采样，该集合由两部分构成：</p>
+
+        <ol>
+          <li>轨迹 $R_u$ 中已观察到的角色</li>
+          <li>全局频繁转化角色（从历史成功转化中挖掘）</li>
+        </ol>
+
+        <p>然后重用 FR-CoT 的 Prompt，但将目标角色替换为反事实角色 $\mathbf{r}'$，让 Reasoner 预测对应的物品 $\hat{i}^{\text{rea}}_u$：</p>
+
+        <div class="formula-block">
+          $$(u, S_u), \langle\text{think}\rangle C_u, R_u, \mathbf{r}' \sim P(\tilde{\mathcal{R}}^{\text{tgt}}_u), \langle/\text{think}\rangle \xrightarrow{\text{Reasoner}} \hat{i}^{\text{rea}}_u$$
+        </div>
+
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$(u, S_u)$：用户上下文</li>
+            <li>$C_u$：用户兴趣 Profile</li>
+            <li>$R_u$：功能角色轨迹</li>
+            <li>$\mathbf{r}' \sim P(\tilde{\mathcal{R}}^{\text{tgt}}_u)$：从候选角色集中采样的反事实角色</li>
+            <li>$\hat{i}^{\text{rea}}_u$：Reasoner 预测的候选物品</li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：反事实推理如何打破循环</div>
+          <p><strong>场景</strong>：用户历史主要浏览低价快消品（如纸巾、清洁剂），FR-CoT 预测目标角色为 <code>FMCG + Trial</code>（快消 + 试用）。</p>
+          <p><strong>问题</strong>：这会导致推荐系统持续推荐低价快消品，陷入自我强化循环。</p>
+          <p><strong>反事实干预</strong>：</p>
+          <ul>
+            <li>候选角色集 $\tilde{\mathcal{R}}^{\text{tgt}}_u$ 包含：<code>(FMCG, Trial)</code>、<code>(Durables, Premium)</code>、<code>(Evergreen, Core)</code></li>
+            <li>采样到 $\mathbf{r}' = \text{(Durables, Premium)}$（耐用品 + 高价）</li>
+            <li>Reasoner 被问："如果用户意图是购买耐用高价品，最可能转化的物品是什么？"</li>
+            <li>输出候选：小家电（如空气炸锅、扫地机器人）</li>
+          </ul>
+          <p style="margin-top:10px;padding:10px;background:#eff6ff;border-radius:8px;font-size:13px;">
+            <strong>结果</strong>：打破了低价快消的循环，探索到了高价值升级路径。
+          </p>
+        </div>
+
+        <div class="callout callout-blue">
+          <strong>💡 反事实机制的两大优势</strong>
+          <ol>
+            <li><strong>逻辑约束的探索</strong>：在角色空间干预产生结构化多样性，保持与用户意图一致</li>
+            <li><strong>高效多候选生成</strong>：在低基数角色空间操作，无需重新计算整个推理轨迹，可并行生成多个反事实候选</li>
+          </ol>
+        </div>
+
+        <h3 id="s3-6">3.6 生成式行为骨干（Generative Behavioral Backbone）</h3>
+
+        <p>虽然 Reasoner 能捕获用户意图，但仅依赖它进行在线服务是次优的：</p>
+
+        <ul>
+          <li>LLM 预测可能<strong>偏离隐式协同过滤模式</strong>（semantic bias）</li>
+          <li><strong>推理延迟高</strong>，难以满足实时响应要求</li>
+          <li>缓存策略引入<strong>数据陈旧性</strong></li>
+        </ul>
+
+        <p>因此，RoleGen 使用<strong>生成式行为骨干</strong>作为执行引擎，Reasoner 作为知识引导的规划器。</p>
+
+        <h4>架构设计</h4>
+
+        <p>骨干采用<strong>decoder-only 生成架构</strong>，将物品表示为<strong>层次化 SID</strong>，转化为结构化 token 生成任务：</p>
+
+        <div class="flow">
+          <div class="flow-title">Backbone 前向传播</div>
+          <div class="flow-row">
+            <div class="flow-box">用户特征<br/>（Profile + History）</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box green">Linear + RMSNorm<br/>→ $\mathbf{T}$ → $(풌, 풗)$</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box purple">Decoder Blocks<br/>（Lazy Cross-Attn + Self-Attn + FFN）</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box amber">自回归生成<br/>SID₁ → SID₂ → SID₃</div>
+          </div>
+        </div>
+
+        <div class="callout callout-purple">
+          <strong>🔧 Lazy Cross-Attention 机制</strong>
+          <p>为了优化推理效率，每个 decoder block 使用<strong>惰性交叉注意力</strong>：</p>
+          <ul>
+            <li>用户上下文 $\mathbf{T}$ 被归一化为静态 KV 缓存 $(풌, 풗)$</li>
+            <li>所有 decoder 层共享该缓存，避免冗余投影</li>
+            <li>后接标准的 causal self-attention 和 position-wise FFN</li>
+          </ul>
+        </div>
+
+        <h3 id="s3-7">3.7 闭环协同训练（Co-Training Strategy）</h3>
+
+        <p>为了充分弥合语义推理与协同执行之间的 gap，RoleGen 建立了<strong>双向闭环</strong>：</p>
+
+        <div class="flow">
+          <div class="flow-title">Reasoning–Execution–Feedback–Reflection 闭环</div>
+          <div class="flow-row">
+            <div class="flow-box purple">Reasoner<br/>推理候选 $\{\hat{i}^{\text{rea}}_u\}$</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box green">Backbone<br/>生成推荐 $\{\hat{i}^{\text{gr}}_u\}$</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box amber">在线曝光<br/>收集反馈 $i_{\text{gt}}$</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box red">Reflection<br/>校准 Reasoner</div>
+          </div>
+        </div>
+
+        <h4>① 前向引导：推理注入（Reasoning Injection）</h4>
+
+        <p>将 Reasoner 的反事实推理注入到生成骨干中，缓解沉默用户的信号稀疏性：</p>
+
+        <ul>
+          <li>编码 Reasoner 的预测 $\{\hat{i}^{\text{rea}}_u\}$ 为<strong>推理引导特征</strong>（Reasoning Guidance Features）</li>
+          <li>包含：原始候选物品列表 + 层次化语义统计（如粗粒度 SID 的位置模式）</li>
+          <li>拼接到 Backbone 的输入上下文，提供显式语义导航线索</li>
+        </ul>
+
+        <h4>② 后向对齐：行为反思（Behavioral Reflection）</h4>
+
+        <p>利用 Backbone 作为协同镜像来校准 Reasoner，构建后验指令微调任务：</p>
+
+        <div class="formula-block">
+          $$(S_u, \{\hat{i}^{\text{rea}}_u\}, \{\hat{i}^{\text{gr}}_u\}) \xrightarrow{\text{Reasoner Reflection}} i_{\text{gt}}$$
+        </div>
+
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$S_u$：原始用户交互序列</li>
+            <li>$\{\hat{i}^{\text{rea}}_u\}$：Reasoner 的推荐</li>
+            <li>$\{\hat{i}^{\text{gr}}_u\}$：Backbone 的推荐</li>
+            <li>$i_{\text{gt}}$：在线曝光后的真实反馈物品（ground-truth）</li>
+          </ul>
+        </div>
+
+        <p><strong>机制</strong>：通过反思过程，Reasoner 迭代地将其语义逻辑与实际协同证据对齐，形成良性循环。</p>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：反思机制如何工作</div>
+          <p><strong>场景</strong>：</p>
+          <ul>
+            <li>Reasoner 基于功能角色推理，预测用户会购买"高端咖啡机"（Premium, Durables）</li>
+            <li>Backbone 基于协同过滤，推荐了"咖啡豆"（Trial, FMCG）</li>
+            <li>在线曝光后，用户实际点击并购买了"咖啡豆"（$i_{\text{gt}} = \text{咖啡豆}$）</li>
+          </ul>
+          <p style="margin-top:10px;"><strong>反思阶段</strong>：</p>
+          <ul>
+            <li>将 $(S_u, \{\text{咖啡机}\}, \{\text{咖啡豆}\})$ 作为新的训练样本</li>
+            <li>Reasoner 学习到：在该用户当前阶段，Trial 类快消品比 Premium 耐用品更容易转化</li>
+            <li>下次遇到类似用户时，Reasoner 会调整其推理逻辑</li>
+          </ul>
+        </div>
+
+        <h4>系统部署（System Deployment）</h4>
+
+        <p>RoleGen 已部署在快手电商平台（700M+ MAU），采用<strong>异步协同架构</strong>：</p>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>Reasoner：近线推理</h4>
+            <ul>
+              <li>每周更新和推理</li>
+              <li>生成候选物品的 SID</li>
+              <li>作为引导特征注入 Backbone</li>
+            </ul>
+          </div>
+          <div class="mini-card">
+            <h4>Backbone：在线服务</h4>
+            <ul>
+              <li>支持流式更新</li>
+              <li>实时响应用户请求</li>
+              <li>低延迟（P99 &lt; 50ms）</li>
+            </ul>
+          </div>
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2602.13134v1/x3.png" alt="Figure 3: 在线部署架构" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />
+          <div class="fig-placeholder" style="display:none;">
+            <b>Figure 3: 在线部署架构</b>
+          </div>
+          <figcaption><strong>Figure 3：</strong>RoleGen 在线部署框架。Near-line Reasoning：Conversion Trajectory Reasoner 每周批量推理，生成 Reasoning Guidance Features；Online Serving：Generative Behavioral Backbone 实时读取引导特征，自回归生成推荐结果，收集反馈供下一轮 Reflection。</figcaption>
+        </figure>
+
+        <div class="callout callout-amber">
+          <strong>🏭 Figure 3 在线部署架构详解</strong>
+          
+          <h4 style="margin-top:10px;">设计哲学：异步协同</h4>
+
+          <div class="two-col" style="margin:10px 0;">
+            <div class="mini-card" style="background:#fffbeb;border-color:#fcd34d;">
+              <h4>📅 Near-line Reasoning（近线推理）</h4>
+              <p><strong>频率</strong>：每周批量更新</p>
+              <p><strong>模块</strong>：Conversion Trajectory Reasoner</p>
+              <p><strong>流程</strong>：</p>
+              <ol style="font-size:13px;margin:8px 0;padding-left:20px;">
+                <li>从日志收集并预处理数据</li>
+                <li>批量推理生成 Reasoning Guidance Features：
+                  <ul>
+                    <li>候选物品 SID 列表</li>
+                    <li>层次化统计特征（SID₁, SID₂ 分布）</li>
+                  </ul>
+                </li>
+                <li>存储到特征服务（Feature Store）</li>
+              </ol>
+              <p style="font-size:12px;color:#d97706;margin-top:8px;"><strong>特点</strong>：计算密集（LLM推理），但不在关键路径上</p>
+            </div>
+
+            <div class="mini-card" style="background:#dcfce7;border-color:#86efac;">
+              <h4>⚡ Online Serving（在线服务）</h4>
+              <p><strong>频率</strong>：实时响应每个推荐请求</p>
+              <p><strong>模块</strong>：Generative Behavioral Backbone</p>
+              <p><strong>流程</strong>：</p>
+              <ol style="font-size:13px;margin:8px 0;padding-left:20px;">
+                <li>接收用户推荐请求</li>
+                <li>读取 Reasoning Guidance Features</li>
+                <li>读取用户实时行为序列</li>
+                <li>自回归生成 SID₁ → SID₂ → SID₃</li>
+                <li>返回推荐结果（SID → Item）</li>
+                <li>曝光后收集反馈 → 下轮 Reflection</li>
+              </ol>
+              <p style="font-size:12px;color:#16a34a;margin-top:8px;"><strong>特点</strong>：低延迟（<50ms），支持流式更新</p>
+            </div>
+          </div>
+
+          <div class="table-wrap" style="margin-top:12px;">
+            <table style="font-size:13px;">
+              <thead>
+                <tr>
+                  <th>维度</th>
+                  <th>Reasoner（近线）</th>
+                  <th>Backbone（在线）</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>延迟要求</td><td>不敏感（批量处理）</td><td>极低（<50ms）</td></tr>
+                <tr><td>计算成本</td><td>高（LLM推理）</td><td>中（生成模型）</td></tr>
+                <tr><td>更新频率</td><td>周级</td><td>实时流式</td></tr>
+                <tr><td>作用</td><td>提供语义导航</td><td>执行精准召回</td></tr>
+                <tr><td>解耦方式</td><td colspan="2">通过 Feature Store 异步通信</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p style="margin-top:12px;padding:10px;background:#eff6ff;border-radius:8px;font-size:13px;">
+            <strong>🔑 关键优势</strong>：<br/>
+            1️⃣ <strong>Reasoner 不在关键路径</strong>：LLM 推理慢不影响线上延迟<br/>
+            2️⃣ <strong>Backbone 实时响应</strong>：利用最新协同信号，毫秒级返回<br/>
+            3️⃣ <strong>解耦灵活</strong>：两者独立扩展，通过 Feature Store 解耦<br/>
+            4️⃣ <strong>成本可控</strong>：Reasoner 周级推理节省大量 LLM 调用成本
+          </p>
+        </div>
+
+      </section>
+
+      <!-- §4 实验结果 -->
+      <section class="section" id="s4">
+        <div class="section-title">
+          <div class="icon" style="background:#dcfce7;">📊</div>
+          §4 实验结果
+        </div>
+
+        <h3>4.1 离线实验（Offline Evaluation）</h3>
+
+        <p><strong>数据集</strong>：快手电商平台大规模真实数据</p>
+
+        <ul>
+          <li>训练：2200 万沉默转活跃用户（过去 3 个月），涉及 2800 万物品</li>
+          <li>反事实推理：1400 万沉默用户</li>
+          <li>测试：700 万正样本 user-item 交互对</li>
+        </ul>
+
+        <p><strong>对比模型</strong>：</p>
+
+        <ul>
+          <li><strong>SASRec</strong>：SOTA 序列推荐模型（self-attention）</li>
+          <li><strong>TIGER</strong>：生成式推荐先驱（RQ-VAE + 自回归生成）</li>
+          <li><strong>U2I & I2I</strong>：快手电商在线召回主力（占 80% 订单）</li>
+          <li><strong>w/o Rea</strong>：RoleGen 的生成骨干（无 Reasoner 干预）</li>
+          <li><strong>RoleGen</strong>：完整框架</li>
+        </ul>
+
+        <h4>物品召回指标（Item Hitrate）</h4>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>类别</th><th>模型</th><th>HI@1</th><th>HI@10</th><th>HI@100</th><th>HI@500</th><th>Loss</th></tr>
+            </thead>
+            <tbody>
+              <tr><td rowspan="2">离线 SeqRec</td><td>SASRec</td><td>1.86%</td><td>2.93%</td><td>5.11%</td><td>14.37%</td><td>-</td></tr>
+              <tr><td>TIGER</td><td>4.73%</td><td>7.88%</td><td>14.86%</td><td>19.53%</td><td>-</td></tr>
+              <tr><td rowspan="2">生产召回</td><td>I2I</td><td>4.38%</td><td>8.12%</td><td>17.82%</td><td>21.68%</td><td>-</td></tr>
+              <tr><td>U2I</td><td>3.19%</td><td>4.26%</td><td>6.95%</td><td>15.74%</td><td>-</td></tr>
+              <tr><td rowspan="2">Ours</td><td>w/o Rea</td><td>5.11%</td><td>10.26%</td><td>20.54%</td><td>31.26%</td><td>3.2950</td></tr>
+              <tr><td><strong>RoleGen</strong></td><td><strong>10.93%</strong></td><td><strong>14.89%</strong></td><td><strong>24.07%</strong></td><td><strong>33.98%</strong></td><td><strong>3.0443</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-green">
+          <strong>✅ 关键发现</strong>
+          <ul>
+            <li>RoleGen 在 <strong>HI@1 上比 TIGER 提升 6.2%</strong>（10.93% vs 4.73%）</li>
+            <li>相比生产召回主力 I2I，HI@1 提升 <strong>149%</strong>（10.93% vs 4.38%）</li>
+            <li>w/o Rea 已超过所有 baseline，说明生成式范式本身有效</li>
+            <li>加入 Reasoner 后在小 K 值上提升显著，证明功能角色推理的价值</li>
+          </ul>
+        </div>
+
+        <h4>语义 ID 指标（SID Hitrate & MRR）</h4>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>模型</th><th>HS₁@1</th><th>HS₂@1</th><th>HS₃@1</th><th>MS₁@10</th><th>MS₂@10</th><th>MS₃@10</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>TIGER</td><td>19.83%</td><td>33.47%</td><td>50.24%</td><td>27.35%</td><td>46.59%</td><td>60.16%</td></tr>
+              <tr><td>w/o Reasoner</td><td>24.51%</td><td>38.09%</td><td>56.32%</td><td>31.55%</td><td>51.43%</td><td>64.93%</td></tr>
+              <tr><td><strong>RoleGen</strong></td><td><strong>30.12%</strong></td><td><strong>41.77%</strong></td><td><strong>56.41%</strong></td><td><strong>38.72%</strong></td><td><strong>53.35%</strong></td><td><strong>65.28%</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-blue">
+          <strong>💡 分析</strong>
+          <p>性能提升主要集中在 <strong>SID₁ 和 SID₂</strong>（粗粒度语义层），这与协同训练策略一致：</p>
+          <ul>
+            <li>Reasoning Injection 主要利用前两层 SID 的统计特征</li>
+            <li>粗粒度 SID 更能反映功能角色的高层语义（如类目、价格段）</li>
+          </ul>
+        </div>
+
+        <h3>4.2 消融实验（Ablation Study）</h3>
+
+        <figure>
+          <img src="https://arxiv.org/html/2602.13134v1/x4.png" alt="Figure 4: 消融实验结果" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />
+          <div class="fig-placeholder" style="display:none;">
+            <b>Figure 4: 消融实验结果</b>
+          </div>
+          <figcaption><strong>Figure 4：</strong>消融实验。左图：物品召回 Hit Item @1 逐步提升（Item Align 1/2 → w/o Reasoning → Reasoning → Reflection，从~5%提升至~19%）；右图：生成质量 BertScore F1 在各阶段保持稳定（85-90），证明各组件有效且不损害通用能力。</figcaption>
+        </figure>
+
+        <div class="callout callout-blue">
+          <strong>📈 Figure 4 消融实验详解</strong>
+          <p><strong>左图：Hit Item @1 性能曲线</strong> - 展示了 5 个训练阶段的渐进提升：</p>
+          <ol style="font-size:13px;">
+            <li><strong>Item Align 1</strong> (~5%)：全局物品对齐，建立基础认知</li>
+            <li><strong>Item Align 2</strong> (~10%)：高质量物品精调，+5% 提升（课程学习效果）</li>
+            <li><strong>w/o Reasoning</strong> (~12%)：标准行为预测（纯协同过滤），+2% 提升</li>
+            <li><strong>Reasoning</strong> (~18%)：加入 FR-CoT 功能角色推理，<strong>+6% 巨大跳跃</strong>！</li>
+            <li><strong>Reflection</strong> (~19%)：行为反思机制，+1% 提升（微调校准）</li>
+          </ol>
+          <p style="margin-top:8px;padding:10px;background:#dcfce7;border-radius:8px;font-size:13px;">
+            <strong>✨ 核心发现</strong>：FR-CoT 带来的提升最大（+6%），证明<strong>功能角色推理是核心创新</strong>，其价值远超标准协同过滤。
+          </p>
+
+          <p style="margin-top:10px;"><strong>右图：BertScore F1（生成质量）</strong> - 验证模型没有灾难性遗忘：</p>
+          <ul style="font-size:13px;">
+            <li>通用语言能力（General）保持在 85-90，<strong>全程稳定</strong></li>
+            <li>物品语义生成（Item Profiling）同步提升</li>
+            <li>证明：功能角色推理没有损害 LLM 的通用能力</li>
+          </ul>
+        </div>
+
+        <h3>4.3 泛化能力分析 & 案例研究</h3>
+
+        <h4>缓解马太效应（Matthew Effect Mitigation）</h4>
+
+        <p>RoleGen 显著提升了<strong>长尾物品</strong>的曝光率：</p>
+
+        <figure>
+          <img src="https://arxiv.org/html/2602.13134v1/x5.png" alt="Figure 5: 马太效应缓解分析" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />
+          <div class="fig-placeholder" style="display:none;">
+            <b>Figure 5: 马太效应缓解分析</b>
+          </div>
+          <figcaption><strong>Figure 5：</strong>马太效应缓解分析。横轴为物品热度（高→低），纵轴为曝光比率（w/ Reasoner vs w/o Reasoner，基线 Ratio=1.0）。高热度物品 Ratio≈1.0，长尾物品 Ratio 显著 >1.0，最高达 2.2。Reasoner 通过功能角色推理打破"热门越热，冷门越冷"循环。</figcaption>
+        </figure>
+
+        <div class="callout callout-green">
+          <strong>📊 Figure 5 马太效应缓解详解</strong>
+          <p><strong>图表类型</strong>：曲线图（曝光比率） + 直方图（物品分布）</p>
+          
+          <div style="background:#f8fafc;padding:10px;border-radius:8px;margin:10px 0;font-size:13px;">
+            <strong>横轴</strong>：物品热度（High Popularity → Low Popularity）<br/>
+            &nbsp;&nbsp;• 左侧：头部爆款（高点击、高购买）<br/>
+            &nbsp;&nbsp;• 右侧：长尾物品（低曝光、低互动）<br/><br/>
+            <strong>纵轴</strong>：曝光比率 = (w/ Reasoner 曝光量) / (w/o Reasoner 曝光量)<br/>
+            &nbsp;&nbsp;• Ratio = 1.0：基线，无差异<br/>
+            &nbsp;&nbsp;• Ratio > 1.0：Reasoner 增加了曝光<br/>
+            &nbsp;&nbsp;• Ratio < 1.0：Reasoner 减少了曝光
+          </div>
+
+          <p style="margin-top:10px;"><strong>关键观察</strong>：</p>
+          <ul style="font-size:13px;">
+            <li><strong>高热度区域</strong>（左侧）：Ratio ≈ 1.0 → 头部爆款曝光不变</li>
+            <li><strong>长尾区域</strong>（右侧）：Ratio 显著 > 1.0，<strong>最高达 2.2</strong> → 长尾曝光翻倍！</li>
+          </ul>
+
+          <p style="margin-top:10px;padding:10px;background:#dcfce7;border-radius:8px;font-size:13px;">
+            <strong>💡 业务意义</strong>：<br/>
+            传统推荐：沉默用户 → 冷启动 → 只敢推热门 → 更冷启动（恶性循环）<br/>
+            <strong>RoleGen</strong>：功能角色推理 → 发现长尾物品的"工具性价值" → 打破循环<br/><br/>
+            <strong>举例</strong>：传统方法只敢推"燕麦奶"（爆款），RoleGen 能发现"有机奇亚籽"（长尾）在健康场景中的互补作用，给长尾物品曝光机会。
+          </p>
+        </div>
+
+        <h4>OOD 泛化测试（Out-of-Distribution）</h4>
+
+        <p><strong>OOD 定义</strong>：目标物品的 SID₁（粗粒度类目）从未在用户历史序列中出现。</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>模型</th><th>HS₁@10</th><th>HS₁@20</th><th>HS₂@10</th><th>HS₂@20</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>w/o Reasoner</td><td>2.06%</td><td>4.33%</td><td>10.97%</td><td>15.88%</td></tr>
+              <tr><td><strong>RoleGen</strong></td><td><strong>3.12%</strong></td><td><strong>5.25%</strong></td><td><strong>20.53%</strong></td><td><strong>28.48%</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-green">
+          <strong>✅ 关键发现</strong>
+          <p>RoleGen 在 OOD 场景下泛化能力显著更强，尤其在 <strong>HS₂@10 上提升 87%</strong>（20.53% vs 10.97%）。</p>
+          <p>这证明<strong>功能角色抽象</strong>能有效迁移跨类目的决策模式。</p>
+        </div>
+
+        <h4>案例研究（Case Study）</h4>
+
+        <figure>
+          <img src="https://arxiv.org/html/2602.13134v1/x6.png" alt="Figure 6: 意图泛化案例" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />
+          <div class="fig-placeholder" style="display:none;">
+            <b>Figure 6: 意图泛化案例</b><br><br>
+            w/o Reasoner 重复推荐历史类目，w/ Reasoner 成功推理出面部护理意图
+          </div>
+          <figcaption><strong>Figure 6：</strong>意图泛化案例。用户历史集中在内衣和化妆品，Ground Truth 为面膜。w/o Reasoner 陷入自我强化循环，重复推荐内衣；RoleGen 通过"Audience Overlap"功能角色推理，成功预测面部护理产品，突破过滤气泡。</figcaption>
+        </figure>
+
+        <div class="callout callout-purple" style="background:#faf5ff;border-color:#e9d5ff;">
+          <strong>🎯 Figure 6 意图泛化案例详解</strong>
+          
+          <div style="background:#fff7ed;padding:12px;border-radius:8px;margin:10px 0;border:1px solid:#fed7aa;">
+            <h4 style="margin:0 0 8px;color:#c2410c;">用户画像</h4>
+            <p style="font-size:13px;margin:0;">
+              <strong>历史行为</strong>：主要浏览 内衣、化妆品<br/>
+              <strong>兴趣 Profile</strong>：C_u = [化妆品 (0.9), 内衣 (0.6), 护肤品 (0.4)]<br/>
+              <strong>Ground Truth</strong>：用户实际购买了 <span style="color:#16a34a;font-weight:700;">面膜</span>（面部护理类，<strong>新类目</strong>！）
+            </p>
+          </div>
+
+          <div class="two-col" style="margin:12px 0;">
+            <div style="background:#fee2e2;padding:12px;border-radius:8px;border:2px solid#fca5a5;">
+              <h4 style="margin:0 0 8px;color:#dc2626;">❌ w/o Reasoner</h4>
+              <div style="font-size:13px;">
+                <p><strong>预测 SID</strong>：<code>&lt;s_a_1679&gt;&lt;s_b_576&gt;&lt;s_c_1481&gt;</code></p>
+                <p><strong>预测物品</strong>：内衣（重复历史类目）</p>
+                <p style="margin-top:8px;padding:8px;background:#fff;border-radius:6px;">
+                  <strong>推理方式</strong>：协同过滤<br/>
+                  <strong>逻辑</strong>：只看到"化妆品 → 内衣"的历史模式<br/>
+                  <strong>问题</strong>：<span style="color:#dc2626;font-weight:700;">陷入自我强化循环，无法跳出已有类目</span>
+                </p>
+              </div>
+            </div>
+
+            <div style="background:#dcfce7;padding:12px;border-radius:8px;border:2px solid #86efac;">
+              <h4 style="margin:0 0 8px;color:#16a34a;">✅ RoleGen</h4>
+              <div style="font-size:13px;">
+                <p><strong>预测 SID</strong>：<code>&lt;s_a_4&gt;&lt;s_b_259&gt;&lt;s_c_758&gt;</code></p>
+                <p><strong>预测物品</strong>：面膜（面部护理）</p>
+                <p style="margin-top:8px;padding:8px;background:#fff;border-radius:6px;">
+                  <strong>推理方式</strong>：功能角色推理<br/>
+                  <strong>识别意图转变</strong>：从"日常穿着"转向"深度自我护理"<br/>
+                  <strong>关键角色</strong>：<span style="color:#7c3aed;font-weight:700;">Audience Overlap</span>（与化妆品用户群重叠）<br/>
+                  <strong>结果</strong>：<span style="color:#16a34a;font-weight:700;">成功泛化到新类目，打破过滤气泡</span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div style="background:#eff6ff;padding:12px;border-radius:8px;margin-top:10px;border:1px solid #bfdbfe;">
+            <h4 style="margin:0 0 8px;color:#1d4ed8;">🔍 关键推理链</h4>
+            <div style="font-size:13px;line-height:1.8;">
+              <strong>化妆品</strong>（历史）<br/>
+              &nbsp;&nbsp;↓ [识别] 用户关注"自我护理 / 美容"<br/>
+              <strong>面膜</strong>（候选）<br/>
+              &nbsp;&nbsp;↓ [推理] 与化妆品有 <code>Audience Overlap</code><br/>
+              &nbsp;&nbsp;↓ [决策] 虽然面膜从未出现在历史中，但符合潜在意图<br/>
+              <strong>✅ 成功跨类目推荐</strong>
+            </div>
+          </div>
+
+          <p style="margin-top:12px;padding:10px;background:#fef3c7;border-radius:8px;font-size:13px;">
+            <strong>🔑 图的核心信息</strong>：<br/>
+            传统协同过滤只能推荐"相似用户也买了"的物品，无法跨类目泛化。<br/>
+            <strong>RoleGen 通过功能角色抽象</strong>，发现"化妆品"和"面膜"在<strong>受众群体</strong>和<strong>使用场景</strong>上的深层联系，实现意图级别的泛化推理。
+          </p>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 案例分析：功能角色如何工作</div>
+          <p><strong>关键推理步骤</strong>：</p>
+          <ol>
+            <li>用户兴趣 Profile $C_u$：化妆品、内衣（女性个护类目）</li>
+            <li>Reasoner 识别潜在意图转变：从"日常穿着"转向"自我护理"</li>
+            <li>推理目标物品功能角色：<strong>Audience Overlap</strong>（与化妆品用户群重叠）</li>
+            <li>生成候选：面膜（满足"自我护理"意图 + 受众重叠）</li>
+          </ol>
+          <p style="margin-top:10px;padding:10px;background:#eff6ff;border-radius:8px;font-size:13px;">
+            <strong>对比</strong>：w/o Reasoner 只看到"化妆品 → 内衣"的历史模式，无法跳出循环。
+          </p>
+        </div>
+
+        <h3>4.4 在线 A/B 测试（Online Evaluation）</h3>
+
+        <p><strong>测试规模</strong>：分配 10% 流量，持续数周</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>模型</th><th>DAC（日活购买用户）</th><th>CTR（点击率）</th><th>CVR（转化率）</th><th>订单量</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>RoleGen</strong></td><td><strong>+5.57%</strong></td><td>+5.38%</td><td>+6.71%</td><td><strong>+7.3%</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-green">
+          <strong>🎉 在线效果（相比生产 Baseline，p < 0.05）</strong>
+          <ul>
+            <li>日活购买用户（DAC）<strong>+5.57%</strong></li>
+            <li>订单量 <strong>+7.3%</strong></li>
+            <li>转化率（CVR）<strong>+6.71%</strong></li>
+          </ul>
+          <p style="margin-top:10px;"><strong>业务意义</strong>：显著唤醒沉默用户，推动 GMV 增长，同时改善推荐生态（缓解马太效应）。</p>
+        </div>
+
+      </section>
+
+      <!-- §5 总结与启发 -->
+      <section class="section" id="s5">
+        <div class="section-title">
+          <div class="icon" style="background:#ede9fe;">🎯</div>
+          §5 总结与启发
+        </div>
+
+        <h3>5.1 核心贡献</h3>
+
+        <ol>
+          <li><strong>功能角色轨迹（Functional Role Trajectory）</strong>：首次显式建模物品的<strong>工具性效应</strong>，将推荐从"单步点级预测"提升到"转化路径推理"</li>
+          <li><strong>反事实推理（Counterfactual Inference）</strong>：在<strong>意图层级</strong>施加干预，打破自我强化循环，生成多样化候选</li>
+          <li><strong>闭环协同训练（Closed-loop Co-Training）</strong>：LLM Reasoner（语义推理）+ Generative Backbone（协同执行）+ Reflection（反馈校准）三位一体</li>
+          <li><strong>工业落地验证</strong>：快手电商平台 700M+ MAU 在线部署，订单量 +7.3%</li>
+        </ol>
+
+        <h3>5.2 关键洞察</h3>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>🔑 洞察 1：物品的双重价值</h4>
+            <ul>
+              <li><strong>固有价值</strong>（Intrinsic Value）：直接转化概率（传统 CTR）</li>
+              <li><strong>工具价值</strong>（Instrumental Value）：塑造意图、推动后续转化</li>
+            </ul>
+            <p style="margin-top:10px;font-size:13px;color:#667085;">
+              对于沉默用户，工具价值可能比固有价值更重要。
+            </p>
+          </div>
+          <div class="mini-card">
+            <h4>🔑 洞察 2：功能角色的可迁移性</h4>
+            <ul>
+              <li>物品空间大、稀疏、噪声多</li>
+              <li>功能角色空间小、稠密、模式可复现</li>
+            </ul>
+            <p style="margin-top:10px;font-size:13px;color:#667085;">
+              跨用户和物品的决策模式可以通过功能角色抽象和迁移。
+            </p>
+          </div>
+        </div>
+
+        <div class="mini-card" style="margin-top:16px;">
+          <h4>🔑 洞察 3：LLM + CF 的协同必要性</h4>
+          <ul>
+            <li><strong>LLM</strong>：提供世界知识和语义推理，缓解数据稀疏</li>
+            <li><strong>CF</strong>：提供平台特定的协同信号，grounded 预测</li>
+            <li><strong>闭环</strong>：通过反馈-反思机制持续对齐两者</li>
+          </ul>
+        </div>
+
+        <h3>5.3 与相关工作的区别</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>方法</th><th>核心思路</th><th>沉默用户问题</th><th>工具性效应</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>RecGPT</td><td>LLM 生成 item tags</td><td>❌ 只做静态 Profile 补全</td><td>❌ 只评估固有价值</td></tr>
+              <tr><td>Align3GR</td><td>LLM-GNN 多层对齐</td><td>❌ 未专门针对沉默用户</td><td>❌ 未建模转化路径</td></tr>
+              <tr><td>TIGER</td><td>生成式推荐（SID）</td><td>⚠️ 通用框架，无特殊处理</td><td>❌ 无功能角色推理</td></tr>
+              <tr><td>ColdLLM</td><td>LLM 模拟冷启动交互</td><td>⚠️ 针对冷启动，非沉默用户</td><td>❌ 单步预测</td></tr>
+              <tr><td><strong>RoleGen</strong></td><td><strong>FR-CoT + 反事实推理</strong></td><td><strong>✅ 专门设计</strong></td><td><strong>✅ 显式建模</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>5.4 启发与展望</h3>
+
+        <div class="callout callout-purple">
+          <strong>💡 对推荐系统的启发</strong>
+          <ol>
+            <li><strong>推荐不是单步任务</strong>：应建模完整的转化路径和意图演化</li>
+            <li><strong>功能角色是有效的中间表示</strong>：在物品空间和意图空间之间架桥</li>
+            <li><strong>LLM 的价值不止于语义增强</strong>：可用于结构化推理和反事实探索</li>
+            <li><strong>闭环机制至关重要</strong>：语义推理需要协同信号 grounding，反之协同执行需要语义引导</li>
+          </ol>
+        </div>
+
+        <div class="callout callout-blue">
+          <strong>🚀 未来方向</strong>
+          <ul>
+            <li><strong>更细粒度的功能角色</strong>：扩展到情感、场景、季节等维度</li>
+            <li><strong>多模态功能角色</strong>：结合图片、视频的视觉功能角色</li>
+            <li><strong>用户级功能角色</strong>：建模用户在生态中的功能角色（KOL、跟随者、探索者等）</li>
+            <li><strong>实时反事实推理</strong>：在线动态调整反事实干预策略</li>
+            <li><strong>跨域迁移</strong>：功能角色能否在不同平台/场景间迁移？</li>
+          </ul>
+        </div>
+
+        <div class="callout callout-amber">
+          <strong>⚠️ 局限与挑战</strong>
+          <ul>
+            <li><strong>功能角色定义的主观性</strong>：当前由人工设计，未来可否自动学习？</li>
+            <li><strong>反事实采样策略</strong>：如何设计更优的候选角色集？</li>
+            <li><strong>计算成本</strong>：LLM Reasoner 即使是近线推理，成本仍然较高</li>
+            <li><strong>可解释性</strong>：虽然功能角色提升了可解释性，但 LLM 内部推理过程仍是黑盒</li>
+          </ul>
+        </div>
+
+      </section>
+
+    </main>
+  </div>
+
+  <footer>
+    <p><a href="index.html" style="color: var(--primary);">← 返回论文列表</a></p>
+    <p style="margin-top: 10px; color: var(--muted);">
+      解读生成：2026年4月 · 基于 R

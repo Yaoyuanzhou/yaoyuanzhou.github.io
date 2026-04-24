@@ -114,6 +114,14 @@
         <li><a href="#kl">§4 KL 散度</a></li>
         <li><a href="#entropy">§5 交叉熵与信息熵</a></li>
         <li><a href="#softmax">§6 Softmax 与温度系数</a></li>
+        <li><a href="#kronecker">§7 Kronecker 积</a>
+          <ul class="toc-sub">
+            <li><a href="#kron-def">7.1 定义与直觉</a></li>
+            <li><a href="#kron-calc">7.2 手工计算逐步拆解</a></li>
+            <li><a href="#kron-permute">7.3 置换矩阵的 Kronecker 分解</a></li>
+            <li><a href="#kron-use">7.4 在推荐模型中的应用</a></li>
+          </ul>
+        </li>
       </ul>
     </aside>
 
@@ -1132,6 +1140,82 @@
           </div>
           <p style="font-size:14px;margin:0;">高温把教师分布「摊平」，让「第2名、第3名」的词也有一定概率，小模型才能真正学到排名信息，而不只是在模仿「第1名是谁」。这种软化的分布被称为 <strong>soft target</strong>，是知识蒸馏效果好的核心原因（Hinton et al., 2015）。</p>
         </div>
+      </section>
+
+      <!-- ═══ §7 Kronecker 积 ═══ -->
+      <section class="section" id="kronecker">
+        <div class="section-title">
+          <div class="icon" style="background:#fef3c7;">⊗</div>
+          §7 Kronecker 积
+        </div>
+
+        <div class="callout-blue">
+          <strong>一句话定义：</strong>Kronecker 积 $A \otimes B$ 是把矩阵 $A$ 的<strong>每一个元素</strong>替换成「该元素 × 矩阵 $B$」这个子块，然后把所有子块拼成一个更大的矩阵。
+        </div>
+
+        <h3 id="kron-def">7.1 定义与直觉</h3>
+
+        <p>设 $A \in \mathbb{R}^{m \times n}$，$B \in \mathbb{R}^{p \times q}$，则 $A \otimes B \in \mathbb{R}^{mp \times nq}$，即把 $A$ 的每个元素 $a_{ij}$ 替换成 $a_{ij} \cdot B$ 这个子块。结果矩阵的大小：行数 = $m \times p$，列数 = $n \times q$。</p>
+
+        <div class="analogy-box">
+          <div class="analogy-title">🏗️ 直觉类比：「贴瓷砖」</div>
+          <p style="margin:0;">想象你有一张设计图（矩阵 $A$），图上每个格子有一个数字。Kronecker 积的意思是：把每个格子替换成一块「瓷砖」（矩阵 $B$），数字大小决定瓷砖的「亮度缩放比例」。数字=0 就是全黑瓷砖，数字=1 就是原版瓷砖，数字=2 就是亮度翻倍的瓷砖。最后把所有瓷砖拼在一起就是 $A \otimes B$。</p>
+        </div>
+
+        <h3 id="kron-calc">7.2 手工计算逐步拆解</h3>
+
+        <div class="example-box">
+          <div class="ex-title">💡 例子 1：数字矩阵 × 数字矩阵</div>
+          <p>$A = \begin{pmatrix}1&amp;2\\3&amp;4\end{pmatrix}$，$B = \begin{pmatrix}0&amp;5\\6&amp;7\end{pmatrix}$</p>
+          <p><strong>第一步：</strong>把 $A$ 的每个元素分别乘以 $B$：$1{\cdot}B, 2{\cdot}B, 3{\cdot}B, 4{\cdot}B$</p>
+          <p>$1{\cdot}B = \begin{pmatrix}0&amp;5\\6&amp;7\end{pmatrix}$，$2{\cdot}B = \begin{pmatrix}0&amp;10\\12&amp;14\end{pmatrix}$，$3{\cdot}B = \begin{pmatrix}0&amp;15\\18&amp;21\end{pmatrix}$，$4{\cdot}B = \begin{pmatrix}0&amp;20\\24&amp;28\end{pmatrix}$</p>
+          <p><strong>第二步：</strong>按 $A$ 的布局拼成大矩阵（结果是 $4\times4$）：</p>
+          <p>$$A \otimes B =
+          \begin{pmatrix}
+            0 &amp; 5 &amp; 0 &amp; 10 \\
+            6 &amp; 7 &amp; 12 &amp; 14 \\
+            0 &amp; 15 &amp; 0 &amp; 20 \\
+            18 &amp; 21 &amp; 24 &amp; 28
+          \end{pmatrix}$$</p>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 例子 2：0/1 矩阵 × 单位矩阵（推荐系统常见）</div>
+          <p>$G = \begin{pmatrix}0&amp;1\\1&amp;0\end{pmatrix}$（token 0 和 token 1 互换），$I_2 = \begin{pmatrix}1&amp;0\\0&amp;1\end{pmatrix}$</p>
+          <p><strong>第一步：</strong>写出 4 个子块：$G_{00}=0 \Rightarrow 0{\cdot}I_2 = \begin{pmatrix}0&amp;0\\0&amp;0\end{pmatrix}$；$G_{01}=1 \Rightarrow 1{\cdot}I_2 = \begin{pmatrix}1&amp;0\\0&amp;1\end{pmatrix}$；$G_{10}=1 \Rightarrow 1{\cdot}I_2 = \begin{pmatrix}1&amp;0\\0&amp;1\end{pmatrix}$；$G_{11}=0 \Rightarrow 0{\cdot}I_2 = \begin{pmatrix}0&amp;0\\0&amp;0\end{pmatrix}$</p>
+          <p><strong>第二步：</strong>按位置拼成 $4\times4$ 矩阵：</p>
+          <p>$$G \otimes I_2 =\begin{pmatrix}0 &amp; 0 &amp; 1 &amp; 0 \\0 &amp; 0 &amp; 0 &amp; 1 \\1 &amp; 0 &amp; 0 &amp; 0 \\0 &amp; 1 &amp; 0 &amp; 0\end{pmatrix}$$</p>
+          <p><strong>第三步：验证矩阵乘法</strong>，令 $v = [a_1, a_2, b_1, b_2]^T$（token 0 的特征 $[a_1,a_2]$，token 1 的特征 $[b_1,b_2]$）：</p>
+          <p>第1行 $[0,0,1,0]$：结果 $= b_1$ ✓；第2行 $[0,0,0,1]$：结果 $= b_2$ ✓；第3行 $[1,0,0,0]$：结果 $= a_1$ ✓；第4行 $[0,1,0,0]$：结果 $= a_2$ ✓</p>
+          <p>输出：$[b_1, b_2, a_1, a_2]^T$ ✅ —— token 0 和 token 1 整体互换，各自内部维度顺序不变。</p>
+        </div>
+
+        <h3 id="kron-permute">7.3 为什么置换矩阵可以分解为 Kronecker 积？</h3>
+
+        <p>置换矩阵做的事有两层相互独立的逻辑：</p>
+        <ul>
+          <li><strong>层1：token 间的搬运</strong>——哪个 token 换到哪个位置（由 $G \in \mathbb{R}^{T \times T}$ 描述）</li>
+          <li><strong>层2：token 内部维度整体搬运</strong>——不拆散 token 内部，$D$ 个维度一起移动（由 $I_D$ 描述）</li>
+        </ul>
+        <p>$G \otimes I_D$ 正好同时表达这两层：$G$ 的每个元素决定「要不要把对应的那个 token 整体搬过来」，$I_D$ 保证搬过来时内部维度原封不动。</p>
+
+        <div class="callout-green">
+          <strong>参数量对比：</strong><br>
+          直接存 $W_\text{perm} \in \mathbb{R}^{TD \times TD}$：参数量 $T^2 D^2$<br>
+          用 $G \otimes I_D$，只需存 $G \in \mathbb{R}^{T \times T}$：参数量 $T^2$，<strong>压缩了 $D^2$ 倍</strong><br>
+          举例：$T=16, D=512$，从 67,108,864 个数降到 256 个数。
+        </div>
+
+        <h3 id="kron-use">7.4 在推荐模型中的应用——UniMixer</h3>
+        <ul>
+          <li><strong>原始 TokenMixer：</strong>$W_\text{perm}$ 是固定的 0/1 置换矩阵，不可学习</li>
+          <li><strong>UniMixing：</strong>把 $G$ 替换成可学习的浮点矩阵 $W_G$，用 Sinkhorn-Knopp 迭代保持双随机性，用温度系数控制稀疏程度</li>
+          <li><strong>UniMixing-Lite：</strong>进一步把 $W_G$ 做低秩分解 $W_G \approx A_G B_G$（$r \ll T$），参数量再降约 78%</li>
+        </ul>
+        <div class="callout-amber">
+          <strong>核心思路总结：</strong>置换矩阵是极端稀疏的双随机矩阵（每行每列只有一个 1）。UniMixer 把「硬约束」放松成「软约束」——矩阵元素可以是任意正浮点数，但通过 Sinkhorn 归一化保持双随机性，通过低温 $\tau$ 鼓励稀疏，让模型自适应地学习最优 token 间交互方式。
+        </div>
+
       </section>
 
     </main>

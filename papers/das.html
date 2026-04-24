@@ -208,6 +208,84 @@
             <p>现有对齐方案（LETTER/QARM）采用两阶段：先训好 CF 模型，再用 CF 的 embedding 指导 SID 量化；或反过来。</p>
             <p><strong>根本缺陷：</strong>两阶段分开优化造成不可避免的<strong>信息损失</strong>，且无法灵活选择对齐策略；互信息最大化受到阻碍。</p>
           </div>
+        </div>
+
+        <div class="callout-amber" style="margin-top:18px;">
+          <strong>📌 两类两阶段对齐方法的完整训练流程</strong>
+          <p>DAS 论文中把现有两阶段方案归为两类：<strong>CF First</strong>（LETTER）和 <strong>Alignment First</strong>（QARM），二者的核心区别在于「对齐」发生在量化过程的哪个阶段。</p>
+
+          <h4 style="margin:14px 0 6px;color:#92400e;">① CF First（先有 CF，再监督量化）——以 LETTER 为代表</h4>
+          <p><strong>训练流程：</strong></p>
+          <ol style="margin:6px 0 10px;">
+            <li><strong>Step 1：预训 CF 模型（冻结）</strong><br>
+              只用用户 ID / 广告 ID / 点击行为，训练一个双塔召回或矩阵分解模型，得到 item CF embedding $i_{cf}$ 和 user CF embedding $u_{cf}$。训练完后 CF 模型冻结，不再更新。</li>
+            <li><strong>Step 2：训练 SID 量化器（RQ-VAE）</strong><br>
+              输入多模态内容 embedding $s_i$，经过 encoder → RQ-VAE，得到量化后的连续表示 $z_i$ 和离散 SID $[c_1,c_2,c_3]$。<br>
+              在量化训练时额外加入对齐损失，让 $z_i$ 靠近冻结的 $i_{cf}$：
+              $$\mathcal{L} = \mathcal{L}_{\text{quant}} + \lambda\,\|z_i - W(i_{cf})\|^2$$
+              其中 $W$ 是线性投影（两侧维度可能不同）。</li>
+          </ol>
+          <p><strong>关键点：</strong>对齐发生在「量化后的连续表示 $z_i$」和「冻结 CF embedding」之间。CF 是固定老师，量化器是学生，<em>两者不联合更新</em>。</p>
+          <div class="example-box" style="margin:8px 0;">
+            <div class="ex-title">🧩 例子：空气炸锅广告 vs 烤箱广告</div>
+            <p>广告 A（空气炸锅）和广告 B（烤箱）内容不像，但被同一批用户点击 → CF 模型学出 $i_{cf}(A)$ 和 $i_{cf}(B)$ 很近。CF First 训练后，量化器被迫让 $z_A$ 靠近 $i_{cf}(A)$，$z_B$ 靠近 $i_{cf}(B)$，于是 A/B 最终被量到相近的码，即使内容不像。</p>
+            <p>广告 C 是空气炸锅配件，内容像 A，但买家完全不同 → CF 模型将 $i_{cf}(C)$ 推远 → 量化器把 C 量到不同的码桶，和 A 分开。</p>
+          </div>
+
+          <h4 style="margin:16px 0 6px;color:#92400e;">② Alignment First（先对齐内容 embedding，再量化）——以 QARM 为代表</h4>
+          <p><strong>训练流程：</strong></p>
+          <ol style="margin:6px 0 10px;">
+            <li><strong>Step 1：预训 CF 模型（冻结）</strong><br>
+              同上，得到冻结的 item CF embedding $i_{cf}$。</li>
+            <li><strong>Step 2：训练内容→CF 对齐网络</strong><br>
+              训练一个 MLP / transformer 对齐器 $g(\cdot)$，把多模态内容 embedding $s_i$ 映射到 CF 空间：
+              $$\tilde{s}_i = g(s_i), \quad \mathcal{L}_{\text{align}} = \|\tilde{s}_i - W(i_{cf})\|^2$$
+              这一步的目标是让「内容表示」在连续空间里就已经近似 CF 结构。</li>
+            <li><strong>Step 3：对 $\tilde{s}_i$ 做 RQ-VAE 量化</strong><br>
+              不再量化原始 $s_i$，而是量化已经对齐过的 $\tilde{s}_i$：
+              $$sid_i = \text{Quantize}(\tilde{s}_i)$$
+              量化器的输入本身已带 CF 语义，所以 SID 天然具有 CF 结构。</li>
+          </ol>
+          <p><strong>关键点：</strong>对齐发生在「量化前的连续 embedding」。先把原料改造成「行为空间的语言」，再做离散化。<em>量化和对齐仍然是分开的两步</em>。</p>
+          <div class="example-box" style="margin:8px 0;">
+            <div class="ex-title">🧩 同样的例子</div>
+            <p>原始内容空间里 A 和 C 很近（都是炸锅类）、B 较远（烤箱）。Step 2 之后，$\tilde{s}_A$ 和 $\tilde{s}_B$ 被拉近（行为相似），$\tilde{s}_C$ 被推远。Step 3 对这组已经改造好的 embedding 做量化，结果和 CF First 类似，但路径不同。</p>
+          </div>
+
+          <h4 style="margin:16px 0 6px;color:#92400e;">两类方法对比</h4>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>方法</th><th>先做什么</th><th>后做什么</th><th>对齐作用于哪里</th><th>核心缺陷</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>CF First</strong><br>（LETTER）</td>
+                  <td>预训 CF 模型，冻结</td>
+                  <td>训量化器，加对齐 loss $z_i \approx i_{cf}$</td>
+                  <td>量化后连续表示 $z_i$</td>
+                  <td>CF 冻结后 quantizer 只能"追"老师，两者解耦，互信息受限</td>
+                </tr>
+                <tr>
+                  <td><strong>Alignment First</strong><br>（QARM）</td>
+                  <td>预训 CF 模型，冻结；训对齐网络 $g(s_i)\approx i_{cf}$</td>
+                  <td>对 $\tilde{s}_i = g(s_i)$ 做 RQ-VAE 量化</td>
+                  <td>量化前连续 embedding $s_i \to \tilde{s}_i$</td>
+                  <td>连续对齐再量化，量化会丢信息；两步仍然割裂</td>
+                </tr>
+                <tr>
+                  <td><strong>DAS（本文）</strong></td>
+                  <td colspan="2">三模块（UISM / ICDM / MDAM）一阶段联合训练</td>
+                  <td>量化、CF、对齐全程同步</td>
+                  <td>无二阶段割裂；互信息最大化</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p style="margin-top:10px;font-size:13px;color:#78350f;"><strong>一句话区分：</strong>CF First = 先有老师再塑形量化空间；Alignment First = 先改造输入再量化；DAS = 三者同时训练，老师也在更新。</p>
+        </div>
+
+        <div class="two-col" style="margin-top:16px;">
           <div class="mini-card">
             <h4>问题 3：流行度偏差污染 CF 信号</h4>
             <p>快手广告场景中，20% 的广告贡献 80% 的广告收入，20% 的用户贡献 80% 的广告收益。如果直接对齐有偏 CF 信号，会将流行度偏差注入 SID 编码空间，损害 codebook 学习。</p>

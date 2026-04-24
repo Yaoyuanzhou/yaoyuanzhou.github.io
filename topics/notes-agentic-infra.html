@@ -1,0 +1,1407 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agentic RL 时代的 Infra 重构：以 Forge、ROLL、Seer、slime 为例</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false }
+          ],
+          throwOnError: false
+        });
+      }
+      const sections = document.querySelectorAll('section[id]');
+      const links = document.querySelectorAll('.toc-list a');
+      const obs = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+          if (e.isIntersecting) {
+            links.forEach(l => l.classList.remove('active'));
+            const a = document.querySelector('.toc-list a[href="#' + e.target.id + '"]');
+            if (a) a.classList.add('active');
+          }
+        });
+      }, { rootMargin: '-20% 0px -60% 0px' });
+      sections.forEach(s => obs.observe(s));
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #0f766e; --primary-soft: #f0fdfa;
+      --accent: #2563eb; --shadow: 0 10px 30px rgba(15,23,42,0.08);
+      --radius: 18px; --max: 1120px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: linear-gradient(180deg,#f0fdfa 0%,var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      line-height: 1.85;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .page { max-width: var(--max); margin: 0 auto; padding: 32px 20px 80px; }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    .back-link:hover { color: var(--primary); text-decoration: none; }
+
+    /* ── 知乎引用卡片 ── */
+    .source-card {
+      display: flex; align-items: center; gap: 16px;
+      background: #fff; border: 1px solid #e4e6ec;
+      border-radius: 16px; padding: 18px 22px; margin-bottom: 22px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    }
+    .source-logo {
+      width: 44px; height: 44px; border-radius: 10px;
+      background: linear-gradient(135deg,#0078ff,#00a3ff);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 22px; font-weight: 900; flex-shrink: 0;
+      font-family: serif; letter-spacing: -1px;
+    }
+    .source-info { flex: 1; min-width: 0; }
+    .source-title { font-size: 15px; font-weight: 700; color: #1a1a1a; margin-bottom: 4px; }
+    .source-meta { font-size: 13px; color: var(--muted); }
+    .source-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: #f0f9ff; border: 1px solid #bae6fd;
+      color: #0369a1; border-radius: 8px; padding: 6px 14px;
+      font-size: 13px; font-weight: 600; white-space: nowrap;
+      transition: all 0.15s;
+    }
+    .source-link:hover { background: #0369a1; color: #fff; text-decoration: none; border-color: #0369a1; }
+
+    /* ── Layout ── */
+    .layout { display: grid; grid-template-columns: 260px minmax(0,1fr); gap: 22px; align-items: start; }
+    .hero {
+      background: radial-gradient(circle at top right,rgba(15,118,110,0.12),transparent 30%),
+                  radial-gradient(circle at left bottom,rgba(37,99,235,0.08),transparent 24%), var(--card);
+      border: 1px solid rgba(15,118,110,0.18); border-radius: 24px;
+      box-shadow: var(--shadow); padding: 34px 34px 28px; margin-bottom: 22px;
+    }
+    .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: #f0fdfa; color: #0f766e; font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+    h1 { margin: 0 0 10px; font-size: 28px; line-height: 1.25; letter-spacing: -0.02em; }
+    .subtitle { margin: 0; color: var(--muted); font-size: 15px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-top: 24px; }
+    .meta-card { background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 16px; padding: 14px 16px; }
+    .meta-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .meta-value { font-size: 13px; font-weight: 600; word-break: break-word; }
+
+    /* ── TOC ── */
+    .toc { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; max-height: calc(100vh - 40px); overflow-y: auto; }
+    .toc h2 { margin: 0 0 12px; font-size: 15px; }
+    .toc-list { list-style: none; margin: 0; padding: 0; }
+    .toc-list li { margin: 0; }
+    .toc-list a { display: block; padding: 5px 8px; border-radius: 8px; color: var(--muted); font-size: 13px; transition: all 0.15s; }
+    .toc-list a:hover { color: var(--primary); background: #f0fdfa; text-decoration: none; }
+    .toc-list a.active { color: var(--primary); background: #f0fdfa; font-weight: 600; border-left: 3px solid var(--primary); padding-left: 5px; }
+    .toc-sub { list-style: none; padding-left: 12px; margin: 0; }
+    .toc-sub a { font-size: 12px; padding: 3px 8px; }
+
+    /* ── Content ── */
+    .content { display: flex; flex-direction: column; gap: 18px; }
+    .section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 26px 28px; }
+    .section-title { display: flex; align-items: center; gap: 12px; margin: 0 0 20px; font-size: 20px; font-weight: 700; }
+    .icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+    h3 { margin: 28px 0 12px; font-size: 17px; color: #111827; border-left: 3px solid #99f6e4; padding-left: 10px; }
+    h4 { margin: 20px 0 8px; font-size: 15px; color: #374151; font-weight: 700; }
+    p { margin: 0 0 12px; }
+
+    /* ── Callouts ── */
+    .callout-blue   { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-amber  { background: #fffbeb; border: 1px solid #fde68a; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-green  { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-teal   { background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-purple { background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-red    { background: #fff1f2; border: 1px solid #fecdd3; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-gray   { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-title  { font-weight: 700; font-size: 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+    .callout-blue .callout-title   { color: #1d4ed8; }
+    .callout-amber .callout-title  { color: #92400e; }
+    .callout-green .callout-title  { color: #166534; }
+    .callout-teal .callout-title   { color: #0f766e; }
+    .callout-purple .callout-title { color: #6d28d9; }
+    .callout-red .callout-title    { color: #9f1239; }
+    .callout-gray .callout-title   { color: #334155; }
+
+    /* ── Special boxes ── */
+    .example-box { background: #f0fdf4; border: 1px solid #86efac; border-radius: 14px; padding: 18px 20px; margin: 18px 0; }
+    .ex-title { font-weight: 700; color: #166534; margin-bottom: 10px; font-size: 14px; }
+    .big-concept { background: linear-gradient(135deg,#f0fdfa 0%,#eff6ff 100%); border: 2px solid #5eead4; border-radius: 16px; padding: 20px 24px; margin: 20px 0; }
+    .big-concept-title { font-size: 17px; font-weight: 800; color: #0f4c42; margin-bottom: 10px; }
+    .insight-box { background: linear-gradient(135deg,#fef9c3,#fffbeb); border: 1px solid #fcd34d; border-radius: 14px; padding: 18px 20px; margin: 18px 0; }
+    .insight-title { font-weight: 700; color: #78350f; margin-bottom: 10px; font-size: 14px; }
+
+    /* ── Flow diagram ── */
+    .flow-diagram { border: 1px solid #99f6e4; border-radius: 14px; padding: 18px; margin: 18px 0; background: #f0fdfa; }
+    .flow-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 8px 0; }
+    .flow-box { background: #ccfbf1; border: 1px solid #5eead4; border-radius: 10px; padding: 8px 14px; font-size: 13px; font-weight: 600; line-height: 1.4; text-align: center; }
+    .flow-box.green  { background: #dcfce7; border-color: #86efac; }
+    .flow-box.blue   { background: #dbeafe; border-color: #93c5fd; }
+    .flow-box.red    { background: #fee2e2; border-color: #fca5a5; }
+    .flow-box.amber  { background: #fef3c7; border-color: #fcd34d; }
+    .flow-box.gray   { background: #f1f5f9; border-color: #cbd5e1; color: #64748b; }
+    .flow-box.purple { background: #ede9fe; border-color: #c4b5fd; }
+    .flow-arrow { color: #0f766e; font-weight: 700; font-size: 18px; }
+
+    /* ── Grid ── */
+    .two-col   { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; margin: 14px 0; }
+    .three-col { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 14px; margin: 14px 0; }
+    .four-col  { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin: 14px 0; }
+    .mini-card { border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; background: #fff; }
+    .mini-card h4 { margin-top: 0; font-size: 14px; }
+    .mini-card p  { font-size: 14px; }
+
+    /* ── System cards ── */
+    .sys-card { border-radius: 16px; padding: 20px 22px; margin: 12px 0; border-left: 4px solid transparent; }
+    .sys-card.forge  { background: #f0fdfa; border-left-color: #0f766e; }
+    .sys-card.roll   { background: #eff6ff; border-left-color: #2563eb; }
+    .sys-card.seer   { background: #faf5ff; border-left-color: #7c3aed; }
+    .sys-card.slime  { background: #f0fdf4; border-left-color: #16a34a; }
+    .sys-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; margin-bottom: 8px; }
+    .sys-badge.forge  { background: #ccfbf1; color: #0f4c42; }
+    .sys-badge.roll   { background: #dbeafe; color: #1e3a8a; }
+    .sys-badge.seer   { background: #ede9fe; color: #4c1d95; }
+    .sys-badge.slime  { background: #dcfce7; color: #14532d; }
+    .sys-card h4 { margin: 0 0 8px; font-size: 15px; }
+    .sys-card p  { font-size: 14px; margin: 0; }
+
+    /* ── Table ── */
+    .table-wrap { overflow-x: auto; margin: 16px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th { background: #f0fdfa; color: #0f4c42; text-align: left; font-weight: 700; padding: 10px 14px; border-bottom: 2px solid #99f6e4; }
+    td { padding: 10px 14px; border-bottom: 1px solid #eef2f7; vertical-align: top; }
+    tbody tr:nth-child(even) { background: #f8fffe; }
+
+    /* ── Badges ── */
+    .badge { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: 99px; margin: 2px; }
+    .badge-teal   { background: #ccfbf1; color: #0f4c42; }
+    .badge-green  { background: #dcfce7; color: #166534; }
+    .badge-amber  { background: #fef3c7; color: #92400e; }
+    .badge-blue   { background: #dbeafe; color: #1d4ed8; }
+    .badge-purple { background: #ede9fe; color: #4c1d95; }
+    .badge-red    { background: #fee2e2; color: #9f1239; }
+
+    /* ── Code ── */
+    pre.code-block { background: #0d1117; border-radius: 12px; padding: 16px 20px; margin: 14px 0; overflow-x: auto; font-family: "SF Mono",Consolas,Monaco,monospace; font-size: 13px; line-height: 1.8; color: #e6edf3; }
+    code { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 6px; padding: 2px 7px; font-family: "SF Mono",Consolas,Monaco,monospace; font-size: 13px; color: #0f766e; }
+
+    /* ── Misc ── */
+    blockquote { margin: 18px 0; padding: 16px 20px; border-left: 4px solid var(--primary); background: rgba(15,118,110,0.05); border-radius: 0 12px 12px 0; color: #3f3f46; font-size: 15px; }
+    ul, ol { padding-left: 24px; margin: 8px 0 12px; }
+    li { margin: 6px 0; }
+    .katex-display { overflow-x: auto; padding: 6px 0; }
+    .divider { border: none; border-top: 2px dashed #99f6e4; margin: 24px 0; }
+    footer { margin-top: 32px; text-align: center; color: var(--muted); font-size: 13px; }
+
+    /* ── Step boxes ── */
+    .step-box { display: flex; gap: 16px; align-items: flex-start; margin: 14px 0; padding: 16px 18px; background: #fafafa; border: 1px solid var(--line); border-radius: 14px; }
+    .step-num { width: 32px; height: 32px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; flex-shrink: 0; }
+    .step-content { flex: 1; min-width: 0; overflow-wrap: break-word; word-break: break-word; }
+    .step-content strong { display: block; margin-bottom: 4px; font-size: 15px; }
+
+    /* ── Formula ── */
+    .formula-block { margin: 18px 0 8px; overflow-x: auto; background: #fafafa; border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px 16px; }
+    .formula-vars { background: #f8faff; border: 1px solid #dbeafe; border-radius: 12px; padding: 14px 16px; margin: 4px 0 18px; font-size: 14px; color: #374151; }
+    .formula-vars .var-title { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+    .formula-vars ul { margin: 0; padding-left: 18px; }
+    .formula-vars li { margin: 5px 0; }
+
+    @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } .toc { position: static; } .meta-grid, .two-col, .three-col, .four-col { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 640px) { .page { padding: 18px 12px 56px; } .hero, .section { padding: 20px 18px; } h1 { font-size: 22px; } .meta-grid, .two-col, .three-col, .four-col { grid-template-columns: 1fr; } .source-card { flex-direction: column; align-items: flex-start; } }
+  </style>
+</head>
+<body>
+<div class="page">
+  <a class="back-link" href="../index.html">← 返回笔记列表</a>
+
+  <!-- ══ 知乎引用卡片 ══ -->
+  <div class="source-card">
+    <div class="source-logo">知</div>
+    <div class="source-info">
+      <div class="source-title">Agentic RL 时代的 Infra 重构：以Forge、ROLL、Seer、Slime为例</div>
+      <div class="source-meta">作者：低级炼丹师 · 知乎专栏 · 2025年4月</div>
+    </div>
+    <a class="source-link" href="https://zhuanlan.zhihu.com/p/2022786148087464077" target="_blank">🔗 原文链接</a>
+  </div>
+
+  <header class="hero">
+    <div class="eyebrow">⚙️ 系统解读 · Agentic RL · 训练推理分离 · torchforge / ROLL / Seer / slime</div>
+    <h1>Agentic RL 时代的 Infra 重构：以 Forge、ROLL、Seer、slime 为例</h1>
+    <p class="subtitle">从"单机单卡跑 PPO"到"千卡异步 Agent 训练"——剖析 Meta、阿里、Moonshot、清华四支团队在 Agentic RL 基础设施上的核心设计哲学，以及权重同步、训推分离、长尾 Rollout、异步流水线四大核心问题的工程解法</p>
+    <div class="meta-grid">
+      <div class="meta-card"><div class="meta-label">四大系统</div><div class="meta-value">torchforge · ROLL · Seer · slime</div></div>
+      <div class="meta-card"><div class="meta-label">出处机构</div><div class="meta-value">Meta · 阿里巴巴 · Moonshot AI · THUDM</div></div>
+      <div class="meta-card"><div class="meta-label">核心挑战</div><div class="meta-value">权重同步 · 训推分离 · 长尾 Rollout · 异步 RL</div></div>
+      <div class="meta-card"><div class="meta-label">适用场景</div><div class="meta-value">RLVR · Agentic RL · Reasoning RL · 大规模生产训练</div></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- ══ TOC ══ -->
+    <aside class="toc">
+      <h2>目录</h2>
+      <ul class="toc-list">
+        <li><a href="#intro">前言</a></li>
+        <li><a href="#framework">§0 分析框架：Agentic RL Infra 在优化什么？</a></li>
+        <li><a href="#agent-integration">§1 如何让训练系统真正接住一个 Agent？</a>
+          <ul class="toc-sub">
+            <li><a href="#agent-changes">1.1 Agent 独立之后，到底改变了什么？</a></li>
+            <li><a href="#forge-agent">1.2 Forge：真正把 Agent 从框架内部逻辑变成系统外部对象</a></li>
+            <li><a href="#roll-cli">1.3 ROLL：在 CLI-Native Mode 下，把 Agent、环境和训练真正拆开</a></li>
+            <li><a href="#slime-tito">1.4 slime：把 rollout 做成服务层，并用 TITO 保证训练对齐</a></li>
+          </ul>
+        </li>
+        <li><a href="#async-scheduling">§2 长尾 Rollout 怎么调度</a>
+          <ul class="toc-sub">
+            <li><a href="#why-async">2.1 Agentic RL 为何天然走向异步？</a></li>
+            <li><a href="#async-cost">2.2 异步的代价：off-policy、分布偏移与训练稳定性</a></li>
+            <li><a href="#forge-window">2.3 Forge 的 Windowed FIFO：在两个极端之间找中间态</a></li>
+            <li><a href="#roll-pipeline">2.4 ROLL：把整条 pipeline 当作异步分布式系统重构</a></li>
+            <li><a href="#slime-control">2.5 slime：在 fully asynchronous setting 下直接控制 off-policy 误差</a></li>
+            <li><a href="#seer-sync">2.6 Seer：坚持同步，但把 rollout 本身做薄</a></li>
+          </ul>
+        </li>
+        <li><a href="#prefix-redundancy">§3 如何消除前缀冗余与重复计算？</a>
+          <ul class="toc-sub">
+            <li><a href="#forge-merging">3.1 Forge 的 Prefix Tree Merging</a></li>
+            <li><a href="#tree-batching">3.2 这类方法的本质：从序列批处理到树结构批处理</a></li>
+            <li><a href="#kv-cache">3.3 推理侧的对应演化：全局 KV Cache Pool</a></li>
+          </ul>
+        </li>
+        <li><a href="#rollout-speedup">§4 Rollout 推理怎么加速？</a>
+          <ul class="toc-sub">
+            <li><a href="#forge-mtp">4.1 Forge：用持续训练的 MTP Head 跟上策略更新</a></li>
+            <li><a href="#seer-grouped">4.2 Seer：利用组内相似性做无 draft 模型的推测解码</a></li>
+            <li><a href="#slime-fp8">4.3 slime：用 FP8 和 PD 解耦优化 rollout 推理</a></li>
+          </ul>
+        </li>
+        <li><a href="#credit-assignment">§5 长时序信用分配与稳定优化</a>
+          <ul class="toc-sub">
+            <li><a href="#forge-dense">5.1 Forge：用 dense reward 缓解长轨迹上的稀疏监督</a></li>
+            <li><a href="#roll-chunked">5.2 ROLL：Chunked MDP 与 IPA，把优化单元对齐交互边界</a></li>
+          </ul>
+        </li>
+        <li><a href="#env-reliability">§6 环境可靠性、测试可信度与奖励污染</a>
+          <ul class="toc-sub">
+            <li><a href="#env-clean">6.1 环境必须保持干净</a></li>
+            <li><a href="#false-positive">6.2 伪阳性会系统性毒化 RL</a></li>
+            <li><a href="#env-diversity">6.3 环境不应只有干净，还要有多样性</a></li>
+          </ul>
+        </li>
+      </ul>
+    </aside>
+
+    <main class="content">
+
+      <!-- ══ 前言 ══ -->
+      <section class="section" id="intro">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdfa;">📝</div>
+          前言
+        </div>
+        <p>这篇文章是在阅读了 Forge、ROLL 、Seer 、slime的博客及技术报告（链接在最后）之后，对这四家公司在 infra 和 agentic RL 相关工作中的部分底层算法所做的整理与总结。作者主要是纯算法背景，对 infra 也有一定了解，但并不算特别深入。因此，这篇文章更多是从应用算法的视角出发，尝试理解和梳理 RL infra 相关技术，并且作为个人学习相关知识的笔记。文中若有理解不准确或表述不严谨之处，也非常欢迎各位老师的批评指正。</p>
+
+        <p>过去一段时间，强化学习在大语言模型上的突破，主要集中在 reasoning 场景。无论是数学、代码还是一般推理任务，大家熟悉的训练方式大体都是一致的：模型生成一段完整回答，系统根据最终结果给出奖励，再进行参数更新。即使这些回答已经足够长、足够复杂，它们本质上还是一种"单次生成"问题，模型的核心目标仍然是一次 response 写对。</p>
+
+        <p>但 Agentic RL 让这个问题变了。模型不再只是生成一个答案，而是要在环境中持续行动：调用工具、接收观察、管理上下文，并在多轮交互后逐步完成任务。<span class="badge badge-teal">MiniMax</span> 在 Forge 的博客里把这个变化说得很直接：在真实世界的大规模复杂场景里做 RL，核心难题始终是如何在系统吞吐量、训练稳定性与 Agent 灵活性三者之间取得平衡。<span class="badge badge-blue">阿里</span> 在 ROLL 的论文里也用了一句很形象的话来概括这种区别："RLVR 训练的是一个'会回答'的模型，而 Agentic RL 训练的是一个'会行动'的模型——跨时间、跨状态、跨不确定性地行动。"</p>
+
+        <p>也正因为如此，Agentic RL 面对的问题不再只是长序列训练，而是整套系统问题：Agent 脚手架怎么接入，环境如何管理，多轮交互里的长尾 rollout 怎么调度，训练和部署怎么保持一致，奖励与测试如何避免被"投机取巧"。最近几家代表性的系统——<span class="badge badge-teal">MiniMax 的 Forge</span>、<span class="badge badge-blue">阿里的 ROLL</span>、<span class="badge badge-purple">Moonshot 的 Seer</span>、<span class="badge badge-green">智谱的 slime</span>——虽然角度不同，但其实都在回答同一个问题：当我们开始训练"会行动"的模型时，RL 基础设施应该如何重构？</p>
+
+        <div class="flow-diagram">
+          <div style="font-size:12px;color:#0f766e;font-weight:700;margin-bottom:12px;">从 RLVR 到 Agentic RL：基础设施重构的核心问题</div>
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <div style="display:flex;gap:8px;align-items:center;">
+              <div style="border:2px solid #0f766e;border-radius:12px;padding:12px 16px;background:#f0fdfa;text-align:center;flex:1;">
+                <div style="font-weight:700;color:#0f4c42;font-size:14px;">RLVR（传统）</div>
+                <div style="font-size:11px;color:var(--muted);margin-top:6px;">单轮生成 → 结果奖励 → 梯度更新</div>
+              </div>
+              <span style="color:#0f766e;font-size:24px;">→</span>
+              <div style="border:2px solid #2563eb;border-radius:12px;padding:12px 16px;background:#eff6ff;text-align:center;flex:1;">
+                <div style="font-weight:700;color:#1e3a8a;font-size:14px;">Agentic RL（新型）</div>
+                <div style="font-size:11px;color:var(--muted);margin-top:6px;">多轮交互 → 环境执行 → 任务完成奖励</div>
+              </div>
+            </div>
+            <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:10px 14px;">
+              <div style="font-weight:700;color:#92400e;font-size:12px;margin-bottom:6px;">⚠️ 新增的基础设施挑战</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:11px;">
+                <span class="badge badge-amber">权重同步</span>
+                <span class="badge badge-blue">训推分离</span>
+                <span class="badge badge-red">长尾 Rollout</span>
+                <span class="badge badge-purple">异步流水线</span>
+                <span class="badge badge-teal">环境可靠性</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ §0 分析框架 ══ -->
+      <section class="section" id="framework">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdfa;">🌊</div>
+          §0 分析框架：Agentic RL Infra 在优化什么？
+        </div>
+
+        <p>Forge 博客在开篇给出了一个非常适合作为总纲的形式化目标。它把 Agent RL 系统抽象成"最大化有效训练收益"：</p>
+
+        <div class="formula-block">$$ \max_{\theta} J(\theta)=\text{Throughput}(\mathcal{A}) \times \text{Sample Efficiency}(\mathcal{A}) $$</div>
+
+        <p>同时满足：</p>
+
+        <div class="callout-teal">
+          <div class="callout-title">📐 系统约束条件</div>
+          <ul style="font-size:14px;margin:0;padding-left:18px;">
+            <li><strong>Agent 可扩展性</strong>：系统能支持任意 Agent $\forall \mathcal{A}\in\Omega_{agent}$</li>
+            <li><strong>更新稳定性</strong>：$\mathbb{E}[\text{Update Variance}]<\delta$</li>
+            <li><strong>训练收敛性</strong>：$\mathbb{E}[||J^{(T)}-J^*||]<\epsilon$</li>
+          </ul>
+        </div>
+
+        <p>Forge 原文里对这个公式后面的解释其实非常清楚。它指出，Throughput 指的是每秒处理的原始 token 数量，主要受 RL 系统中四部分控制：Rollout、Training、Data Processing 和 I/O。而 Sample Efficiency 指的是每个样本带来的平均性能提升，它取决于数据分布、数据质量、算法效率以及 off-policy 程度。稳定性和收敛性则需要通过训练过程中的监控指标来判断。</p>
+
+        <div class="insight-box">
+          <div class="insight-title">💡 为什么这个形式化很有用？</div>
+          <p style="font-size:14px;margin:0;">这个定义有一个很大的好处：它把很多看起来彼此分散的问题放进了同一框架下。比如：</p>
+          <ul style="font-size:14px;margin:8px 0 0;padding-left:18px;">
+            <li>为什么大家都在拼 rollout 吞吐？<span class="badge badge-teal">因为 rollout 往往是 Throughput 的主要瓶颈</span></li>
+            <li>为什么异步系统一边提速一边又让人担心？<span class="badge badge-amber">因为它可能提升吞吐，但损害 sample efficiency</span></li>
+            <li>为什么要强调任意 Agent、黑盒 Agent？<span class="badge badge-blue">因为 $\Omega_{agent}$ 的外延本身在不断扩大</span></li>
+            <li>为什么同样是加速，有些优化会伤训练稳定性？<span class="badge badge-red">因为系统优化最终必须受 stability 和 convergence 约束</span></li>
+          </ul>
+        </div>
+
+        <div class="big-concept">
+          <div class="big-concept-title">🎯 核心张力：几组矛盾的处理</div>
+          <p style="font-size:14px;margin:0;">也就是说，今天讨论 Agentic RL Infra，与其说是在讨论某种单独的"工程技巧"，不如说是在不断处理这个目标函数里的几组张力：</p>
+          <div class="two-col" style="margin-top:12px;">
+            <div class="mini-card" style="border-left:3px solid #0f766e;">
+              <h4 style="color:#0f4c42;margin-top:0;">⚡ 吞吐 vs 效率</h4>
+              <p style="font-size:13px;margin:0;">一边想把系统跑得更快，一边又不能把训练分布和策略更新搞坏</p>
+            </div>
+            <div class="mini-card" style="border-left:3px solid #2563eb;">
+              <h4 style="color:#1e3a8a;margin-top:0;">🏗️ 复杂性 vs 稳定性</h4>
+              <p style="font-size:13px;margin:0;">一边想接入更真实、更复杂的 Agent，一边又必须控制系统复杂度和稳定性</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ §1 如何让训练系统真正接住一个 Agent ══ -->
+      <section class="section" id="agent-integration">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdfa;">⚙️</div>
+          §1 如何让训练系统真正接住一个 Agent？
+        </div>
+
+        <p>如果只从算法层面看，Agentic RL 相比传统 RLVR 的变化，似乎只是"轨迹更长、交互更多、奖励更稀疏"。但从基础设施角度看，真正第一个撞上的问题反而更底层：训练系统究竟该怎样接住一个真实的 Agent？</p>
+
+        <p>Forge 在这里总结得很直接，当前常见的 RL 框架和范式对 Agent 的复杂度限制很大，主要体现在两个方面。</p>
+
+        <div class="callout-red">
+          <div class="callout-title">😤 问题一：Agent 自由度受限</div>
+          <p style="font-size:14px;margin:0;">"将 Agent 视为白盒就要求在 Agent 和 RL Framework 之间共享和传递状态。这种设计难以对复杂的 Agent 架构（如动态上下文管理、Multi-Agent RL 等）进行建模，导致模型能力无法在复杂的黑盒 Agent 上有效泛化。"</p>
+          <p style="font-size:13px;margin-top:8px;color:var(--muted);">→ 训练框架强依赖 Agent 内部状态，Agent 的自由度被大幅限制，系统很难支持真正复杂或者黑盒的 Agent</p>
+        </div>
+
+        <div class="callout-red">
+          <div class="callout-title">😤 问题二：TITO 一致性问题</div>
+          <p style="font-size:14px;margin:0;">"现有的 TITO（Token-In-Token-Out）模式迫使 Agent 与底层的 Tokenizer 逻辑深度耦合。在复杂的上下文管理机制下，要想维持 Agent 和 RL 之间的严格一致性，其工程成本是非常大的。"</p>
+          <p style="font-size:13px;margin-top:8px;color:var(--muted);">→ Agent 与 tokenizer 深度耦合，在复杂上下文管理下维护 token-level 一致性的工程成本极高</p>
+        </div>
+
+        <div class="insight-box">
+          <div class="insight-title">💡 共同方向：Agent 独立化</div>
+          <p style="font-size:14px;margin:0;">所以这类系统最终都走向了一个共同方向：不要再把 Agent 塞在 RL Framework 内部，而是把它独立出来，单独作为一层系统抽象来看待。</p>
+        </div>
+
+        <h3 id="agent-changes">1.1 Agent 独立之后，到底改变了什么？</h3>
+
+        <p>Agent 独立出来之后，最大的区别是：训练系统不再试图"自己扮演 Agent"，而只是把 Agent 当成一个会持续发请求、收反馈、产出 trajectory 的外部系统。</p>
+
+        <div class="two-col">
+          <div class="mini-card" style="border-left:3px solid #ef4444;">
+            <h4 style="color:#9f1239;margin-top:0;">❌ 未独立：RL 框架扮演 Agent</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li>拼上下文</li>
+              <li>维护多轮历史</li>
+              <li>组织工具调用成下一轮输入</li>
+              <li>决定哪些 observation 保留、哪些丢掉</li>
+              <li>只要真实 Agent 行为变了，训练框架就得跟着改</li>
+            </ul>
+          </div>
+          <div class="mini-card" style="border-left:3px solid #0f766e;">
+            <h4 style="color:#0f4c42;margin-top:0;">✅ 独立后：Agent 自己管理</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li>Agent 自己维护上下文</li>
+              <li>自己决定何时调工具</li>
+              <li>自己组织下一轮输入</li>
+              <li>RL 系统只负责提供模型生成能力，收集 trajectory</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 具体例子：长上下文下的 Search Agent</div>
+          <p style="font-size:14px;margin:8px 0;">假设一个 search agent 在连续浏览网页后，上下文快爆掉了，于是它触发了一次 context management，把前面十几轮网页内容总结成一小段 memory，同时删掉大量原始 observation，只保留结论和少数关键引用。</p>
+          <div class="two-col" style="margin-top:12px;">
+            <div>
+              <p style="font-size:12px;font-weight:700;color:#9f1239;margin:0 0 6px;">❌ 如果 Agent 没独立</p>
+              <p style="font-size:12px;margin:0;background:#fef2f2;border:1px solid #fecdd3;border-radius:8px;padding:8px;">训练框架必须知道 summarize 是怎么做的，哪些 token 被删了，下一轮 prompt 如何拼接。只要 summary 模板变了，训练框架代码也得改</p>
+            </div>
+            <div>
+              <p style="font-size:12px;font-weight:700;color:#0f766e;margin:0 0 6px;">✅ 如果 Agent 独立</p>
+              <p style="font-size:12px;margin:0;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:8px;">search agent 自己完成 summarize，再把 summarize 后的新上下文作为下一次模型请求发给 rollout engine。RL 系统根本不需要知道"这段 summary 怎么来的"</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="big-concept">
+          <div class="big-concept-title">🔑 本质变化：职责分离</div>
+          <p style="font-size:14px;margin:0;">在独立架构下：</p>
+          <ul style="font-size:14px;margin:8px 0 0;padding-left:18px;">
+            <li><strong>"如何管理上下文"属于 Agent</strong></li>
+            <li><strong>"如何根据 Agent 跑出来的数据训练模型"属于 RL 系统</strong></li>
+          </ul>
+          <p style="font-size:14px;margin-top:12px;">这也是 Agent 独立之后最本质的变化：以前是 RL 框架里嵌一个"伪 Agent"，现在是一个真实 Agent 在外面跑，RL 系统在后面接住它。</p>
+        </div>
+
+        <h3 id="forge-agent">1.2 Forge：真正把 Agent 从框架内部逻辑变成系统外部对象</h3>
+
+        <p>Forge 的核心设计并不复杂，但非常有代表性。为了实现真正可扩展的架构，它们"不再局限于具体的 Agent，而是转向通用的抽象层设计，将 Agent 的执行逻辑与底层的训推引擎彻底解耦"。</p>
+
+        <div class="flow-diagram">
+          <div style="font-size:12px;color:#0f766e;font-weight:700;margin-bottom:12px;">Forge 三层架构</div>
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <div style="border:2px solid #0f766e;border-radius:12px;padding:12px 16px;background:#f0fdfa;text-align:center;">
+              <div style="font-weight:700;color:#0f4c42;font-size:14px;">第一层：Agent（Trajectory Producer）</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:4px;">协调环境交互 · 业务逻辑 · Context Management</div>
+            </div>
+            <div style="border:2px solid #5eead4;border-radius:12px;padding:12px 16px;background:#ccfbf1;text-align:center;">
+              <div style="font-weight:700;color:#0f4c42;font-size:14px;">第二层：中间件抽象层（Gateway Server + Data Pool）</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:4px;">标准化通信 · 异步数据收集 · 物理隔离</div>
+            </div>
+            <div style="border:2px solid #93c5fd;border-radius:12px;padding:12px 16px;background:#dbeafe;text-align:center;">
+              <div style="font-weight:700;color:#1e3a8a;font-size:14px;">第三层：训练与推理引擎</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:4px;">Rollout Engine（高吞吐生成）+ Train Engine（模型更新）</div>
+            </div>
+          </div>
+        </div>
+
+        <p>Forge 这个设计的重点不在模块名，而在它对<span class="badge badge-teal">白盒 Agent 和 黑盒 Agent 的同时支持</span>。</p>
+
+        <div class="callout-blue">
+          <div class="callout-title">🤔 为什么要同时支持白盒和黑盒？</div>
+          <p style="font-size:14px;margin:0;">因为真实世界里的 Agent，既有你可以充分控制、分析和增强的白盒 Agent，也有你只能通过外部接口接入的黑盒 Agent。Forge 原文直接说：</p>
+          <blockquote style="margin:12px 0 0;padding-left:12px;border-left:2px solid #2563eb;">
+            "许多用户的真正在用的 Agent 实际上是闭源的，我们完全无法感知内部的 Agent loop 逻辑。"
+          </blockquote>
+          <p style="font-size:14px;margin-top:8px;">→ 工业界大量重要场景本来就是黑盒。系统如果不能兼容它们，训练出来的模型就很可能只能在研究脚手架上表现好，而无法在真实工作流里泛化。</p>
+        </div>
+
+        <div class="sys-card forge">
+          <div class="sys-badge forge">Forge 特性</div>
+          <h4>Gateway + Data Pool：标准化交互协议</h4>
+          <p>Forge 的方案是，训练系统本身不感知 Agent 内部细节，只要求 Agent 通过 Gateway 发起标准请求。这样它就能兼容：</p>
+          <ul style="font-size:13px;margin:8px 0 0;padding-left:16px;">
+            <li>任意上下文操作</li>
+            <li>任意内部 Agent loop</li>
+            <li>任意工具调用格式</li>
+            <li>甚至像 ClaudeCode、Opencode Agent 这样的黑盒系统</li>
+          </ul>
+        </div>
+
+        <div class="callout-green">
+          <div class="callout-title">✅ Context Management 作为 Action</div>
+          <p style="font-size:14px;margin:0;">Forge 对白盒 Agent 的讨论也很值得注意。它没有把 context management 仅仅当成推理阶段的一个小技巧，而是进一步把 CM 本身建模为一种 action：</p>
+          <blockquote style="margin:12px 0 0;padding-left:12px;border-left:2px solid #16a34a;">
+            "我们将 CM 建模为 agent action，而上下文变迁则蕴含在环境的 dynamics 中。"
+          </blockquote>
+          <p style="font-size:14px;margin-top:8px;">→ 模型不仅要学会回答和工具调用，还要学会应对上下文切换。训练时就已经把推理阶段会遇到的上下文变迁纳入了状态转移。</p>
+        </div>
+
+        <h3 id="roll-cli">1.3 ROLL：在 CLI-Native Mode 下，把 Agent、环境和训练真正拆开</h3>
+
+        <p>ROLL 工作的核心，也是在做分层：训练框架不应该再自己承担 Agent 的内部逻辑，而是要把 Agent、环境和训练系统拆成相对独立的部分，让它们通过明确的接口协同工作。不过这里要特别强调，这种"训练系统不再自己重建 Agent，而是直接接入真实 Agent runtime"的做法，主要对应的是它们的 CLI-Native Mode。</p>
+
+        <p>ROLL 的 ALE（Agentic Learning Ecosystem）的整体设计由三部分组成：</p>
+
+        <div class="three-col">
+          <div class="mini-card" style="border-left:3px solid #2563eb;">
+            <h4 style="color:#1e3a8a;margin-top:0;">ROLL</h4>
+            <p style="font-size:13px;margin:0;">负责权重优化的后训练框架</p>
+          </div>
+          <div class="mini-card" style="border-left:3px solid #16a34a;">
+            <h4 style="color:#14532d;margin-top:0;">OPENAI-GYM COMPATIBLE ENV</h4>
+            <p style="font-size:13px;margin:0;">环境容器，支持沙箱代码执行、文件系统操作、API 调用等真实 Agent 任务</p>
+          </div>
+          <div class="mini-card" style="border-left:3px solid #7c3aed;">
+            <h4 style="color:#4c1d95;margin-top:0;">AGENT CLI</h4>
+            <p style="font-size:13px;margin:0;">Agent 的命令行接口，接收环境状态，输出动作，与训练框架解耦</p>
+          </div>
+        </div>
+
+        <div class="sys-card roll">
+          <div class="sys-badge roll">ROLL 特性</div>
+          <h4>CLI-Native Mode：直接接入真实 Agent runtime</h4>
+          <p>在 CLI-Native Mode 下，Agent、环境、训练系统是三个独立进程：</p>
+          <ul style="font-size:13px;margin:8px 0 0;padding-left:16px;">
+            <li><strong>Agent CLI</strong>：运行在独立容器中，接收环境 observation，输出 action，通过标准 I/O 与训练框架通信</li>
+            <li><strong>Environment</strong>：沙箱环境，执行 Agent 动作，返回 observation 和 reward</li>
+            <li><strong>ROLL</strong>：训练框架，从 Agent CLI 收集 trajectory，训练模型，更新权重</li>
+          </ul>
+        </div>
+
+        <div class="insight-box">
+          <div class="insight-title">💡 分层的好处</div>
+          <p style="font-size:14px;margin:0;">这种分层设计的好处是：<strong>Agent 可以用任何语言实现，环境可以是任何沙箱，训练框架不需要知道 Agent 内部如何推理、如何组织上下文</strong>。只要 Agent CLI 符合约定的接口，就能接入训练。</p>
+        </div>
+
+        <h3 id="slime-tito">1.4 slime：把 rollout 做成服务层，并用 TITO 保证训练对齐</h3>
+
+        <p>slime 的路线更加激进：它直接把 rollout 做成了一个服务层（Rollout as a Service），模型推理不再是训练框架内部的一个步骤，而是外部可扩展的服务。</p>
+
+        <div class="sys-card slime">
+          <div class="sys-badge slime">slime 特性</div>
+          <h4>TITO：Token-In-Token-Out 的严格一致性</h4>
+          <p>slime 特别强调了 TITO（Token-In-Token-Out）约束：</p>
+          <ul style="font-size:13px;margin:8px 0 0;padding-left:16px;">
+            <li>Agent 和 RL 系统之间只传递 token 序列，不传递任何结构化状态</li>
+            <li>训练数据完全由 token 序列构成，没有额外的 metadata 依赖</li>
+            <li>这样可以保证训练和推理的严格一致性，避免训推不一致带来的分布偏移</li>
+          </ul>
+        </div>
+
+        <div class="callout-amber">
+          <div class="callout-title">⚠️ TITO 的代价</div>
+          <p style="font-size:14px;margin:0;">TITO 虽然保证了训练-推理一致性，但也有代价：Agent 必须能够从 token 序列中恢复所有必要的状态信息。如果 Agent 内部有复杂的状态管理（如动态 context compression），在 TITO 约束下，这些状态必须能够编码到 token 序列中。</p>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>系统</th><th>Agent 抽象方式</th><th>一致性约束</th><th>黑盒支持</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><span class="badge badge-teal">Forge</span></td><td>Trajectory Producer</td><td>Gateway 协议</td><td>✅ 原生支持</td></tr>
+              <tr><td><span class="badge badge-blue">ROLL</span></td><td>CLI-Native Mode</td><td>CLI 接口</td><td>✅ 通过 CLI</td></tr>
+              <tr><td><span class="badge badge-green">slime</span></td><td>Rollout as Service</td><td>TITO 约束</td><td>⚠️ 需 token 编码</td></tr>
+              <tr><td><span class="badge badge-purple">Seer</span></td><td>（未详细披露）</td><td>同步训练</td><td>⚠️ 受限</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ══ §2 长尾 Rollout 怎么调度 ══ -->
+      <section class="section" id="async-scheduling">
+        <div class="section-title">
+          <div class="icon" style="background:#fffbeb;">⏱️</div>
+          §2 长尾 Rollout 怎么调度
+        </div>
+
+        <p>从目前公开的几类工作来看，Agentic RL Infra 最核心的工程矛盾几乎都集中在 rollout 这一段。而要理解 Forge 的 Windowed FIFO、ROLL和slime 的异步训练pipeline以及 Seer 的同步优化，最好先从一个更基本的问题开始：<strong>为什么 agentic RL 几乎天然会走向异步？</strong></p>
+
+        <h3 id="why-async">2.1 Agentic RL 为何天然走向异步？</h3>
+
+        <p>在传统 RLVR 中，虽然 rollout 也可能很长，但任务结构通常比较规整：一轮生成完成，reward 给出，然后进入训练。整个流程虽然昂贵，但至少形态相对统一。</p>
+
+        <p>但在 agentic RL 中，rollout 的时长方差会被明显放大。原因有：</p>
+
+        <div class="callout-amber">
+          <div class="callout-title">⚠️ 三大原因导致长尾问题</div>
+          <ul style="font-size:14px;margin:0;padding-left:18px;">
+            <li><strong>第一，Agent rollout 不只是在生成 token</strong>：一个 Agent episode 的耗时不仅包括 LLM token generation，还包括工具调用往返、沙箱环境执行、网络等待、文件 I/O、子任务重试以及多轮上下文整理。因此两个看起来很像的任务，最终完成时间可能相差几十倍。</li>
+            <li><strong>第二，长尾样本在 Agent 场景里是常态，不是异常</strong>：有些 episode 几秒就结束，有些可能拖到几分钟甚至几小时。而且一旦 agent 陷入 retry loop、慢工具、环境恢复或超长推理，这种长尾只会被进一步放大。</li>
+            <li><strong>第三，group-based rollout 会进一步放大阻塞</strong>：像 GRPO 这样的训练，通常需要对同一 prompt 采多条 response。如果把整组 response 一起调到某个实例上，短样本会被长样本拖住，实例间和实例内都容易失衡。</li>
+          </ul>
+        </div>
+
+        <div class="flow-diagram">
+          <div style="font-size:12px;color:#92400e;font-weight:700;margin-bottom:12px;">严格同步的队头阻塞问题</div>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <div style="display:flex;gap:6px;align-items:center;">
+              <div style="flex:1;display:flex;gap:4px;">
+                <div style="background:#dcfce7;border:1px solid #86efac;border-radius:6px;padding:4px 8px;font-size:11px;text-align:center;">Prompt 1<br>2s</div>
+                <div style="background:#dcfce7;border:1px solid #86efac;border-radius:6px;padding:4px 8px;font-size:11px;text-align:center;">Prompt 2<br>5s</div>
+                <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:4px 8px;font-size:11px;text-align:center;">Prompt 3<br>120s ⚠️</div>
+                <div style="background:#dcfce7;border:1px solid #86efac;border-radius:6px;padding:4px 8px;font-size:11px;text-align:center;">Prompt 4<br>3s</div>
+                <div style="background:#dcfce7;border:1px solid #86efac;border-radius:6px;padding:4px 8px;font-size:11px;text-align:center;">Prompt 5<br>8s</div>
+              </div>
+            </div>
+            <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:8px 12px;font-size:12px;text-align:center;">
+              <div style="font-weight:700;color:#9f1239;margin-bottom:4px;">🔴 同步等待：所有任务必须等最慢的 Prompt 3 完成</div>
+              <div style="color:var(--muted);">Prompt 1-2 和 4-5 已完成，但必须等 120s → GPU 空转 110+ 秒</div>
+            </div>
+          </div>
+        </div>
+
+        <p>严格同步会把这些尾部代价全部显式暴露出来。只要这一轮还剩一个极端慢 episode 没跑完，训练就必须等。所以对工业系统来说，一个非常自然的反应就是：<strong>既然长尾不可避免，那就不要让训练阻塞在 rollout 上，而是把 rollout 与 training 解耦，让它们异步推进</strong>。这也是为什么今天很多 agentic RL 系统都天然带有明显的异步色彩。</p>
+
+        <h3 id="async-cost">2.2 异步的代价：off-policy、分布偏移与训练稳定性</h3>
+
+        <p>异步很自然，但它带来的问题也同样严重。对 agentic RL 来说，真正的难点并不是简单地在"同步"与"异步"之间二选一，而是：一旦 rollout 和 training 解耦，系统就必须同时处理 off-policy、样本分布偏移和训练稳定性这几类问题。</p>
+
+        <div class="two-col">
+          <div class="mini-card" style="border-top:3px solid #16a34a;">
+            <h4 style="color:#14532d;margin-top:0;">✅ 最保守：严格同步 FIFO</h4>
+            <p style="font-size:13px;margin:0;">rollout 请求按进入系统的顺序排队，训练阶段也严格按这个顺序消费。</p>
+            <div style="margin-top:8px;padding:8px;background:#f0fdf4;border-radius:6px;font-size:12px;">
+              <div style="font-weight:700;color:#166534;margin-bottom:4px;">优点：</div>
+              <div style="color:var(--muted);">数据最新鲜、on-policy 性更强、分布更稳定</div>
+            </div>
+            <div style="margin-top:6px;padding:8px;background:#fef2f2;border-radius:6px;font-size:12px;">
+              <div style="font-weight:700;color:#9f1239;margin-bottom:4px;">缺点：</div>
+              <div style="color:var(--muted);">只要前面卡住一个极端慢的长尾样本，后面一串已经完成的数据都得等着，形成典型的队头阻塞，系统吞吐会被严重拖慢，GPU 也容易空转</div>
+            </div>
+          </div>
+          <div class="mini-card" style="border-top:3px solid #ef4444;">
+            <h4 style="color:#9f1239;margin-top:0;">❌ 最激进：纯贪心异步</h4>
+            <p style="font-size:13px;margin:0;">谁先完成谁先训练。</p>
+            <div style="margin-top:8px;padding:8px;background:#f0fdf4;border-radius:6px;font-size:12px;">
+              <div style="font-weight:700;color:#166534;margin-bottom:4px;">优点：</div>
+              <div style="color:var(--muted);">吞吐最高，长尾样本不会拖住整个系统，资源利用率通常也更高</div>
+            </div>
+            <div style="margin-top:6px;padding:8px;background:#fef2f2;border-radius:6px;font-size:12px;">
+              <div style="font-weight:700;color:#9f1239;margin-bottom:4px;">代价：</div>
+              <div style="color:var(--muted);">off-policy、样本分布偏移、训练不稳定</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout-red">
+          <div class="callout-title">😤 异步的三大核心问题</div>
+          <ul style="font-size:14px;margin:0;padding-left:18px;">
+            <li><strong>第一是 off-policy</strong>：Forge 对此讲得很明确：sample efficiency 不只取决于数据质量和算法本身，也取决于 off-policy degree。也就是说，如果训练阶段拿到的数据不是由当前最新策略生成，而是持续来自旧版本策略，那么单位样本能带来的有效性能提升就会下降。</li>
+            <li><strong>第二是样本分布偏移</strong>：Forge 在讨论异步调度时专门比较了严格 FIFO 和贪心策略：前者的数据更新鲜、分布更稳定，但容易被长尾阻塞；后者吞吐更高，却会优先消费那些更早完成的样本。也正因为如此，训练数据会被运行时调度重新加权，越来越偏向短样本、快样本和环境更稳定的样本，而不是忠实反映原始任务分布。</li>
+            <li><strong>第三是训练稳定性</strong>：这里 ROLL 的经验更有代表性。它在系统设计里专门处理 stale sample、policy mismatch、mask / filter、reweight 以及 rollback / resume 等问题，这实际上说明：一旦 rollout 和 training 解耦，训练过程就不只是"样本老一点"这么简单，而是会持续积累不稳定因素。</li>
+          </ul>
+        </div>
+
+        <div class="insight-box">
+          <div class="insight-title">💡 核心问题：不是"同步还是异步"的二选一</div>
+          <p style="font-size:14px;margin:0;">所以从 infra 角度看，agentic RL 真正要解决的，并不是"同步还是异步"的二选一，而是<strong>如何在保证高吞吐的同时，把样本新鲜度、分布偏移和长尾影响控制在一个可接受范围内</strong>。Forge 的 Windowed FIFO，就是在这个背景下提出的：它既不接受严格 FIFO 的极端阻塞，也不接受纯贪心异步带来的分布失真，而是试图在两者之间找到一个更可控的中间态。</p>
+        </div>
+
+        <h3 id="forge-window">2.3 Forge 的 Windowed FIFO：在两个极端之间找中间态</h3>
+
+        <p>Windowed FIFO 可以看成是严格 FIFO 和纯贪心之间的中间态。</p>
+
+        <div class="big-concept">
+          <div class="big-concept-title">🔑 Windowed FIFO 的基本设定</div>
+          <p style="font-size:14px;margin:0 0 12px;">假设当前生成队列的头部是 H，训练调度器只能看到一个大小为 W 的窗口：<span class="badge badge-amber">[H, H+W]</span></p>
+          <p style="font-size:14px;margin:0;">也就是说，即使总并发很大，训练器也只能在这个局部窗口里挑已经完成的轨迹。</p>
+        </div>
+
+        <div class="callout-blue">
+          <div class="callout-title">📋 四条核心规则</div>
+          <ol style="font-size:14px;margin:0;padding-left:18px;">
+            <li><strong>受限可见性</strong>：调度器只能从窗口 [H, H+W] 内拿已完成轨迹。</li>
+            <li><strong>窗口内局部贪婪</strong>：在窗口内部，谁先完成谁先被消费，这样可以避免单纯 FIFO 下的队头阻塞。</li>
+            <li><strong>窗口外严格阻塞</strong>：就算 H+W+k 位置上的任务已经完成，也不能越过窗口提前进入训练。</li>
+            <li><strong>窗口只有在头部任务被消费后才前移</strong>：也就是说，旧数据不能被无限跳过。</li>
+          </ol>
+        </div>
+
+        <div class="flow-diagram">
+          <div style="font-size:12px;color:#1d4ed8;font-weight:700;margin-bottom:12px;">Windowed FIFO 调度示意（W=5）</div>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <div style="display:flex;gap:4px;align-items:center;">
+              <div style="background:#dcfce7;border:1px solid #86efac;border-radius:6px;padding:4px 8px;font-size:11px;text-align:center;flex:1;">#1 (H)<br>完成✓</div>
+              <div style="background:#dcfce7;border:1px solid #86efac;border-radius:6px;padding:4px 8px;font-size:11px;text-align:center;flex:1;">#2<br>完成✓</div>
+              <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:4px 8px;font-size:11px;text-align:center;flex:1;">#3<br>进行中</div>
+              <div style="background:#dcfce7;border:1px solid #86efac;border-radius:6px;padding:4px 8px;font-size:11px;text-align:center;flex:1;">#4<br>完成✓</div>
+              <div style="background:#dcfce7;border:1px solid #86efac;border-radius:6px;padding:4px 8px;font-size:11px;text-align:center;flex:1;">#5 (H+W)<br>完成✓</div>
+              <div style="border:2px dashed #cbd5e1;border-radius:6px;padding:4px 8px;font-size:11px;text-align:center;flex:1;color:#94a3b8;">#6<br>窗口外</div>
+              <div style="border:2px dashed #cbd5e1;border-radius:6px;padding:4px 8px;font-size:11px;text-align:center;flex:1;color:#94a3b8;">#7<br>窗口外</div>
+            </div>
+            <div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:8px 12px;font-size:12px;">
+              <div style="font-weight:700;color:#1d4ed8;margin-bottom:4px;">🎯 调度策略</div>
+              <ul style="margin:0;padding-left:16px;color:var(--muted);">
+                <li>窗口内：可训练 #1、#2、#4、#5（#3 未完成，跳过不影响）</li>
+                <li>窗口外：#6、#7 已完成也不能训练，必须等窗口滑动</li>
+                <li>窗口滑动：只有 #3 被消费后，窗口才前移到 [4, 8]</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout-green">
+          <div class="callout-title">✅ Windowed FIFO 解决的问题</div>
+          <ul style="font-size:14px;margin:0;padding-left:18px;">
+            <li>它避免了完全同步的极端阻塞，因为窗口内依然允许局部贪心，短任务不必死等最老任务</li>
+            <li>它避免了完全异步的分布塌缩，因为窗口外数据不能乱取，所以系统不会一直优先训练那些"最快完成"的样本</li>
+            <li>它把 off-policyness 控制在一个局部范围内，数据虽然不是严格 FIFO，但也不会老到失控</li>
+          </ul>
+        </div>
+
+        <div class="insight-box">
+          <div class="insight-title">💡 本质：样本分布调节器</div>
+          <p style="font-size:14px;margin:0;">从系统角度看，Windowed FIFO 本质上不是一个普通 scheduler，而是一个样本分布调节器。它的重点不是"谁快谁慢"，而是"哪些数据可以被允许提前训练，哪些不能"。</p>
+        </div>
+
+        <h3 id="roll-pipeline">2.4 ROLL：把整条 pipeline 当作异步分布式系统重构</h3>
+
+        <p>和 Forge 相比，ROLL 的路线更偏工程化，也更彻底地拥抱异步。</p>
+
+        <p>它的核心做法，不只是简单地把 rollout 和 training 分开，而是把整个 agentic RL 闭环拆成可以独立推进、相互流水的几个阶段。论文和技术报告里，ROLL 对整个训练流程的拆分是比较完整的：在逻辑上，一次 RL iteration 仍然包含 rollout、reward computation、experience construction，以及随后的 loss 计算、反向传播和参数更新；但在系统实现上，这几个阶段不再被强行串成一个严格同步的大批次流程。</p>
+
+        <div class="flow-diagram">
+          <div style="font-size:12px;color:#2563eb;font-weight:700;margin-bottom:12px;">ROLL 异步流水线架构</div>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <div style="display:flex;gap:6px;align-items:center;justify-content:center;">
+              <div style="background:#dbeafe;border:1px solid #93c5fd;border-radius:8px;padding:10px 14px;text-align:center;">
+                <div style="font-weight:700;font-size:12px;color:#1e3a8a;">Rollout Workers</div>
+                <div style="font-size:10px;color:var(--muted);margin-top:4px;">Generation + Env + Reward</div>
+              </div>
+              <span style="color:#2563eb;font-size:18px;">→</span>
+              <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:10px 14px;text-align:center;">
+                <div style="font-weight:700;font-size:12px;color:#92400e;">Sample Buffer</div>
+                <div style="font-size:10px;color:var(--muted);margin-top:4px;">异步队列</div>
+              </div>
+              <span style="color:#2563eb;font-size:18px;">→</span>
+              <div style="background:#dcfce7;border:1px solid #86efac;border-radius:8px;padding:10px 14px;text-align:center;">
+                <div style="font-weight:700;font-size:12px;color:#166534;">Training Workers</div>
+                <div style="font-size:10px;color:var(--muted);margin-top:4px;">梯度计算 + 权重更新</div>
+              </div>
+            </div>
+            <div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:8px 12px;font-size:12px;">
+              <div style="font-weight:700;color:#1d4ed8;margin-bottom:4px;">⚡ 关键特性</div>
+              <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">
+                <div><span class="badge badge-blue">细粒度 Rollout</span> generation、env、reward 子过程流水化</div>
+                <div><span class="badge badge-amber">异步训练</span> staleness 控制 + asynchronous ratio</div>
+                <div><span class="badge badge-green">Multiplexing</span> GPU 时间维度动态复用</div>
+                <div><span class="badge badge-purple">权重同步</span> 定期同步，非阻塞</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <p>最前面是<span class="badge badge-blue">细粒度 rollout</span>。ROLL 把 rollout 阶段进一步拆成 generation、environment interaction 和 reward computation 三个子过程，并允许它们以 sample-level 粒度流水化推进，而不是必须等待一个完整 batch 全部生成结束之后再统一交给环境、再统一算奖励。报告里强调，它支持异步 reward computation，因此 rollout 可以被分解为多个可以并行推进的相对独立阶段。</p>
+
+        <p>在这个基础上，ROLL 引入了<span class="badge badge-amber">异步训练</span>。这里 rollout 被视为 producer，training 被视为 consumer，中间通过 sample buffer 连接。已完成的轨迹进入 sample buffer，训练阶段则从中阻塞式地取出一批目标样本进行训练。为了避免样本太 stale，ROLL 还引入了 asynchronous ratio，去约束"当前训练策略版本"和"生成该样本的策略版本"之间允许的最大差距。也就是说，它不是简单地异步，而是显式地把 staleness 当成一个需要控制的系统变量。</p>
+
+        <div class="callout-blue">
+          <div class="callout-title">📋 ROLL 异步训练流程</div>
+          <ol style="font-size:14px;margin:0;padding-left:18px;">
+            <li><strong>第一步</strong>：训练阶段完成上一轮梯度计算后，从 sample buffer 中取出一批样本。那些违反 asynchronous ratio 约束、已经过旧的数据会被直接丢弃。</li>
+            <li><strong>第二步</strong>：系统暂停 rollout 侧，执行一次权重同步，把训练得到的新权重从 training workers 推到 rollout workers。</li>
+            <li><strong>第三步</strong>：rollout 继续用新权重生成新轨迹，而 training 侧则在另一组设备上并行计算下一轮梯度。</li>
+          </ol>
+          <p style="font-size:13px;margin-top:8px;color:var(--muted);">→ 训练和 rollout 在物理上是解耦的，但又通过 sample buffer 和版本控制保持一定约束。</p>
+        </div>
+
+        <p>ROLL 还进一步引入了<span class="badge badge-green">train-rollout multiplexing</span>。ROLL团队注意到，即使 rollout 和 training 可以并行，资源利用仍然会出现气泡，因为二者的时长通常非常不均衡：rollout 更长，training 更短。于是如果静态划分资源，比如固定一半 GPU 跑 rollout、一半 GPU 跑 training，往往会导致一侧长时间空闲。为了解决这个问题，ROLL 让 GPU 在时间维度上动态复用。当 rollout 成为瓶颈时，就把更多 GPU 借给 rollout；当 sample buffer 积累到足够数据后，再 shrink rollout、把一部分 GPU 挪给 training；training 完成后，再把 GPU 归还给 rollout。这样 GPU 在整个训练周期里被更充分地利用。</p>
+
+        <h3 id="slime-control">2.5 slime：在 fully asynchronous setting 下直接控制 off-policy 误差</h3>
+
+        <p>slime 选择了一条更直接的路线：既然异步不可避免地引入 off-policy，那就直接在算法层面显式控制它。</p>
+
+        <div class="sys-card slime">
+          <div class="sys-badge slime">slime 特性</div>
+          <h4>直接控制 off-policy 误差</h4>
+          <p>slime 在 fully asynchronous setting 下工作，rollout 和 training 完全解耦。但它引入了一个关键机制：</p>
+          <ul style="font-size:13px;margin:8px 0 0;padding-left:16px;">
+            <li><strong>Importance Sampling Ratio Clipping</strong>：对 importance weight 做裁剪，避免过大的 update variance</li>
+            <li><strong>Staleness-aware Resampling</strong>：根据样本的 staleness 重新采样，stale 样本权重降低</li>
+            <li><strong>Explicit Off-Policy Penalty</strong>：在 loss 中加入 off-policy penalty，约束策略更新不要偏离太远</li>
+          </ul>
+        </div>
+
+        <p>这种方法的好处是：<strong>不需要像 Windowed FIFO 那样在调度层面做约束，而是在算法层面显式处理 off-policy 带来的问题</strong>。理论上更优雅，但代价是算法复杂度增加，且需要更多的超参数调优。</p>
+
+        <h3 id="seer-sync">2.6 Seer：坚持同步，但把 rollout 本身做薄</h3>
+
+        <p>与 Forge、ROLL、slime 不同，Seer 选择了一条更激进的路线：<strong>坚持同步，不引入 off-policy</strong>。</p>
+
+        <div class="sys-card seer">
+          <div class="sys-badge seer">Seer 特性</div>
+          <h4>同步 RL 的长尾优化</h4>
+          <p>Seer 的核心信念：异步虽然快，但算法代价大。我们选择在同步框架内解决效率问题，而不是打破同步假设。</p>
+        </div>
+
+        <p>Seer 的核心观察是：在同步 RL 中，真正决定单个 iteration completion time 的不是平均请求，而是最后那一小撮 tail requests。如果能把这些 tail requests 加速，就能在不引入 off-policy 的前提下大幅提升同步 RL 的吞吐。</p>
+
+        <div class="callout-purple">
+          <div class="callout-title">🔬 Seer 的三大技术</div>
+          <ol style="font-size:14px;margin:0;padding-left:18px;">
+            <li><strong>Divided Rollout</strong>：把长 rollout 拆成多个小 chunk，允许不同 chunk 在不同 GPU 上并行执行，KV Cache 通过全局 Pool 共享。</li>
+            <li><strong>Context-Aware Scheduling</strong>：在正式生成前，先用小模型或采样预测请求长度，优先调度长任务。</li>
+            <li><strong>Grouped Speculative Decoding</strong>：利用 GRPO 同组 responses 之间的相似性做推测解码，加速长请求的生成。</li>
+          </ol>
+        </div>
+
+        <p>Seer 的实验表明，在 Qwen2-VL-72B 的训练中，这些技术能把同步 RL 的吞吐提升 <strong>44%-104%</strong>，同时保持严格的 on-policy。</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>系统</th><th>同步/异步</th><th>Off-Policy</th><th>核心优化</th><th>吞吐提升</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><span class="badge badge-teal">Forge</span></td><td>半同步</td><td>有限 staleness</td><td>Windowed FIFO</td><td>平衡吞吐和分布</td></tr>
+              <tr><td><span class="badge badge-blue">ROLL</span></td><td>异步</td><td>明确接受</td><td>异步 pipeline + multiplexing</td><td>~2× 吞吐提升</td></tr>
+              <tr><td><span class="badge badge-green">slime</span></td><td>异步</td><td>算法控制</td><td>Importance Sampling Clipping</td><td>算法优化</td></tr>
+              <tr><td><span class="badge badge-purple">Seer</span></td><td>严格同步</td><td>无</td><td>Divided Rollout + Context-Aware</td><td>44%-104%</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ══ §3 如何消除前缀冗余 ══ -->
+      <section class="section" id="prefix-redundancy">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">🌳</div>
+          §3 如何消除前缀冗余与重复计算？
+        </div>
+
+        <p>Agentic RL 里一个特别昂贵、但又特别容易被忽视的问题是：同一条轨迹、多轮请求、group responses 之间存在大量共享前缀，但系统往往把它们当成独立样本处理。这会带来巨大的重复计算。</p>
+
+        <h3 id="forge-merging">3.1 Forge 的 Prefix Tree Merging</h3>
+
+        <p>Agentic RL 训练里，一个很容易被忽视的浪费来源是：不同 completions 往往共享很长的前缀。如果训练时仍然把它们当成彼此独立的序列处理，那么这些公共前缀就会在不同样本里被反复做前后向，造成大量重复计算。</p>
+
+        <div class="sys-card forge">
+          <div class="sys-badge forge">Forge 特性</div>
+          <h4>Prefix Tree Merging 的核心思想</h4>
+          <p style="font-size:14px;margin:8px 0 0;">Forge 的 Prefix Tree Merging 做的就是这一步额外的复用：先把共享前缀的 completions 组织成一棵前缀树，再按树结构执行训练计算。这样一来，公共前缀部分只需要算一次。</p>
+        </div>
+
+        <div class="flow-diagram">
+          <div style="font-size:12px;color:#0f766e;font-weight:700;margin-bottom:12px;">Prefix Tree Merging 原理</div>
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <div style="display:flex;gap:8px;align-items:center;">
+              <div style="flex:1;display:flex;flex-direction:column;gap:4px;">
+                <div style="font-size:11px;font-weight:700;color:#9f1239;">❌ 传统方式：独立计算</div>
+                <div style="display:flex;gap:4px;">
+                  <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:4px;padding:4px;font-size:10px;flex:1;text-align:center;">
+                    <div style="color:#9f1239;">Completion A</div>
+                    <div style="font-size:9px;color:var(--muted);">前缀[共享] + 分叉A</div>
+                  </div>
+                  <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:4px;padding:4px;font-size:10px;flex:1;text-align:center;">
+                    <div style="color:#9f1239;">Completion B</div>
+                    <div style="font-size:9px;color:var(--muted);">前缀[共享] + 分叉B</div>
+                  </div>
+                  <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:4px;padding:4px;font-size:10px;flex:1;text-align:center;">
+                    <div style="color:#9f1239;">Completion C</div>
+                    <div style="font-size:9px;color:var(--muted);">前缀[共享] + 分叉C</div>
+                  </div>
+                </div>
+                <div style="font-size:10px;color:#9f1239;text-align:center;">前缀被重复计算 3 次</div>
+              </div>
+              <span style="color:#0f766e;font-size:24px;">→</span>
+              <div style="flex:1;display:flex;flex-direction:column;gap:4px;">
+                <div style="font-size:11px;font-weight:700;color:#166534;">✅ Tree Merging：共享前缀</div>
+                <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+                  <div style="background:#dcfce7;border:1px solid #86efac;border-radius:4px;padding:6px 12px;font-size:10px;text-align:center;">
+                    <div style="color:#14532d;">共享前缀</div>
+                    <div style="font-size:9px;color:var(--muted);">只计算 1 次</div>
+                  </div>
+                  <div style="font-size:16px;color:#16a34a;">↓</div>
+                  <div style="display:flex;gap:4px;">
+                    <div style="background:#ccfbf1;border:1px solid #5eead4;border-radius:4px;padding:4px;font-size:9px;">分叉A</div>
+                    <div style="background:#ccfbf1;border:1px solid #5eead4;border-radius:4px;padding:4px;font-size:9px;">分叉B</div>
+                    <div style="background:#ccfbf1;border:1px solid #5eead4;border-radius:4px;padding:4px;font-size:9px;">分叉C</div>
+                  </div>
+                </div>
+                <div style="font-size:10px;color:#166534;text-align:center;">训练计算量减少 67%</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout-green">
+          <div class="callout-title">✅ 核心收益</div>
+          <p style="font-size:14px;margin:0;">原来这些 completions 会作为多条独立序列分别计算，同一段共享前缀也会被重复执行；而做了 Prefix Tree Merging 之后，共享前缀只计算一次，后续分叉部分再继续展开。等到计算 loss 的时候，再把前缀树 unmerge 回序列格式，因此不会影响后续的 loss 计算和指标统计。这样减少的也不只是前向，而是整体训练过程里的重复 token 计算量。</p>
+        </div>
+
+        <p>在 Forge 讨论的 agent 场景里，这个收益尤其明显。因为真正大量重合的，不是同一个 group 内不同 trajectory 之间的前缀，而是同一个 trajectory 下多个 completions 之间的前缀。在多轮 agent 请求、长历史上下文、大量工具调用 的设置下，这部分共享前缀可能非常长。经过 tree merge 之后，原本会被反复重算的大段历史只保留一份计算，因此训练时的有效 token 计算量会显著下降，带来很高的实测加速。</p>
+
+        <h3 id="tree-batching">3.2 这类方法的本质：从序列批处理到树结构批处理</h3>
+
+        <p>如果把 Forge 的 Prefix Tree Merging，以及 AReaL 提出的 Dynamic Tree Attention 再抽象一层，它们其实都不是在改某个具体的 RL 目标，而是在做一件更基础的事：<strong>把原本按多条独立序列组织的训练 batch，改成按共享前缀组织的树结构 batch</strong>。</p>
+
+        <div class="two-col">
+          <div class="mini-card" style="border-left:3px solid #9f1239;">
+            <h4 style="color:#9f1239;margin-top:0;">❌ 传统：序列批处理</h4>
+            <p style="font-size:13px;margin:0;">样本通常都是一条条线性序列，系统默认它们彼此独立，所以即使几条样本前面完全一样，也还是会分别计算。</p>
+            <div style="margin-top:8px;padding:8px;background:#fef2f2;border-radius:6px;font-size:12px;color:#9f1239;">
+              问题：共享前缀被重复计算多次，浪费大量计算资源
+            </div>
+          </div>
+          <div class="mini-card" style="border-left:3px solid #166534;">
+            <h4 style="color:#166534;margin-top:0;">✅ 改进：树结构批处理</h4>
+            <p style="font-size:13px;margin:0;">把这些共享前缀提出来，合并成一棵树来统一计算。共享前缀只需要计算一次，后面不同的分支再继续各自展开。</p>
+            <div style="margin-top:8px;padding:8px;background:#f0fdf4;border-radius:6px;font-size:12px;color:#166534;">
+              收益：训练计算量大幅减少，且不改变loss计算逻辑
+            </div>
+          </div>
+        </div>
+
+        <div class="insight-box">
+          <div class="insight-title">💡 为什么 Agentic RL 特别适合这种优化？</div>
+          <p style="font-size:14px;margin:0;">因为"同一历史 + 不同后续尝试"的模式本来就非常常见。无论是同一个 trajectory 下采多个 completions，还是多轮交互后对下一步动作做不同探索，本质上都很适合这种树结构表示。</p>
+        </div>
+
+        <h3 id="kv-cache">3.3 推理侧的对应演化：全局 KV Cache Pool</h3>
+
+        <p>除了训练端的计算图复用，推理阶段的共享前缀问题也越来越要求 infra 做更高层的 cache 管理。Forge 与 Seer 都在不同程度上强调了全局 KV cache pool 的必要性。</p>
+
+        <div class="callout-amber">
+          <div class="callout-title">⚠️ 为什么 Agentic RL 特别需要 KV Cache Pool？</div>
+          <ul style="font-size:14px;margin:0;padding-left:18px;">
+            <li><strong>多轮交互</strong>：历史对话会被反复带回去</li>
+            <li><strong>超长上下文</strong>：通常在 32K-200K tokens</li>
+            <li><strong>共享前缀比例高</strong>：多轮请求之间共享大量历史</li>
+            <li><strong>请求生命周期长</strong>：一次 Agent 任务可能持续数分钟</li>
+            <li><strong>大 batch 下驱逐频繁</strong>：单实例 cache 容量很快不足</li>
+            <li><strong>重算 prefill 代价很高</strong>：长前缀 prefill 非常昂贵</li>
+          </ul>
+        </div>
+
+        <div class="callout-red">
+          <div class="callout-title">😤 单实例 Prefix Cache 的问题</div>
+          <ul style="font-size:14px;margin:0;padding-left:18px;">
+            <li><strong>容量不足</strong>：无法容纳所有活跃请求的 KV Cache</li>
+            <li><strong>命中率下降</strong>：频繁驱逐导致 cache 失效</li>
+            <li><strong>cache 驱逐导致重算</strong>：需要重新 prefill 共享前缀</li>
+            <li><strong>chunk 迁移代价高</strong>：跨实例迁移 KV Cache 开销大</li>
+          </ul>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>系统</th><th>KV Cache 方案</th><th>核心特性</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><span class="badge badge-teal">Forge</span></td><td>全局 L3 KV Cache Pool</td><td>cost-aware routing，智能路由到有 cache 的实例</td></tr>
+              <tr><td><span class="badge badge-purple">Seer</span></td><td>Global KVCache Pool</td><td>支持 divided rollout 的 chunk 迁移</td></tr>
+              <tr><td><span class="badge badge-green">slime</span></td><td>DP-aware Routing</td><td>保持 rollout 级别的 prefix locality，减少跨 DP 迁移</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="insight-box">
+          <div class="insight-title">💡 趋势：KV Cache 正在从推理引擎内部细节上升为基础设施层</div>
+          <p style="font-size:14px;margin:0;">这说明在 Agentic RL 场景下，KV Cache 不再是推理引擎的内部实现细节，而是需要整个基础设施层面统一管理和优化的共享资源。全局 KV Cache Pool 正在成为 Agentic RL Infra 的标配。</p>
+        </div>
+      </section>
+
+      <!-- ══ §4 Rollout 推理怎么加速 ══ -->
+      <section class="section" id="rollout-speedup">
+        <div class="section-title">
+          <div class="icon" style="background:#eff6ff;">⚡</div>
+          §4 Rollout 推理怎么加速？
+        </div>
+
+        <p>在 agentic RL 里，rollout 的主成本仍然大量集中在推理阶段，因此推理加速不是锦上添花，而是基础需求。和普通 serving 相比，这里的请求通常更长、轮次更多、长尾更重、上下文更大，因此单次 decode 的代价和尾部拖慢效应都更明显。更关键的是，RL 训练过程中 policy 本身还在持续变化，这会让很多在静态 serving 中成立的推理优化假设，在这里迅速失效。</p>
+
+        <p>先从两类最常见的推理加速思路说起：</p>
+
+        <div class="two-col">
+          <div class="mini-card" style="border-left:3px solid #2563eb;">
+            <h4 style="color:#1e3a8a;margin-top:0;">🔬 传统 Speculative Decoding</h4>
+            <p style="font-size:13px;margin:8px 0;">引入一个参数规模更小、推理成本更低的 draft model，先在当前前缀条件下自回归地生成一段 candidate continuation；然后再由参数更大的 target model 对这段候选 continuation 进行并行校验，并尽可能接受其中最长的可接受前缀。</p>
+            <p style="font-size:12px;margin:0;color:#92400e;"><strong>Draft model 来源</strong>：要么直接使用一个更小的预训练模型，要么通过 distillation 的方式，让小模型去拟合 target model 的 next-token distribution。</p>
+          </div>
+          <div class="mini-card" style="border-left:3px solid #7c3aed;">
+            <h4 style="color:#4c1d95;margin-top:0;">🔮 MTP（Multi-Token Prediction）</h4>
+            <p style="font-size:13px;margin:8px 0;">与 speculative decoding 的优化目标本质一致，都是希望减少 target model 在 autoregressive decoding 中的串行瓶颈，但实现路径不同。在主模型 backbone 上额外挂一个 multi-token prediction head，使模型能够在单次前向中直接预测多个未来位置的 token 分布。</p>
+            <p style="font-size:12px;margin:0;color:#4c1d95;"><strong>优势</strong>：更强的参数共享、更低的额外部署复杂度、更容易在系统层与主模型协同。</p>
+          </div>
+        </div>
+
+        <div class="callout-red">
+          <div class="callout-title">😤 两类方法在 Agentic RL 中的共同问题</div>
+          <p style="font-size:14px;margin:0 0 8px;">最核心的问题是：<strong>它们默认 target model 是相对稳定的</strong>。静态 serving 中，这个假设成立，所以只要把 draft model 或 MTP head 训好，它就能在较长时间里维持较高接受率；但在 RL 中，target policy 是持续更新的，之前还和 target 很接近的 draft model，今天可能就已经明显不适配。</p>
+          <p style="font-size:14px;margin:0;">除此之外，这些方法还会带来额外计算与显存开销，如果接受率下降，就可能出现"draft成本还在，但收益已经不明显"的情况。</p>
+        </div>
+
+        <h3 id="forge-mtp">4.1 Forge：用持续训练的 MTP Head 跟上策略更新</h3>
+
+        <p>Forge 采用了 MTP 来加速 rollout 推理，并且做法不是简单挂一个静态 draft head，而是：</p>
+
+        <div class="sys-card forge">
+          <div class="sys-badge forge">Forge 特性</div>
+          <h4>持续训练 MTP Head</h4>
+          <ul style="font-size:14px;margin:8px 0 0;padding-left:18px;">
+            <li>在 RL 训练过程中<strong>持续训练 detached MTP head</strong></li>
+            <li>用 <strong>Top-K KL Loss</strong> 保持它与当前 RL policy 对齐</li>
+          </ul>
+          <p style="font-size:14px;margin-top:12px;color:var(--muted);">→ 把 MTP 当成训练系统内部的一个持续协同模块，而不是一次性训练好的推理插件。让 MTP head 始终随着主策略的变化而更新，避免它逐渐偏向已经过时的旧分布。</p>
+        </div>
+
+        <h3 id="seer-grouped">4.2 Seer：利用组内相似性做无 draft 模型的推测解码</h3>
+
+        <p>如前文所述，Seer 对传统 speculative decoding 的批评也很到位。它指出，经典的 draft-model-based speculation 在 RL 中有两个核心问题：</p>
+
+        <ul>
+          <li>第一，target model 在训练过程中持续更新，draft model 很快会与当前 policy distribution 发生漂移，acceptance rate 难以长期维持；</li>
+          <li>第二，draft model 自身引入了额外的 compute overhead 和 memory footprint，在大 batch rollout 场景下，这部分额外成本并不低，甚至可能抵消 speculation 本身带来的收益。</li>
+        </ul>
+
+        <p>因此，Seer 没有继续沿用额外训练一个 draft model 的路线，而是转向了一种更贴合 RL workload 的 <strong>model-free speculation</strong> 思路：<strong>直接利用 GRPO 同组 responses 之间的 local pattern similarity 来构造 draft token</strong>。</p>
+
+        <div class="flow-diagram">
+          <div style="font-size:12px;color:#6d28d9;font-weight:700;margin-bottom:12px;">Seer: Model-Free Speculative Decoding</div>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <div style="display:flex;gap:8px;align-items:center;">
+              <div style="flex:1;background:#ede9fe;border:1px solid #c4b5fd;border-radius:8px;padding:8px 12px;text-align:center;">
+                <div style="font-weight:700;font-size:12px;color:#4c1d95;">同一 Prompt 的 G 个 Responses</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:6px;justify-content:center;">
+              <div style="background:#dbeafe;border:1px solid #93c5fd;border-radius:6px;padding:6px 10px;font-size:11px;text-align:center;">
+                <div style="font-weight:700;color:#1d4ed8;">Response 1</div>
+                <div style="font-size:9px;color:var(--muted);margin-top:4px;">Opening pattern A<br>Template B<br>Suffix C</div>
+              </div>
+              <div style="background:#dcfce7;border:1px solid #86efac;border-radius:6px;padding:6px 10px;font-size:11px;text-align:center;">
+                <div style="font-weight:700;color:#166534;">Response 2</div>
+                <div style="font-size:9px;color:var(--muted);margin-top:4px;">Opening pattern A<br>Template B<br>Suffix D</div>
+              </div>
+              <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:6px 10px;font-size:11px;text-align:center;">
+                <div style="font-weight:700;color:#92400e;">Response 3</div>
+                <div style="font-size:9px;color:var(--muted);margin-top:4px;">Opening pattern A<br>Template E<br>Suffix F</div>
+              </div>
+            </div>
+            <div style="background:#f5f3ff;border:1px solid #c4b5fd;border-radius:8px;padding:8px 12px;font-size:12px;">
+              <div style="font-weight:700;color:#6d28d9;margin-bottom:4px;">💡 核心观察：组内相似性</div>
+              <div style="color:var(--muted);">虽然全局不同，但局部结构相似（opening pattern、tool-use rhythm、suffix fragment）</div>
+              <div style="margin-top:8px;font-weight:700;color:#16a34a;">→ 可作为在线 proposal signal，无需额外 draft model</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout-blue">
+          <div class="callout-title">🔬 Seer 的关键设计：DGDS + CST</div>
+          <p style="font-size:14px;margin:0 0 8px;"><strong>DGDS（Distributed Grouped Draft Server）</strong>：分布式的 grouped draft context aggregation layer，会在 rollout 过程中持续收集同组 response 已生成出来的 token sequence。</p>
+          <p style="font-size:14px;margin:0;"><strong>CST（Compressed Suffix Tree）</strong>：组织这些 sequence 中的 suffix pattern，在当前 decoding position 快速执行 pattern lookup。</p>
+        </div>
+
+        <div class="insight-box">
+          <div class="insight-title">💡 Seer 方法的本质</div>
+          <p style="font-size:14px;margin:0;">把 Seer 的 speculative decoding 从"由一个外部小模型生成 proposal"转变成了"从当前 group 在线累积出来的 generation history 中检索最有希望的 continuation pattern"。</p>
+          <p style="font-size:14px;margin-top:12px;"><strong>优势</strong>：这些 proposal signal 本身就是在当前 policy 下在线生成的，所以天然比静态 draft model 更贴近当前 target distribution。</p>
+        </div>
+
+        <h3 id="slime-fp8">4.3 slime：用 FP8 和 PD 解耦优化 rollout 推理</h3>
+
+        <p>和前面 Forge、Seer 主要从 decode 机制本身入手不同，slime 在 rollout acceleration 上更强调 serving 栈层面的优化：</p>
+
+        <div class="three-col">
+          <div class="mini-card" style="border-top:3px solid #16a34a;">
+            <h4 style="color:#14532d;margin-top:0;">FP8 Inference</h4>
+            <p style="font-size:13px;margin:0;">使用 FP8 精度进行 rollout 推理，降低显存占用和计算开销。</p>
+          </div>
+          <div class="mini-card" style="border-top:3px solid #2563eb;">
+            <h4 style="color:#1e3a8a;margin-top:0;">Prefill-Decode 解耦</h4>
+            <p style="font-size:13px;margin:0;">把 prefill 和 decode 放到不同资源上执行，而不是继续混跑在同一套 serving 资源上。</p>
+          </div>
+          <div class="mini-card" style="border-top:3px solid #7c3aed;">
+            <h4 style="color:#4c1d95;margin-top:0;">DP-aware Routing</h4>
+            <p style="font-size:13px;margin:0;">保持 rollout 级别的 prefix locality，减少跨 DP rank 迁移导致的 KV miss。</p>
+          </div>
+        </div>
+
+        <p>对多轮 agentic RL 来说，PD 解耦尤其重要，因为 rollout 会不断把历史对话、工具调用记录、代码上下文和中间结果带回下一轮请求，导致长前缀 prefill 反复出现，而且往往比普通 serving 更长、更频繁。</p>
+      </section>
+
+      <!-- ══ §5 长时序信用分配 ══ -->
+      <section class="section" id="credit-assignment">
+        <div class="section-title">
+          <div class="icon" style="background:#faf5ff;">🎯</div>
+          §5 长时序信用分配与稳定优化
+        </div>
+
+        <p>在 agentic RL 中，优化对象不再是一段单轮 response，而是一条包含多次环境交互、工具调用、观察反馈和再决策的长轨迹。这样一来，传统 RLVR 里很多默认成立的做法就不再自然：reward 不能只落在最终结果上，policy optimization 的粒度也不应简单停留在 token 或整条 sequence 上。</p>
+
+        <p>这一类问题上，Forge和ROLL分别给出了不同层面的做法：</p>
+
+        <div class="two-col">
+          <div class="mini-card" style="border-left:3px solid #0f766e;">
+            <h4 style="color:#0f4c42;margin-top:0;">Forge：Dense Reward</h4>
+            <p style="font-size:13px;margin:0;">重点解决 reward 过于稀疏的问题，把最终结果扩展成更适合长轨迹优化的 dense reward</p>
+          </div>
+          <div class="mini-card" style="border-left:3px solid #2563eb;">
+            <h4 style="color:#1e3a8a;margin-top:0;">ROLL：Chunked MDP + IPA</h4>
+            <p style="font-size:13px;margin:0;">重点解决优化粒度与环境交互错位的问题，把优化单元从 token / full trajectory 改成 interaction chunk</p>
+          </div>
+        </div>
+
+        <h3 id="forge-dense">5.1 Forge：用 dense reward 缓解长轨迹上的稀疏监督</h3>
+
+        <p>Forge 在博客里明确指出，复杂 Agent 任务常常包含上千步 trajectory。如果只依赖最终结果作为 sparse reward，会出现几个直接问题：</p>
+
+        <ul>
+          <li>中间行为没有训练信号，梯度方差会非常大</li>
+          <li>模型还可能通过拉长 CoT 或执行路径来"刷榜"，但真实用户体验反而变差</li>
+        </ul>
+
+        <p>因此，Forge 设计了三类复合奖励：</p>
+
+        <div class="callout-green">
+          <div class="callout-title">✅ 三类 Dense Reward</div>
+          <ol style="font-size:14px;margin:0;padding-left:18px;">
+            <li><strong>（1）过程奖励（Process Reward）</strong>：监督 agent 的中间行为（如惩罚语言混合或特定工具调用错误），提供密集反馈，而不只依赖最终结果。</li>
+            <li><strong>（2）任务完成时间奖励</strong>：将相对完成时间作为奖励信号。因为真实延迟不仅取决于 Token 生成，还受工具执行和子 Agent 调用影响，这能激励 Agent 主动利用并行策略、选择最短的执行路径来加速任务。</li>
+            <li><strong>（3）用于降低方差的后续奖励（Reward-to-Go）</strong>：长周期任务的稀疏奖励容易引发高梯度方差。Forge使用 Reward-to-Go 来标准化回报，大幅提高了信用分配的精度，稳定了优化过程。</li>
+          </ol>
+        </div>
+
+        <div class="formula-block">$$ G_t = \sum_{k=t}^{T} \gamma^{k-t} r_k $$</div>
+
+        <div class="formula-vars">
+          <div class="var-title">变量说明</div>
+          <ul>
+            <li>$G_t$：时刻 $t$ 的累计回报（Reward-to-Go）</li>
+            <li>$r_k$：时刻 $k$ 获得的即时奖励</li>
+            <li>$\gamma$：折扣因子（通常取 0.99）</li>
+            <li>$T$：轨迹总长度</li>
+          </ul>
+        </div>
+
+        <h3 id="roll-chunked">5.2 ROLL：Chunked MDP 与 IPA，把优化单元对齐交互边界</h3>
+
+        <p>ROLL 的基本判断是，在多轮 agentic 任务里，传统优化粒度并不自然。</p>
+
+        <div class="callout-amber">
+          <div class="callout-title">⚠️ 两个极端的问题</div>
+          <p style="font-size:14px;margin:0 0 8px;"><strong>首先，token-level 太细</strong>。大多数 token 并不会改变环境状态。token-level optimization 会把大量"无状态转移 token"和少数真正触发环境变化的动作混在一起。在这种情况下，最终 outcome reward 与 token 级 importance sampling / update 是错位的，因为 reward 反映的是环境层面的任务成败，而 token-level 更新却会作用在大量并不直接改变环境的 token 上。</p>
+          <p style="font-size:14px;margin:0;"><strong>另一边，sequence-level 又太粗</strong>。如果直接把整条 trajectory 当成一个优化单元，那么一条轨迹中包含的多个决策节点、多个交互轮次都会被混在一起，credit assignment 很难落到某个具体交互过程上。</p>
+        </div>
+
+        <p>因此，ROLL 提出要把 agentic task 建模成 <strong>Chunked MDP</strong>。</p>
+
+        <div class="big-concept">
+          <div class="big-concept-title">🔑 Interaction Chunk 的定义</div>
+          <p style="font-size:14px;margin:0 0 12px;">在ROLL的技术报告中，interaction chunk 的定义写得很明确：<strong>一个 interaction chunk，是从一次环境交互到下一次环境交互之间的一段连续片段，通常以一次工具调用结束</strong>。也就是说，chunk 不是按固定 token 长度切的，也不是按句子切的，而是按环境交互边界切的。</p>
+          <p style="font-size:14px;margin:0;">技术报告强调，这个粒度比 token 粗、但比 full trajectory 细，更贴近真实 Agent 的语义动作单元。</p>
+        </div>
+
+        <div class="formula-block">$$ (s_1, c_1, o_1), (s_2, c_2, o_2), \dots, (s_K, c_K, o_K) $$</div>
+
+        <div class="formula-vars">
+          <div class="var-title">变量说明</div>
+          <ul>
+            <li>$s_k$：第 $k$ 个 chunk 开始前的状态</li>
+            <li>$c_k$：该 chunk 内连续生成的片段</li>
+            <li>$o_k$：这一轮交互后环境返回的 observation</li>
+            <li>$K$：整条轨迹被切成的 chunk 数</li>
+          </ul>
+        </div>
+
+        <p>在 Chunked MDP 基础上，ROME 提出了 <strong>IPA（Interaction-Perceptive Agentic Policy Optimization）</strong>。报告中明确列出，IPA 主要围绕 chunk 做了几项改动：chunk-level discounted return、chunk-level importance sampling、chunk-level mismatch masking、chunk-level initialized resampling，以及 imitation + RL 混合训练。</p>
+
+        <h4>（1）Chunk-Level Discounted Return</h4>
+
+        <p>先看 chunk-level discounted return。ROLL 认为，token-level discounting 在长序列上会导致 reward 快速衰减，因此它把 return 的传播单位改成 chunk。也就是说，<strong>回报不再沿 token 时间轴传播，而是沿 interaction chunk 的时间轴传播</strong>。这样做的目的在论文里写得很直接：缩短有效 horizon，让 temporal credit assignment 对齐真实交互步长，并降低长时序上的梯度方差。</p>
+
+        <p>如果写成 chunk 级累计回报，可以表示为：</p>
+
+        <div class="formula-block">$$ G_k = \sum_{j=k}^{K} \gamma^{j-k} r_j^{chunk} $$</div>
+
+        <div class="formula-vars">
+          <div class="var-title">变量说明</div>
+          <ul>
+            <li>$G_k$：第 $k$ 个 chunk 的回报</li>
+            <li>$r_j^{chunk}$：第 $j$ 个 chunk 对应的奖励</li>
+            <li>$K$：整条轨迹被切成的 chunk 数</li>
+            <li>$\gamma$：折扣因子</li>
+          </ul>
+          <p style="font-size:13px;margin-top:8px;color:var(--muted);">也就是说，<strong>discount 的基本单位从 token 变成了 interaction</strong>。</p>
+        </div>
+
+        <h4>（2）Chunk-Level Importance Sampling</h4>
+
+        <p>接下来是 chunk-level importance sampling。ROLL 把 importance sampling 从 token-level 改成 chunk-level。做法是对一个 chunk 内所有 token 的新旧策略概率比做聚合，形成一个 chunk-level ratio。技术报告给出的形式是几何平均：</p>
+
+        <div class="formula-block">$$ \rho(c) = \left( \prod_{t \in c} \frac{\pi_\theta(\tau_t \mid \tau_{<t})}{\pi_{\theta_{old}}(\tau_t \mid \tau_{<t})} \right)^{1 / |c|} $$</div>
+
+        <div class="formula-vars">
+          <div class="var-title">变量说明</div>
+          <ul>
+            <li>$c$：一个 interaction chunk</li>
+            <li>$|c|$：该 chunk 包含的 token 数</li>
+            <li>$\pi_\theta$：当前策略</li>
+            <li>$\pi_{\theta_{old}}$：旧策略</li>
+          </ul>
+          <p style="font-size:13px;margin-top:8px;color:var(--muted);">这样做不是对每个 token 单独修正，而是<strong>直接衡量一个交互单元在新旧策略下的偏差</strong>。报告中对这一改动的动机很明确，就是让 off-policy 修正对齐 interaction 粒度。</p>
+        </div>
+
+        <h4>（3）Chunk-Level Mismatch Masking</h4>
+
+        <p>第三项是 chunk-level mismatch masking。ROLL 还把 inference / training mismatch 的 masking 提升到了 chunk 层级。逻辑是先算 chunk-level mismatch，如果该 chunk 的 mismatch 超过阈值，就 mask 整个 chunk，而不是逐 token mask。</p>
+
+        <div class="callout-blue">
+          <div class="callout-title">💡 为什么要 Chunk-Level Masking？</div>
+          <p style="font-size:14px;margin:0;">论文给出的理由是，agentic 任务中的 reward 和状态转移本来就是粗粒度的，因此 <strong>chunk-level masking 比 token-level masking 更匹配实际任务结构</strong>。</p>
+        </div>
+
+        <h4>（4）Chunk-Level Initialized Resampling</h4>
+
+        <p>第四项是 chunk-level initialized resampling。ROLL 把这一项放在 rollout paradigm refinement 里单独讨论。</p>
+
+        <div class="callout-amber">
+          <div class="callout-title">⚠️ 问题背景</div>
+          <p style="font-size:14px;margin:0;">对于一些很难的长时序任务，从初始状态直接 rollout，采到成功轨迹的概率很低，因为只要在前面某个关键 decision fork 走错，后面整条轨迹都会失败。</p>
+        </div>
+
+        <p>因此它提出 chunk-level initialized resampling。基本思路是：<strong>不总是从任务起点开始 rollout，而是利用 expert-like trajectory 或高价值前缀，从某个关键 chunk 附近开始继续采样</strong>。这一步是为了提高困难任务上的有效学习范围，减少从零搜索整条成功路径的成本。</p>
+
+        <h4>（5）Imitation + RL 混合训练</h4>
+
+        <p>最后是 imitation + RL 混合训练。ROLL 技术报告也明确提到，IPA 不是纯 RL，而是结合了 imitation learning。</p>
+
+        <div class="insight-box">
+          <div class="insight-title">💡 为什么要结合 Imitation Learning？</div>
+          <p style="font-size:14px;margin:0;">原因很直接：<strong>困难 agentic task 的正轨迹本来就稀疏，单靠 RL 探索代价高，而一些关键 chunk 更适合先通过 imitation 提供 anchor，再由 RL 进一步优化和泛化</strong>。所以在 IPA 里，imitation learning 不是附属技巧，而是训练框架的一部分。</p>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>改进项</th><th>核心思想</th><th>主要收益</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>Chunk-Level Discounted Return</strong></td><td>回报沿 interaction chunk 传播，而非 token</td><td>缩短有效 horizon，降低梯度方差</td></tr>
+              <tr><td><strong>Chunk-Level Importance Sampling</strong></td><td>对 chunk 内所有 token 的概率比做几何平均</td><td>off-policy 修正对齐 interaction 粒度</td></tr>
+              <tr><td><strong>Chunk-Level Mismatch Masking</strong></td><td>mask 整个 chunk，而非逐 token mask</td><td>更匹配 agentic 任务的粗粒度结构</td></tr>
+              <tr><td><strong>Chunk-Level Initialized Resampling</strong></td><td>从高价值 chunk 附近开始继续采样</td><td>提高困难任务的有效学习范围</td></tr>
+              <tr><td><strong>Imitation + RL 混合训练</strong></td><td>先用 imitation 提供 anchor，再 RL 优化</td><td>减少探索代价，提高样本效率</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ══ §6 环境可靠性 ══ -->
+      <section class="section" id="env-reliability">
+        <div class="section-title">
+          <div class="icon" style="background:#f8fafc;">🛡️</div>
+          §6 环境可靠性、测试可信度与奖励污染
+        </div>
+
+        <p>在 agentic RL 里，reward 不是凭空给出的，而是通过"模型行动 → 环境执行 → 测试验证 → 奖励返回"这条链路构造出来的。只要这条链路里有任何一个环节不干净，模型就不会学会真正完成任务，而会优先学会利用漏洞、绕过约束、甚至主动作弊。</p>
+
+        <p>这一类问题在 ROLL 的实践博客、技术报告，以及与其相关的环境和基建设计里都被反复强调。和很多只讨论算法公式的工作不同，这条线的一个非常强的结论是：<strong>环境清洁度、测试可信度和安全边界，不是训练之外的附属问题，而是 reward 正确性本身的一部分</strong>。</p>
+
+        <h3 id="env-clean">6.1 环境必须保持干净</h3>
+
+        <p>ROLL 博客中对这一点说得非常明确：在终端类 agentic RL 中，只要环境中残留了额外信息，模型就会非常快地学会利用这些线索，而不是按任务要求去完成问题。</p>
+
+        <div class="callout-red">
+          <div class="callout-title">😤 环境残留信息的典型问题</div>
+          <ul style="font-size:14px;margin:0;padding-left:18px;">
+            <li>临时文件</li>
+            <li>安装缓存</li>
+            <li>中间产物</li>
+            <li>历史运行结果</li>
+            <li>泄露的配置文件</li>
+            <li>测试脚本或测试相关目录</li>
+          </ul>
+          <p style="font-size:14px;margin-top:12px;color:var(--muted);">对普通静态 benchmark 来说，这些残留可能只是"脏环境"；但对 agent 而言，它们直接构成了新的可利用 observation。</p>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 典型坏行为</div>
+          <ul style="font-size:14px;margin:0;padding-left:16px;">
+            <li>直接读取测试文件</li>
+            <li>直接修改测试文件</li>
+            <li>直接操作 web 根目录来伪造结果</li>
+            <li>修改环境配置以绕过原任务要求</li>
+          </ul>
+          <p style="font-size:13px;margin-top:8px;color:#9f1239;">→ 某些测试相关命令的调用频率显著上升，模型逐渐学会把测试本身当成"可以利用的对象"</p>
+        </div>
+
+        <div class="callout-green">
+          <div class="callout-title">✅ ROLL 的环境清理策略</div>
+          <ol style="font-size:14px;margin:0;padding-left:18px;">
+            <li><strong>第一，rollout 前主动清理环境初始化和 Agent 安装过程中留下的中间文件</strong></li>
+            <li><strong>第二，训练阶段严格隔离测试相关文件</strong></li>
+            <li><strong>第三，测试文件只在最终评估阶段上传</strong></li>
+          </ol>
+          <p style="font-size:14px;margin-top:12px;color:var(--muted);">这三点背后的核心逻辑非常统一：reward 的语义应该由任务本身决定，而不是由测试文件可见性、缓存残留或历史状态泄露决定。</p>
+        </div>
+
+        <h3 id="false-positive">6.2 伪阳性会系统性毒化 RL</h3>
+
+        <p>如果说环境污染会让模型"看见不该看见的东西"，那么 false positive 则更糟，因为它会直接把错误行为打成正样本。</p>
+
+        <div class="callout-amber">
+          <div class="callout-title">⚠️ False Positive 的危害</div>
+          <p style="font-size:14px;margin:0;">ROLL 博客明确提到，他们在早期合成实例中观察到 false positive 比例一度高达约 <strong>40%</strong>。这意味着：</p>
+          <ul style="font-size:14px;margin:8px 0 0;padding-left:18px;">
+            <li>模型看起来通过了测试</li>
+            <li>实际却没有按任务要求完成</li>
+            <li>但 reward 依然是正的</li>
+          </ul>
+          <p style="font-size:14px;margin-top:12px;color:#92400e;"><strong>这种错误对 RL 的危害远大于普通噪声数据</strong>。普通噪声可能只是让训练信号更弱，而 false positive 会系统性地把策略推向 shortcut，因为模型会不断得到"错误但高回报"的强化。</p>
+        </div>
+
+        <div class="callout-blue">
+          <div class="callout-title">📋 ROLL 的三层验证机制</div>
+          <ol style="font-size:14px;margin:0;padding-left:18px;">
+            <li><strong>第一层是 LLM-as-judge 验证</strong>：多个 LLM 协同检查 instruction-test 对，识别高 false-positive 风险。</li>
+            <li><strong>第二层是 Ground-truth 验证</strong>：如果 golden solution 自己都通不过测试，这个实例直接丢弃。</li>
+            <li><strong>第三层是 No-op 验证</strong>：如果几乎不做任何有效操作也能通过测试，这个实例直接丢弃。</li>
+          </ol>
+          <p style="font-size:14px;margin-top:12px;color:var(--muted);">这些验证本质上是训练稳定性的一部分。只有测试可信，reward 才可信；而只有 reward 可信，RL 才不会被系统性带偏。</p>
+        </div>
+
+        <h3 id="env-diversity">6.3 环境不应只有干净，还要有多样性</h3>
+
+        <p>ROLL 博客和 ROME 技术报告都强调了一点：<strong>环境治理不能只停留在"把环境清到一尘不染"，还需要有意识地引入多样性</strong>。否则，模型即便在一个标准化 sandbox 中训练得很好，也可能只是学会了针对固定环境配置的策略。</p>
+
+        <div class="callout-green">
+          <div class="callout-title">✅ ROLL 的环境多样性策略</div>
+          <ul style="font-size:14px;margin:0;padding-left:18px;">
+            <li>不同版本的软件包</li>
+            <li>不同镜像源</li>
+            <li>不同配置细节</li>
+            <li>有时故意移除某些依赖</li>
+            <li>有时故意构造部分不可用环境</li>
+          </ul>
+          <p style="font-size:14px;margin-top:12px;color:var(--muted);">目的不是为了人为增加难度，而是逼模型学会更像真实工程师那样工作——先判断环境、再决定怎么做，而不是默认环境永远是完美配置好的。</p>
+        </div>
+
+        <div class="insight-box">
+          <div class="insight-title">💡 Environment Augmentation 的本质</div>
+          <p style="font-size:14px;margin:0;">ROLL 明确把这种做法视作一种 environment augmentation。它和图像任务里加入输入扰动本质上属于同一类思想：<strong>通过受控的变化，逼模型学习更稳的策略，而不是依赖环境中的静态规律</strong>。</p>
+        </div>
+
+        <hr class="divider" />
+
+        <div class="callout-gray">
+          <div class="callout-title">📚 参考文档</div>
+          <ul style="font-size:13px;margin:0;padding-left:18px;">
+            <li><a href="https://zhuanlan.zhihu.com/p/2005742716252861435" target="_blank">Forge: 大规模原生Agent RL系统</a></li>
+            <li><a href="https://zhuanlan.zhihu.com/p/2007250216227729670" target="_blank">从各家技术文章看26年Agentic RL Infra优化方向</a></li>
+            <li><a href="https://zhuanlan.zhihu.com/p/1981531591953114351" target="_blank">Seer：突破性在线上下文学习系统</a></li>
+            <li><a href="https://zhuanlan.zhihu.com/p/2006389553703982040" target="_blank">苦涩的教训！ROLL团队分享：Agentic RL 训练中的实践经验</a></li>
+            <li><a href="https://zhuanlan.zhihu.com/p/2014286514494912433" target="_blank">ROLL 团队分享：Rollback 课程学习机制探索与实践</a></li>
+            <li><a href="https://arxiv.org/pdf/2511.14617" target="_blank">ROLL arXiv 论文</a></li>
+            <li><a href="https://arxiv.org/pdf/2512.22560" target="_blank">ROLL Flash 论文</a></li>
+            <li><a href="https://arxiv.org/pdf/2512.24873" target="_blank">ROME 技术报告</a></li>
+          </ul>
+        </div>
+      </section>
+
+    </main>
+  </div>
+  <footer>
+    <p>本文基于知乎文章整理，版权归原作者所有</p>
+  </footer>
+</div>
+</body>
+</html>

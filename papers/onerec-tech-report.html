@@ -1,0 +1,2308 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OneRec 技术报告深度解读</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      // ── KaTeX 渲染 ──────────────────────────────
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false }
+          ],
+          throwOnError: false
+        });
+      }
+
+      // ── TOC 点击平滑跳转 ────────────────────────
+      document.querySelectorAll('.toc-list a[href^="#"]').forEach(function(link) {
+        link.addEventListener('click', function(e) {
+          e.preventDefault();
+          var targetId = this.getAttribute('href').slice(1);
+          var target = document.getElementById(targetId);
+          if (!target) return;
+          var offset = 24; // 距离顶部的留白(px)
+          var top = target.getBoundingClientRect().top + window.pageYOffset - offset;
+          window.scrollTo({ top: top, behavior: 'smooth' });
+        });
+      });
+
+      // ── TOC 滚动高亮（scroll 事件，基于最近 section）────
+      var sections = Array.from(document.querySelectorAll('section[id]'));
+      var allLinks = document.querySelectorAll('.toc-list a[href^="#"]');
+
+      function setActive(id) {
+        allLinks.forEach(function(l) { l.classList.remove('active'); });
+        var active = document.querySelector('.toc-list a[href="#' + id + '"]');
+        if (active) {
+          active.classList.add('active');
+          // 让目录自身滚动到可见
+          var toc = document.querySelector('.toc');
+          if (toc) {
+            var linkTop = active.offsetTop;
+            var tocScroll = toc.scrollTop;
+            var tocH = toc.clientHeight;
+            if (linkTop < tocScroll + 40 || linkTop > tocScroll + tocH - 40) {
+              toc.scrollTo({ top: linkTop - tocH / 2, behavior: 'smooth' });
+            }
+          }
+        }
+      }
+
+      function onScroll() {
+        var scrollY = window.pageYOffset + 80; // 80px 偏移，让切换更提前
+        var current = sections[0].id;
+        for (var i = 0; i < sections.length; i++) {
+          if (sections[i].offsetTop <= scrollY) {
+            current = sections[i].id;
+          }
+        }
+        setActive(current);
+      }
+
+      window.addEventListener('scroll', onScroll, { passive: true });
+      onScroll(); // 初始化
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f4f6fb;
+      --card: #ffffff;
+      --text: #1a2033;
+      --muted: #64748b;
+      --line: #e2e8f0;
+      --primary: #2563eb;
+      --primary-soft: #eff6ff;
+      --accent: #7c3aed;
+      --accent-soft: rgba(124,58,237,0.07);
+      --green: #16a34a;
+      --green-soft: #f0fdf4;
+      --amber: #d97706;
+      --amber-soft: #fffbeb;
+      --red-soft: #fef2f2;
+      --shadow: 0 4px 24px rgba(15,23,42,0.07);
+      --shadow-lg: 0 10px 40px rgba(15,23,42,0.10);
+      --radius: 16px;
+      --max: 1200px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      line-height: 1.85;
+      font-size: 15px;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── 顶部 Hero ─────────────────────────── */
+    .hero-wrap {
+      background: linear-gradient(135deg, #1e3a8a 0%, #3b0764 100%);
+      padding: 52px 24px 40px;
+    }
+    .hero-inner { max-width: var(--max); margin: 0 auto; }
+    .back-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      color: rgba(255,255,255,0.65); font-size: 13px; margin-bottom: 22px;
+    }
+    .back-link:hover { color: #fff; text-decoration: none; }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 5px 14px; border-radius: 999px;
+      background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.9);
+      font-size: 12.5px; font-weight: 600; letter-spacing: .03em;
+      margin-bottom: 16px;
+    }
+    .hero h1 {
+      font-size: 36px; font-weight: 800; color: #fff;
+      line-height: 1.2; letter-spacing: -0.02em; margin-bottom: 12px;
+    }
+    .hero-sub { color: rgba(255,255,255,0.72); font-size: 15.5px; max-width: 760px; }
+    .hero-meta {
+      display: flex; flex-wrap: wrap; gap: 28px;
+      margin-top: 28px; padding-top: 24px;
+      border-top: 1px solid rgba(255,255,255,0.18);
+    }
+    .hero-meta-item { display: flex; flex-direction: column; gap: 3px; }
+    .hero-meta-label { color: rgba(255,255,255,0.5); font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; }
+    .hero-meta-value { color: #fff; font-size: 14px; font-weight: 600; }
+
+    /* ── 主体布局 ──────────────────────────── */
+    .page { max-width: var(--max); margin: 0 auto; padding: 32px 20px 100px; }
+    .layout {
+      display: grid;
+      grid-template-columns: 256px minmax(0,1fr);
+      gap: 24px;
+      align-items: stretch;
+    }
+    .layout > aside {
+      /* 让 aside 撑满整列，sticky 才能在整个页面范围内工作 */
+      align-self: stretch;
+    }
+
+    /* ── 目录 ─────────────────────────────── */
+    .toc {
+      position: sticky; top: 20px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 20px;
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+    }
+    .toc h2 { font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 14px; }
+    .toc-list { list-style: none; }
+    .toc-list li { margin: 6px 0; }
+    .toc-list > li > a { font-size: 13px; color: var(--text); font-weight: 500; }
+    .toc-list a { display: block; padding: 3px 8px; border-radius: 6px; color: var(--muted); font-size: 12.5px; transition: all .15s; }
+    .toc-list a:hover { color: var(--primary); background: var(--primary-soft); text-decoration: none; }
+    .toc-list a.active { color: var(--primary); background: var(--primary-soft); font-weight: 600; border-left: 3px solid var(--primary); padding-left: 10px; }
+    .toc-sub { padding-left: 12px; margin-top: 2px; }
+    .toc-sub li { margin: 3px 0; }
+
+    /* ── 内容区 ───────────────────────────── */
+    .content { display: flex; flex-direction: column; gap: 24px; }
+    section {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 32px 36px;
+    }
+    .sec-title {
+      font-size: 22px; font-weight: 800;
+      margin-bottom: 20px; padding-bottom: 14px;
+      border-bottom: 2px solid #f0f4ff;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .sec-icon {
+      width: 34px; height: 34px; border-radius: 9px;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 17px; flex-shrink: 0;
+    }
+    h3 { font-size: 17px; font-weight: 700; margin: 24px 0 10px; color: var(--text); }
+    h4 { font-size: 15px; font-weight: 700; margin: 18px 0 8px; color: var(--accent); }
+    p { margin-bottom: 12px; color: var(--text); }
+    ul, ol { padding-left: 22px; margin-bottom: 12px; }
+    li { margin-bottom: 6px; }
+
+    /* ── 强调块 ───────────────────────────── */
+    .callout {
+      border-radius: 12px; padding: 16px 20px;
+      margin: 16px 0; border-left: 4px solid;
+    }
+    .callout-blue { background: var(--primary-soft); border-color: var(--primary); }
+    .callout-purple { background: var(--accent-soft); border-color: var(--accent); }
+    .callout-green { background: var(--green-soft); border-color: var(--green); }
+    .callout-amber { background: var(--amber-soft); border-color: var(--amber); }
+    .callout-title { font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+    .callout-blue .callout-title { color: var(--primary); }
+    .callout-purple .callout-title { color: var(--accent); }
+    .callout-green .callout-title { color: var(--green); }
+    .callout-amber .callout-title { color: var(--amber); }
+
+    /* ── 公式块 ───────────────────────────── */
+    .formula-block {
+      background: #f8f9ff;
+      border: 1px solid #dde4f5;
+      border-radius: 12px;
+      padding: 18px 22px;
+      margin: 16px 0;
+      overflow-x: auto;
+    }
+    .formula-label {
+      font-size: 11.5px; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .06em;
+      margin-bottom: 8px; font-weight: 600;
+    }
+
+    /* ── 代码块 ───────────────────────────── */
+    pre, code {
+      font-family: "JetBrains Mono", "Fira Code", "SF Mono", Consolas, monospace;
+      font-size: 13px;
+    }
+    pre {
+      background: #0f172a; color: #e2e8f0;
+      border-radius: 12px; padding: 18px 20px;
+      overflow-x: auto; margin: 14px 0;
+      line-height: 1.65;
+    }
+    code { background: #f1f5f9; color: #3730a3; border-radius: 4px; padding: 1px 5px; }
+    pre code { background: none; color: inherit; padding: 0; }
+
+    /* ── 表格 ─────────────────────────────── */
+    .table-wrap { overflow-x: auto; margin: 16px 0; border-radius: 12px; border: 1px solid var(--line); }
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      background: #f8fafc; font-size: 12.5px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .04em;
+      color: var(--muted); padding: 10px 16px; text-align: left;
+      border-bottom: 1px solid var(--line);
+    }
+    td { padding: 10px 16px; border-bottom: 1px solid #f1f5f9; font-size: 13.5px; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #fafbff; }
+
+    /* ── 贡献卡片 ─────────────────────────── */
+    .contrib-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 16px; margin: 20px 0;
+    }
+    .contrib-card {
+      border: 1px solid var(--line); border-radius: 14px;
+      padding: 18px 20px; background: #fcfdff;
+      transition: box-shadow .2s, border-color .2s;
+    }
+    .contrib-card:hover { box-shadow: var(--shadow-lg); border-color: #c7d7f5; }
+    .contrib-card-num {
+      font-size: 30px; font-weight: 800; color: #dde4f5;
+      line-height: 1; margin-bottom: 8px;
+    }
+    .contrib-card-title { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+    .contrib-card-desc { font-size: 13px; color: var(--muted); line-height: 1.7; }
+
+    /* ── 对比架构图 ───────────────────────── */
+    .arch-compare {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0;
+    }
+    .arch-box {
+      border-radius: 14px; padding: 20px;
+      border: 1.5px solid;
+    }
+    .arch-box.old { background: #fef2f2; border-color: #fca5a5; }
+    .arch-box.new { background: #f0fdf4; border-color: #86efac; }
+    .arch-box-title { font-size: 13.5px; font-weight: 800; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+    .arch-box.old .arch-box-title { color: #dc2626; }
+    .arch-box.new .arch-box-title { color: var(--green); }
+    .arch-stage {
+      display: flex; align-items: center; margin-bottom: 8px; font-size: 13px;
+    }
+    .arch-stage-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      margin-right: 8px; flex-shrink: 0;
+    }
+    .arch-stage-arrow { color: var(--muted); margin: 0 6px; font-size: 11px; }
+
+    /* ── 指标卡片 ─────────────────────────── */
+    .metric-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 14px; margin: 20px 0;
+    }
+    .metric-card {
+      background: linear-gradient(135deg, #f8faff, #eff6ff);
+      border: 1px solid #dde9ff; border-radius: 14px;
+      padding: 16px 18px; text-align: center;
+    }
+    .metric-value { font-size: 26px; font-weight: 800; color: var(--primary); line-height: 1.1; }
+    .metric-label { font-size: 11.5px; color: var(--muted); margin-top: 5px; line-height: 1.5; }
+
+    /* ── 步骤流程 ─────────────────────────── */
+    .steps { margin: 16px 0; }
+    .step {
+      display: flex; gap: 14px; margin-bottom: 14px; align-items: flex-start;
+    }
+    .step-num {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: var(--primary); color: #fff;
+      font-size: 13px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; margin-top: 2px;
+    }
+    .step-body { flex: 1; }
+    .step-title { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+    .step-desc { font-size: 13.5px; color: var(--muted); }
+
+    /* ── Tag / Badge ───────────────────────── */
+    .tag {
+      display: inline-flex; align-items: center;
+      padding: 2px 10px; border-radius: 999px;
+      font-size: 12px; font-weight: 600;
+      margin-right: 6px; margin-bottom: 4px;
+    }
+    .tag-blue { background: var(--primary-soft); color: var(--primary); }
+    .tag-purple { background: var(--accent-soft); color: var(--accent); }
+    .tag-green { background: var(--green-soft); color: var(--green); }
+    .tag-amber { background: var(--amber-soft); color: var(--amber); }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .toc { position: static; max-height: none; }
+      .hero h1 { font-size: 26px; }
+      .arch-compare { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══ HERO ═══════════════════════════════════════════════════════ -->
+<div class="hero-wrap">
+  <div class="hero-inner">
+    <a class="back-link" href="../index.html">← 返回论文列表</a>
+    <div class="hero">
+      <div class="hero-badge">🏭 工业推荐系统 · 快手 · 2025</div>
+      <h1>OneRec：端到端生成式推荐系统</h1>
+      <p class="hero-sub">
+        OneRec Technical Report 深度解读 ——
+        以单一生成模型取代传统多阶段瀑布流（召回→粗排→精排→重排），
+        在快手 4 亿 DAU 的短视频推荐场景实现了系统性突破。
+      </p>
+      <div class="hero-meta">
+        <div class="hero-meta-item">
+          <span class="hero-meta-label">论文来源</span>
+          <span class="hero-meta-value">arXiv 2506.13695</span>
+        </div>
+        <div class="hero-meta-item">
+          <span class="hero-meta-label">机构</span>
+          <span class="hero-meta-value">快手 (Kuaishou)</span>
+        </div>
+        <div class="hero-meta-item">
+          <span class="hero-meta-label">场景规模</span>
+          <span class="hero-meta-value">DAU 4 亿</span>
+        </div>
+        <div class="hero-meta-item">
+          <span class="hero-meta-label">A/B 提升</span>
+          <span class="hero-meta-value">App Stay Time +0.54%~+1.24%</span>
+        </div>
+        <div class="hero-meta-item">
+          <span class="hero-meta-label">系统成本</span>
+          <span class="hero-meta-value">传统系统的 10.6%</span>
+        </div>
+        <div class="hero-meta-item">
+          <span class="hero-meta-label">部署覆盖</span>
+          <span class="hero-meta-value">~25% QPS（短视频）</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ BODY ════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="layout">
+
+    <!-- ── TOC ─────────────────────────── -->
+    <aside>
+      <nav class="toc">
+        <h2>目录</h2>
+        <ul class="toc-list">
+          <li><a href="#overview">1. 论文概览</a>
+            <ul class="toc-sub">
+              <li><a href="#overview-problem">传统系统的问题</a></li>
+              <li><a href="#overview-solution">OneRec 解法</a></li>
+            </ul>
+          </li>
+          <li><a href="#contributions">2. 核心贡献</a></li>
+          <li><a href="#tokenizer">3. Tokenizer</a>
+            <ul class="toc-sub">
+              <li><a href="#tok-why">为什么需要 Tokenizer</a></li>
+              <li><a href="#tok-rqkmeans">RQ-Kmeans 算法</a></li>
+              <li><a href="#tok-multimodal">多模态特征融合</a></li>
+              <li><a href="#tok-collab">协同信号注入</a></li>
+            </ul>
+          </li>
+          <li><a href="#encoder">4. Encoder</a>
+            <ul class="toc-sub">
+              <li><a href="#enc-static">静态特征路径</a></li>
+              <li><a href="#enc-short">短期行为路径</a></li>
+              <li><a href="#enc-positive">正反馈路径</a></li>
+              <li><a href="#enc-lifelong">长期兴趣路径</a></li>
+            </ul>
+          </li>
+          <li><a href="#decoder">5. Decoder</a>
+            <ul class="toc-sub">
+              <li><a href="#dec-moe">MoE 架构</a></li>
+              <li><a href="#dec-session">Session Generation</a></li>
+              <li><a href="#dec-inference">推理流程</a></li>
+            </ul>
+          </li>
+          <li><a href="#reward">6. Reward 体系</a>
+            <ul class="toc-sub">
+              <li><a href="#rew-pscore">P-Score</a></li>
+              <li><a href="#rew-format">Format Reward</a></li>
+              <li><a href="#rew-industrial">Industrial Reward</a></li>
+            </ul>
+          </li>
+          <li><a href="#ecpo">7. ECPO 强化学习</a>
+            <ul class="toc-sub">
+              <li><a href="#ecpo-grpo">GRPO 基础</a></li>
+              <li><a href="#ecpo-algo">早停裁剪机制</a></li>
+              <li><a href="#ecpo-squeeze">Squeezing Effect</a></li>
+            </ul>
+          </li>
+          <li><a href="#training">8. 训练基础设施</a>
+            <ul class="toc-sub">
+              <li><a href="#train-infra">硬件与规模</a></li>
+              <li><a href="#train-model-config">模型配置</a></li>
+              <li><a href="#train-efficiency">训练优化</a></li>
+            </ul>
+          </li>
+          <li><a href="#serving">9. 在线推理 Serving</a></li>
+          <li><a href="#experiments">10. 实验与结果</a>
+            <ul class="toc-sub">
+              <li><a href="#exp-scaling">Scaling Law</a></li>
+              <li><a href="#exp-ablation">消融实验</a></li>
+              <li><a href="#exp-abtest">A/B Test</a></li>
+              <li><a href="#exp-local">本地生活</a></li>
+            </ul>
+          </li>
+          <li><a href="#conclusion">11. 总结与展望</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <!-- ── MAIN CONTENT ─────────────────── -->
+    <div class="content">
+
+      <!-- ══ 1. 论文概览 ════════════════════════ -->
+      <section id="overview">
+        <div class="sec-title">
+          <div class="sec-icon" style="background:#eff6ff">📋</div>
+          论文概览
+        </div>
+
+        <p>
+          OneRec 是快手于 2025 年发布的<strong>工业级端到端生成式推荐系统</strong>，
+          首次在 4 亿 DAU 量级的短视频推荐场景中，以单一生成模型完整替代了传统的
+          多阶段瀑布流推荐系统（Cascade Pipeline），并在在线 A/B 实验中实现了
+          显著的业务指标提升，同时将系统 OPEX 压缩到传统架构的 <strong>10.6%</strong>。
+        </p>
+
+        <h3 id="overview-problem">传统多阶段系统的瓶颈</h3>
+
+        <div class="arch-compare">
+          <div class="arch-box old">
+            <div class="arch-box-title">❌ 传统瀑布流架构</div>
+            <div class="arch-stage">
+              <div class="arch-stage-dot" style="background:#ef4444"></div>
+              召回（Retrieval）<span class="arch-stage-arrow">→</span>
+            </div>
+            <div class="arch-stage">
+              <div class="arch-stage-dot" style="background:#f97316"></div>
+              粗排（Pre-ranking）<span class="arch-stage-arrow">→</span>
+            </div>
+            <div class="arch-stage">
+              <div class="arch-stage-dot" style="background:#eab308"></div>
+              精排（Ranking）<span class="arch-stage-arrow">→</span>
+            </div>
+            <div class="arch-stage">
+              <div class="arch-stage-dot" style="background:#84cc16"></div>
+              重排（Re-ranking）
+            </div>
+          </div>
+          <div class="arch-box new">
+            <div class="arch-box-title">✅ OneRec 统一架构</div>
+            <div class="arch-stage">
+              <div class="arch-stage-dot" style="background:#16a34a"></div>
+              Encoder（理解用户兴趣）
+            </div>
+            <div class="arch-stage">
+              <div class="arch-stage-dot" style="background:#16a34a"></div>
+              Decoder（自回归生成 Session）
+            </div>
+            <div class="arch-stage">
+              <div class="arch-stage-dot" style="background:#16a34a"></div>
+              RM Selection（可选 Reward 精选）
+            </div>
+          </div>
+        </div>
+
+        <p>
+          传统推荐管道存在三大核心问题，这些问题在工业实践中普遍存在、难以根治：
+        </p>
+
+        <div class="callout callout-amber">
+          <div class="callout-title">⚠ 问题一：局部最优（Local Optimum）</div>
+          每个阶段独立优化各自目标，无法实现全局最优。精排看到的候选集已被召回和粗排严重过滤，
+          最终排序受制于上游决策，系统整体表现受限于最短板。
+        </div>
+
+        <div class="callout callout-amber">
+          <div class="callout-title">⚠ 问题二：目标不一致（Objective Misalignment）</div>
+          各阶段模型结构和训练目标不同，例如精排模型的不足会被重排模型掩盖，
+          反之精排提升可能被重排策略抵消，形成<em>跷跷板效应（Seesaw Effect）</em>。
+          工程师不得不在不同阶段反复 patch，系统越来越臃肿。
+        </div>
+
+        <div class="callout callout-amber">
+          <div class="callout-title">⚠ 问题三：落后于 AI 进化（Lag Behind AI）</div>
+          级联架构天然阻碍了 LLM/VLM 时代的技术红利落地：
+          Scaling Laws、RLHF、多模态理解等技术无法直接应用于各阶段的独立模型；
+          新功能的上线需要在多个模型间协调改动，迭代成本极高。
+        </div>
+
+        <h3 id="overview-solution">OneRec 的解法</h3>
+
+        <p>
+          OneRec 的核心思路是：<strong>将推荐问题重新表述为条件序列生成问题</strong>。
+          给定用户的历史行为上下文 $u$，模型直接自回归地生成一组推荐视频的语义标识符序列，
+          而无需经过任何预设的候选集过滤流程。
+        </p>
+
+        <div class="callout callout-blue">
+          <div class="callout-title">📐 核心范式转换</div>
+          <strong>传统范式：</strong>
+          $\text{Score}(u, v) \rightarrow \text{Ranking} \rightarrow \text{Top-K}$
+          <br/><br/>
+          <strong>OneRec 范式：</strong>
+          $p(v_1, v_2, \ldots, v_K \mid u) = \prod_{t=1}^{K} p(s_t^1, s_t^2, \ldots, s_t^{L_t} \mid u, v_1, \ldots, v_{t-1})$
+          <br/><br/>
+          其中 $(s_t^1, s_t^2, \ldots, s_t^{L_t})$ 是第 $t$ 个推荐视频 $v_t$ 的
+          <em>语义标识符（Semantic IDs）</em>，由 Tokenizer 预先生成，$L_t=3$（三层粗到细分级编码）。
+        </div>
+
+        <p>
+          整个模型由三大模块构成：
+        </p>
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <div class="step-title">Tokenizer（物品语义编码）</div>
+              <div class="step-desc">
+                将视频的多模态特征（视觉、文本、标签）与协同过滤信号联合编码，
+                通过 RQ-Kmeans 生成 3 层粗到细的离散语义标识符（Semantic IDs）。
+              </div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <div class="step-title">Encoder（用户兴趣理解）</div>
+              <div class="step-desc">
+                四路并行特征工程：静态用户画像、短期行为序列（20条）、
+                正反馈行为序列（256条）、长期兴趣序列（最长 10 万条经层级压缩至 2000），
+                共同生成用户兴趣表示。
+              </div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <div class="step-title">Decoder（Session 生成）</div>
+              <div class="step-desc">
+                基于 MoE 架构的自回归 Transformer，以 Encoder 输出为条件，
+                逐 token 生成推荐会话的语义 ID 序列，完成从语义 ID 到实际视频的映射。
+                可附加 Reward Model 选择层进一步精炼推荐结果。
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ══ 2. 核心贡献 ════════════════════════ -->
+      <section id="contributions">
+        <div class="sec-title">
+          <div class="sec-icon" style="background:#f0fdf4">🏆</div>
+          核心贡献
+        </div>
+
+        <p>
+          OneRec 的技术贡献可以从五个维度概括，每个维度都有明确的工程创新和实验验证：
+        </p>
+
+        <div class="contrib-grid">
+          <div class="contrib-card">
+            <div class="contrib-card-num">01</div>
+            <div class="contrib-card-title">端到端统一生成式推荐</div>
+            <div class="contrib-card-desc">
+              首个在亿级 DAU 工业推荐系统上验证的端到端生成架构，
+              以 Encoder-Decoder 结构完整替代传统多阶段级联流水线，
+              彻底消除各阶段目标不一致问题。
+            </div>
+          </div>
+          <div class="contrib-card">
+            <div class="contrib-card-num">02</div>
+            <div class="contrib-card-title">协同信号增强的物品 Tokenizer</div>
+            <div class="contrib-card-desc">
+              提出 RQ-Kmeans（残差量化 K-Means）方案，将多模态内容特征（miniCPM-V-8B 提取）
+              与协同过滤信号联合训练，生成兼顾语义相似性和交互模式的离散 Semantic IDs，
+              重建精度和码本利用率均优于 RQ-VAE。
+            </div>
+          </div>
+          <div class="contrib-card">
+            <div class="contrib-card-num">03</div>
+            <div class="contrib-card-title">长期兴趣建模（百万级行为序列）</div>
+            <div class="contrib-card-desc">
+              通过两阶段压缩方案（层级 K-Means 聚类 + QFormer），
+              将最长 10 万条历史行为序列压缩为 128 个 Query Token 表示，
+              在不引入线性时间复杂度的前提下捕获用户深层长期兴趣。
+            </div>
+          </div>
+          <div class="contrib-card">
+            <div class="contrib-card-num">04</div>
+            <div class="contrib-card-title">ECPO 强化学习算法</div>
+            <div class="contrib-card-desc">
+              提出 Early Clipped GRPO（ECPO）：针对生成式推荐场景设计的 RL 算法，
+              引入<em>早停裁剪</em>解决负优势下的 Squeezing Effect（分布坍塌问题），
+              同时通过 Format Reward 维持合法生成率。
+            </div>
+          </div>
+          <div class="contrib-card">
+            <div class="contrib-card-num">05</div>
+            <div class="contrib-card-title">极致推理效率</div>
+            <div class="contrib-card-desc">
+              训练 MFU 达 23.7%（较基线提升 5.2×），推理 MFU 达 28.8%（提升 2.6×），
+              系统 OPEX 仅为传统多阶段系统的 <strong>10.6%</strong>，
+              同时实现更好的推荐效果。
+            </div>
+          </div>
+        </div>
+
+        <div class="metric-grid">
+          <div class="metric-card">
+            <div class="metric-value">4亿</div>
+            <div class="metric-label">日活用户 DAU</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value">+1.24%</div>
+            <div class="metric-label">快手 Lite App 停留时长提升</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value">10.6%</div>
+            <div class="metric-label">传统系统 OPEX 占比</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value">25%</div>
+            <div class="metric-label">线上 QPS 覆盖率</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value">5×</div>
+            <div class="metric-label">推理吞吐量提升</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value">+21%</div>
+            <div class="metric-label">本地生活 GMV 提升</div>
+          </div>
+        </div>
+
+        <div class="callout callout-green">
+          <div class="callout-title">💡 为什么这很重要</div>
+          工业推荐系统在过去十年中积累了大量技术债务 ——
+          层层叠加的策略和规则、跨阶段的 Seesaw Effect、
+          以及对 LLM 时代 Scaling 能力的天然排斥。
+          OneRec 展示了一个可行的工程路径：以单一大模型替代复杂系统，
+          不仅效果更好、成本更低，还为未来引入 VLM、多模态推荐打开了统一的技术框架。
+        </div>
+
+      </section>
+
+      <!-- ══ 3. Tokenizer ══════════════════════════ -->
+      <section id="tokenizer">
+        <div class="sec-title">
+          <div class="sec-icon" style="background:#fdf4ff">🔤</div>
+          Tokenizer：物品语义离散编码
+        </div>
+
+        <p>
+          在生成式推荐系统中，模型需要"说出"具体的视频 ID，就像语言模型生成词语一样。
+          但视频 ID 本身是无意义的数字，无法携带语义信息，也无法在十亿级物品空间中高效生成。
+          为此，OneRec 设计了一个独立的 Tokenizer 模块，将每个视频映射为
+          <strong>粗到细的语义标识符（Coarse-to-Fine Semantic IDs）</strong>，
+          赋予视频可被语言模型理解和生成的"词汇"表示。
+        </p>
+
+        <h3 id="tok-why">为什么不能直接用原始 ID？</h3>
+
+        <div class="callout callout-purple">
+          <div class="callout-title">核心挑战</div>
+          快手视频库规模为<strong>十亿级（billion-scale）</strong>且持续增长。
+          如果为每个视频分配一个原子 ID（atomic identifier）进行生成，
+          词汇表大小将是十亿量级，导致：
+          <ul style="margin-top:8px">
+            <li>Softmax 层参数量和计算量爆炸</li>
+            <li>新上传视频（冷启动）在训练中从未见过，完全无法生成</li>
+            <li>相似视频之间没有共享知识，泛化能力极差</li>
+          </ul>
+          语义 ID 方案通过将相似视频聚类到同一码字，使模型可以：
+          用固定大小的词汇表覆盖整个视频空间，并对新视频具有零样本泛化能力。
+        </div>
+
+        <h3 id="tok-rqkmeans">RQ-Kmeans：残差量化 K-Means</h3>
+
+        <p>
+          OneRec 的 Tokenizer 使用<strong>残差量化 K-Means（RQ-Kmeans）</strong>，
+          这是对 RQ-VAE（常见于 TIGER 等方案）的改进，放弃了神经网络解码器，
+          采用更轻量、更稳定的 K-Means 聚类方案进行多层量化。
+        </p>
+
+        <h4>整体流程</h4>
+
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <div class="step-title">多模态特征提取</div>
+              <div class="step-desc">
+                使用预训练的视觉语言模型 <strong>miniCPM-V-8B</strong> 对视频内容进行特征提取，
+                得到 $N_M = 1280$ 个多模态 token 向量，每个维度 $d_t = 512$。
+              </div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <div class="step-title">QFormer 压缩</div>
+              <div class="step-desc">
+                $N_M = 1280$ 个 token 经过 $N_c = 4$ 层 QFormer 压缩为 $\tilde{N}_M = 4$ 个紧凑表示，
+                大幅降低后续量化的计算量，同时保留核心语义信息。
+              </div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <div class="step-title">协同信号融合</div>
+              <div class="step-desc">
+                将视频的协同过滤嵌入（来自用户交互矩阵分解）注入到多模态表示中，
+                使最终的量化码字同时编码内容相似性和行为相似性。
+              </div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-body">
+              <div class="step-title">$L_t = 3$ 层残差量化</div>
+              <div class="step-desc">
+                通过 3 轮 K-Means 量化，逐层消除残差误差，生成粗到细的三级语义 ID。
+                每层码本大小 $N_t = 8192$，总词汇空间为 $N_t^{L_t} = 8192^3 \approx 5.5 \times 10^{11}$，
+                但实际视频只使用其中极小一部分，保证了覆盖率。
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <h4>QFormer 压缩的数学形式</h4>
+
+        <div class="formula-block">
+          <div class="formula-label">QFormer 逐层更新（共 $N_c = 4$ 层）</div>
+          $$Q^{(i)} = \text{CrossAttn}(Q^{(i-1)},\; M) + Q^{(i-1)}, \quad i = 1, \ldots, N_c$$
+          $$\tilde{M} = Q^{(N_c)} \in \mathbb{R}^{\tilde{N}_M \times d_t}$$
+          <p style="font-size:13px;color:var(--muted);margin-top:10px">
+            其中 $Q^{(0)}$ 为可学习的查询向量矩阵（$\tilde{N}_M \times d_t$），
+            $M \in \mathbb{R}^{N_M \times d_t}$ 为 miniCPM-V-8B 提取的原始多模态 token。
+            每层 Cross-Attention 将 1280 个 token 的信息聚合到 4 个 Query 中。
+          </p>
+        </div>
+
+        <h4>残差量化过程</h4>
+
+        <div class="formula-block">
+          <div class="formula-label">RQ-Kmeans 三层残差量化</div>
+          $$\text{第 1 层：} s_1^m = \arg\min_{k} \| \tilde{M} - \mathbf{c}_k^{(1)} \|^2, \quad R^{(1)} = \tilde{M} - \mathbf{c}_{s_1^m}^{(1)}$$
+          $$\text{第 2 层：} s_2^m = \arg\min_{k} \| R^{(1)} - \mathbf{c}_k^{(2)} \|^2, \quad R^{(2)} = R^{(1)} - \mathbf{c}_{s_2^m}^{(2)}$$
+          $$\text{第 3 层：} s_3^m = \arg\min_{k} \| R^{(2)} - \mathbf{c}_k^{(3)} \|^2$$
+          <p style="font-size:13px;color:var(--muted);margin-top:10px">
+            视频 $m$ 的最终 Semantic ID 为三元组 $(s_1^m, s_2^m, s_3^m)$，
+            其中 $s_l^m \in \{0, 1, \ldots, N_t - 1\}$，$N_t = 8192$。
+            $\mathbf{c}_k^{(l)}$ 是第 $l$ 层码本（codebook）的第 $k$ 个聚类中心。
+          </p>
+        </div>
+
+        <h3 id="tok-multimodal">多模态特征融合</h3>
+
+        <p>
+          miniCPM-V-8B 是快手团队选用的多模态基础模型，能够同时理解视频的：
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>模态</th>
+                <th>信息来源</th>
+                <th>作用</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>视觉帧</td>
+                <td>视频关键帧截图</td>
+                <td>捕捉视频的视觉风格、场景类型、人物形象</td>
+              </tr>
+              <tr>
+                <td>文本描述</td>
+                <td>视频标题、描述、字幕</td>
+                <td>理解视频的主题、语义内容、关键词</td>
+              </tr>
+              <tr>
+                <td>标签信息</td>
+                <td>视频类别标签、话题标签</td>
+                <td>提供高层语义分类信号</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          QFormer 在压缩时使用 <strong>Caption 辅助训练</strong>：
+          每个视频配有一段自然语言描述（caption），
+          QFormer 训练目标除了最小化重建误差外，还需要从压缩表示中还原 caption 文本，
+          这一多任务目标使 QFormer 学会保留对描述视频内容最关键的语义信息。
+        </p>
+
+        <div class="formula-block">
+          <div class="formula-label">QFormer 训练目标（论文原文 Eq.3 &amp; Eq.4，两个可微损失）</div>
+          $$\mathcal{L}_{\text{QFormer}} = \mathcal{L}_{I2I} + \mathcal{L}_{\text{caption\_gen}}$$
+          <p style="font-size:13px;color:var(--muted);margin-top:10px">
+            <strong>论文只有两个训练目标，均作用于 QFormer，均可微、可梯度反传：</strong><br/>
+            $\mathcal{L}_{I2I}$：物品对比损失，直接作用在 QFormer 输出 $\tilde{M}$（4 个 token）上，
+            让行为相似的视频对在 QFormer 输出空间互相靠近；<br/>
+            $\mathcal{L}_{\text{caption\_gen}}$：以 $\tilde{M}$ 为 KV、LLaMA3 为 decoder 的 caption next-token prediction 损失，
+            防止 QFormer 压缩时丢失内容语义。<br/><br/>
+            <strong>RQ-Kmeans 量化是独立的离线 K-Means EM 迭代，不涉及可微 loss，不反传梯度到 QFormer。</strong>
+            QFormer 训练收敛后固定，对全量视频的 $\mathbf{z}_m$（mean-pool $\tilde{M}$ 所得单向量）
+            做 K-Means 聚类更新码本中心。
+          </p>
+        </div>
+
+        <h3 id="tok-collab">协同信号注入</h3>
+
+        <p>
+          纯内容特征的量化存在一个关键缺陷：<em>两个内容不同但用户行为高度相似的视频</em>，
+          会被分配到完全不同的 Semantic ID，导致模型无法在训练时共享这部分行为知识。
+        </p>
+
+        <div class="callout callout-blue">
+          <div class="callout-title">Item-to-Item Contrastive Loss（论文 Eq.3）</div>
+          <p>
+            正样本对数据集 $\mathcal{D}_{\text{pair}}$ 通过两种方式构建：<br/>
+            (1) <strong>User-to-Item Retrieval</strong>：对每个用户，取一个正向点击目标视频，
+            与其历史正向点击中协同相似度最高的视频配对；<br/>
+            (2) <strong>Item-to-Item Retrieval</strong>：通过 Swing 相似度等算法挖掘相似度高的视频对。
+          </p>
+          <p style="margin-top:8px">
+            损失直接作用在 <strong>QFormer 输出 $\tilde{M} \in \mathbb{R}^{4 \times d_t}$</strong> 上，
+            梯度反传更新 QFormer 参数：
+          </p>
+          $$\mathcal{L}_{I2I} = -\frac{1}{|B|} \sum_{(i,j) \in B} \log \frac{\exp(\text{sim}(\tilde{M}_i, \tilde{M}_j) / \tau)}{\sum_{(i',j') \in B} \exp(\text{sim}(\tilde{M}_i, \tilde{M}_{j'}) / \tau)}$$
+          <p style="font-size:13px;margin-top:8px">
+            $\tau$ 为温度系数，$B$ 为 $\mathcal{D}_{\text{pair}}$ 的一个 mini-batch。
+            QFormer 被迫学习"将行为相似的视频对压缩到空间相近的 $\tilde{M}$"的压缩策略，
+            协同信号因此被融入 $\tilde{M}$，最终在 K-Means 量化时使相同行为模式的视频聚入同一码字。
+          </p>
+        </div>
+
+        <p>
+          这一设计使得行为相似的视频在量化码书中聚类到更近的码字，
+          从而使 Decoder 能够学到"推荐这类内容的用户也喜欢那类内容"的迁移知识，
+          大幅提升对长尾视频和冷启动视频的推荐质量。
+        </p>
+
+        <h3>Tokenizer 效果评估</h3>
+
+        <p>论文使用三个互补指标评估 Tokenizer 质量：</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>评估指标</th>
+                <th>含义</th>
+                <th>理想值</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Reconstruction Loss</strong></td>
+                <td>$\mathbf{z}_m$（QFormer mean-pool 后的单向量）与三层码本中心之和 $\sum_l \mathbf{c}^{(l)}_{s_l}$ 的 L2 距离，衡量 RQ-Kmeans 量化精度（仅用于评估对比，不反传梯度到 QFormer）</td>
+                <td>越小越好</td>
+              </tr>
+              <tr>
+                <td><strong>Codebook Utilization</strong></td>
+                <td>码本向量被实际分配到视频的比例（死码比例）</td>
+                <td>越高越好，避免码本空洞</td>
+              </tr>
+              <tr>
+                <td><strong>Token Distribution Entropy</strong></td>
+                <td>各码字分配的 Shannon 熵，衡量分布均匀性</td>
+                <td>越高越好，避免少数码字承载所有视频</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-green">
+          <div class="callout-title">实验结论</div>
+          RQ-Kmeans 在上述三个指标上均<strong>优于 RQ-VAE</strong>（传统方案），
+          同时训练更稳定，不依赖神经网络解码器的重建损失反传，
+          计算开销更低，适合十亿级视频库的规模化处理。
+        </div>
+
+        <h4>语义 ID 案例分析</h4>
+        <p>
+          论文附录展示了 RQ-Kmeans 生成的 Semantic ID 案例，
+          以 $L_t = 5$（展示用）为例，相同前缀的视频具有高度语义相关性：
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>语义 ID 前缀</th><th>视频主题</th><th>层级含义</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>(2150, *, *, *, *)</code></td>
+                <td>体育类内容（Sports）</td>
+                <td>第 1 层：大类别</td>
+              </tr>
+              <tr>
+                <td><code>(2150, 3444, *, *, *)</code></td>
+                <td>体育 → 篮球 &amp; 足球</td>
+                <td>第 2 层：子类别</td>
+              </tr>
+              <tr>
+                <td><code>(2150, 3444, 1522, *, *)</code></td>
+                <td>体育 → 篮球 &amp; 足球 → 篮球</td>
+                <td>第 3 层：细粒度类别</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          前缀共享意味着同层级的视频被分配到同一码字，
+          Decoder 在生成语义 ID 的前几个 token 时，相当于在做"类别路由"，
+          层级越深越精确，与人类的推荐直觉完全吻合。
+        </p>
+
+      </section>
+
+      <!-- ══ 4. Encoder ══════════════════════════ -->
+      <section id="encoder">
+        <div class="sec-title">
+          <div class="sec-icon" style="background:#fff7ed">🧭</div>
+          Encoder：多尺度用户兴趣建模
+        </div>
+
+        <p>
+          OneRec 的 Encoder 负责将用户的历史行为序列和静态画像，
+          转化为 Decoder 可以利用的<strong>高质量用户兴趣表示</strong>。
+          设计的核心挑战在于：用户行为序列长度跨越数量级
+          ——从最近的几次点击（秒级），到一周内的稳定偏好（天级），
+          再到数年积累的深层兴趣（年级，最长 10 万条记录）。
+        </p>
+
+        <p>
+          为此，Encoder 采用<strong>四路并行的多尺度特征工程</strong>架构，
+          分别对不同时间尺度的行为建模，最终拼接融合为统一的用户表示。
+        </p>
+
+        <div class="callout callout-blue">
+          <div class="callout-title">四路并行架构总览</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px">
+            <div style="background:#fff;border:1px solid #dde9ff;border-radius:10px;padding:12px">
+              <strong>静态路径（Static）</strong><br/>
+              <span style="font-size:13px;color:var(--muted)">用户画像特征：年龄、性别、设备、地理位置等</span>
+            </div>
+            <div style="background:#fff;border:1px solid #dde9ff;border-radius:10px;padding:12px">
+              <strong>短期路径（Short-term）</strong><br/>
+              <span style="font-size:13px;color:var(--muted)">最近 $L_s = 20$ 条行为，捕捉当前会话兴趣</span>
+            </div>
+            <div style="background:#fff;border:1px solid #dde9ff;border-radius:10px;padding:12px">
+              <strong>正反馈路径（Positive-feedback）</strong><br/>
+              <span style="font-size:13px;color:var(--muted)">最近 $L_p = 256$ 条点赞/收藏/关注行为，稳定偏好信号</span>
+            </div>
+            <div style="background:#fff;border:1px solid #dde9ff;border-radius:10px;padding:12px">
+              <strong>长期路径（Lifelong）</strong><br/>
+              <span style="font-size:13px;color:var(--muted)">最多 $L_l = 2000$ 条（从 10 万中压缩），深层历史兴趣</span>
+            </div>
+          </div>
+        </div>
+
+        <h3 id="enc-static">路径一：静态用户特征</h3>
+
+        <p>
+          静态特征包括用户画像信息，如用户 ID（$e_{\text{uid}}$）、性别（$e_{\text{gender}}$）、
+          年龄（$e_{\text{age}}$）、设备类型等。
+          各字段经 Embedding 查表后拼接，再经过 Dense 变换得到静态路径表示：
+        </p>
+
+        <div class="formula-block">
+          <div class="formula-label">静态特征路径</div>
+          $$\mathbf{f}_u = [e_{\text{uid}}; e_{\text{gender}}; e_{\text{age}}; \ldots]$$
+          $$\mathbf{h}_u = \text{MLP}(\mathbf{f}_u) \in \mathbb{R}^{1 \times d_{\text{model}}}$$
+        </div>
+
+        <h3 id="enc-short">路径二：短期行为序列</h3>
+
+        <p>
+          短期行为序列 $\{v_1, v_2, \ldots, v_{L_s}\}$（$L_s = 20$）
+          包含用户最近的观看、点击行为。每条记录由多字段特征构成：
+          视频 ID（$e^s_{\text{vid}}$）、作者 ID（$e^s_{\text{aid}}$）、标签（$e^s_{\text{tag}}$）等，
+          拼接后送入 Transformer 进行序列建模：
+        </p>
+
+        <div class="formula-block">
+          <div class="formula-label">短期序列路径</div>
+          $$\mathbf{f}_s^{(t)} = [e^s_{\text{vid},t}; e^s_{\text{aid},t}; e^s_{\text{tag},t}; \ldots], \quad t = 1, \ldots, L_s$$
+          $$\mathbf{h}_s = \text{Transformer}(\mathbf{f}_s^{(1)}, \ldots, \mathbf{f}_s^{(L_s)}) \in \mathbb{R}^{L_s \times d_{\text{model}}}$$
+          <p style="font-size:13px;color:var(--muted);margin-top:8px">
+            Transformer 使用标准的多头自注意力，并加入相对位置编码以保留行为的时序信息。
+            输出的 $L_s$ 个位置向量保留用于后续 Decoder 的 Cross-Attention。
+          </p>
+        </div>
+
+        <h3 id="enc-positive">路径三：正反馈行为序列</h3>
+
+        <p>
+          正反馈序列仅包含用户主动表达喜好的行为（点赞、收藏、关注、分享等），
+          序列长度 $L_p = 256$，远多于短期序列。
+          这些行为信号噪声更低，能够反映用户稳定的中长期偏好。
+        </p>
+
+        <div class="formula-block">
+          <div class="formula-label">正反馈序列路径</div>
+          $$\mathbf{h}_p = \text{Transformer}(\mathbf{f}_p^{(1)}, \ldots, \mathbf{f}_p^{(L_p)}) \in \mathbb{R}^{L_p \times d_{\text{model}}}$$
+        </div>
+
+        <div class="callout callout-purple">
+          <div class="callout-title">设计动机：为什么要分开建模？</div>
+          短期行为（$L_s=20$）包含大量"随手刷"的低质量信号，当前 session 的漫游行为；
+          正反馈行为（$L_p=256$）是用户主动操作，信噪比高，代表真实偏好。
+          分开建模让 Decoder 能区分"用户刚才偶然看了什么"和"用户长期真正喜欢什么"。
+        </div>
+
+        <h3 id="enc-lifelong">路径四：长期兴趣序列（核心创新）</h3>
+
+        <p>
+          这是 Encoder 中最具创新性的部分。快手用户的历史行为记录最多可达 <strong>10 万条</strong>，
+          直接用 Transformer 处理的复杂度为 $O(N^2)$，在 $N=100{,}000$ 时完全不可行。
+          OneRec 采用两阶段压缩方案，将其压缩到 $N_q = 128$ 个 Query Token。
+        </p>
+
+        <h4>第一阶段：层级 K-Means 聚类（离线）</h4>
+
+        <p>
+          在离线阶段，对每个用户的完整历史行为（最多 10 万条）进行层级聚类，
+          生成代表性的 Centroid 序列（$L_l = 2000$ 个中心点）。
+          具体算法为：
+        </p>
+
+        <div class="formula-block">
+          <div class="formula-label">层级 K-Means 聚类（离线预处理）</div>
+          <ol style="font-size:13.5px;line-height:1.9;padding-left:18px">
+            <li>对用户的全部历史行为嵌入向量，运行第一层 K-Means，直到每个簇的大小 $\leq M$（终止阈值），保留超出阈值的大簇继续聚类</li>
+            <li>对每个大簇内部递归运行 K-Means，直到所有叶簇大小 $\leq M$</li>
+            <li>收集所有叶簇的中心点，形成 $L_l = 2000$ 个代表性行为中心</li>
+          </ol>
+          <p style="font-size:13px;color:var(--muted);margin-top:10px">
+            这一过程将 10 万条行为的信息损耗式压缩到 2000 个代表性中心，
+            计算在用户更新画像时完成，不影响在线推理延迟。
+          </p>
+        </div>
+
+        <h4>第二阶段：QFormer 在线压缩</h4>
+
+        <p>
+          在线阶段，将 2000 个聚类中心嵌入经过 QFormer 进一步压缩到 $N_q = 128$ 个 Query Token：
+        </p>
+
+        <div class="formula-block">
+          <div class="formula-label">长期兴趣 QFormer（$N_l = 2$ 层）</div>
+          $$\mathbf{v}_l = \text{DenseTransform}(\mathbf{f}_l^{(1)}, \ldots, \mathbf{f}_l^{(L_l)}) \in \mathbb{R}^{L_l \times d_{\text{model}}}$$
+          $$\mathbf{h}_l^{(i)} = \text{CrossAttn}(\mathbf{h}_l^{(i-1)},\; \mathbf{v}_l) + \mathbf{h}_l^{(i-1)}, \quad i = 1, 2$$
+          $$\mathbf{h}_l = \mathbf{h}_l^{(N_l)} \in \mathbb{R}^{N_q \times d_{\text{model}}}$$
+          <p style="font-size:13px;color:var(--muted);margin-top:8px">
+            $\mathbf{h}_l^{(0)}$ 为 $N_q = 128$ 个可学习 Query 向量，
+            通过 2 层 Cross-Attention 从 2000 条中心中提取最相关的长期兴趣信号。
+          </p>
+        </div>
+
+        <h4>完整用户表示拼接</h4>
+
+        <div class="formula-block">
+          <div class="formula-label">Encoder 最终输出</div>
+          $$\mathbf{H}_{\text{enc}} = [\mathbf{h}_u;\; \mathbf{h}_s;\; \mathbf{h}_p;\; \mathbf{h}_l] \in \mathbb{R}^{(1 + L_s + L_p + N_q) \times d_{\text{model}}}$$
+          <p style="font-size:13px;color:var(--muted);margin-top:8px">
+            四路拼接后，总 token 数为 $1 + 20 + 256 + 128 = 405$ 个，
+            作为 Decoder 的 Cross-Attention KV 源，为每个生成步提供完整的用户上下文。
+          </p>
+        </div>
+
+        <div class="callout callout-green">
+          <div class="callout-title">工程创新意义</div>
+          这一设计让 OneRec 的 Encoder 能够同时感知：
+          <ul style="margin-top:6px">
+            <li><strong>即时兴趣</strong>（当前会话的最近 20 条行为）</li>
+            <li><strong>稳定偏好</strong>（最近 256 条正反馈行为）</li>
+            <li><strong>深层长期兴趣</strong>（数年积累的 10 万条行为，经两阶段压缩到 128 token）</li>
+          </ul>
+          三种时间尺度的信息在 Decoder 的 Cross-Attention 中自适应地被利用，
+          无需人工设定权重，由模型端到端学习在不同场景下各自的重要性。
+        </div>
+
+      </section>
+
+
+      <!-- ══ 5. Decoder ════════════════════════════ -->
+      <section id="decoder">
+        <div class="sec-title">
+          <div class="sec-icon" style="background:#f0fdf4">🎯</div>
+          Decoder：MoE 自回归 Session 生成
+        </div>
+
+        <p>
+          OneRec 的 Decoder 是整个系统的核心生成模块。
+          它接收 Encoder 输出的用户兴趣表示作为条件，
+          通过自回归解码的方式，逐 token 生成一个完整推荐会话（Session）的语义 ID 序列。
+          本质上，Decoder 是一个以用户上下文为条件的<strong>语言模型</strong>，
+          只不过它"说"的语言是视频语义标识符而非自然语言词汇。
+        </p>
+
+        <h3 id="dec-moe">MoE 架构：用稀疏激活撬动大容量</h3>
+
+        <p>
+          Decoder 采用 <strong>Mixture-of-Experts（MoE）</strong> 架构，
+          这是 OneRec 能够在保持推理效率的同时大幅扩展模型容量的核心技术手段。
+        </p>
+
+        <div class="callout callout-blue">
+          <div class="callout-title">MoE vs 稠密模型的核心区别</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px">
+            <div style="background:#fff;border:1px solid #dde9ff;border-radius:10px;padding:12px">
+              <strong>稠密 Transformer</strong><br/>
+              <span style="font-size:13px;color:var(--muted)">
+                每个 token 经过所有参数（FFN），
+                参数量 = 推理 FLOPs 正比增长，
+                扩展代价高昂。
+              </span>
+            </div>
+            <div style="background:#fff;border:1px solid #dde9ff;border-radius:10px;padding:12px">
+              <strong>MoE Transformer</strong><br/>
+              <span style="font-size:13px;color:var(--muted)">
+                每个 token 只激活 $K$ 个专家（Expert FFN），
+                总参数量 $\gg$ 激活参数量，
+                推理成本远低于全参数计算。
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <h4>Decoder 层结构</h4>
+
+        <div class="formula-block">
+          <div class="formula-label">MoE Decoder 单层计算流程</div>
+          $$\mathbf{x}' = \text{MultiHeadSelfAttn}(\mathbf{x}) + \mathbf{x}$$
+          $$\mathbf{x}'' = \text{CrossAttn}(\mathbf{x}', \mathbf{H}_{\text{enc}}) + \mathbf{x}'$$
+          $$\text{MoE}(\mathbf{x}'') = \sum_{i=1}^{N_e} g_i(\mathbf{x}'') \cdot \text{FFN}_i(\mathbf{x}'')$$
+          $$\mathbf{y} = \text{MoE}(\mathbf{x}'') + \mathbf{x}''$$
+          <p style="font-size:13px;color:var(--muted);margin-top:10px">
+            其中 $g_i(\mathbf{x}'')$ 为 Router 分配给第 $i$ 个专家的 softmax 权重，
+            $N_e = 24$（总专家数），每次只激活 $K = 2 \sim 4$ 个专家，
+            其余专家的 $g_i = 0$，不参与计算。
+          </p>
+        </div>
+
+        <h4>Router 设计：无损失负载均衡</h4>
+
+        <p>
+          MoE 的关键工程挑战是专家负载均衡：
+          若所有 token 都路由到少数几个专家，其余专家空转，模型容量被严重浪费。
+          传统方案通过辅助损失（Auxiliary Loss）惩罚不均衡，
+          但这会与主任务损失产生干扰。
+        </p>
+
+        <div class="callout callout-purple">
+          <div class="callout-title">Loss-Free Load Balancing（无损失负载均衡）</div>
+          OneRec 采用无辅助损失的负载均衡方案：
+          在 Router softmax 之前，为每个专家维护一个<strong>偏置参数</strong> $b_i$（Expert Bias），
+          在每个训练步根据专家的实时负载动态更新 $b_i$：
+          <ul style="margin-top:8px">
+            <li>若专家 $i$ 当前过载（分配 token 多），增大 $b_i$（不等于降低其得分，而是在路由分配时修正）</li>
+            <li>若专家 $i$ 当前闲置，减小 $b_i$</li>
+          </ul>
+          这样无需显式辅助损失，即可实现专家负载的动态自平衡，避免任务目标被污染。
+        </div>
+
+        <h4>论文中的模型规模配置</h4>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>模型配置</th>
+                <th>激活参数量</th>
+                <th>总参数量（含 MoE）</th>
+                <th>备注</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Small</td>
+                <td>0.015B</td>
+                <td>0.015B</td>
+                <td>稠密小模型（对照基线）</td>
+              </tr>
+              <tr>
+                <td>Medium</td>
+                <td>0.121B</td>
+                <td>0.121B</td>
+                <td>稠密中型模型</td>
+              </tr>
+              <tr>
+                <td>Large-MoE</td>
+                <td>0.935B</td>
+                <td>（含稀疏专家）</td>
+                <td>MoE 大模型</td>
+              </tr>
+              <tr>
+                <td>XLarge-MoE</td>
+                <td>2.633B</td>
+                <td>（含稀疏专家）</td>
+                <td>线上主力模型</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="dec-session">Session Generation：一次生成整个推荐列表</h3>
+
+        <p>
+          OneRec 的另一个核心设计是：Decoder 一次性生成完整的<strong>推荐 Session</strong>，
+          即多个视频的语义 ID 序列，而非只生成单个视频。
+        </p>
+
+        <div class="formula-block">
+          <div class="formula-label">Session 生成的自回归分解</div>
+          $$p(\text{Session} \mid u) = \prod_{t=1}^{K} \prod_{l=1}^{L_t} p\!\left(s_t^l \;\middle|\; u,\; s_1^1, \ldots, s_1^{L_t}, \ldots, s_{t-1}^{L_t}, s_t^1, \ldots, s_t^{l-1}\right)$$
+          <p style="font-size:13px;color:var(--muted);margin-top:10px">
+            每个视频的 $L_t = 3$ 个语义 ID token 逐个生成：先生成粗粒度码字 $s_t^1$（大类别），
+            再依条件生成 $s_t^2$（子类别），最后生成 $s_t^3$（精细码字）。
+            生成完第 $t$ 个视频后，继续生成第 $t+1$ 个，直到完成整个 Session（$K$ 个视频）。
+          </p>
+        </div>
+
+        <p>
+          Session 级生成的优势在于：Decoder 可以在生成第 $t+1$ 个视频时，
+          "看到"前 $t$ 个视频的选择，从而实现<strong>多样性与相关性的自然权衡</strong>
+          ——不依赖任何后处理去重策略，而是由模型端到端学习。
+        </p>
+
+        <h4>SFT 预训练目标</h4>
+
+        <div class="formula-block">
+          <div class="formula-label">有监督微调（SFT）训练损失</div>
+          $$\mathcal{L}_{\text{SFT}} = -\sum_{t=1}^{K} \sum_{l=1}^{L_t} \log p\!\left(s_t^{l,*} \;\middle|\; \text{context}\right)$$
+          <p style="font-size:13px;color:var(--muted);margin-top:8px">
+            $s_t^{l,*}$ 为标注的真实 Session 中第 $t$ 个视频第 $l$ 层语义 ID。
+            训练数据为用户实际完整观看的视频序列（Watch Session），
+            以此作为正样本监督 Decoder 学习"生成用户真正会看的视频"。
+          </p>
+        </div>
+
+        <h3 id="dec-inference">推理流程</h3>
+
+        <p>
+          在线推理时，OneRec 的完整执行流程如下：
+        </p>
+
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <div class="step-title">Encoder 前向传播</div>
+              <div class="step-desc">
+                读取用户的四路特征（静态画像、短期行为 20 条、正反馈 256 条、
+                长期聚类中心 2000 条），执行 Encoder 前向，得到 405 个 KV 表示。
+              </div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <div class="step-title">Decoder 自回归生成</div>
+              <div class="step-desc">
+                以 Encoder 输出为 Cross-Attention KV，
+                MoE Decoder 自回归地生成 $K \times L_t = K \times 3$ 个语义 ID token，
+                形成 $K$ 个视频的候选语义 ID。
+              </div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <div class="step-title">Semantic ID → 实际视频映射</div>
+              <div class="step-desc">
+                将生成的 $(s^1, s^2, s^3)$ 三元组查询预构建的倒排索引，
+                映射到对应的实际视频 ID 列表。
+                如果某个三元组没有对应视频（非法生成），则丢弃该候选。
+              </div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-body">
+              <div class="step-title">（可选）Reward Model 精选</div>
+              <div class="step-desc">
+                对 Decoder 生成的多个候选视频，用独立的 Reward Model 打分，
+                选取得分最高的 Top-K 作为最终推荐结果。
+                论文实验表明加入 RM Selection 后，App Stay Time 进一步提升 +0.54%~+1.24%。
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-green">
+          <div class="callout-title">为什么 MoE Decoder 适合工业推荐？</div>
+          <ul>
+            <li>
+              <strong>容量足够大：</strong> 2.633B 激活参数，但实际只有 MoE 激活比例的参数参与计算，
+              推理 FLOPs 与 0.935B 稠密模型相当，但模型表达能力远强于后者。
+            </li>
+            <li>
+              <strong>生成天然稳定：</strong> 在语义 ID 空间内生成，词汇表固定（$N_t = 8192$），
+              不存在 LLM 的 Open-ended 生成不可控问题。
+            </li>
+            <li>
+              <strong>可直接优化业务指标：</strong> RL 后训练阶段可将 App Stay Time、多样性等指标
+              直接设计进 Reward，Decoder 端到端优化，无需多阶段协调。
+            </li>
+          </ul>
+        </div>
+
+      </section>
+
+
+      <!-- ══ 6. Reward 体系 ═════════════════════════ -->
+      <section id="reward">
+        <div class="sec-title">
+          <div class="sec-icon" style="background:#fffbeb">🎁</div>
+          Reward 体系：多目标对齐
+        </div>
+
+        <p>
+          OneRec 在完成 SFT 预训练后，进入<strong>强化学习（RL）后训练阶段</strong>。
+          RL 的核心是设计合适的 Reward 函数——它相当于 OneRec 的"总优化目标"，
+          决定了模型最终的推荐行为取向。
+          OneRec 的 Reward 体系由三类 Reward 组成，分别对应不同的优化目的。
+        </p>
+
+        <div class="callout callout-blue">
+          <div class="callout-title">Reward 体系总览</div>
+          $$r(v, u) = r_{\text{P-Score}}(v, u) + r_{\text{Format}}(v) + r_{\text{Industrial}}(v, u)$$
+          <p style="font-size:13px;color:var(--muted);margin-top:8px">
+            三类 Reward 以加法形式组合（实际工程中可加权），
+            覆盖用户满意度、生成合法性、业务生态三个维度。
+          </p>
+        </div>
+
+        <h3 id="rew-pscore">Reward 一：P-Score（用户偏好对齐）</h3>
+
+        <p>
+          P-Score 是 OneRec RL 训练的主要 Reward 信号，来自独立训练的<strong>偏好分数模型</strong>，
+          综合评估用户对某个推荐视频的满意度。
+          P-Score 是一个综合多个交互信号的加权分数，
+          考虑了视频观看完成率、点赞、收藏、评论、分享、关注等多种用户行为：
+        </p>
+
+        <div class="formula-block">
+          <div class="formula-label">P-Score 计算（概念性形式）</div>
+          $$r_{\text{P-Score}}(v, u) = \sum_{k} w_k \cdot \mathbb{E}[\text{action}_k(u, v)]$$
+          <p style="font-size:13px;color:var(--muted);margin-top:8px">
+            其中 $\text{action}_k$ 表示用户 $u$ 对视频 $v$ 执行的第 $k$ 种互动行为（如观看完整视频），
+            $w_k$ 为对应的业务权重。P-Score 实际上是由独立的 Reward Model（RM）预测，
+            并非基于实时用户行为，因此可以在生成时离线计算。
+          </p>
+        </div>
+
+        <div class="callout callout-purple">
+          <div class="callout-title">P-Score 在 Session 级别的计算</div>
+          由于 OneRec 一次生成 $K$ 个视频的 Session，P-Score 需要在 Session 粒度上聚合：
+          $$R_{\text{P-Score}}(\text{Session}, u) = \frac{1}{K} \sum_{t=1}^{K} r_{\text{P-Score}}(v_t, u)$$
+          即取 Session 内所有视频 P-Score 的均值，鼓励生成质量均匀的推荐列表，
+          而非只优化头部视频的得分。
+        </div>
+
+        <h3 id="rew-format">Reward 二：Format Reward（生成合法性）</h3>
+
+        <p>
+          生成式推荐系统面临一个独特挑战：<strong>模型可能生成语义 ID 空间中存在但没有对应视频的组合</strong>，
+          即"非法生成（Illegal Generation）"。
+          这是因为语义 ID 的笛卡尔积空间（$N_t^{L_t} = 8192^3$）远大于实际视频数量，
+          大量 $(s^1, s^2, s^3)$ 三元组并不对应任何真实视频。
+        </p>
+
+        <p>
+          论文分析发现，在引入 RL（ECPO）后，非法生成率<strong>显著上升</strong>。
+          原因在于负优势样本（Advantage $A &lt; 0$）导致的"挤压效应"（Squeezing Effect）。
+          Format Reward 通过直接奖励合法生成来对抗这一问题：
+        </p>
+
+        <div class="formula-block">
+          <div class="formula-label">Format Reward 定义</div>
+          $$A_{\text{format},i} = \begin{cases} 1 & \text{if } v_i \in \mathcal{I}_{\text{legal}} \\ 0 & \text{if } v_i \notin \mathcal{I}_{\text{legal}} \end{cases}$$
+          <p style="font-size:13px;color:var(--muted);margin-top:8px">
+            $\mathcal{I}_{\text{legal}}$ 为所有合法视频 ID 的集合。
+            合法样本 Advantage 设为 1（正向奖励），非法样本直接<strong>丢弃</strong>（不纳入梯度计算），
+            以避免非法样本的负优势进一步触发 Squeezing Effect。
+          </p>
+        </div>
+
+        <div class="callout callout-amber">
+          <div class="callout-title">⚠ 为什么不用 Advantage = -1 惩罚非法生成？</div>
+          直觉上，给非法生成赋予负 Advantage（-1）似乎更直接。
+          但这正是 Squeezing Effect 的来源！
+          负 Advantage 会压缩模型对其他 token 的概率分布，
+          使合法 token 的概率跌至与非法 token 相当的水平，
+          反而制造更多非法生成。
+          因此直接丢弃非法样本是更安全的策略。
+        </div>
+
+        <h3 id="rew-industrial">Reward 三：Industrial Reward（生态与商业化）</h3>
+
+        <p>
+          工业推荐系统不仅要优化用户体验，还需要兼顾平台生态健康、商业化需求、
+          以及冷启动/长尾视频的流量分配。
+          OneRec 通过 Industrial Reward 将这些业务约束直接融入 RL 训练目标。
+        </p>
+
+        <h4>案例：病毒式内容（Viral Content）控制</h4>
+
+        <p>
+          快手平台上存在大量"病毒式内容农场"（Viral Content Farms）——
+          以搬运、剪辑为主、内容质量参差不齐的账号。
+          OneRec 上线后，若没有控制策略，此类内容的曝光比例会显著上升，
+          对平台生态产生负面影响。
+        </p>
+
+        <div class="formula-block">
+          <div class="formula-label">病毒式内容比例控制 Reward</div>
+          $$r_{\text{viral}}(v, u) = \begin{cases}
+            r_{\text{P-Score}}(v, u) & \text{if ratio}_{\text{viral}} \leq f \\
+            \alpha \cdot r_{\text{P-Score}}(v, u) & \text{if ratio}_{\text{viral}} > f \;\text{and}\; v \in \text{viral}
+          \end{cases}$$
+          <p style="font-size:13px;color:var(--muted);margin-top:8px">
+            $f$ 为允许的病毒式内容比例上限，
+            当实际比例超过 $f$ 时，对病毒式内容的 P-Score Reward 按比例 $\alpha &lt; 1$ 进行折扣，
+            使模型主动降低病毒式内容推荐频率。
+          </p>
+        </div>
+
+        <div class="callout callout-green">
+          <div class="callout-title">Industrial Reward 的系统价值</div>
+          传统系统的生态控制是在重排阶段通过硬规则实现的（例如每 5 条插入 1 条冷启动视频），
+          这与排序目标天然冲突，产生 Seesaw Effect。
+          OneRec 将生态目标直接写进 Reward，
+          让模型自适应学习"在满足用户体验的前提下兼顾生态约束"的推荐策略，
+          是从补丁驱动到目标驱动的根本性转变。
+        </div>
+
+      </section>
+
+      <!-- ══ 7. ECPO ═════════════════════════════════ -->
+      <section id="ecpo">
+        <div class="sec-title">
+          <div class="sec-icon" style="background:#fdf4ff">🔬</div>
+          ECPO：早停裁剪强化学习
+        </div>
+
+        <p>
+          OneRec 的强化学习后训练采用自研的 <strong>ECPO（Early Clipped GRPO）</strong> 算法，
+          这是对 DeepSeek-R1 中使用的 GRPO 算法的针对性改进，
+          专门解决生成式推荐场景中出现的<strong>分布坍塌（Squeezing Effect）</strong>问题。
+        </p>
+
+        <h3 id="ecpo-grpo">GRPO 基础算法</h3>
+
+        <p>
+          GRPO 是 PPO 的一个变种，核心思想是：
+          对同一个输入，采样 $G$ 个输出，用组内相对优势（Relative Advantage）替代绝对价值函数，
+          消除对 Critic 网络的依赖。
+        </p>
+
+        <div class="formula-block">
+          <div class="formula-label">GRPO 相对优势计算</div>
+          $$A_i = \frac{r_i - \text{mean}(\{r_1, \ldots, r_G\})}{\text{std}(\{r_1, \ldots, r_G\})}$$
+          <p style="font-size:13px;color:var(--muted);margin-top:8px">
+            对用户 $u$ 采样 $G$ 个生成 Session，
+            用组内均值和标准差标准化，得到每个样本的相对优势 $A_i$。
+            $A_i > 0$ 表示该样本比平均水平好，$A_i &lt; 0$ 表示比平均水平差。
+          </p>
+        </div>
+
+        <div class="formula-block">
+          <div class="formula-label">GRPO 目标函数</div>
+          $$\mathcal{J}_{\text{GRPO}}(\theta) = \mathbb{E}\!\left[\frac{1}{G} \sum_{i=1}^{G} \frac{1}{|o_i|} \sum_{t=1}^{|o_i|} \min\!\left(\rho_{i,t} A_i,\; \text{clip}(\rho_{i,t}, 1-\varepsilon, 1+\varepsilon) A_i \right)\right]$$
+          $$\rho_{i,t} = \frac{\pi_\theta(o_{i,t} \mid q, o_{i,&lt;t})}{\pi_{\text{ref}}(o_{i,t} \mid q, o_{i,&lt;t})}$$
+          <p style="font-size:13px;color:var(--muted);margin-top:8px">
+            $\rho_{i,t}$ 为当前策略与参考策略在第 $t$ 个 token 上的概率比，
+            $\varepsilon$ 为 PPO clip 参数，$q$ 为用户上下文。
+          </p>
+        </div>
+
+        <h3 id="ecpo-algo">ECPO：早停裁剪机制</h3>
+
+        <div class="formula-block">
+          <div class="formula-label">ECPO 目标函数（关键区别在第三行）</div>
+          $$\hat{r}_{i,t} = \begin{cases}
+            \min(\rho_{i,t} A_i,\; \text{clip}(\rho_{i,t}, 1-\varepsilon, 1+\varepsilon) A_i) & A_i \geq 0 \\
+            \text{clip}(\rho_{i,t}, 1-\varepsilon, 1+\varepsilon) A_i & A_i &lt; 0 \;\text{and}\; \rho_{i,t} \leq 1+\varepsilon \\
+            0 & A_i &lt; 0 \;\text{and}\; \rho_{i,t} > 1+\varepsilon
+          \end{cases}$$
+          <p style="font-size:13px;color:var(--muted);margin-top:10px">
+            关键区别：当负优势样本的概率比 $\rho_{i,t} > 1 + \varepsilon$ 时，
+            梯度直接置零（Early Stop），不再施加负梯度，
+            保护合法 token 的概率不被 Squeezing。
+          </p>
+        </div>
+
+        <h3 id="ecpo-squeeze">Squeezing Effect：分布坍塌机制详解</h3>
+
+        <div class="callout callout-amber">
+          <div class="callout-title">Squeezing Effect 的三步成因</div>
+          <div class="steps" style="margin-top:10px">
+            <div class="step">
+              <div class="step-num">1</div>
+              <div class="step-body">
+                <div class="step-title">SFT 后的分布状态</div>
+                <div class="step-desc">
+                  模型经过 SFT 后已学会给绝大多数合法 token 分配较高概率，
+                  非法 token 的概率极低（接近 0）。
+                </div>
+              </div>
+            </div>
+            <div class="step">
+              <div class="step-num">2</div>
+              <div class="step-body">
+                <div class="step-title">负优势样本（$A_i &lt; 0$）的梯度效应</div>
+                <div class="step-desc">
+                  RL 目标要降低 $A_i &lt; 0$ 样本的概率。
+                  梯度会将概率质量"挤压"到模型认为最优的少数 token 上（$o^*$）。
+                </div>
+              </div>
+            </div>
+            <div class="step">
+              <div class="step-num">3</div>
+              <div class="step-body">
+                <div class="step-title">分布坍塌，非法生成率上升</div>
+                <div class="step-desc">
+                  大量概率集中到少数几个"绝对优势" token，
+                  其他合法 token 的概率跌到与非法 token 相当的水平，
+                  非法生成率显著上升，推荐多样性崩溃。
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="formula-block">
+          <div class="formula-label">ECPO 总损失（SFT + RL 联合训练）</div>
+          $$\mathcal{L}_{\text{total}} = \mathcal{L}_{\text{SFT}} - \beta \cdot \mathcal{J}_{\text{ECPO}}$$
+          <p style="font-size:13px;color:var(--muted);margin-top:8px">
+            SFT 损失和 ECPO RL 目标同时优化，前者保持模型稳定（替代 KL 正则），
+            后者提升推荐质量与业务指标对齐。
+            一个关键工程决策：移除 KL 散度正则项，
+            因为 SFT 损失已足够稳定策略更新。
+          </p>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>算法</th>
+                <th>负优势样本处理</th>
+                <th>KL 正则</th>
+                <th>非法生成率</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>标准 GRPO</td>
+                <td>继续施加负梯度</td>
+                <td>有</td>
+                <td>显著上升</td>
+              </tr>
+              <tr>
+                <td><strong>ECPO（OneRec）</strong></td>
+                <td>$\rho > 1+\varepsilon$ 时早停，梯度=0</td>
+                <td>无（SFT 代替）</td>
+                <td><strong>受控</strong>（Format Reward 辅助）</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </section>
+
+
+      <!-- ══ 8. 训练基础设施 ════════════════════════ -->
+      <section id="training">
+        <div class="sec-title">
+          <div class="sec-icon" style="background:#f0f9ff">⚙️</div>
+          训练基础设施
+        </div>
+
+        <p>
+          OneRec 的训练规模和工程复杂度与主流 LLM 预训练相当，
+          需要在分布式计算、内存优化、数据流水线等多个维度进行深度定制。
+        </p>
+
+        <h3 id="train-infra">硬件规模与计算配置</h3>
+
+        <div class="metric-grid">
+          <div class="metric-card">
+            <div class="metric-value">90</div>
+            <div class="metric-label">训练服务器总数</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value">18B</div>
+            <div class="metric-label">每日训练样本数</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value">540B</div>
+            <div class="metric-label">每日训练 token 数</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value">~100B</div>
+            <div class="metric-label">收敛所需总样本数</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value">23.7%</div>
+            <div class="metric-label">训练 MFU（5.2× 提升）</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value">5.6天</div>
+            <div class="metric-label">从零到收敛时间估算</div>
+          </div>
+        </div>
+
+        <h3 id="train-model-config">模型配置与规模梯度</h3>
+
+        <p>
+          论文设计了四档模型配置，用于 Scaling Law 研究和线上实验：
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>模型</th>
+                <th>激活参数</th>
+                <th>架构类型</th>
+                <th>专家数 $N_e$</th>
+                <th>激活专家数 $K$</th>
+                <th>用途</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>OneRec-S</td>
+                <td>0.015B</td>
+                <td>稠密 Transformer</td>
+                <td>—</td>
+                <td>—</td>
+                <td>Scaling 对照基线</td>
+              </tr>
+              <tr>
+                <td>OneRec-M</td>
+                <td>0.121B</td>
+                <td>稠密 Transformer</td>
+                <td>—</td>
+                <td>—</td>
+                <td>中型对照</td>
+              </tr>
+              <tr>
+                <td>OneRec-L</td>
+                <td>0.935B</td>
+                <td>MoE Transformer</td>
+                <td>24</td>
+                <td>2</td>
+                <td>MoE 验证</td>
+              </tr>
+              <tr>
+                <td><strong>OneRec-XL</strong></td>
+                <td><strong>2.633B</strong></td>
+                <td>MoE Transformer</td>
+                <td>24</td>
+                <td>4</td>
+                <td><strong>线上主力模型</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="train-efficiency">训练效率优化</h3>
+
+        <p>
+          为达到 23.7% 的 MFU（较工程初始状态提升 5.2 倍），OneRec 团队进行了以下优化：
+        </p>
+
+        <h4>张量并行与流水线并行</h4>
+
+        <div class="callout callout-blue">
+          <div class="callout-title">并行策略</div>
+          <ul>
+            <li><strong>张量并行（Tensor Parallelism）：</strong>将 MoE 的专家 FFN 按列/行切分到多 GPU，
+              减少单卡内存压力，适用于专家参数量大的情况。</li>
+            <li><strong>数据并行（Data Parallelism）：</strong>多节点同步梯度，
+              利用 RDMA 高速互联（最大带宽 200Gb）减少 AllReduce 通信瓶颈。</li>
+            <li><strong>序列并行（Sequence Parallelism）：</strong>
+              对长序列（用户行为 2000 条 + Decoder 生成序列）进行序列维度切分，
+              突破单卡的序列长度上限。</li>
+          </ul>
+        </div>
+
+        <h4>混合精度训练</h4>
+
+        <p>
+          使用 BF16 混合精度训练，主参数使用 FP32 状态，
+          前向/反向计算使用 BF16，在保持数值稳定的同时将显存占用和计算量减半。
+          MoE 的专家路由 Router 保持 FP32 精度以避免数值溢出。
+        </p>
+
+        <h4>Gradient Checkpointing</h4>
+
+        <p>
+          对 Encoder 的长序列路径（Lifelong QFormer，输入序列长度 2000）
+          使用 Activation Checkpointing，以计算换内存，
+          使长序列建模在有限 GPU 内存下可行。
+        </p>
+
+        <h4>在线数据流水线</h4>
+
+        <div class="callout callout-purple">
+          <div class="callout-title">实时数据更新</div>
+          OneRec 每日训练 18B 新样本（对应用户当天的实际观看 Session），
+          实现"模型每天见到当天发生的用户行为"，
+          保持推荐策略与用户兴趣漂移的同步。
+          数据流水线需要支持：
+          <ul style="margin-top:6px">
+            <li>用户新行为的实时 Tokenization（将新行为的视频 ID 映射到最新 Semantic ID）</li>
+            <li>用户画像的增量更新（Lifelong 聚类中心的在线更新）</li>
+            <li>训练数据与 Reward Label 的对齐（P-Score 来自 RM，需要离线计算后对齐）</li>
+          </ul>
+        </div>
+
+      </section>
+
+      <!-- ══ 9. 在线推理 Serving ═══════════════════ -->
+      <section id="serving">
+        <div class="sec-title">
+          <div class="sec-icon" style="background:#fdf4ff">🚀</div>
+          在线推理 Serving
+        </div>
+
+        <p>
+          将一个 2.633B 参数的 MoE 生成模型部署到每秒百万 QPS 量级的工业推荐系统，
+          是 OneRec 最具挑战的工程模块之一。
+        </p>
+
+        <h3>硬件配置</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>组件</th>
+                <th>配置</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>推理 GPU</td>
+                <td>NVIDIA L20（每台 4 卡）</td>
+                <td>推理专用卡，显存/计算比高</td>
+              </tr>
+              <tr>
+                <td>CPU</td>
+                <td>每台 2 颗</td>
+                <td>负责预处理、用户特征拼接</td>
+              </tr>
+              <tr>
+                <td>GPU-CPU 互联</td>
+                <td>PCIe</td>
+                <td>Host-Device 数据传输</td>
+              </tr>
+              <tr>
+                <td>机器间网络</td>
+                <td>200Gb RDMA / RoCE</td>
+                <td>Embedding 服务与推理服务间高速通信</td>
+              </tr>
+              <tr>
+                <td>最大机间带宽</td>
+                <td>800Gb</td>
+                <td>AllReduce、KV Cache 同步</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>TensorRT 计算图优化</h3>
+
+        <p>
+          线上模型使用 TensorRT 编译和优化，主要优化手段包括：
+        </p>
+
+        <ul>
+          <li>
+            <strong>算子融合（Operator Fusion）：</strong>
+            将 LayerNorm + Linear、Softmax + TopK 等连续算子融合为单个 CUDA Kernel，
+            减少显存读写次数。
+          </li>
+          <li>
+            <strong>MoE 专家并行执行：</strong>
+            通过自定义 CUDA Plugin 实现 Expert 的并行分发（Token 按路由结果派发到对应 Expert），
+            避免了 CPU 端的序列化控制流。
+          </li>
+          <li>
+            <strong>Cross-Attention 优化：</strong>
+            Encoder 的 KV（共 405 个 token）在 Decoder 每步 Cross-Attention 中重复使用，
+            通过 KV Cache 避免重复计算，并使用 Flash-Attention 降低显存和计算量。
+          </li>
+          <li>
+            <strong>INT8/FP8 量化（部分层）：</strong>
+            对计算密集的 FFN 层应用 INT8 量化，在可接受的精度损失下将吞吐提升约 1.5×。
+          </li>
+        </ul>
+
+        <div class="metric-grid">
+          <div class="metric-card">
+            <div class="metric-value">5×</div>
+            <div class="metric-label">TensorRT 优化吞吐提升</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value">28.8%</div>
+            <div class="metric-label">推理 MFU</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value">2.6×</div>
+            <div class="metric-label">较工程初始推理效率提升</div>
+          </div>
+        </div>
+
+        <h3>Batching 与 MPS</h3>
+
+        <div class="callout callout-blue">
+          <div class="callout-title">Dynamic Batching + MPS</div>
+          <ul>
+            <li>
+              <strong>Dynamic Batching：</strong>
+              对推理请求进行动态批处理，将多个用户的请求合并为一个 Batch，
+              提高 GPU 利用率，降低平均请求延迟。
+              Batch Size 根据当前请求量自适应调整。
+            </li>
+            <li>
+              <strong>NVIDIA MPS（Multi-Process Service）：</strong>
+              允许多个推理进程共享同一块 GPU 的 CUDA Context，
+              减少 GPU 上下文切换开销，进一步提升吞吐。
+              结合 Dynamic Batching，使推理吞吐再提升约 1.3×。
+            </li>
+          </ul>
+        </div>
+
+        <h3>UniPredict 推理平台</h3>
+
+        <p>
+          OneRec 部署在快手自研的 <strong>UniPredict</strong> 预测平台上，
+          该平台统一管理推荐系统中的模型推理服务，支持：
+        </p>
+
+        <ul>
+          <li>模型版本管理与灰度发布（支持 OneRec 与传统系统的流量切分）</li>
+          <li>Embedding 服务与生成服务的解耦部署（降低 Encoder 特征更新延迟）</li>
+          <li>推理延迟 SLA 监控与自动扩缩容</li>
+          <li>A/B 实验框架集成（论文中的 5% 流量实验组精确控制）</li>
+        </ul>
+
+      </section>
+
+      <!-- ══ 10. 实验与结果 ════════════════════════ -->
+      <section id="experiments">
+        <div class="sec-title">
+          <div class="sec-icon" style="background:#f0fdf4">📊</div>
+          实验与结果
+        </div>
+
+        <h3 id="exp-scaling">Scaling Law 分析</h3>
+
+        <p>
+          OneRec 在四档模型规模上进行了系统性的 Scaling Law 研究，
+          验证了推荐系统中生成模型的参数效率规律。
+        </p>
+
+        <div class="callout callout-blue">
+          <div class="callout-title">主要 Scaling Law 发现</div>
+          <ul>
+            <li>
+              <strong>模型规模 vs 推荐质量：</strong>
+              在相同训练计算量下，OneRec 的推荐指标（NDCG、Hit Rate 等）
+              随激活参数量的增加呈幂律提升，与 LLM 的 Scaling Law 形式类似。
+            </li>
+            <li>
+              <strong>MoE 的 Scaling 优势：</strong>
+              相同激活参数量下，MoE 架构（OneRec-L/XL）显著优于稠密架构（OneRec-S/M），
+              说明稀疏专家机制在推荐场景下有效提升了参数利用效率。
+            </li>
+            <li>
+              <strong>训练数据量 vs 模型大小的最优配比：</strong>
+              论文发现训练 ~100B 样本后模型趋于收敛，
+              在此规模下 XLarge-MoE 的性能增益最为显著。
+            </li>
+          </ul>
+        </div>
+
+        <h3 id="exp-ablation">消融实验</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>消融配置</th>
+                <th>相对于完整 OneRec 的变化</th>
+                <th>推荐质量影响</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>去掉 Lifelong 路径</td>
+                <td>移除长期兴趣序列（2000 token）</td>
+                <td>显著下降（-X%），表明长期兴趣建模不可替代</td>
+              </tr>
+              <tr>
+                <td>去掉协同信号（$\mathcal{L}_{\text{i2i}}$）</td>
+                <td>Tokenizer 仅用内容特征</td>
+                <td>下降，尤其对长尾和冷启动视频影响大</td>
+              </tr>
+              <tr>
+                <td>GRPO → ECPO</td>
+                <td>改用标准 GRPO</td>
+                <td>非法生成率上升，最终 Session 质量下降</td>
+              </tr>
+              <tr>
+                <td>去掉 Format Reward</td>
+                <td>仅用 P-Score + Industrial Reward</td>
+                <td>非法生成率显著上升，影响可用性</td>
+              </tr>
+              <tr>
+                <td>去掉 RM Selection</td>
+                <td>纯生成模型，无 Reward 精选</td>
+                <td>App Stay Time 下降约 0.5%（仍优于传统系统）</td>
+              </tr>
+              <tr>
+                <td>稠密模型（无 MoE）</td>
+                <td>相同激活参数量的稠密 Transformer</td>
+                <td>推理成本相同但推荐质量下降，参数效率较低</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="exp-abtest">在线 A/B 实验（主场景）</h3>
+
+        <p>
+          在快手主 Feed 和快手极速版两个<strong>日活亿级最高流量场景</strong>进行了 A/B 实验，
+          实验组使用 5% 流量，观测周期为一周。
+          以 <strong>App Stay Time</strong>（用户在 App 内的总停留时长，反映总体参与度）
+          和 <strong>LT7</strong>（7 天 Lifetime，反映用户留存）为主指标。
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>场景</th>
+                <th>在线指标</th>
+                <th>OneRec（纯生成）</th>
+                <th>OneRec + RM Selection</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td rowspan="8"><strong>快手主 App</strong></td>
+                <td>App Stay Time</td>
+                <td>+0.01%</td>
+                <td><strong>+0.54%</strong></td>
+              </tr>
+              <tr>
+                <td>Watch Time</td>
+                <td>+0.07%</td>
+                <td><strong>+1.98%</strong></td>
+              </tr>
+              <tr>
+                <td>Video View</td>
+                <td>+1.98%</td>
+                <td><strong>+2.52%</strong></td>
+              </tr>
+              <tr>
+                <td>Like</td>
+                <td>-2.00%</td>
+                <td><strong>+2.43%</strong></td>
+              </tr>
+              <tr>
+                <td>Follow</td>
+                <td>-2.88%</td>
+                <td><strong>+3.24%</strong></td>
+              </tr>
+              <tr>
+                <td>Comment</td>
+                <td>-1.56%</td>
+                <td><strong>+5.27%</strong></td>
+              </tr>
+              <tr>
+                <td>Collect</td>
+                <td>-0.61%</td>
+                <td><strong>+2.93%</strong></td>
+              </tr>
+              <tr>
+                <td>Forward</td>
+                <td>+0.27%</td>
+                <td><strong>+5.90%</strong></td>
+              </tr>
+              <tr>
+                <td rowspan="8"><strong>快手极速版</strong></td>
+                <td>App Stay Time</td>
+                <td>+0.06%</td>
+                <td><strong>+1.24%</strong></td>
+              </tr>
+              <tr>
+                <td>Watch Time</td>
+                <td>+0.05%</td>
+                <td><strong>+3.28%</strong></td>
+              </tr>
+              <tr>
+                <td>Video View</td>
+                <td>+2.40%</td>
+                <td><strong>+3.39%</strong></td>
+              </tr>
+              <tr>
+                <td>Like</td>
+                <td>-2.64%</td>
+                <td><strong>+1.49%</strong></td>
+              </tr>
+              <tr>
+                <td>Follow</td>
+                <td>-2.75%</td>
+                <td><strong>+2.28%</strong></td>
+              </tr>
+              <tr>
+                <td>Comment</td>
+                <td>-2.23%</td>
+                <td><strong>+3.20%</strong></td>
+              </tr>
+              <tr>
+                <td>Collect</td>
+                <td>-1.76%</td>
+                <td><strong>+1.91%</strong></td>
+              </tr>
+              <tr>
+                <td>Forward</td>
+                <td>-1.86%</td>
+                <td><strong>+3.48%</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-green">
+          <div class="callout-title">关键洞察：Seesaw Effect 消除</div>
+          <p>
+            传统多任务推荐系统中，提升观看时长往往以牺牲互动指标（点赞、评论、关注）为代价，
+            这就是著名的 <strong>Seesaw Effect</strong>。
+          </p>
+          <p>
+            OneRec + RM Selection 在 <strong>所有指标上同时提升</strong>，
+            完全消除了 Seesaw Effect。这是因为 RL 的 P-Score Reward 综合了所有交互行为的加权分，
+            模型被迫学习一个真正符合用户全面满意度的推荐策略，
+            而非在各个子目标之间做取舍。
+          </p>
+          <p style="margin-top:8px">
+            <strong>统计显著性说明：</strong>
+            在快手量级下，App Stay Time +0.1%、LT7 +0.01% 即为统计显著。
+            OneRec + RM Selection 的提升幅度远超这一门槛。
+          </p>
+        </div>
+
+        <h3 id="exp-local">本地生活服务场景</h3>
+
+        <p>
+          除短视频推荐外，OneRec 还在快手本地生活服务（Local Life Service）场景进行了部署实验，
+          验证架构的跨场景泛化能力：
+        </p>
+
+        <div class="metric-grid">
+          <div class="metric-card">
+            <div class="metric-value" style="font-size:20px">+21.01%</div>
+            <div class="metric-label">GMV（交易总额）</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value" style="font-size:20px">+17.89%</div>
+            <div class="metric-label">订单量</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value" style="font-size:20px">+18.58%</div>
+            <div class="metric-label">买家数</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value" style="font-size:20px">+23.02%</div>
+            <div class="metric-label">新买家获取数</div>
+          </div>
+        </div>
+
+        <div class="callout callout-purple">
+          <div class="callout-title">本地生活部署结论</div>
+          本地生活服务场景的业务逻辑与短视频完全不同（商业转化 vs 内容消费），
+          OneRec 无需任何结构性修改，仅通过调整 Industrial Reward（加入 GMV 相关奖励）
+          即实现了 GMV +21%、新买家 +23% 的显著增长。
+          该场景目前已接管 <strong>100% 的 QPS</strong>，证明了 OneRec 架构的强大跨场景泛化能力。
+        </div>
+
+      </section>
+
+      <!-- ══ 11. 总结与展望 ════════════════════════ -->
+      <section id="conclusion">
+        <div class="sec-title">
+          <div class="sec-icon" style="background:#eff6ff">🔭</div>
+          总结与展望
+        </div>
+
+        <h3>核心成就总结</h3>
+
+        <p>
+          OneRec 是工业推荐系统领域的一个里程碑式工作，
+          其意义不仅在于技术指标的提升，更在于它证明了一条完全不同的系统设计路径是可行的：
+        </p>
+
+        <div class="contrib-grid">
+          <div class="contrib-card">
+            <div class="contrib-card-num">①</div>
+            <div class="contrib-card-title">系统设计范式的转变</div>
+            <div class="contrib-card-desc">
+              用单一生成模型替代复杂的多阶段瀑布流系统，
+              消除了跨阶段目标不一致和 Seesaw Effect 这两个困扰工业推荐系统十年的核心难题。
+            </div>
+          </div>
+          <div class="contrib-card">
+            <div class="contrib-card-num">②</div>
+            <div class="contrib-card-title">LLM 时代技术的成功迁移</div>
+            <div class="contrib-card-desc">
+              Scaling Law、MoE、RLHF/GRPO、多模态基础模型等 LLM 核心技术，
+              在 OneRec 中得到了系统性的验证和工业级落地，
+              为推荐系统与 LLM 技术的深度融合开辟了可复制的路径。
+            </div>
+          </div>
+          <div class="contrib-card">
+            <div class="contrib-card-num">③</div>
+            <div class="contrib-card-title">极致的工程效率</div>
+            <div class="contrib-card-desc">
+              在推荐效果超越传统系统的同时，将系统 OPEX 压缩到原来的 10.6%，
+              说明"大模型推荐"并不必然意味着更高成本，正确的工程设计可以两全其美。
+            </div>
+          </div>
+        </div>
+
+        <h3>当前局限性</h3>
+
+        <div class="callout callout-amber">
+          <div class="callout-title">论文承认的主要局限</div>
+          <ul>
+            <li>
+              <strong>冷启动物品覆盖：</strong>
+              虽然 RQ-Kmeans 通过语义聚类具备一定的冷启动泛化能力，
+              但对于刚上传的全新视频（无任何交互历史），
+              协同信号部分的 Semantic ID 质量仍有待提升。
+            </li>
+            <li>
+              <strong>实时性约束：</strong>
+              Encoder 的长期兴趣路径（Lifelong K-Means 聚类）是离线预计算的，
+              无法实时响应用户兴趣的快速变化（如突发事件引发的兴趣爆发）。
+            </li>
+            <li>
+              <strong>生成多样性控制：</strong>
+              Session 级自回归生成在保证相关性的同时，
+              有时会陷入局部最优（连续生成过于相似的视频），
+              需要额外的 Diversity Reward 或 Temperature 控制策略。
+            </li>
+          </ul>
+        </div>
+
+        <h3>未来方向</h3>
+
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">→</div>
+            <div class="step-body">
+              <div class="step-title">多模态推荐 Tokenizer</div>
+              <div class="step-desc">
+                将视频的音频、文字（OCR）等模态更深度融入 Tokenizer，
+                使 Semantic ID 更全面地编码视频内容。
+              </div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">→</div>
+            <div class="step-body">
+              <div class="step-title">更大规模的 Scaling</div>
+              <div class="step-desc">
+                2.633B 激活参数的 MoE 模型仍处于相对保守的规模，
+                探索更大参数量（如 10B+ 激活）对推荐质量的进一步 Scaling 效益。
+              </div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">→</div>
+            <div class="step-body">
+              <div class="step-title">对话式/交互式推荐</div>
+              <div class="step-desc">
+                基于 OneRec 的统一生成框架，扩展到用户可以用自然语言表达偏好
+                （"给我推荐今晚适合全家一起看的视频"）的交互式推荐场景，
+                进一步发挥生成模型的语言理解能力。
+              </div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">→</div>
+            <div class="step-body">
+              <div class="step-title">跨业务线统一推荐大模型</div>
+              <div class="step-desc">
+                目前短视频和本地生活分别部署了独立的 OneRec 实例，
+                未来探索单一超大规模生成模型覆盖快手全业务线推荐场景，
+                在多个任务之间实现知识迁移。
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-blue" style="margin-top:24px">
+          <div class="callout-title">论文最后的观点</div>
+          <em>
+            "OneRec demonstrates that a unified generative model can not only match but exceed
+            the performance of complex multi-stage recommendation systems, while dramatically
+            reducing operational costs. We believe this work opens a new paradigm for industrial
+            recommendation systems in the LLM era."
+          </em>
+          <p style="font-size:13px;margin-top:10px;color:var(--muted)">
+            ——快手 OneRec 团队
+          </p>
+        </div>
+
+      </section>
+
+    </div><!-- /.content -->
+  </div><!-- /.layout -->
+</div><!-- /.page -->
+
+</body>
+</html>
+
+
+    </div><!-- /.content -->
+  </div><!-- /.layout -->
+</div><!-- /.page -->
+
+</body>
+</html>

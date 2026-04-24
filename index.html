@@ -181,10 +181,10 @@
     <h1>学习笔记 &amp; 论文解读</h1>
     <p>推荐 · 搜索 · LLM · NLP · 工业落地</p>
     <div class="stats">
-      <div class="stat-pill">论文 <strong>17</strong> 篇</div>
-      <div class="stat-pill">学习笔记 <strong>11</strong> 篇</div>
+      <div class="stat-pill">论文 <strong>20</strong> 篇</div>
+      <div class="stat-pill">学习笔记 <strong>13</strong> 篇</div>
       <div class="stat-pill">Semantic ID <strong>12</strong></div>
-      <div class="stat-pill">生成式推荐 <strong>7</strong></div>
+      <div class="stat-pill">生成式推荐 <strong>9</strong></div>
       <div class="stat-pill">排序 Scaling <strong>6</strong></div>
     </div>
   </div>
@@ -193,11 +193,11 @@
   <div class="tabs-wrap">
     <div class="tabs">
       <button class="tab-btn active" onclick="switchTab('all',this)">
-        全部 <span class="tab-count">24</span>
+        全部 <span class="tab-count">29</span>
       </button>
       <button class="tab-btn" onclick="switchTab('notes',this)">
         <span class="tab-dot" style="background:#0891b2"></span>
-        📝 学习笔记 <span class="tab-count">11</span>
+        📝 学习笔记 <span class="tab-count">14</span>
       </button>
       <button class="tab-btn" onclick="switchTab('sid',this)">
         <span class="tab-dot" style="background:#c2410c"></span>
@@ -205,7 +205,7 @@
       </button>
       <button class="tab-btn" onclick="switchTab('gen',this)">
         <span class="tab-dot" style="background:#1d4ed8"></span>
-        生成式推荐与检索 <span class="tab-count">7</span>
+        生成式推荐与检索 <span class="tab-count">9</span>
       </button>
       <button class="tab-btn" onclick="switchTab('rank',this)">
         <span class="tab-dot" style="background:#065f46"></span>
@@ -237,6 +237,38 @@
   <!-- 全部 -->
   <div id="panel-all" class="panel visible">
     <div class="paper-list">
+
+      <!-- RoleGen 2025 快手+北航 -->
+      <a class="paper-card" href="rolegen.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">Under Review · arXiv 待发</span>
+            <span class="tag tc-gen">生成式推荐 · 功能角色推理</span>
+            <span class="tag tc-llm">LLM 增强 · 反事实推理</span>
+            <span class="tag tc-indus">快手+北航 · 订单 +7.3%</span>
+          </div>
+          <div class="card-title">RoleGen：唤醒沉默用户，用功能角色推理 + 反事实推断打破自我强化循环</div>
+          <div class="card-subtitle">Awakening Dormant Users: Generative Recommendation with Counterfactual Functional Role Reasoning · 快手+北航</div>
+          <div class="card-summary">沉默用户（30天无购买，但占DAU 40%+）数据极稀疏，传统方法只建模单步固有价值，忽视物品的工具性效应（某些物品虽不转化，但能触发意图转变推动后续购买）。RoleGen 提出功能角色轨迹（Functional Role Trajectory）抽象用户意图演化，LLM-based Reasoner 通过 FR-CoT 推理 + 反事实干预（do(r'=替代角色)）探索多样化转化路径，Generative Backbone 将语义预测 grounded 到协同信号，闭环 Reasoning→Execution→Feedback→Reflection。快手 700M MAU：离线 Recall@1 +6.2%，在线订单 +7.3%，缓解马太效应（长尾物品曝光 Ratio 达 2.2）。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- Agentic 训练笔记 -->
+      <a class="paper-card" href="topics/notes-agentic-training.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#e0f7fa;color:#006064;">📝 学习笔记</span>
+            <span class="tag ty">2025 技术前沿</span>
+            <span class="tag tc-llm">GLM-5 / MiniMax M2 / Kimi K2.5</span>
+          </div>
+          <div class="card-title">Agentic 能力从哪里来？拆解基座大模型的训练过程</div>
+          <div class="card-subtitle">以 GLM-5 为主线，系统梳理 Pre-Training → Mid-Training → SFT → 多阶段 RL → On-Policy Cross-Stage 蒸馏完整链路</div>
+          <div class="card-summary">完整还原现代基座大模型的训练流水线：28.5T tokens 预训练数据配比；Mid-Training 逐步扩展至 200K 上下文；SFT 三种 thinking 模式（Interleaved/Preserved/Turn-level）；Reasoning RL + Agentic RL（SWE/Search/Terminal）+ General RL 混合奖励；On-Policy Cross-Stage Distillation 防止灾难性遗忘；Agentic 数据合成六步流水线；训推不一致（IcePop）、异步框架 off-policy 问题；Kimi K2.5 Agent Swarm（可训练 orchestrator + 冻结 subagents，延迟降低 4.5×）。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
 
       <!-- DIET 2026 快手+中科大 -->
       <a class="paper-card" href="papers/diet.html">
@@ -298,6 +330,22 @@
           <div class="card-title">LiGR：用 7 个特征超越数百特征，LinkedIn 生成式排序的工业实践</div>
           <div class="card-subtitle">From Features to Transformers: Redefining Ranking for Scalable Impact · Fedor Borisyuk et al. · LinkedIn · KDD 2025</div>
           <div class="card-summary">LiGR 将 HSTU 风格生成式推荐引入 LinkedIn Feed 排序，7 个特征超越数百特征的 DLRM 基线；Gated skip-connection 解决大模型训练稳定性；Setwise Attention 替代规则多样性；SID concat pooling 将参数量从 5.4B→1.3B；生产 A/B：DAU +0.27%，Feed 时长 +0.28%。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- TaoSR1 2025 Alibaba -->
+      <a class="paper-card" href="papers/taosr1.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">arXiv 2508.12365</span>
+            <span class="tag tc-sid">电商相关性</span>
+            <span class="tag tc-indus">KDD 2026 · 淘宝</span>
+          </div>
+          <div class="card-title">TaoSR1：电商搜索相关性的 Thinking 模型</div>
+          <div class="card-subtitle">TaoSR1: The Thinking Model for E-commerce Relevance Search · Taobao &amp; Tmall Group, Alibaba</div>
+          <div class="card-summary">三阶段优化框架：RAG-CoT SFT（先答后思规避错误累积）→ Pass@N DPO（可解决样本自纠正 + 困难样本 DeepSeek-R1 Oracle 引导）→ 难度感知 GRPO（标签均衡 + 有效难度范围采样）。CumPT 单参数分层部署，彻底消除传统 4 超参敏感性。淘宝 A/B：Macro F1 +4.9pt，平替 Query GSB +34.43%，IPV +2.43%。</div>
         </div>
         <div class="card-arrow">→</div>
       </a>
@@ -462,6 +510,23 @@
           <div class="card-title">OneRec：用统一生成模型替代多级漏斗，快手主场景落地</div>
           <div class="card-subtitle">Unifying Retrieve and Rank with Generative Recommender and Preference Alignment · Deng et al. · Kuaishou</div>
           <div class="card-summary">首个工业级单阶段生成推荐系统，用 Encoder-Decoder + MoE 替代三级漏斗（召回→粗排→精排）。创新点：① Balanced K-Means 残差量化解决 hourglass 现象；② Session-wise 生成（一次输出整批视频）替代逐 item 预测；③ Iterative Preference Alignment (IPA) 结合 DPO 从奖励模型自动构造偏好对。快手主页 A/B：总观看时长 +1.68%，人均观看时长 +6.56%。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- OneRec Technical Report 2025.06 -->
+      <a class="paper-card" href="papers/onerec-tech-report.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025.06</span>
+            <span class="tag tv">arXiv 2506.13695</span>
+            <span class="tag tc-gen">工程化演进</span>
+            <span class="tag tc-sid">Semantic ID</span>
+            <span class="tag tc-indus">OPEX 10.6%</span>
+          </div>
+          <div class="card-title">OneRec Technical Report：补齐工程体系、RL 与成本收益</div>
+          <div class="card-subtitle">OneRec Technical Report · Kuaishou</div>
+          <div class="card-summary">2506 技术报告把 2502 原论文中的工程细节完整展开：多模态 tokenizer（caption / OCR / ASR / 图像帧 + QFormer + RQ-Kmeans）、静态/短期/正反馈/终身四路 Encoder、P-Score/Format/Industrial Reward、ECPO 强化学习，以及 25% QPS 承接和 OPEX 仅为传统 pipeline 10.6% 的工业落地结果。</div>
         </div>
         <div class="card-arrow">→</div>
       </a>
@@ -824,6 +889,23 @@
     </div>
     <div class="paper-list">
 
+      <!-- RoleGen 2025 -->
+      <a class="paper-card" href="rolegen.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">Under Review</span>
+            <span class="tag tc-gen">功能角色推理</span>
+            <span class="tag tc-llm">LLM 增强 · 反事实推理</span>
+            <span class="tag tc-indus">快手+北航 · 订单 +7.3%</span>
+          </div>
+          <div class="card-title">RoleGen：功能角色推理 + 反事实推断唤醒沉默用户</div>
+          <div class="card-subtitle">Awakening Dormant Users · Kuaishou + Beihang University</div>
+          <div class="card-summary">针对沉默用户（30天无购买，占DAU 40%+），提出功能角色轨迹抽象用户意图演化，LLM-based Reasoner 通过 FR-CoT 推理 + 反事实干预探索多样化转化路径，Generative Backbone grounded 到协同信号，闭环训练。快手 Recall@1 +6.2%，订单 +7.3%，长尾曝光 Ratio 达 2.2。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
       <!-- GRID 2025.07 -->
       <a class="paper-card" href="papers/grid.html">
         <div>
@@ -901,6 +983,22 @@
         <div class="card-arrow">→</div>
       </a>
 
+      <!-- OneRec Technical Report 2025.06 -->
+      <a class="paper-card" href="papers/onerec-tech-report.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025.06</span>
+            <span class="tag tv">arXiv 2506.13695</span>
+            <span class="tag tc-gen">工程化演进</span>
+            <span class="tag tc-indus">OPEX 10.6%</span>
+          </div>
+          <div class="card-title">OneRec Technical Report：工程细节、RL 与成本收益全展开</div>
+          <div class="card-subtitle">OneRec Technical Report · Kuaishou</div>
+          <div class="card-summary">补全 OneRec 的工程化全景：多模态 tokenizer、四路 Encoder、Format Reward / Industrial Reward、ECPO 强化学习、训练基础设施与在线 serving 指标。重点信息包括 25% QPS 承接、MFU 与 OPEX 仅为传统 pipeline 10.6%。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
       <!-- LIGER 2024.11 -->
       <a class="paper-card" href="papers/liger.html">
         <div>
@@ -942,6 +1040,21 @@
       <span class="cat-desc">大参数排序模型的 Scaling Law、MoE、稀疏 embedding 替代方案</span>
     </div>
     <div class="paper-list">
+
+      <!-- UniMixer 2026 -->
+      <a class="paper-card" href="papers/unimixer.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2026</span>
+            <span class="tag tv">arXiv 2604.00590 · 快手</span>
+            <span class="tag tc-rank">排序 Scaling · 统一架构</span>
+          </div>
+          <div class="card-title">UniMixer：统一 Attention / TokenMixer / FM 三大 Scaling 架构</div>
+          <div class="card-subtitle">UniMixer: A Unified Architecture for Scaling Laws in Recommendation Systems · Kuaishou Technology</div>
+          <div class="card-summary">通过 TokenMixer 等价参数化（置换矩阵 → Kronecker 分解），将推荐系统三大 Scaling 范式统一到一个理论框架；轻量版 UniMixer-Lite 引入基矩阵组合 + 低秩全局矩阵，参数效率最优，Scaling 指数（0.1419）高于 RankMixer（0.1160）；SiameseNorm 解决深度退化，快手广告在线 CAD +15%。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
 
       <!-- GPSD 2025 -->
       <a class="paper-card" href="papers/gpsd.html">
@@ -1128,6 +1241,36 @@
     </div>
     <div class="paper-list">
 
+      <!-- SID-Coord 论文解读 -->
+      <a class="paper-card" href="papers/sid-coord.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#fff7ed;color:#c2410c;">📄 SIGIR 2026</span>
+            <span class="tag tc-sid">Semantic ID × 排序</span>
+            <span class="tag tc-indus">快手搜索 · 长播率 +0.664%</span>
+          </div>
+          <div class="card-title">SID-Coord：协调语义ID与哈希ID的短视频搜索排序</div>
+          <div class="card-subtitle">多分辨率SID融合 + 流行度感知门控 + 兴趣对齐 · 端到端可训练</div>
+          <div class="card-summary">快手提出的轻量级SID框架，将语义ID作为可训练的结构化标识符，而非静态特征。三大创新：(I) 多分辨率融合捕获粗细粒度语义；(II) 目标感知门控自适应平衡HID记忆与SID泛化；(III) 兴趣对齐建模用户历史相似性。4.5B训练样本的在线A/B：搜索长播率+0.664%，播放时长+0.369%，延迟增加仅+0.005%。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- Diffusion Model 笔记 -->
+      <a class="paper-card" href="topics/notes-diffusion.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#fdf4ff;color:#7c3aed;">🎨 视觉生成</span>
+            <span class="tag ty">2025 技术前沿</span>
+            <span class="tag" style="background:#f0fdf4;color:#166534;">完全新手向</span>
+          </div>
+          <div class="card-title">视觉 Diffusion Model：从零开始完全图解</div>
+          <div class="card-subtitle">DDPM · Stable Diffusion · U-Net · Cross-Attention · CFG · Latent Diffusion · 每个概念都有类比 + 具体例子</div>
+          <div class="card-summary">完全新手向Diffusion模型解读：前向扩散（故意加噪声）→ 逆向去噪（训练AI洗图）→ U-Net架构 → 时间步编码 → Cross-Attention条件注入 → Latent Diffusion算力优化 → Classifier-Free Guidance → 经典模型演进（DDPM / Stable Diffusion / DALL-E 2）→ 应用场景（文生图 / Inpainting）→ 与GAN/VAE对比。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
       <!-- AI Agent 关键技术 -->
       <a class="paper-card" href="topics/notes-agent.html">
         <div>
@@ -1229,6 +1372,21 @@
           <div class="card-title">LLM Tokenizer 方法总结：BPE / WordPiece / Unigram / SentencePiece</div>
           <div class="card-subtitle">从字符到 Token 的完整演化路径，含每种方法的算法细节、对比与工业应用</div>
           <div class="card-summary">覆盖 BPE（GPT 系列）、WordPiece（BERT）、Unigram Language Model（T5/XLNet）、SentencePiece（统一框架）、Byte-level BPE（GPT-2/LLaMA）、tiktoken 等主流方案。每种方法都有具体示例演示词表构建过程，并附 vocab size 选择、多语言处理、OOV 等工程实践经验。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- Agentic 训练笔记 -->
+      <a class="paper-card" href="topics/notes-agentic-training.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#e0f7fa;color:#006064;">📝 学习笔记</span>
+            <span class="tag ty">2025 技术前沿</span>
+            <span class="tag tc-llm">大模型训练</span>
+          </div>
+          <div class="card-title">Agentic 能力从哪里来？拆解基座大模型的训练过程</div>
+          <div class="card-subtitle">以 GLM-5 为主线，系统梳理 Pre-Training → SFT → 多阶段 RL → On-Policy Cross-Stage 蒸馏完整链路</div>
+          <div class="card-summary">完整还原现代基座大模型训练流水线：预训练数据配比与 Mid-Training；SFT 三种 thinking 模式；Reasoning RL + Agentic RL（SWE/Search/Terminal）+ General RL；On-Policy Cross-Stage Distillation 防止灾难性遗忘；Agentic 数据合成六步流水线；训推不一致（IcePop）与异步框架 off-policy 解决方案；Kimi K2.5 Agent Swarm 延迟降低 4.5×。</div>
         </div>
         <div class="card-arrow">→</div>
       </a>

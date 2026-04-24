@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TaoSR1 论文解读 — 电商搜索相关性的 Thinking 模型</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false }
+          ],
+          throwOnError: false
+        });
+      }
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #2563eb; --primary-soft: #eff6ff;
+      --accent: #7c3aed; --accent-soft: rgba(124,58,237,0.06);
+      --shadow: 0 10px 30px rgba(15,23,42,0.08); --radius: 18px; --max: 1120px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: linear-gradient(180deg,#f8fbff 0%,var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      line-height: 1.8;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .page { max-width: var(--max); margin: 0 auto; padding: 32px 20px 80px; }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    .back-link:hover { color: var(--primary); text-decoration: none; }
+    .hero {
+      background: radial-gradient(circle at top right,rgba(37,99,235,0.14),transparent 30%),
+                  radial-gradient(circle at left bottom,rgba(124,58,237,0.10),transparent 24%), var(--card);
+      border: 1px solid rgba(37,99,235,0.08); border-radius: 24px;
+      box-shadow: var(--shadow); padding: 34px 34px 28px; margin-bottom: 22px;
+    }
+    .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--primary-soft); color: var(--primary); font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+    h1 { font-size: 34px; line-height: 1.25; letter-spacing: -0.02em; margin-bottom: 10px; }
+    .subtitle { color: var(--muted); font-size: 16px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-top: 24px; }
+    .meta-card { background: #fbfdff; border: 1px solid #e7eefb; border-radius: 16px; padding: 14px 16px; }
+    .meta-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .meta-value { font-size: 14px; font-weight: 600; word-break: break-word; }
+    .layout { display: grid; grid-template-columns: 260px minmax(0,1fr); gap: 22px; align-items: start; }
+    .toc { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; }
+    .toc h2 { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+    .toc-list { list-style: none; }
+    .toc-list li { margin: 7px 0; }
+    .toc-list a { font-size: 13.5px; color: var(--muted); }
+    .toc-list a:hover { color: var(--primary); text-decoration: none; }
+    .toc-sub { padding-left: 14px; margin-top: 4px; }
+    .toc-sub li { margin: 4px 0; }
+    .toc-sub a { font-size: 12.5px; }
+    .content { display: flex; flex-direction: column; gap: 20px; }
+    .section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 28px 30px; }
+    .section-title { font-size: 22px; font-weight: 800; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 2px solid #f0f4ff; display: flex; align-items: center; gap: 10px; }
+    .section-title .icon { width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+    h3 { font-size: 18px; font-weight: 700; margin: 26px 0 12px; color: #111827; }
+    h4 { font-size: 15px; font-weight: 700; margin: 20px 0 10px; color: #1d4ed8; }
+    p { margin-bottom: 12px; }
+    p:last-child { margin-bottom: 0; }
+    ul, ol { padding-left: 22px; }
+    li { margin-bottom: 8px; }
+    .callout { border-radius: 14px; padding: 14px 18px; margin: 16px 0; font-size: 14.5px; }
+    .callout-blue { background: linear-gradient(180deg,rgba(37,99,235,0.08),rgba(37,99,235,0.04)); border: 1px solid rgba(37,99,235,0.16); }
+    .callout-blue strong { color: #1d4ed8; }
+    .callout-amber { background: #fffbeb; border: 1px solid #fde68a; }
+    .callout-amber strong { color: #92400e; }
+    .callout-green { background: #f0fdf4; border: 1px solid #86efac; }
+    .callout-green strong { color: #166534; }
+    .callout-purple { background: var(--accent-soft); border: 1px solid rgba(124,58,237,0.18); }
+    .callout-purple strong { color: #6d28d9; }
+    .note { background: #f8faff; border: 1px dashed #cbd5e1; border-radius: 12px; padding: 12px 16px; color: #475467; font-size: 13.5px; margin: 12px 0; }
+    .example-box { background: #f0fdf4; border: 1px solid #86efac; border-radius: 14px; padding: 16px 20px; margin: 16px 0; }
+    .example-box .ex-title { font-size: 12px; font-weight: 700; color: #166534; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+    .example-box p { margin-bottom: 8px; font-size: 14px; color: #166534; }
+    .example-box p:last-child { margin-bottom: 0; }
+    blockquote { margin: 16px 0; padding: 14px 18px; border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 0 12px 12px 0; color: #3f3f46; font-size: 14.5px; }
+    .paper-info { background: #fafbff; border-left: 4px solid var(--primary); border-radius: 12px; padding: 14px 16px; margin: 16px 0; color: #334155; font-size: 14px; }
+    .paper-info p { margin: 5px 0; }
+    figure { margin: 22px 0; background: #fbfdff; border: 1px solid #e8edf5; border-radius: 16px; padding: 14px; }
+    figure img { width: 100%; display: block; border-radius: 12px; background: #fff; }
+    figcaption { margin-top: 10px; font-size: 13.5px; color: var(--muted); line-height: 1.6; }
+    .fig-placeholder { padding: 36px 24px; text-align: center; background: #f8faff; border-radius: 12px; color: #94a3b8; font-size: 14px; border: 2px dashed #e2e8f0; line-height: 1.9; }
+    .formula-block { background: #fafbff; border: 1px solid #e8edf5; border-radius: 14px; padding: 16px 20px; margin: 14px 0; overflow-x: auto; }
+    .formula-vars { background: #f0f7ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 12px 16px; margin: 6px 0 16px; font-size: 13.5px; color: #374151; }
+    .formula-vars .var-title { font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+    .formula-vars ul { margin: 0; padding-left: 18px; }
+    .formula-vars li { margin: 5px 0; }
+    .katex-display { overflow-x: auto; overflow-y: hidden; padding: 6px 0; }
+    .table-wrap { overflow-x: auto; margin: 16px 0; }
+    table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 12px; font-size: 13.5px; }
+    thead th { background: #f3f6fb; color: #334155; font-weight: 700; border-bottom: 2px solid var(--line); text-align: left; padding: 12px 14px; }
+    td { padding: 11px 14px; border-bottom: 1px solid #eef2f7; vertical-align: top; }
+    tbody tr:nth-child(even) { background: #fafcff; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; }
+    .badge-green { background: #dcfce7; color: #166534; }
+    .badge-red { background: #fee2e2; color: #991b1b; }
+    .badge-blue { background: #dbeafe; color: #1e40af; }
+    .badge-gray { background: #f3f4f6; color: #374151; }
+    .badge-yellow { background: #fef9c3; color: #854d0e; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+    .mini-card { border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; background: #fff; }
+    .mini-card h4 { margin-top: 0; font-size: 14px; }
+    .step-list { list-style: none; padding: 0; counter-reset: step; }
+    .step { display: flex; gap: 14px; margin-bottom: 16px; align-items: flex-start; }
+    .step-num { width: 28px; height: 28px; border-radius: 50%; background: var(--primary); color: white; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
+    .flow-diagram { border: 1px solid #c7d7f0; border-radius: 14px; padding: 20px; margin: 16px 0; background: #f7faff; }
+    .flow-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+    .flow-box { background: white; border: 1.5px solid #bfdbfe; border-radius: 10px; padding: 8px 14px; font-size: 13px; font-weight: 600; color: #1e40af; }
+    .flow-arrow { color: #93c5fd; font-size: 18px; font-weight: 700; }
+    footer { text-align: center; margin-top: 48px; color: var(--muted); font-size: 14px; padding-top: 24px; border-top: 1px solid var(--line); }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <a class="back-link" href="../index.html">← 返回论文列表</a>
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="eyebrow">⚡ 电商搜索 · LLM + RL · KDD 2026</div>
+    <h1>TaoSR1：电商搜索相关性的 Thinking 模型</h1>
+    <p class="subtitle">TaoSR1: The Thinking Model for E-commerce Relevance Search</p>
+    <div class="meta-grid">
+      <div class="meta-card"><div class="meta-label">作者</div><div class="meta-value">Chenhe Dong et al.</div></div>
+      <div class="meta-card"><div class="meta-label">机构</div><div class="meta-value">Taobao &amp; Tmall Group, Alibaba</div></div>
+      <div class="meta-card"><div class="meta-label">发表</div><div class="meta-value">2025 / KDD 2026</div></div>
+      <div class="meta-card"><div class="meta-label">arXiv</div><div class="meta-value"><a href="https://arxiv.org/abs/2508.12365" target="_blank">2508.12365</a></div></div>
+    </div>
+  </div>
+
+  <!-- LAYOUT -->
+  <div class="layout">
+
+    <!-- TOC -->
+    <aside class="toc">
+      <h2>目录</h2>
+      <ul class="toc-list">
+        <li><a href="#background">1. 背景与动机</a></li>
+        <li><a href="#method">2. 方法详解</a>
+          <ul class="toc-sub">
+            <li><a href="#sft">2.1 SFT + CoT</a></li>
+            <li><a href="#dpo">2.2 Pass@N DPO</a></li>
+            <li><a href="#grpo">2.3 GRPO 难度采样</a></li>
+            <li><a href="#cumpt">2.4 CumPT 分层部署</a></li>
+          </ul>
+        </li>
+        <li><a href="#experiments">3. 实验结果</a></li>
+        <li><a href="#analysis">4. 消融分析</a></li>
+        <li><a href="#insight">5. 个人理解</a></li>
+      </ul>
+    </aside>
+
+    <!-- CONTENT -->
+    <main class="content">
+
+      <!-- ===== 1. 背景与动机 ===== -->
+      <section class="section" id="background">
+        <div class="section-title">
+          <div class="icon" style="background:#eff6ff;">🔍</div>
+          背景与动机
+        </div>
+
+        <p>电商搜索中的 Query-Product 相关性预测是搜索引擎的基础模块：不相关的商品会损害用户体验，降低商家效率。传统方案依赖 BERT 系模型，已能满足 80–90% 的用户需求，但对剩余 10%+ 的<strong>长尾复杂 Query</strong>（如：否定语义、品牌替代、知识型提问等）表现欠佳。</p>
+
+        <h3>BERT 怎么做相关性预测？</h3>
+
+        <p>电商搜索链路：Query → 召回 → 粗排 → <strong>相关性过滤</strong> → 精排 → 展示。相关性模型的任务只有一件事：给一对 (Query, 商品) 打分，判断"这个商品和这个 Query 相不相关"，相关性差的直接过滤掉，不进精排。</p>
+
+        <p>BERT 的做法：把 <code>[CLS] Query [SEP] 商品标题+属性 [SEP]</code> 拼成一条文本，过 BERT encoder，取 <code>[CLS]</code> embedding 接一个线性层输出相关性分数（0~1 的回归，或多分类）。训练数据是人工标注的 <code>(Query, 商品, 相关性等级)</code> 三元组。本质上是一个<strong>文本匹配</strong>任务。</p>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：BERT 擅长什么、不擅长什么</div>
+          <p><strong>擅长（简单语义匹配）</strong>：Query="蓝色运动鞋" vs 商品="耐克蓝色跑步鞋"——词汇高度重叠，BERT 双向注意力能直接对上，打高分，没问题。</p>
+          <p><strong>不擅长（否定语义）</strong>：Query="不粘毛的短袖" vs 商品="纯白棉质短袖（易沾毛）"——"不粘毛"是否定约束，BERT 没有能力推理"易沾毛"和"不粘毛"是语义冲突，往往还是把词汇重叠部分（短袖）当匹配依据打高分。</p>
+          <p><strong>不擅长（品牌替代）</strong>：Query="Miumiu 平替" vs 商品="真正的 Miumiu 包包"——"平替"意味着用户不想要 Miumiu 本身，但 BERT 看到"Miumiu"词汇重叠度极高，往往误判为高度相关。</p>
+          <p><strong>根本原因</strong>：BERT 做的是 token 级别的语义对齐，没有推理能力——它不知道"平替"是"要替代"的意思，也不知道"不粘毛"的"不"否定了后面的属性。</p>
+        </div>
+
+        <div class="callout callout-blue">
+          <strong>核心矛盾：</strong>相关性判断在简单 Query 上是"词汇匹配"，在复杂 Query 上是"语义推理"。BERT 只能做前者，10%+ 的复杂 Query 需要的是后者。LLM 有推理能力，但大多数方案要么还是用判别范式（相当于退化回 BERT 的形式），要么直接蒸馏回 BERT 部署——推理能力又丢了。
+        </div>
+
+        <h3>三大工程挑战</h3>
+        <ul>
+          <li><strong>部署延迟</strong>：CoT 生成更多 token，对每条 Query 要为数百个候选商品打分，实时在线生成计算量极大</li>
+          <li><strong>CoT 错误累积</strong>：中间推理过程越长，早期幻觉/错误越容易传播并污染最终预测</li>
+          <li><strong>判别幻觉（Discriminative Hallucination）</strong>：即便推理链正确，模型仍可能输出错误的最终分类标签</li>
+        </ul>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：什么是「判别幻觉」（Discriminative Hallucination）？</div>
+          <p><strong>背景</strong>：TaoSR1 让 LLM 生成一段推理链（CoT），再输出分类标签。推理链分析得对，但最后输出标签时"头脑短路"——推理和结论不一致，这就是判别幻觉。</p>
+          <p><strong>具体例子</strong>：Query="Miumiu 平替"，商品="MiuMiu 原价皮包 4500元"</p>
+          <p>LLM 的 CoT 推理链：<em>"用户搜索'平替'，说明他们想要风格相似但价格更低的商品，并不是要购买 MiuMiu 本身。这个商品就是 MiuMiu 真品，价格昂贵，不满足平替需求，应为 2-Mismatch。"</em></p>
+          <p>但最终输出的标签却是：<strong>4-Excellent</strong> ← 这就是判别幻觉。推理链分析完全正确，但最后那一步"给出分类标签"时，模型被训练成的"生成模式"把高词汇重叠（MiuMiu）当成了强正信号，覆盖了推理结论。</p>
+          <p><strong>类比推荐场景</strong>：相当于你的精排模型 loss 算对了，但梯度更新方向写反了——局部正确但整体结果错误。判别幻觉是 LLM 做分类任务特有的问题，推荐里不存在，因为推荐的标签是行为数据，模型不会"明知故犯"。</p>
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2508.12365v4/kdd2026.png" alt="Figure 1: TaoSR1 三阶段框架"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+                 <b>Figure 1：TaoSR1 三阶段优化框架</b><br><br>
+                 Stage 1: SFT with CoT（赋予推理能力）<br>
+                 Stage 2: Pass@N DPO（提升生成质量）<br>
+                 Stage 3: Difficulty-based GRPO（减少判别幻觉）
+               </div>`" />
+          <figcaption><strong>Figure 1（论文原图）：</strong>TaoSR1 三阶段优化框架，每个阶段针对一个核心问题：<br><br>
+          <strong>Stage 1 · SFT with CoT（左）</strong>：从 LLM Base（Tbstar-42B 做过通用 SFT）出发，注入电商领域的 CoT 推理能力。用 RAG 检索业务规则合成推理链，采用"先答后思"（Respond-then-Think）范式——模型先输出标签（如 "4-Excellent"），再生成解释性推理链。这样部署时只需要看第一个 token 的概率，CoT 内容不进入线上延迟路径，但通过后续 RL 持续发挥作用。<br><br>
+          <strong>Stage 2 · Pass@N DPO（中）</strong>：Stage 1 之后 Pass@1 准确率仍低于判别基线，但 Pass@5 已超越（说明模型"有能力但不稳定"）。DPO 利用这个信号构造偏好对：能答对的样本自己生成 chosen/rejected；始终答不对的困难样本，用 DeepSeek-R1 提供 chosen，向模型注入外部知识。<br><br>
+          <strong>Stage 3 · Difficulty-based GRPO（右）</strong>：在线强化学习，只对"有对有错"批次做梯度更新（全对梯度为 0，全错无效采样）。关键发现：比调难度阈值 γ 更有效的是先把训练数据标签均衡（各类等量），CV=0 时 Macro F1 比 CV=1.06 时高 3.5 pt。GRPO 阶段结束后，判别幻觉案例比 DPO 阶段减少 30%。</figcaption>
+        </figure>
+      </section>
+
+      <!-- ===== 2. 方法详解 ===== -->
+      <section class="section" id="method">
+        <div class="section-title">
+          <div class="icon" style="background:#f3e8ff;">⚙️</div>
+          方法详解
+        </div>
+
+        <p>TaoSR1 的整体优化框架包含四个阶段，构建在 Tbstar-42B（阿里内部从头预训练的 MoE 电商 LLM，42B 总参数、3.5B 激活参数）之上：</p>
+
+        <div class="flow-diagram">
+          <div class="flow-row">
+            <div class="flow-box">LLM Base<br><small style="font-weight:400;color:#64748b;">Tbstar-42B SFT</small></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box">Stage 1: SFT+CoT<br><small style="font-weight:400;color:#64748b;">RAG 合成推理链</small></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box">Stage 2: DPO<br><small style="font-weight:400;color:#64748b;">Pass@N 偏好对</small></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box">Stage 3: GRPO<br><small style="font-weight:400;color:#64748b;">难度感知在线 RL</small></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box">CumPT 部署<br><small style="font-weight:400;color:#64748b;">单参数分层</small></div>
+          </div>
+        </div>
+
+        <p>任务定义为 4 类相关性分类：<strong>4-Excellent</strong>（极相关）、<strong>3-Related</strong>（相关）、<strong>2-Mismatch</strong>（部分不相关）、<strong>1-Irrelevant</strong>（不相关）。</p>
+
+        <!-- 2.1 SFT -->
+        <h3 id="sft">2.1 SFT 阶段：生成式范式 + CoT 推理</h3>
+
+        <h4>2.1.1 从判别式到生成式</h4>
+        <p>传统 BERT 范式用 MSE 或 Cross-Entropy 对 <code>[CLS]</code> token 表示做分类。TaoSR1 改为生成式 LLM 直接输出标签文本（如 "4-Excellent"），训练目标改为语言模型 loss：</p>
+
+        <div class="formula-block">
+          $$\mathcal{L}_{lm}(\pi) = \mathbb{E}_{(\mathbf{x},\mathbf{y})\sim\mathcal{D}} \left[ -\sum_{t=1}^{|\mathbf{y}|-1} \log \pi\left(\mathbf{y}_{t+1} \mid \mathbf{x}_1,\ldots,y_t\right) \right]$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\mathbf{x}$：输入 token 序列（query + item 特征）</li>
+            <li>$\mathbf{y}$：目标输出序列（标签文本，如 "4-Excellent"）</li>
+            <li>$\pi$：当前模型的生成概率分布</li>
+            <li>$\mathcal{D}$：训练数据集，样本格式为 (query, item, label)</li>
+          </ul>
+        </div>
+
+        <p>在线打分时，取<strong>第一个生成 token 的概率</strong>作为连续评分依据：</p>
+
+        <div class="formula-block">
+          $$\mathbf{P}\left(\mathbf{y}_{1}=\mathbf{c} \mid \mathbf{x}\right) = \left(\mathbf{p}_{1}\right)_{\text{id}(\mathbf{c})} = \frac{\exp\left(\pi(\mathbf{x})_{\text{id}(\mathbf{c})}\right)}{\sum_{j=1}^{4}\exp\left(\pi(\mathbf{x})_{\text{id}(\mathbf{c}_j)}\right)}$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\mathbf{y}_1$：第一个生成 token（"1"/"2"/"3"/"4" 之一）</li>
+            <li>$\mathbf{p}_1 \in \mathbb{R}^4$：第一个 token 在 4 个标签上的 softmax 概率向量</li>
+            <li>$\text{id}(\mathbf{c})$：标签字符对应的词表 index</li>
+            <li>$\left(\mathbf{p}_1\right)_{\text{id}(\mathbf{c})}$：标签 c 对应的概率，可作为下游的连续评分</li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：生成式 vs 判别式的评分方式</div>
+          <p><strong>判别式（BERT）</strong>：取 [CLS] embedding，过线性层得到 4 维 logit [0.1, 0.3, 0.5, 1.2]，对这 4 个值做 softmax 后取 argmax = "4-Excellent"，或加权求和得连续分。</p>
+          <p><strong>生成式（TaoSR1）</strong>：输入 "Query: 运动鞋 Item: 白色Nike慢跑鞋，请判断相关性：" → 模型做一次 forward，得到整个词表（假设 32000 维）的 next-token logit → <strong>只取 "1""2""3""4" 四个字符对应 vocab index 处的 logit 值</strong>（其余几万个 token 全部丢弃）→ 对这 4 个 logit 做 softmax，得到 $\mathbf{p}_1 = [p_1, p_2, p_3, p_4]$，例如 [0.01, 0.02, 0.10, 0.87] → argmax 得标签 "4-Excellent"，或按 Eq.(11) 加权求和得连续分。</p>
+          <p>训练时：把标签 "4" 放在输出序列最前面（"4\nQuery 理解：…"），用标准 LM Loss 训练，模型自然学会在看完 query+item 后第一个 token 给出相关性等级。生成式范式保留了 LLM 原始预训练目标，不会退化为纯判别器。</p>
+        </div>
+
+        <h4>2.1.2 RAG-based CoT 生成</h4>
+        <p>电商相关性判断受复杂业务规则支配，单纯的标签监督无法让模型学到规则逻辑——模型只知道"这道题答案是 3 分"，但不知道"为什么是 3 分"，泛化能力差。TaoSR1 的做法是：先用<strong>强模型（DeepSeek-R1）+ 业务规则</strong>给训练数据配上推理链，再用这份带推理链的数据训练 TaoSR1，让它学会"怎么推理"而不只是"记住答案"。</p>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：RAG-CoT 合成的完整流程</div>
+          <p><strong>原始训练样本</strong>：Query="Mate50" 商品="Mate50 Pro 手机壳" 标签=3-Related</p>
+          <p><strong>Step 1 · 原子规则知识库</strong>：把完整的业务规则文档（可能几百条）拆成一条条细粒度规则，每条带元数据标注。例如：<em>"规则#47：若用户搜索型号 A，商品适配 A 的升级款 B，定义为 3-Related；反之搜索 B 而返回 A，定义为 2-Mismatch。适用：手机/配件，关键词：型号升降级。"</em></p>
+          <p><strong>Step 2 · 动态 RAG 检索</strong>：人工标注时额外标了这条样本的关键因子（如"型号升降级"），用它检索知识库，只取相关的 3~5 条规则，避免把几百条全塞进 prompt。</p>
+          <p><strong>Step 3 · CoT 合成</strong>：把 <code>检索到的规则 + Query + 商品 + 标签</code> 输入 DeepSeek-R1，让它生成推理链。最终训练样本变成：</p>
+          <p style="font-family:monospace;font-size:12.5px;background:#dcfce7;padding:8px 12px;border-radius:6px;line-height:1.8;">
+            输出: "3-Related<br>
+            [CoT] 1.Query理解：用户搜索Mate50，意图是找Mate50相关配件<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2.商品理解：Mate50 Pro 手机壳，适配Pro版<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.品类匹配：均为手机壳，品类相符<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.属性匹配：引用规则#47——Mate50 Pro是Mate50升级版，壳可能不完全适配但语义上相关<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;5.结论：3-Related"
+          </p>
+          <p>这样 TaoSR1 在 SFT 时不只是"背答案"，而是学会了"看到型号升降级问题要引用#47号规则推理"，对新的类似 Query 具备泛化能力。</p>
+        </div>
+
+        <p>CoT 的 5 个结构化步骤：<em>Query Understanding → Product Comprehension → Category Matching → Attribute Matching → Relevance Determination</em></p>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：RAG-CoT 实际推理链</div>
+          <p><strong>Query</strong>: "Mate50 Pro 壳" &nbsp; <strong>商品</strong>: 适配华为 Mate50 的手机壳</p>
+          <p><strong>CoT 推理</strong>：(1) Query 理解：用户要找 Mate50 Pro 专用壳，强调 Pro 版；(2) 商品理解：该商品适配 Mate50（非 Pro）；(3) 品类匹配：同为手机壳，品类相符；(4) 属性匹配：RAG 检索到规则"若商品只适配 Mate50 而非 Mate50 Pro，应标记为 2-Mismatch"；(5) 结论：2-Mismatch。</p>
+          <p>若是反过来——Query "Mate50 壳"，商品 "适配 Mate50 Pro"，规则显示 Pro 是升级版，标记为 3-Related。</p>
+        </div>
+
+        <h4>2.1.3 Respond-then-Think（先答后思）</h4>
+        <p>论文实验了两种范式：</p>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>❌ Think-then-Respond（先思后答）</h4>
+            <p>输出格式：&lt;CoT&gt; → &lt;Label&gt;</p>
+            <p style="color:#dc2626;font-size:13px;">CoT 的错误在前期累积，到最终 label 时已经受到污染。实验表明比判别基线更差。</p>
+          </div>
+          <div class="mini-card">
+            <h4>✅ Respond-then-Think（先答后思）</h4>
+            <p>输出格式：&lt;Label&gt; → &lt;CoT&gt;</p>
+            <p style="color:#16a34a;font-size:13px;">label 在 CoT 之前生成，不受中间推理错误累积影响。部署时只用第一个 token 的概率，CoT 部分仅用于质量提升和后续 RL 训练信号。</p>
+          </div>
+        </div>
+
+        <!-- 2.2 DPO -->
+        <h3 id="dpo">2.2 Pass@N-based DPO：离线偏好优化</h3>
+
+        <p>SFT 之后，单次解码（Pass@1）准确率仍低于判别基线，但 Pass@N 随 N 增大显著提升并最终超越基线，说明模型<em>有能力</em>但不<em>稳定</em>地给出正确答案。DPO 的目标正是把这种潜力稳定化。</p>
+
+        <div class="callout callout-blue">
+          <strong>Pass@N 是什么？</strong>Pass@N 借自代码生成评测（HumanEval）：对同一道题让模型独立采样 N 次，只要 N 次里<strong>至少有一次答对</strong>就算通过。Pass@N 准确率 = 测试集里"至少答对一次"的样本比例。<br><br>
+          类比：<strong>给一个差生 N 次考试机会，取最高分</strong>——机会越多，最高分越容易接近满分，N 越大 Pass@N 越高是数学必然。但这只是评估指标，不是推理策略（不是跑 N 次然后投票选答案）——线上最终还是只跑一次（Pass@1）。<br><br>
+          它衡量的是模型的<strong>能力上限</strong>而非稳定性。Pass@1=67% 但 Pass@5=82% 说明：模型知道怎么做对，但不够稳定，有时候会偏。这个 gap 正是 RL 可以填补的空间——DPO/GRPO 的目标就是把"偶尔能答对"训练成"稳定答对"，最终让 Pass@1 追上 Pass@N。
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>模型</th><th>Accuracy</th></tr></thead>
+            <tbody>
+              <tr><td>LLM Base（判别基线）</td><td>75.01</td></tr>
+              <tr><td>TaoSR1(CoT) Pass@1</td><td>67.38</td></tr>
+              <tr><td>TaoSR1(CoT) Pass@2</td><td>74.26</td></tr>
+              <tr><td>TaoSR1(CoT) Pass@3</td><td>77.68</td></tr>
+              <tr><td>TaoSR1(CoT) Pass@4</td><td>80.18</td></tr>
+              <tr><td>TaoSR1(CoT) Pass@5</td><td>81.73</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>偏好数据集分两类构建：</p>
+
+        <div class="step-list">
+          <div class="step">
+            <div class="step-num">A</div>
+            <div>
+              <strong>可解决样本自纠正（Pass@N > 0）</strong>：从模型自己的多次采样中选一个正确答案作为 $y^+$，一个错误答案作为 $y^-$，构成偏好对集合 $\mathcal{D}_\text{pass}$
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">B</div>
+            <div>
+              <strong>困难样本 Oracle 引导（Pass@N = 0）</strong>：模型始终无法做对的样本，用 DeepSeek-R1 生成正确 chosen 回答，配对模型自己的错误 rejected，构成 $\mathcal{D}'_\text{pass}$（约 50% 的 Pass@N=0 样本被纳入）
+            </div>
+          </div>
+        </div>
+
+        <p>DPO 训练目标：</p>
+        <div class="formula-block">
+          $$\mathcal{L}_\text{DPO}(\pi_\theta;\pi_\text{ref}) = -\mathbb{E}_{(\mathbf{x},\mathbf{y}^+,\mathbf{y}^-)\sim\mathcal{D}_\text{pass}\cup\mathcal{D}'_\text{pass}} \left[ \log\sigma\left(\beta\log\frac{\pi_\theta(\mathbf{y}^+|\mathbf{x})}{\pi_\text{ref}(\mathbf{y}^+|\mathbf{x})} - \beta\log\frac{\pi_\theta(\mathbf{y}^-|\mathbf{x})}{\pi_\text{ref}(\mathbf{y}^-|\mathbf{x})}\right) \right]$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\pi_\theta$：当前训练的策略模型（待优化）</li>
+            <li>$\pi_\text{ref}$：参考模型（CoT-SFT 之后的 checkpoint，保持固定）</li>
+            <li>$\mathbf{y}^+$：chosen 回答（正确）；$\mathbf{y}^-$：rejected 回答（错误）</li>
+            <li>$\beta$：KL 惩罚系数，控制偏离 ref 的幅度</li>
+            <li>$\sigma$：sigmoid 函数</li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：DPO 偏好对构造</div>
+          <p><strong>样本</strong>：Query="短睡衣" Item="睡衣套装睡袍短款女"，真实标签=4-Excellent</p>
+          <p><strong>Pass@5 采样结果</strong>：[4-Excellent, 3-Related, 4-Excellent, 4-Excellent, 2-Mismatch]</p>
+          <p><strong>Pass@N=3 &gt; 0</strong>，属于"可解决样本"：chosen = 其中一条 4-Excellent 生成（推理链正确），rejected = 一条 3-Related 生成（推理链偏差）→ 构成偏好对加入 $\mathcal{D}_\text{pass}$</p>
+          <p><strong>若 Pass@5 全错</strong>（如某知识型 Query），则由 DeepSeek-R1 提供 chosen，模型自己的错误回答作为 rejected → 加入 $\mathcal{D}'_\text{pass}$，引入外部知识</p>
+        </div>
+
+        <!-- 2.3 GRPO -->
+        <h3 id="grpo">2.3 GRPO + 难度感知动态采样</h3>
+
+        <p>DPO 的 Pass@N=0 处理虽然引入了外部知识，但仍偏向离线。GRPO 在更大的采样空间下进行在线强化学习，进一步减少判别幻觉。核心改进：<strong>难度感知动态采样（Difficulty-aware Dynamic Sampling）</strong>——只对准确率在 $(0, \gamma)$ 区间的批次做梯度更新。</p>
+
+        <div class="formula-block">
+          $$\mathcal{L}_\text{GRPO}(\theta) = \mathbb{E}_{(x,y)\sim\mathcal{D},\{o_i\}_{i=1}^G\sim\pi_\theta} \left[ \frac{1}{G}\sum_{i=1}^{G}\frac{1}{|o_i|}\sum_{t=1}^{|o_i|}\min\left(r_{i,t}(\theta)\hat{A}_t, \text{clip}(r_{i,t}(\theta),1-\epsilon,1+\epsilon)\hat{A}_t\right) - \beta D_\text{KL}(\pi_\theta\|\pi_\text{ref}) \right]$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$G$：每个 query-item 对采样的输出数量</li>
+            <li>$o_i$：第 $i$ 条采样输出</li>
+            <li>$r_{i,t}(\theta) = \frac{\pi_\theta(o_{i,t}|x,o_{i,&lt;t})}{\pi_{\theta_\text{old}}(o_{i,t}|x,o_{i,&lt;t})}$：当前策略与旧策略的概率比（importance ratio）</li>
+            <li>$\hat{A}_{i,t} = \frac{R_i - \text{mean}(\{R_i\})}{\text{std}(\{R_i\})}$：归一化优势，$R_i$ 为 0/1 可验证奖励（预测标签是否正确）</li>
+            <li>$\epsilon$：clip 范围（PPO-style 稳定化）</li>
+            <li>$\beta D_\text{KL}$：KL 正则，防止偏离参考策略太远</li>
+          </ul>
+        </div>
+
+        <p>难度感知采样的关键约束：</p>
+        <div class="formula-block">
+          $$\text{s.t.} \quad 0 < |\{o_i \mid \text{is\_equivalent}(y, o_i)\}| < \gamma$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">约束含义</div>
+          <ul>
+            <li>全对的批次（$=G$）：组内优势均为零，梯度消失，丢弃</li>
+            <li>全错的批次（$=0$）：模型缺乏相关知识，继续采样成功率极低，丢弃</li>
+            <li>只保留"有对有错"的批次：在梯度有效的同时专注于困难样本</li>
+          </ul>
+        </div>
+
+        <div class="callout callout-amber">
+          <strong>关键洞见：标签分布平衡 vs 难度阈值 γ</strong><br><br>
+          原始训练集 L4:L3:L2:L1 = 50%:5%:36%:9%，严重不均衡。GRPO 动态采样时，不管怎么调 γ，采出来的 batch 里 L4 还是占大头，变异系数（CV）高，各类别性能差异大，Macro F1 卡在 63~64。<br><br>
+          真正有效的做法：在跑 GRPO <strong>之前</strong>就把训练集各类下采样到最小类别（L3）大小，让 CV=0，然后用宽松的 γ∈[0.01, 0.99]（几乎不过滤）。结果 Macro F1 直接跳到 67.12——比精心调 γ 的最好结果高 3 pt。<br><br>
+          结论：<strong>喂给 GRPO 的数据均衡比算法参数更重要</strong>。用更少的数据（下采样后），但分布更好，反而更优。
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：GRPO 难度感知的实际效果</div>
+          <p><strong>批次 A</strong>（Query="运动鞋" Item="耐克运动鞋"）：G=4 采样，4条都输出 4-Excellent（全对），$\hat{A}=0$ → 丢弃，不更新</p>
+          <p><strong>批次 B</strong>（Query="Miumiu 平替" Item="MiuMiu 原价包包"）：G=4 采样，2条输出 2-Mismatch（正确），2条输出 4-Excellent（幻觉），γ=0.5∈(0,1) → 保留，$\hat{A}$ 有正有负，正确输出得正梯度，幻觉输出受负梯度抑制</p>
+          <p><strong>批次 C</strong>（Pass@4=0 的极难样本）：4条全错 → 丢弃（缺乏知识，继续采样意义不大）</p>
+        </div>
+
+        <!-- 2.4 CumPT -->
+        <h3 id="cumpt">2.4 CumPT：累积概率分层部署</h3>
+
+        <p>线上系统需要把模型的四类概率映射为 Good/Mid/Bad 三档。传统方法用加权求和得连续分，再设两个阈值，共需 4 个超参数且对阈值设置极敏感。TaoSR1 提出 <strong>Cumulative Probability Tiering (CumPT)</strong>，只用一个超参数 $\beta_\text{cum}$：</p>
+
+        <div class="formula-block">
+          $$\text{rel\_tier} = \begin{cases} \text{Good} & \text{if } (\mathbf{p}_1)_{\text{id}(4)} \geq \beta_\text{cum} \\ \text{Good} & \text{elif } (\mathbf{p}_1)_{\text{id}(4)} + (\mathbf{p}_1)_{\text{id}(3)} \geq \beta_\text{cum} \\ \text{Mid} & \text{elif } (\mathbf{p}_1)_{\text{id}(4)} + (\mathbf{p}_1)_{\text{id}(3)} + (\mathbf{p}_1)_{\text{id}(2)} \geq \beta_\text{cum} \\ \text{Bad} & \text{otherwise} \end{cases}$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">直觉解读</div>
+          <ul>
+            <li>从"最相关"类别开始累积概率，一旦超过阈值就归入当前档位</li>
+            <li>$(\mathbf{p}_1)_{\text{id}(4)}$：4-Excellent 的概率；$(\mathbf{p}_1)_{\text{id}(3)}$：3-Related 的概率；以此类推</li>
+            <li>$\beta_\text{cum}$：唯一需要调的超参数，对不同取值（0.3~0.7）性能基本稳定</li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：CumPT 与传统方法对比</div>
+          <p><strong>模型输出概率</strong>：P("4")=0.62, P("3")=0.25, P("2")=0.10, P("1")=0.03，设 $\beta_\text{cum}=0.5$</p>
+          <p><strong>CumPT 判断</strong>：P(4)=0.62 &gt; 0.5 → <strong>Good</strong>（只累积一步就判定）</p>
+          <p><strong>另一个样本</strong>：P("4")=0.38, P("3")=0.30, P("2")=0.20, P("1")=0.12，设 $\beta_\text{cum}=0.5$</p>
+          <p>P(4)=0.38 &lt; 0.5；P(4)+P(3)=0.68 &gt; 0.5 → <strong>Good</strong></p>
+          <p><strong>传统方法</strong>：$\text{score} = 0 \times 0.12 + \alpha_1 \times 0.20 + \alpha_2 \times 0.30 + 1 \times 0.38$，需要分别调 $\alpha_1, \alpha_2, \beta_1, \beta_2$ 四个参数，且对具体组合非常敏感（Table 7 显示 β₂ 从 0.3 到 0.7，Online Macro F1 从 41.42 到 65.26 大幅波动）。CumPT 在所有 β 设置下均稳定在 67.x。</p>
+        </div>
+
+      </section>
+
+      <!-- ===== 3. 实验结果 ===== -->
+      <section class="section" id="experiments">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">📊</div>
+          实验结果
+        </div>
+
+        <h3>测试集设置</h3>
+        <p>~7 万条人工标注的 Query-Item 对，采样自淘宝在线搜索日志（候选打分空间）。为考察推理能力，Query 分布聚焦于 4 类复杂场景：否定语义、平替需求、问答型、知识型。</p>
+
+        <h3>主实验结果（Offline）</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>模型</th><th>C1 F1</th><th>C2 F1</th><th>C3 F1</th><th>C4 F1</th><th>Macro F1</th><th>Accuracy</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>BERT</td><td>65.74</td><td>69.63</td><td>33.87</td><td>76.06</td><td>61.33</td><td>69.36</td></tr>
+              <tr><td>Qwen3-0.6B</td><td>42.02</td><td>68.13</td><td>23.50</td><td>78.14</td><td>52.95</td><td>70.29</td></tr>
+              <tr><td>Qwen3-30BA3B</td><td>65.09</td><td>68.80</td><td>32.47</td><td>81.68</td><td>62.01</td><td>74.42</td></tr>
+              <tr><td>LLM Base（Tbstar-42B SFT）</td><td>65.19</td><td>68.86</td><td>32.91</td><td>81.90</td><td>62.22</td><td>75.04</td></tr>
+              <tr><td>TaoSR1(CoT)</td><td>43.30</td><td>67.54</td><td>19.68</td><td>75.62</td><td>51.54</td><td>68.22</td></tr>
+              <tr><td>TaoSR1(CoT&amp;DPO)</td><td>62.90</td><td>71.20</td><td>37.96</td><td>82.25</td><td>63.58</td><td>75.54</td></tr>
+              <tr style="background:#f0fdf4;"><td><strong>TaoSR1(CoT&amp;DPO&amp;GRPO)</strong></td><td><strong>66.82</strong></td><td><strong>72.15</strong></td><td><strong>39.40</strong></td><td><strong>82.27</strong></td><td><strong>65.16</strong></td><td><strong>75.92</strong></td></tr>
+              <tr><td>TaoSR1(CoT) <sub>postCoT</sub></td><td>57.63</td><td>72.64</td><td>27.91</td><td>81.88</td><td>60.01</td><td>75.12</td></tr>
+              <tr><td>TaoSR1(CoT&amp;DPO) <sub>postCoT</sub></td><td>65.74</td><td>71.95</td><td>39.43</td><td>83.00</td><td>65.03</td><td>76.49</td></tr>
+              <tr style="background:#f0fdf4;font-weight:700;"><td>TaoSR1(CoT&amp;DPO&amp;GRPO) <sub>postCoT</sub></td><td>67.34</td><td>73.15</td><td>44.94</td><td>83.06</td><td>67.12</td><td>76.86</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-green">
+          <strong>关键结论：</strong>最终模型（postCoT 配置下完整三阶段）Macro F1 比 LLM Base 提升 <strong>+4.9 pt</strong>，其中 Class 3（部分相关/难类别）从 32.91 → 44.94 提升最显著（+12 pt）。
+        </div>
+
+        <h3>在线侧人工评测</h3>
+        <p>2000 条 Query，A/B 对比，Top-10 结果三项指标评估：</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Query 类型</th><th>示例</th><th>GSB</th><th>Query Goodrate</th><th>Item Goodrate</th></tr></thead>
+            <tbody>
+              <tr><td>Q&amp;A 型</td><td>什么药能让头发变黑？</td><td>+16.62%</td><td>+6.53pt</td><td>+5.66pt</td></tr>
+              <tr><td>平替型</td><td>Miumiu 平替</td><td><strong>+34.43%</strong></td><td>+13.11pt</td><td>+10.69pt</td></tr>
+              <tr><td>否定型</td><td>不粘毛的短袖</td><td>+10.92%</td><td>+3.80pt</td><td>+3.74pt</td></tr>
+              <tr><td>知识型</td><td>不怕汽车压的油漆</td><td>+18.45%</td><td>+6.85pt</td><td>+4.44pt</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>平替型 Query 改善最显著（GSB +34.43%），因为传统 term-matching 模型会把"Miumiu 平替"的 Query 与真正的 Miumiu 商品高度相关——品牌词完全重合，但语义上应为"平替"而非原价 Miumiu。</p>
+
+        <figure>
+          <img src="https://arxiv.org/html/2508.12365v4/model_radar_chart_custom_labels.jpg" alt="Figure 2: Atomic Capability Evaluation"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+                 <b>Figure 2：原子能力评测雷达图</b><br><br>
+                 TaoSR1 在否定、平替、问答、知识型等各维度的能力对比雷达图，<br>
+                 相比 LLM Base 在各个复杂 Query 类型上均有提升
+               </div>`" />
+          <figcaption><strong>Figure 2（论文原图）：</strong>各模型在 Atomic Capability Evaluation Benchmarks 上的雷达图对比。TaoSR1 在四类复杂 Query 场景下全面超越 LLM Base。</figcaption>
+        </figure>
+
+        <h3>在线 A/B 测试</h3>
+        <p>严格 AB 实验关键指标变化（相比基线）：</p>
+        <ul>
+          <li>UV：<span class="badge badge-green">+0.22%</span></li>
+          <li>IPV（商品详情页浏览）：<span class="badge badge-green">+2.43%</span></li>
+          <li>成交量：<span class="badge badge-green">+0.82%</span></li>
+          <li>GMV：<span class="badge badge-red">−0.29%</span></li>
+        </ul>
+        <p class="note">GMV 小幅下降但在误差范围内，作者解读为：相关性优化带来了更好的用户体验（更多浏览、更多成交），但并不牺牲购买意愿，整体商业价值持平或正向。</p>
+      </section>
+
+      <!-- ===== 4. 消融分析 ===== -->
+      <section class="section" id="analysis">
+        <div class="section-title">
+          <div class="icon" style="background:#fefce8;">🔬</div>
+          消融分析
+        </div>
+
+        <h3>为什么要先 DPO 再 GRPO？</h3>
+        <p>训练顺序：SFT → DPO → GRPO。</p>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>DPO：Off-policy，可外挂 Oracle</h4>
+            <p style="font-size:13px;color:#374151;">离线批量采样一次，生成静态偏好数据集，再用 teacher-forcing 训练，actor 不再实时采样。<strong>关键优势</strong>：Pass@N=0 的全错样本，可以让 DeepSeek-R1 提供正确 chosen，向模型注入它自己从来没能生成的正确推理链。</p>
+          </div>
+          <div class="mini-card">
+            <h4>GRPO：On-policy，规则奖励，无需 RM</h4>
+            <p style="font-size:13px;color:#374151;">每个 step 实时让当前模型采样 G 条，用规则判断对错（分类任务天然可验证），0/1 奖励，不需要神经网络 Reward Model。<strong>局限</strong>：全错批次梯度为 0，学不到任何信息，直接丢弃。</p>
+          </div>
+        </div>
+
+        <div class="callout callout-blue">
+          <strong>为什么不直接跳过 DPO 用 GRPO？</strong>Pass@N=0 的样本占 13.7%，这些样本模型 5 次全错，说明根本不知道正确答案长什么样。GRPO 是自采样，全错批次直接丢弃，什么都学不到。DPO 用 DeepSeek-R1 作为 Oracle，让模型"见到"正确推理链，注入外部知识，提升这部分样本的 Pass@1。DPO 之后再跑 GRPO，原本全错的样本开始有一定正确率，GRPO 才能发挥作用。Table 6 验证：直接 GRPO = 66.84，DPO→GRPO = 67.12。
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>训练路径</th><th>Macro F1</th></tr></thead>
+            <tbody>
+              <tr><td>TaoSR1(CoT) postCoT</td><td>60.01</td></tr>
+              <tr><td>TaoSR1(CoT&amp;GRPO) postCoT</td><td>66.84</td></tr>
+              <tr><td>TaoSR1(CoT&amp;DPO) postCoT</td><td>65.02</td></tr>
+              <tr style="background:#f0fdf4;font-weight:700;"><td>TaoSR1(CoT&amp;DPO&amp;GRPO) postCoT</td><td>67.12</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>GRPO 难度比例的影响</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>难度范围 γ</th><th>L1%</th><th>L2%</th><th>L3%</th><th>L4%</th><th>CV</th><th>Macro F1</th></tr></thead>
+            <tbody>
+              <tr><td>[0.2, 0.8]</td><td>3.6%</td><td>29.1%</td><td>6.4%</td><td>60.9%</td><td>1.06</td><td>63.55</td></tr>
+              <tr><td>[0.2, 0.6]</td><td>4.6%</td><td>29.9%</td><td>8.2%</td><td>57.3%</td><td>0.97</td><td>63.87</td></tr>
+              <tr><td>[0.1, 0.5]</td><td>6.0%</td><td>31.8%</td><td>10.5%</td><td>51.7%</td><td>0.84</td><td>64.25</td></tr>
+              <tr style="background:#f0fdf4;font-weight:700;"><td>[0.01, 0.99] + 均衡标签</td><td>25.0%</td><td>25.0%</td><td>25.0%</td><td>25.0%</td><td>0</td><td>67.12</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>CumPT vs 传统方法对阈值的敏感性</h3>
+        <p>传统方法（固定 $\alpha_1=0.33, \alpha_2=0.66, \beta_1=0.15$，只变 $\beta_2$）：Online Macro F1 从 41.42（$\beta_2=0.3$）到 65.26（$\beta_2=0.6$），波动极大。CumPT（变 $\beta_\text{cum}$ 从 0.3 到 0.7）：Online Macro F1 稳定在 67.05–67.17，几乎无波动。</p>
+      </section>
+
+      <!-- ===== 5. 个人理解 ===== -->
+      <section class="section" id="insight">
+        <div class="section-title">
+          <div class="icon" style="background:#faf5ff;">💭</div>
+          个人理解与启发
+        </div>
+
+        <h3>亮点</h3>
+        <ul>
+          <li><strong>Respond-then-Think 范式</strong>：先输出标签再生成 CoT 是本文最重要的工程洞见。经典的"Think-then-Answer"看似更合理（先思考再回答），但在分类任务中反而因为错误累积更差。这个结论和 GenCLS++ 等工作一致，对工业分类任务有普遍参考价值。</li>
+          <li><strong>Pass@N 驱动的 DPO 框架</strong>：用 Pass@N 准确率作为 RL 潜力指标，同时处理"可解决"和"不可解决"两类样本，逻辑清晰且有操作性。Pass@N=0 的 Oracle 引导是 DPO 相对 GRPO 的独特价值点。</li>
+          <li><strong>标签均衡比难度阈值更重要</strong>：GRPO 实验揭示了一个反直觉的结论——与其精心调 γ，不如先平衡标签分布。CV 和 Macro F1 的强负相关是值得关注的实践规律。</li>
+          <li><strong>CumPT 的工程价值</strong>：从 4 个超参数压缩到 1 个，且在宽泛的参数范围内稳定——这对实际生产部署的调参成本有实质意义。</li>
+        </ul>
+
+        <h3>局限与可探讨的问题</h3>
+        <ul>
+          <li><strong>部署延迟问题未完全量化</strong>：论文虽然用 postCoT 解决了"先答后思"的延迟问题（只需第一个 token 的概率），但整体延迟对比（LLM vs BERT）没有给出数字，生产中的实际 QPS/P99 latency 未披露。</li>
+          <li><strong>GMV 小幅下降</strong>：商业上略存疑虑，相关性提升后点击率和成交量上升，但 GMV 微降（−0.29%）。可能是高 GMV 商品恰好有更多相关性问题（如流量商品做了边缘 Query），被新模型降级了。</li>
+          <li><strong>CoT 质量依赖 DeepSeek-R1</strong>：Pass@N=0 样本的 Oracle 回答来自 DeepSeek-R1，而该模型并非在淘宝电商语境下训练，合成 CoT 的质量上限受外部模型能力约束。后续可考虑用 TaoSR1 自身迭代替代外部 Oracle。</li>
+          <li><strong>标签均衡带来的召回损失</strong>：对多数类（L4 从 50% 下采样到 25%）的下采样会损失一部分训练数据信息，如何在均衡和信息量之间找到最优平衡仍有探索空间。</li>
+        </ul>
+
+        <div class="callout callout-purple">
+          <strong>对搜索相关性工业实践的启示：</strong>
+          TaoSR1 展示了 LLM 从研究到工业部署的全链路——SFT 赋予领域能力、RL 激活推理潜力、后处理解决部署约束、CumPT 简化运维复杂度。这套框架对任何需要"复杂 Query 理解 + 实时打分"的工业场景（搜索、广告、推荐过滤）都有参考价值，尤其是"Respond-then-Think"范式和难度感知采样的具体实现。
+        </div>
+
+        <div class="paper-info">
+          <p>📄 <strong>论文链接</strong>：<a href="https://arxiv.org/abs/2508.12365" target="_blank">https://arxiv.org/abs/2508.12365</a></p>
+          <p>🏷 <strong>关键词</strong>：E-commerce Search, Relevance Prediction, CoT, DPO, GRPO, Pass@N, Cumulative Probability Tiering</p>
+        </div>
+      </section>
+
+    </main>
+  </div><!-- /layout -->
+
+  <footer>
+    <a href="../index.html">← 返回论文列表</a>
+    &nbsp;·&nbsp; TaoSR1 · 2025 · Alibaba Taobao &amp; Tmall Group
+  </footer>
+
+</div><!-- /page -->
+</body>
+</html>

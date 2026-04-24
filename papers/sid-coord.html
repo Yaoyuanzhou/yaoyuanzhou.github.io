@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SID-Coord：协调语义ID与哈希ID的短视频搜索排序</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false }
+          ],
+          throwOnError: false
+        });
+      }
+      const sections = document.querySelectorAll('section[id]');
+      const links = document.querySelectorAll('.toc-list a');
+      const obs = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+          if (e.isIntersecting) {
+            links.forEach(l => l.classList.remove('active'));
+            const a = document.querySelector('.toc-list a[href="#' + e.target.id + '"]');
+            if (a) a.classList.add('active');
+          }
+        });
+      }, { rootMargin: '-20% 0px -60% 0px' });
+      sections.forEach(s => obs.observe(s));
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #8b5cf6; --primary-soft: #faf5ff;
+      --accent: #2563eb; --shadow: 0 10px 30px rgba(15,23,42,0.08);
+      --radius: 18px; --max: 1120px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: linear-gradient(180deg,#fdf4ff 0%,var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      line-height: 1.85;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .page { max-width: var(--max); margin: 0 auto; padding: 32px 20px 80px; }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    .back-link:hover { color: var(--primary); text-decoration: none; }
+    .hero {
+      background: radial-gradient(circle at top right, rgba(139,92,246,0.12), transparent 30%),
+                  radial-gradient(circle at left bottom, rgba(37,99,235,0.08), transparent 24%),
+                  var(--card);
+      border: 1px solid rgba(139,92,246,0.15);
+      border-radius: 24px; box-shadow: var(--shadow);
+      padding: 34px 34px 28px; margin-bottom: 22px;
+    }
+    .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: #faf5ff; color: #6d28d9; font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+    h1 { margin: 0 0 10px; font-size: 32px; line-height: 1.25; letter-spacing: -0.02em; }
+    .subtitle { margin: 0; color: var(--muted); font-size: 15px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 24px; }
+    .meta-card { background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 16px; padding: 14px 16px; }
+    .meta-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .meta-value { font-size: 14px; font-weight: 600; word-break: break-word; }
+    .layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 22px; align-items: start; }
+    .toc { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; max-height: calc(100vh - 40px); overflow-y: auto; }
+    .toc h2 { margin: 0 0 12px; font-size: 15px; color: var(--text); }
+    .toc-list { list-style: none; margin: 0; padding: 0; }
+    .toc-list li { margin: 0; }
+    .toc-list a { display: block; padding: 5px 8px; border-radius: 8px; color: var(--muted); font-size: 13px; transition: all 0.15s; }
+    .toc-list a:hover { color: var(--primary); background: #faf5ff; text-decoration: none; }
+    .toc-list a.active { color: var(--primary); background: #eff6ff; font-weight: 600; border-left: 3px solid var(--primary); padding-left: 5px; }
+    .toc-sub { list-style: none; padding-left: 12px; margin: 0; }
+    .toc-sub a { font-size: 12px; padding: 3px 8px; }
+    .content { display: flex; flex-direction: column; gap: 18px; }
+    .section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 26px 28px; }
+    .section-title { display: flex; align-items: center; gap: 12px; margin: 0 0 20px; font-size: 20px; font-weight: 700; }
+    .icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+    h3 { margin: 28px 0 12px; font-size: 17px; color: #111827; border-left: 3px solid #e9d5ff; padding-left: 10px; }
+    h4 { margin: 20px 0 8px; font-size: 15px; color: #374151; }
+    p { margin: 0 0 12px; }
+    .callout-blue { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-amber { background: #fffbeb; border: 1px solid #fde68a; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-green { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-purple { background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-red { background: #fff1f2; border: 1px solid #fecdd3; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-cyan { background: #ecfeff; border: 1px solid #a5f3fc; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-title { font-weight: 700; font-size: 14px; margin-bottom: 8px; }
+    .callout-blue .callout-title { color: #1d4ed8; }
+    .callout-amber .callout-title { color: #92400e; }
+    .callout-green .callout-title { color: #166534; }
+    .callout-purple .callout-title { color: #6d28d9; }
+    .callout-red .callout-title { color: #9f1239; }
+    .callout-cyan .callout-title { color: #0e7490; }
+    .example-box { background: #f0fdf4; border: 1px solid #86efac; border-radius: 14px; padding: 18px 20px; margin: 18px 0; }
+    .ex-title { font-weight: 700; color: #166534; margin-bottom: 10px; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+    .formula-block { margin: 18px 0 8px; overflow-x: auto; background: #fafafa; border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px 16px; }
+    .formula-vars { background: #f8faff; border: 1px solid #dbeafe; border-radius: 12px; padding: 14px 16px; margin: 4px 0 18px; font-size: 14px; color: #374151; }
+    .formula-vars .var-title { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+    .formula-vars ul { margin: 0; padding-left: 18px; }
+    .formula-vars li { margin: 5px 0; }
+    .flow-diagram { border: 1px solid #e9d5ff; border-radius: 14px; padding: 18px; margin: 18px 0; background: #faf5ff; }
+    .flow-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 8px 0; }
+    .flow-box { background: #ede9fe; border: 1px solid #c4b5fd; border-radius: 10px; padding: 8px 14px; font-size: 13px; font-weight: 600; line-height: 1.4; text-align: center; }
+    .flow-box.green { background: #dcfce7; border-color: #86efac; }
+    .flow-box.blue { background: #dbeafe; border-color: #93c5fd; }
+    .flow-box.red { background: #fee2e2; border-color: #fca5a5; }
+    .flow-arrow { color: #8b5cf6; font-weight: 700; font-size: 18px; }
+    .two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 14px 0; }
+    .three-col { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 14px 0; }
+    .mini-card { border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; background: #fff; }
+    .mini-card h4 { margin-top: 0; font-size: 14px; color: #111827; }
+    .mini-card p { font-size: 14px; }
+    .table-wrap { overflow-x: auto; margin: 16px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    thead th { background: #faf5ff; color: #4c1d95; text-align: left; font-weight: 700; padding: 10px 14px; border-bottom: 2px solid #e9d5ff; }
+    td { padding: 10px 14px; border-bottom: 1px solid #eef2f7; vertical-align: top; }
+    tbody tr:nth-child(even) { background: #fefaff; }
+    blockquote { margin: 18px 0; padding: 16px 20px; border-left: 4px solid var(--primary); background: rgba(139,92,246,0.05); border-radius: 0 12px 12px 0; color: #3f3f46; font-size: 15px; }
+    ul, ol { padding-left: 24px; margin: 8px 0 12px; }
+    li { margin: 6px 0; }
+    li + li { margin-top: 7px; }
+    code { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 6px; padding: 2px 7px; font-family: "SF Mono",Consolas,Monaco,monospace; font-size: 13px; color: #6d28d9; }
+    .step-box { display: flex; gap: 16px; align-items: flex-start; margin: 14px 0; padding: 16px 18px; background: #fafafa; border: 1px solid var(--line); border-radius: 14px; }
+    .step-num { width: 32px; height: 32px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; flex-shrink: 0; }
+    .step-content { flex: 1; }
+    .step-content strong { display: block; margin-bottom: 4px; font-size: 15px; }
+    .highlight { background: linear-gradient(180deg, transparent 60%, #fde68a 60%); font-weight: 600; }
+    .katex-display { overflow-x: auto; padding: 6px 0; }
+    .big-concept { background: linear-gradient(135deg, #faf5ff 0%, #eff6ff 100%); border: 2px solid #c4b5fd; border-radius: 16px; padding: 20px 24px; margin: 20px 0; }
+    .big-concept-title { font-size: 18px; font-weight: 800; color: #4c1d95; margin-bottom: 10px; }
+    figure { margin: 24px 0; }
+    figcaption { font-size: 12px; color: var(--muted); margin-top: 8px; text-align: center; }
+    footer { margin-top: 32px; text-align: center; color: var(--muted); font-size: 13px; }
+    .paper-info { background: #f8faff; border: 1px solid #dbeafe; border-radius: 12px; padding: 16px 20px; margin: 18px 0; }
+    .paper-info-title { font-weight: 700; color: #1d4ed8; margin-bottom: 8px; font-size: 14px; }
+    @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } .toc { position: static; } .meta-grid, .two-col, .three-col { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 640px) { .page { padding: 18px 12px 56px; } .hero, .section { padding: 20px 18px; } h1 { font-size: 26px; } .meta-grid, .two-col, .three-col { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div class="page">
+  <a class="back-link" href="../index.html">← 返回论文列表</a>
+
+  <header class="hero">
+    <div class="eyebrow">📄 SIGIR 2026 · 短视频搜索 · 排序系统</div>
+    <h1>SID-Coord：协调语义ID与哈希ID的短视频搜索排序</h1>
+    <p class="subtitle">SID-Coord: Coordinating Semantic IDs for ID-based Ranking in Short-Video Search</p>
+    <div class="meta-grid">
+      <div class="meta-card"><div class="meta-label">核心问题</div><div class="meta-value">如何在工业排序系统中协调语义泛化与ID记忆？</div></div>
+      <div class="meta-card"><div class="meta-label">技术方案</div><div class="meta-value">多分辨率SID融合 + 目标感知门控 + 兴趣对齐</div></div>
+      <div class="meta-card"><div class="meta-label">应用场景</div><div class="meta-value">快手短视频搜索排序（4.5B训练样本）</div></div>
+      <div class="meta-card"><div class="meta-label">在线收益</div><div class="meta-value">长播率 +0.664%，播放时长 +0.369%</div></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="toc">
+      <h2>目录</h2>
+      <ul class="toc-list">
+        <li><a href="#tldr">一句话总结</a></li>
+        <li><a href="#background">§1 背景与动机</a></li>
+        <li><a href="#method">§2 方法详解</a>
+          <ul class="toc-sub">
+            <li><a href="#multi-res">2.1 多分辨率SID建模</a></li>
+            <li><a href="#gating">2.2 目标感知HID-SID门控</a></li>
+            <li><a href="#alignment">2.3 用户-物品语义对齐</a></li>
+          </ul>
+        </li>
+        <li><a href="#experiments">§3 实验结果</a></li>
+        <li><a href="#insights">§4 理解与启发</a></li>
+        <li><a href="#summary">§5 总结</a></li>
+      </ul>
+    </aside>
+
+    <main class="content">
+
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!--  一句话总结                                                  -->
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <section class="section" id="tldr">
+        <div class="section-title">
+          <div class="icon" style="background:#faf5ff;">💬</div>
+          一句话总结
+        </div>
+        <blockquote>
+          SID-Coord 把<strong>语义ID（SID）</strong>当作可训练的结构化标识符，而非静态特征，通过<strong>多分辨率融合</strong>捕获粗细粒度语义、<strong>流行度感知门控</strong>平衡记忆与泛化、<strong>兴趣对齐</strong>建模用户历史相似性，在快手搜索排序系统中显著提升了长尾物品的效果。
+        </blockquote>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!--  §1 背景与动机                                              -->
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <section class="section" id="background">
+        <div class="section-title">
+          <div class="icon" style="background:#eff6ff;">📌</div>
+          §1 背景与动机
+        </div>
+
+        <h3>1.1 工业排序系统的核心矛盾</h3>
+
+        <p>在快手等短视频搜索排序系统中，主流方案是<strong>基于稀疏ID的判别式模型</strong>：</p>
+
+        <div class="two-col">
+          <div class="mini-card" style="border-left:3px solid #22c55e;">
+            <h4 style="color:#14532d;margin-top:0;">✅ HID（哈希ID）的优势</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li>高效记忆频繁交互（曝光-点击-观看）</li>
+              <li>推理延迟低，满足工业级实时性要求</li>
+              <li>训练稳定，收敛快</li>
+            </ul>
+          </div>
+          <div class="mini-card" style="border-left:3px solid #ef4444;">
+            <h4 style="color:#9f1239;margin-top:0;">❌ HID的局限</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li>对内容语义完全无感知</li>
+              <li>长尾物品泛化极差（曝光稀疏）</li>
+              <li>无法利用视频的多模态信息</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="callout-amber">
+          <div class="callout-title">⚠️ 记忆-泛化权衡难题</div>
+          <p style="margin:0;"><strong>HID擅长记忆头部物品，但泛化差；语义embedding泛化好，但引入serving开销且任务适应性差。</strong> 如何在工业约束下协调这两者，是本文要解决的核心问题。</p>
+        </div>
+
+        <h3>1.2 现有方案的不足</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>方案类型</th><th>代表工作</th><th>核心做法</th><th>局限</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>稠密语义特征</strong></td>
+                <td>SimTier, MOON, MUSE, DMF</td>
+                <td>将多模态embedding作为辅助输入</td>
+                <td>serving开销大；任务适应性有限；与ID-based架构松耦合</td>
+              </tr>
+              <tr>
+                <td><strong>SID作为静态特征</strong></td>
+                <td>SPM, Prefix-Ngram</td>
+                <td>SID视为item-side特征直接输入</td>
+                <td>未利用层级结构；未根据流行度自适应；记忆-泛化未显式协调</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="big-concept">
+          <div class="big-concept-title">🔑 本文核心洞察</div>
+          <p style="margin:0;">关键不是<strong>引入</strong>语义表示，而是<strong>如何利用SID的多层级语义粒度</strong>，并<strong>根据物品流行度系统性协调语义泛化与ID记忆</strong>。SID不应只是静态特征，而应是可训练的结构化标识符，在判别式排序目标下端到端优化。</p>
+        </div>
+
+        <h3>1.3 问题定义</h3>
+
+        <p><strong>输入</strong>：用户查询 $q$、用户历史行为 $H_u=\{v_1,\ldots,v_T\}$、候选视频集合 $V$</p>
+        <p><strong>输出</strong>：对每个候选视频 $v$ 预测点击/观看概率 $P(y=1|q, H_u, v)$</p>
+        <p><strong>约束</strong>：排序延迟 &lt; 50ms（工业级实时性要求）</p>
+
+        <div class="paper-info">
+          <div class="paper-info-title">📄 论文链接</div>
+          <ul style="margin:0;padding-left:18px;font-size:13px;">
+            <li>arXiv: <a href="https://arxiv.org/abs/2604.10471" target="_blank">arxiv.org/abs/2604.10471</a></li>
+            <li>PDF: <a href="https://arxiv.org/pdf/2604.10471" target="_blank">arxiv.org/pdf/2604.10471</a></li>
+            <li>会议: SIGIR 2026 (Melbourne, Australia)</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!--  §2 方法详解                                                 -->
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <section class="section" id="method">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">🏗️</div>
+          §2 方法详解
+        </div>
+
+        <p>SID-Coord 的整体框架包含三个核心组件：</p>
+
+        <div class="flow-diagram">
+          <div style="font-size:12px;color:#6d28d9;font-weight:700;margin-bottom:12px;">SID-Coord 三大组件</div>
+          <div class="three-col" style="gap:10px;">
+            <div style="border:2px solid #c4b5fd;border-radius:12px;padding:12px;text-align:center;background:#ede9fe;">
+              <div style="font-weight:700;font-size:13px;color:#4c1d95;">I. 多分辨率SID建模</div>
+              <div style="font-size:11px;color:#6d28d9;margin-top:4px;">层级SID组合 + 注意力融合</div>
+            </div>
+            <div style="border:2px solid #86efac;border-radius:12px;padding:12px;text-align:center;background:#dcfce7;">
+              <div style="font-weight:700;font-size:13px;color:#14532d;">II. 目标感知HID-SID门控</div>
+              <div style="font-size:11px;color:#166534;margin-top:4px;">流行度自适应平衡记忆与泛化</div>
+            </div>
+            <div style="border:2px solid #93c5fd;border-radius:12px;padding:12px;text-align:center;background:#dbeafe;">
+              <div style="font-weight:700;font-size:13px;color:#1e3a8a;">III. 用户-物品语义对齐</div>
+              <div style="font-size:11px;color:#1d4ed8;margin-top:4px;">候选与历史相似性分布建模</div>
+            </div>
+          </div>
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2604.10471v1/x1.png" alt="Figure 1: SID-Coord框架概览"
+               style="width:100%;border-radius:12px;border:1px solid #e5e7eb;"
+               onerror="this.onerror=null;this.parentElement.innerHTML='<div style=\'background:#f8faff;border:1px solid #dbeafe;border-radius:12px;padding:24px;text-align:center;color:#6b7280;font-size:13px;\'><b>Figure 1: SID-Coord框架概览</b><br><br>三大组件：(I) 多分辨率SID建模：层级组合 + 注意力融合；(II) 目标感知门控：根据物品流行度自适应平衡HID记忆与SID泛化；(III) 兴趣对齐：候选与历史语义相似性分布建模</div>'" />
+          <figcaption><strong>Figure 1（论文原图）：</strong>SID-Coord 整体框架 — 三大组件协同作用，在统一的ID-based排序架构内协调语义泛化与ID记忆</figcaption>
+        </figure>
+
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <!--  2.1 多分辨率SID建模                                         -->
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <h3 id="multi-res">2.1 多分辨率SID建模</h3>
+
+        <p>SID-Coord 通过残差量化（Residual Quantization, RQ）为每个视频生成三级语义ID，每级对应一个8192大小的码本，语义粒度从粗到细递进。</p>
+
+        <h4>层级SID组合</h4>
+
+        <p>直接使用 $\{s_v^{(1)}, s_v^{(2)}, s_v^{(3)}\}$ 作为嵌入查找会丢失层级依赖关系。为此，SID-Coord 在相邻层级间构造<strong>组合SID</strong>：</p>
+
+        <div class="formula-block">$$s_v^{(1,2)} = B \cdot s_v^{(1)} + s_v^{(2)}, \quad s_v^{(2,3)} = B \cdot s_v^{(2)} + s_v^{(3)}$$</div>
+
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$s_v^{(1)}, s_v^{(2)}, s_v^{(3)}$：三个层级的离散语义ID，取值范围 $[0, 8191]$</li>
+            <li>$B$：基数（base），设为10000（大于码本大小8192），保证组合后的唯一映射</li>
+            <li>$s_v^{(1,2)}$：粗细粒度组合ID，如 $s_v^{(1)}=17, s_v^{(2)}=5301 \Rightarrow s_v^{(1,2)}=175301$</li>
+          </ul>
+        </div>
+
+        <div class="callout-cyan">
+          <div class="callout-title">📌 设计动机</div>
+          <ul style="margin:0;padding-left:18px;">
+            <li><strong>显式编码细化关系</strong>：$s_v^{(1,2)}$ 在粗粒度 $s_v^{(1)}$ 基础上细化，避免跨层级组合（如 $s_v^{(1,3)}$）导致的过度碎片化</li>
+            <li><strong>保持层级局部性</strong>：相同 $s_v^{(1)}$ 的物品在嵌入空间中共享粗语义</li>
+            <li><strong>参数效率</strong>：避免全深度组合 $s_v^{(1,2,3)}$ 导致的参数爆炸</li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：层级SID组合</div>
+          <p><strong>场景</strong>：一个篮球教学视频</p>
+          <ul>
+            <li><strong>第1级（粗）</strong>：$s_v^{(1)}=17$，表示"体育类视频"</li>
+            <li><strong>第2级（中）</strong>：$s_v^{(2)}=5301$，表示"篮球相关"</li>
+            <li><strong>第3级（细）</strong>：$s_v^{(3)}=1205$，表示"运球教学"</li>
+          </ul>
+          <p><strong>组合SID</strong>：</p>
+          <ul>
+            <li>$s_v^{(1,2)} = 10000 \times 17 + 5301 = 175301$，细化为"体育-篮球"</li>
+            <li>$s_v^{(2,3)} = 10000 \times 5301 + 1205 = 53011205$，细化为"篮球-运球教学"</li>
+          </ul>
+          <p style="font-size:13px;color:#166534;margin-top:10px;"><strong>直觉</strong>：层级组合像地址系统，先定位到省（粗），再细化到市（中），再到区（细），每一级都在父节点内部细分。</p>
+        </div>
+
+        <h4>注意力融合</h4>
+
+        <p>组合后，每个视频有5个SID：$\{s_v^{(1)}, s_v^{(2)}, s_v^{(3)}, s_v^{(1,2)}, s_v^{(2,3)}\}$，映射为嵌入 $\{e_v^{(1)}, \ldots, e_v^{(2,3)}\}$。不同物品需要不同粒度的语义：</p>
+
+        <ul>
+          <li><strong>长尾物品</strong>：交互稀疏，粗粒度SID（$s_v^{(1)}$）可跨物品共享统计信号</li>
+          <li><strong>头部物品</strong>：交互充足，细粒度SID（$s_v^{(3)}$）提供精准区分</li>
+        </ul>
+
+        <p>SID-Coord 引入<strong>注意力机制</strong>自适应选择粒度：</p>
+
+        <div class="formula-block">$$e_v^{sid} = \sum_{i=1}^{5} \alpha_i \cdot e_v^{(i)}, \quad \alpha_i = \frac{\exp(w_i^\top e_v^{(i)})}{\sum_{j=1}^{5} \exp(w_j^\top e_v^{(j)})}$$</div>
+
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$e_v^{(i)}$：第 $i$ 个分辨率级别的SID嵌入</li>
+            <li>$w_i$：可学习的查询向量，用于计算注意力权重</li>
+            <li>$\alpha_i$：归一化后的注意力权重，表示对第 $i$ 级语义的重视程度</li>
+            <li>$e_v^{sid}$：最终融合后的语义表示</li>
+          </ul>
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2604.10471v1/x2.png" alt="Figure 2: SID多级注意力融合机制"
+               style="width:100%;border-radius:12px;border:1px solid #e5e7eb;"
+               onerror="this.onerror=null;this.parentElement.innerHTML='<div style=\'background:#f8faff;border:1px solid #dbeafe;border-radius:12px;padding:24px;text-align:center;color:#6b7280;font-size:13px;\'><b>Figure 2: SID多级注意力融合机制</b><br><br>5个分辨率级别的SID嵌入（e^1到e^(2,3)）作为Value，与可学习查询向量计算注意力权重，加权求和得到最终语义表示</div>'" />
+          <figcaption><strong>Figure 2（论文原图）：</strong>SID多级注意力融合机制 — 自适应选择最有效的语义粒度</figcaption>
+        </figure>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：注意力融合的粒度选择</div>
+          <p><strong>5个粒度级别</strong>：</p>
+          <ul>
+            <li>$\alpha_1$：第1级SID（最粗，如"体育类"）</li>
+            <li>$\alpha_2$：第2级SID（中等，如"篮球"）</li>
+            <li>$\alpha_3$：第3级SID（最细，如"运球教学"）</li>
+            <li>$\alpha_4$：组合 $s_v^{(1,2)}$（粗+中）</li>
+            <li>$\alpha_5$：组合 $s_v^{(2,3)}$（中+细）</li>
+          </ul>
+          <p style="margin-top:12px;"><strong>场景1：长尾物品（曝光 &lt; 100次）</strong></p>
+          <ul>
+            <li>注意力权重：$\alpha_1=0.45$（最粗粒度高），$\alpha_3=0.10$（最细粒度低）</li>
+            <li><strong>原因</strong>：细粒度SID训练不充分，粗粒度可跨物品共享统计信号</li>
+          </ul>
+          <p style="margin-top:12px;"><strong>场景2：头部物品（曝光 &gt; 1M次）</strong></p>
+          <ul>
+            <li>注意力权重：$\alpha_1=0.15$，$\alpha_3=0.55$（最细粒度高）</li>
+            <li><strong>原因</strong>：交互充足，细粒度可精准区分相似物品</li>
+          </ul>
+          <p style="font-size:13px;color:#166534;margin-top:10px;"><strong>直觉</strong>：像学生做题，不熟悉的题型用通用方法（粗粒度 $s^{(1)}$），熟悉的题型用精准技巧（细粒度 $s^{(3)}$）。</p>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <!--  2.2 目标感知HID-SID门控                                   -->
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <h3 id="gating">2.2 目标感知HID-SID门控</h3>
+
+        <p>HID和SID具有互补性：</p>
+        <ul>
+          <li><strong>HID</strong>：从大规模稀疏交互中捕获<strong>记忆</strong>信号（哪些用户点击过）</li>
+          <li><strong>SID</strong>：从多模态内容中提供<strong>泛化</strong>信号（语义相似物品可共享）</li>
+        </ul>
+
+        <p>核心问题：<strong>如何根据物品流行度自适应平衡两者？</strong></p>
+
+        <p>SID-Coord 引入<strong>目标感知门控</strong>，使用目标物品的历史统计特征（曝光、点击、点赞、分享、评论次数）预测门控权重：</p>
+
+        <div class="formula-block">$$g = \sigma(\text{MLP}([n_{exp}, n_{click}, n_{like}, n_{share}, n_{comment}]))$$</div>
+
+        <div class="formula-block">$$e_v^{shid} = g \cdot e_v^{hid} + (1 - g) \cdot e_v^{sid}$$</div>
+
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$n_{exp}, n_{click}, \ldots$：目标物品的历史统计特征（曝光次数、点击次数等）</li>
+            <li>$\sigma(\cdot)$：Sigmoid激活函数，将输出压缩到 $[0, 1]$</li>
+            <li>$g$：门控权重，接近1时偏向HID记忆，接近0时偏向SID泛化</li>
+            <li>$e_v^{hid}$：哈希ID嵌入（传统方式）</li>
+            <li>$e_v^{sid}$：融合后的语义ID嵌入（来自2.1节）</li>
+            <li>$e_v^{shid}$：最终目标物品表示</li>
+          </ul>
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2604.10471v1/fig3.png" alt="Figure 3: 流行度感知协调分析"
+               style="width:100%;border-radius:12px;border:1px solid #e5e7eb;"
+               onerror="this.onerror=null;this.parentElement.innerHTML='<div style=\'background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:24px;text-align:center;color:#6b7280;font-size:13px;\'><b>Figure 3: 流行度感知协调分析</b><br><br>横轴为流行度分桶（7天曝光次数分位数），纵轴为门控权重g。结果显示：流行度越高，g越大，验证了模型自适应平衡记忆与泛化的能力</div>'" />
+          <figcaption><strong>Figure 3（论文原图）：</strong>门控权重 $g$ 随物品流行度的变化 — 头部物品更依赖HID记忆，长尾物品更依赖SID泛化</figcaption>
+        </figure>
+
+        <div class="callout-purple">
+          <div class="callout-title">🔑 关键发现</div>
+          <p style="margin:0;">实验验证：门控网络成功学习到<strong>流行度感知协调</strong>策略——</p>
+          <ul style="margin-top:8px;padding-left:20px;">
+            <li><strong>头部物品</strong>（曝光多）：$g \approx 0.7$，主要依赖HID记忆</li>
+            <li><strong>长尾物品</strong>（曝光少）：$g \approx 0.3$，主要依赖SID泛化</li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：门控机制的工作流程</div>
+          <p><strong>场景1：头部物品（爆款视频，曝光1亿+）</strong></p>
+          <ul>
+            <li>门控网络输入：$[n_{exp}=100000000, n_{click}=5000000, \ldots]$</li>
+            <li>门控输出：$g=0.72$</li>
+            <li>融合表示：$e_v^{shid} = 0.72 \cdot e_v^{hid} + 0.28 \cdot e_v^{sid}$</li>
+            <li><strong>直觉</strong>：交互信号充足，优先使用HID记忆</li>
+          </ul>
+          <p style="margin-top:12px;"><strong>场景2：长尾物品（新视频，曝光50次）</strong></p>
+          <ul>
+            <li>门控网络输入：$[n_{exp}=50, n_{click}=3, \ldots]$</li>
+            <li>门控输出：$g=0.25$</li>
+            <li>融合表示：$e_v^{shid} = 0.25 \cdot e_v^{hid} + 0.75 \cdot e_v^{sid}$</li>
+            <li><strong>直觉</strong>：交互稀疏，HID不可靠，依赖SID泛化</li>
+          </ul>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <!--  2.3 用户-物品语义对齐                                     -->
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <h3 id="alignment">2.3 用户-物品语义对齐</h3>
+
+        <p>传统用户行为建模只使用具体ID（照片ID、作者ID），无法感知内容层面的相关性。SID-Coord 利用SID增强用户侧建模：</p>
+
+        <p><strong>输入</strong>：用户历史 $H_u = \{v_1, \ldots, v_T\}$，候选物品 $v$</p>
+        <p><strong>计算</strong>：</p>
+
+        <div class="formula-block">$$S = [\text{sim}(e_v^{sid}, e_{v_1}^{sid}), \ldots, \text{sim}(e_v^{sid}, e_{v_T}^{sid})]$$</div>
+
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\text{sim}(\cdot)$：余弦相似度，衡量候选与历史物品的语义接近程度</li>
+            <li>$S$：长度为 $T$ 的相似度向量，表示候选与每个历史物品的语义匹配度</li>
+          </ul>
+        </div>
+
+        <p><strong>变换</strong>：直接使用 $S$ 会丢失分布信息。SID-Coord 应用 <strong>AutoDis</strong>（自动离散化）将相似度转换为分布感知表示：</p>
+
+        <div class="formula-block">$$h_{align} = [\text{MaxPool}(S), \text{AvgPool}(S)]$$</div>
+
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\text{MaxPool}(S)$：提取最强语义匹配（最相关的历史物品）</li>
+            <li>$\text{AvgPool}(S)$：提取整体语义一致性（平均匹配程度）</li>
+            <li>$h_{align}$：拼接后的对齐特征，作为额外输入送入排序模型</li>
+          </ul>
+        </div>
+
+        <div class="callout-blue">
+          <div class="callout-title">📌 为什么用AutoDis？</div>
+          <p style="margin:0;">原始余弦相似度是连续值，直接使用会忽略相似度的分布特性（如长尾分布、多峰分布）。AutoDis通过自动分桶+嵌入查找，将相似度离散化为分布感知表示，捕获更高阶语义兴趣模式。</p>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：兴趣对齐的计算流程</div>
+          <p><strong>用户历史</strong>：</p>
+          <ul>
+            <li>$v_1$：篮球教学视频（$e_{v_1}^{sid}$）</li>
+            <li>$v_2$：足球比赛集锦（$e_{v_2}^{sid}$）</li>
+            <li>$v_3$：舞蹈教学（$e_{v_3}^{sid}$）</li>
+          </ul>
+          <p style="margin-top:10px;"><strong>候选物品</strong>：$v$ = 篮球过人技巧</p>
+          <p style="margin-top:10px;"><strong>相似度计算</strong>：</p>
+          <ul>
+            <li>$\text{sim}(e_v^{sid}, e_{v_1}^{sid}) = 0.89$（篮球相关，高度相似）</li>
+            <li>$\text{sim}(e_v^{sid}, e_{v_2}^{sid}) = 0.45$（体育相关，中度相似）</li>
+            <li>$\text{sim}(e_v^{sid}, e_{v_3}^{sid}) = 0.12$（不相关，低相似）</li>
+          </ul>
+          <p style="margin-top:10px;"><strong>对齐特征</strong>：</p>
+          <ul>
+            <li>$\text{MaxPool} = 0.89$（最强匹配：篮球教学）</li>
+            <li>$\text{AvgPool} = 0.49$（平均相似度）</li>
+          </ul>
+          <p style="font-size:13px;color:#166534;margin-top:10px;"><strong>直觉</strong>：模型知道候选与用户篮球兴趣高度匹配，且用户有体育消费习惯，提升排序得分。</p>
+        </div>
+
+        <h3>2.4 训练与推理</h3>
+
+        <p><strong>训练流程</strong>：</p>
+        <ol>
+          <li><strong>SID生成</strong>：离线用RQ-KMeans为所有视频生成三级SID（码本大小8192）</li>
+          <li><strong>特征构建</strong>：HID（哈希ID）+ SID + 用户特征 + 上下文特征</li>
+          <li><strong>前向传播</strong>：通过三大组件计算目标物品表示 $e_v^{shid}$ 和对齐特征 $h_{align}$</li>
+          <li><strong>损失函数</strong>：二分类交叉熵（点击/长播预测）
+            <div class="formula-block" style="margin-top:10px;">$$\mathcal{L} = -\frac{1}{N}\sum_{i=1}^{N} \left[ y_i \log \hat{y}_i + (1-y_i) \log (1-\hat{y}_i) \right]$$</div>
+          </li>
+          <li><strong>端到端优化</strong>：SID嵌入和门控网络随排序目标联合训练</li>
+        </ol>
+
+        <p><strong>推理流程</strong>：</p>
+        <ol>
+          <li>查询 $q$ → 召回候选集 $V$（数百个视频）</li>
+          <li>对每个候选 $v$：
+            <ul>
+              <li>查找HID嵌入 $e_v^{hid}$</li>
+              <li>多分辨率融合得到 $e_v^{sid}$</li>
+              <li>门控融合得到 $e_v^{shid}$</li>
+              <li>计算兴趣对齐特征 $h_{align}$</li>
+              <li>拼接所有特征 → MLP → 预测分数</li>
+            </ul>
+          </li>
+          <li>按分数降序排列，返回Top-K</li>
+        </ol>
+
+        <div class="callout-green">
+          <div class="callout-title">✅ 工业友好设计</div>
+          <ul style="margin:0;padding-left:18px;">
+            <li><strong>轻量级</strong>：门控网络仅两层MLP，计算开销可忽略</li>
+            <li><strong>无侵入</strong>：不修改骨干排序模型，可插拔集成</li>
+            <li><strong>延迟可控</strong>：在线A/B测试显示延迟变化仅 +0.005%</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!--  §3 实验结果                                                -->
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <section class="section" id="experiments">
+        <div class="section-title">
+          <div class="icon" style="background:#fffbeb;">📊</div>
+          §3 实验结果
+        </div>
+
+        <h3>3.1 实验设置</h3>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4 style="margin-top:0;">📦 数据规模</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li>训练集：~45亿样本</li>
+              <li>测试集：~1.3亿样本</li>
+              <li>物品数：数千万级</li>
+            </ul>
+          </div>
+          <div class="mini-card">
+            <h4 style="margin-top:0;">⚙️ SID配置</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li>码本：3级 × 8192</li>
+              <li>生成方式：RQ-KMeans</li>
+              <li>基数B：10000</li>
+            </ul>
+          </div>
+        </div>
+
+        <h3>3.2 整体性能对比</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>方法</th><th>整体AUC</th><th>长尾AUC</th><th>长尾UAUC</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Production Baseline</strong></td>
+                <td>基准</td>
+                <td>基准</td>
+                <td>基准</td>
+              </tr>
+              <tr>
+                <td>Prefix-Ngram</td>
+                <td>+0.15%</td>
+                <td>+0.18%</td>
+                <td>+0.42%</td>
+              </tr>
+              <tr>
+                <td>Ngram</td>
+                <td>+0.19%</td>
+                <td>+0.23%</td>
+                <td>+0.51%</td>
+              </tr>
+              <tr>
+                <td>SPM-SID</td>
+                <td>+0.21%</td>
+                <td>+0.26%</td>
+                <td>+0.58%</td>
+              </tr>
+              <tr>
+                <td>DAS</td>
+                <td>+0.25%</td>
+                <td>+0.31%</td>
+                <td>+0.72%</td>
+              </tr>
+              <tr style="background:#dcfce7;">
+                <td><strong>SID-Coord（本文）</strong></td>
+                <td><strong>+0.33%</strong></td>
+                <td><strong>+0.42%</strong></td>
+                <td><strong>+0.93%</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout-purple">
+          <div class="callout-title">🔑 核心发现</div>
+          <ul style="margin:0;padding-left:20px;">
+            <li><strong>所有SID方法都优于生产基线</strong>，验证语义信号的引入有效</li>
+            <li><strong>SID-Coord在所有指标上最佳</strong>，尤其在长尾UAUC上提升+0.93%</li>
+            <li><strong>长尾收益显著</strong>：长尾AUC提升(+0.42%)大于整体(+0.33%)</li>
+          </ul>
+        </div>
+
+        <h3>3.3 消融实验</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>变体</th><th>整体AUC变化</th><th>长尾AUC变化</th><th>结论</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Full w/o I</strong>（去掉多分辨率SID）</td>
+                <td>-0.22%</td>
+                <td>-0.26%</td>
+                <td>自适应粒度对长尾关键</td>
+              </tr>
+              <tr>
+                <td><strong>Full w/o II</strong>（去掉门控机制）</td>
+                <td>-0.13%</td>
+                <td>-0.14%</td>
+                <td>流行度自适应平衡必要</td>
+              </tr>
+              <tr>
+                <td><strong>Full w/o III</strong>（去掉兴趣对齐）</td>
+                <td>-0.16%</td>
+                <td>-0.19%</td>
+                <td>用户-物品匹配提供额外信号</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>3.4 在线A/B测试</h3>
+
+        <div class="example-box" style="background:#eff6ff;border-color:#93c5fd;">
+          <div class="ex-title" style="color:#1d4ed8;">🧪 真实流量实验（7天A/B，10%流量）</div>
+          <table style="font-size:13px;margin-top:10px;">
+            <thead>
+              <tr><th>指标</th><th>提升</th><th>95%置信区间</th><th>显著性</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>搜索观看时长</strong></td>
+                <td>+0.369%</td>
+                <td>[0.05%, 0.69%]</td>
+                <td>✅ 显著</td>
+              </tr>
+              <tr>
+                <td><strong>搜索播放数</strong></td>
+                <td>+0.472%</td>
+                <td>[0.17%, 0.77%]</td>
+                <td>✅ 显著</td>
+              </tr>
+              <tr>
+                <td><strong>长播率</strong></td>
+                <td>+0.664% (绝对+0.226pp)</td>
+                <td>[0.49%, 0.84%]</td>
+                <td>✅ 显著</td>
+              </tr>
+              <tr>
+                <td><strong>搜索延迟</strong></td>
+                <td>+0.005%</td>
+                <td>[-0.08%, 0.09%]</td>
+                <td>❌ 不显著</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout-green">
+          <div class="callout-title">✅ 工业验证成功</div>
+          <ul style="margin:0;padding-left:20px;">
+            <li><strong>业务指标全面显著提升</strong>：观看时长、播放数、长播率均有显著增益</li>
+            <li><strong>延迟无显著增加</strong>：置信区间包含0，验证轻量级设计有效</li>
+            <li><strong>收益稳定</strong>：7天实验期间效果持续</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!--  §4 理解与启发                                              -->
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <section class="section" id="insights">
+        <div class="section-title">
+          <div class="icon" style="background:#faf5ff;">💡</div>
+          §4 理解与启发
+        </div>
+
+        <h3>4.1 本文核心贡献</h3>
+
+        <div class="three-col">
+          <div class="mini-card">
+            <h4>🎯 问题重构</h4>
+            <p style="font-size:13px;margin:0;">将SID集成从"特征工程"问题重新定义为"协调问题"——显式平衡记忆与泛化</p>
+          </div>
+          <div class="mini-card">
+            <h4>🏗️ 技术创新</h4>
+            <p style="font-size:13px;margin:0;">三级协调机制：粒度协调（多分辨率）、信号协调（门控）、兴趣协调（对齐）</p>
+          </div>
+          <div class="mini-card">
+            <h4>🏭 工业验证</h4>
+            <p style="font-size:13px;margin:0;">在快手生产系统完成大规模A/B测试，验证有效性和可用性</p>
+          </div>
+        </div>
+
+        <h3>4.2 与相关工作对比</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>工作</th><th>SID使用方式</th><th>层级利用</th><th>流行度自适应</th><th>用户-物品对齐</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>SPM / Prefix-Ngram</strong></td>
+                <td>静态特征</td>
+                <td>❌</td>
+                <td>❌</td>
+                <td>❌</td>
+              </tr>
+              <tr>
+                <td><strong>DAS</strong></td>
+                <td>匹配统计</td>
+                <td>部分</td>
+                <td>❌</td>
+                <td>✅</td>
+              </tr>
+              <tr style="background:#dcfce7;">
+                <td><strong>SID-Coord（本文）</strong></td>
+                <td>可训练标识符</td>
+                <td>✅ 多分辨率</td>
+                <td>✅ 目标感知门控</td>
+                <td>✅ 分布级对齐</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>4.3 个人理解</h3>
+
+        <div class="callout-blue">
+          <div class="callout-title">💡 为什么这样设计有效？</div>
+          <ol style="margin:0;padding-left:20px;">
+            <li><strong>多分辨率融合</strong>：类似多尺度特征金字塔，不同粒度适配不同数据密度</li>
+            <li><strong>流行度门控</strong>：相当于动态集成两个专家模型（HID专家和SID专家）</li>
+            <li><strong>兴趣对齐</strong>：显式建模"用户是否对这类内容感兴趣"，而非仅依赖隐式序列建模</li>
+          </ol>
+        </div>
+
+        <div class="callout-amber">
+          <div class="callout-title">⚠️ 潜在局限</div>
+          <ul style="margin:0;padding-left:20px;">
+            <li>SID质量依赖离线量化，无法实时更新</li>
+            <li>门控网络需要足够的历史统计特征，冷启动物品仍有挑战</li>
+            <li>仅验证排序场景，召回场景效果待探索</li>
+          </ul>
+        </div>
+
+        <h3>4.4 可借鉴点</h3>
+
+        <div class="two-col">
+          <div class="mini-card" style="border-left:3px solid #8b5cf6;">
+            <h4 style="color:#4c1d95;margin-top:0;">📖 学术启发</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li>SID可训练的设计思想可推广到其他离散标识符</li>
+              <li>流行度自适应策略可应用于更多长尾问题</li>
+              <li>多分辨率融合思路可借鉴到其他层级编码场景</li>
+            </ul>
+          </div>
+          <div class="mini-card" style="border-left:3px solid #22c55e;">
+            <h4 style="color:#14532d;margin-top:0;">🛠️ 工程启示</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li>轻量级门控设计确保工业可用性</li>
+              <li>SID离线生成降低在线开销</li>
+              <li>无侵入设计便于灰度发布和回滚</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!--  §5 总结                                                    -->
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <section class="section" id="summary">
+        <div class="section-title">
+          <div class="icon" style="background:#ecfeff;">🗺️</div>
+          §5 总结
+        </div>
+
+        <blockquote>
+          <strong>SID-Coord 提出了"协调"的新视角</strong>：不是简单引入语义信息，而是系统性协调语义泛化与ID记忆，通过多分辨率建模、流行度感知门控、兴趣对齐三大机制，在快手搜索排序系统中实现了显著且稳定的业务收益，为工业级排序系统的语义化升级提供了可行方案。
+        </blockquote>
+
+        <div class="three-col">
+          <div class="mini-card">
+            <h4>✅ 优势</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li>长尾效果显著提升</li>
+              <li>工业友好、延迟可控</li>
+              <li>端到端可训练</li>
+            </ul>
+          </div>
+          <div class="mini-card">
+            <h4>⚠️ 局限</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li>SID离线生成，实时性受限</li>
+              <li>冷启动仍有挑战</li>
+              <li>仅验证排序场景</li>
+            </ul>
+          </div>
+          <div class="mini-card">
+            <h4>🔮 展望</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li>在线更新SID</li>
+              <li>推广到召回/推荐</li>
+              <li>探索变长SID</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+  <footer>
+    <p>本文档基于论文解读整理，仅供学习参考</p>
+    <a class="back-link" href="../index.html">← 返回论文列表</a>
+  </footer>
+</div>
+</body>
+</html>

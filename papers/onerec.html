@@ -172,6 +172,17 @@
           <p>📄 <strong>原文：</strong><a href="https://arxiv.org/abs/2502.18965" target="_blank">https://arxiv.org/abs/2502.18965</a></p>
           <p>🔗 <strong>前驱工作：</strong>TIGER（NeurIPS 2023）、LETTER（arXiv 2403.06361）</p>
         </div>
+
+        <div class="callout callout-purple">
+          <strong>补充阅读：OneRec 技术报告（arXiv 2506.13695）</strong><br>
+          当前页面聚焦 <strong>2502 原论文</strong>：核心方法主线是 <strong>Balanced K-Means + Session-wise 生成 + IPA 对齐</strong>，重点回答“<strong>OneRec 为什么成立、为什么能替代三级漏斗</strong>”。<br><br>
+          如果你想继续看“<strong>它在快手到底怎么工程化落地</strong>”，建议再读：<a href="./onerec-tech-report.html"><strong>OneRec Technical Report 解读</strong></a>。技术报告重点补了四类信息：<br>
+          ① <strong>Tokenizer 前置多模态管线</strong>：caption / OCR / ASR / 图像帧 + QFormer + RQ-Kmeans；<br>
+          ② <strong>更完整的用户建模</strong>：静态特征、短期行为、正反馈行为、终身行为四路 Encoder；<br>
+          ③ <strong>更工程化的对齐体系</strong>：P-Score、Format Reward、Industrial Reward、ECPO / RL；<br>
+          ④ <strong>更完整的工业指标</strong>：MFU、OPEX、QPS 承接比例、硬件规模等。<br><br>
+          可以把两页配合理解为：<strong>这页讲“方法为什么成立”</strong>，<strong>技术报告页讲“系统怎样真正落地、扩展并降成本”</strong>。
+        </div>
         <div class="callout callout-blue">
           <strong>三句话核心贡献：</strong><br>
           ① 单阶段替代三级漏斗：Encoder-Decoder + MoE，一个模型统一召回与精排，彻底消除多阶段信息损失；<br>
@@ -227,30 +238,73 @@
 
         <h3 id="tokenization">2.1 均衡 K-Means 语义 ID（Balanced Identifier Quantization）</h3>
 
-        <p>传统 RQ-VAE 存在"沙漏现象"（hourglass phenomenon）：少数 codebook 码字被频繁使用（高频 item 全都量化到几个热门码字），而大量码字闲置，导致 ID 分布极不均匀，Decoder 难以学习。OneRec 使用<strong>平衡 K-Means</strong> 解决这一问题。</p>
+        <p>传统 RQ-VAE 存在"沙漏现象"（hourglass phenomenon）：少数 codebook 码字被频繁使用（高频 item 全都量化到几个热门码字），而大量码字闲置，导致 ID 分布极不均匀，Decoder 难以学习。OneRec 使用<strong>平衡 K-Means（Balanced K-Means）</strong> 解决这一问题。</p>
 
-        <h4>量化算法：强制等分</h4>
-        <p>对于每层 codebook，设总视频数为 $|V|$，codebook 大小为 $K$，则每个 cluster 强制包含 $w = |V|/K$ 个视频：</p>
+        <h4>SID 生成全流程：残差量化 + 均衡约束</h4>
+        <p>OneRec 的 SID 生成分两步：<strong>①残差量化（RQ）</strong> 决定每层的 token 是什么；<strong>②均衡 K-Means</strong> 决定每层的 codebook 如何训练。两者结合生成最终的分层 SID。</p>
 
+        <h4>第一步：残差量化生成 SID（与 RQ-VAE 相同）</h4>
+        <p>给定视频 $i$ 的多模态 embedding $\mathbf{e}_i$，依次在每一层 codebook 中找最近邻 cluster，用"残差"迭代量化：</p>
         <div class="formula-block">
-          $$s_i^l = \arg\min_k \| \mathbf{r}_i^l - \mathbf{c}_k^l \|_2^2, \quad \mathbf{r}_i^{l+1} = \mathbf{r}_i^l - \mathbf{c}_{s_i^l}^l$$
+          $$\mathbf{r}_i^1 = \mathbf{e}_i$$
+          $$s_i^l = \arg\min_k \| \mathbf{r}_i^l - \mathbf{c}_k^l \|_2^2 \quad (\text{第}l\text{层 token = 最近 cluster 编号})$$
+          $$\mathbf{r}_i^{l+1} = \mathbf{r}_i^l - \mathbf{c}_{s_i^l}^l \quad (\text{残差 = 当前向量} - \text{被选中 cluster 的中心})$$
         </div>
-        <div class="formula-vars">
-          <div class="var-title">符号说明</div>
-          <ul>
-            <li>$\mathbf{r}_i^1 = \mathbf{e}_i$：视频 $i$ 的多模态 embedding（初始残差）</li>
-            <li>$\mathbf{c}_k^l$：第 $l$ 层第 $k$ 个 cluster 中心</li>
-            <li>$s_i^l$：视频 $i$ 在第 $l$ 层被分配到的 cluster 编号（即该层的 ID token）</li>
-            <li>$L$：总层数（论文中为 3 层，每层 codebook 大小 $K=8192$）</li>
-          </ul>
-        </div>
+        <p>重复 $L$ 层后，视频 $i$ 的 SID 为 $(s_i^1, s_i^2, \ldots, s_i^L)$，即一个 $L$ 维的 token 序列。</p>
 
-        <p>关键约束：每轮迭代中，每个 cluster 只接受距离最近的 $w$ 个未分配视频（通过优先队列顺序分配），强制保证 cluster 大小相等，从根本上消除沙漏现象。</p>
+        <h4>第二步：均衡 K-Means 训练 codebook（OneRec 的创新）</h4>
+        <p>普通 K-Means 允许各 cluster 大小不一，导致沙漏现象。均衡 K-Means 对每层 codebook 训练加入强制等分约束：</p>
+        <div class="formula-block">
+          $$w = |\mathcal{V}| / K \quad (\text{每个 cluster 精确包含} w \text{个视频})$$
+        </div>
+        <p>每轮迭代的分配过程：初始化 $K$ 个 cluster 中心 → 将所有视频按到各 cluster 的距离排序 → 每个 cluster 按距离从近到远依次认领最近的 $w$ 个<strong>未被认领</strong>的视频 → 用分配到的视频均值更新 cluster 中心 → 重复直到收敛。</p>
 
         <div class="example-box">
-          <div class="ex-title">💡 举例：沙漏现象 vs 均衡 K-Means</div>
-          <p><strong>沙漏现象（普通 RQ-VAE）：</strong>快手有 100 亿个视频，但热门的"搞笑段子"类视频有 20 亿个，它们密集分布在 embedding 空间同一区域，导致第一层 8192 个 cluster 中的 5 个 cluster 就包含了大部分视频。Decoder 学到的策略就是"无论如何都输出这 5 个 cluster ID"，对长尾视频几乎没有区分能力。</p>
-          <p><strong>均衡 K-Means：</strong>每个 cluster 精确包含 100 亿 / 8192 ≈ 122 万个视频。即使"搞笑段子"有 20 亿个，它们也会被强制分散到约 1638 个 cluster（而不是 5 个）。每个 cluster 的视频数量均衡，Decoder 每次预测 token 时各 cluster 被预测的概率更加均匀，梯度更平衡，训练更稳定。</p>
+          <div class="ex-title">💡 具体例子：5 个视频 × 2 层 codebook 如何生成 SID</div>
+          <p><strong>设定：</strong>总视频数 $|\mathcal{V}|=6$，每层 codebook 大小 $K=3$，层数 $L=2$，则 $w = 6/3 = 2$（每个 cluster 精确包含 2 个视频）。</p>
+
+          <p><strong>假设 6 个视频的 embedding（1 维，便于可视化）：</strong></p>
+          <ul>
+            <li>视频 A: 0.1 &nbsp;|&nbsp; 视频 B: 0.15 &nbsp;|&nbsp; 视频 C: 0.5 &nbsp;|&nbsp; 视频 D: 0.55 &nbsp;|&nbsp; 视频 E: 0.9 &nbsp;|&nbsp; 视频 F: 0.95</li>
+          </ul>
+
+          <p><strong>第一层均衡 K-Means（$K=3$，$w=2$）：</strong><br>
+          初始化 3 个 cluster 中心，假设收敛后：<br>
+          Cluster 0 中心 ≈ 0.125，Cluster 1 中心 ≈ 0.525，Cluster 2 中心 ≈ 0.925<br>
+          按均衡约束分配（每个 cluster 精确 2 个视频）：</p>
+          <ul>
+            <li>Cluster 0 ← {视频 A(0.1), 视频 B(0.15)}（最近 0.125，且恰好 2 个）</li>
+            <li>Cluster 1 ← {视频 C(0.5), 视频 D(0.55)}（最近 0.525）</li>
+            <li>Cluster 2 ← {视频 E(0.9), 视频 F(0.95)}（最近 0.925）</li>
+          </ul>
+          <p>→ 第一层 SID token（$s_i^1$）：A→<strong>0</strong>, B→<strong>0</strong>, C→<strong>1</strong>, D→<strong>1</strong>, E→<strong>2</strong>, F→<strong>2</strong></p>
+
+          <p><strong>计算第一层残差（$\mathbf{r}_i^2 = \mathbf{r}_i^1 - \mathbf{c}_{s_i^1}^1$）：</strong></p>
+          <ul>
+            <li>视频 A 残差：0.1 − 0.125 = −0.025</li>
+            <li>视频 B 残差：0.15 − 0.125 = +0.025</li>
+            <li>视频 C 残差：0.5 − 0.525 = −0.025</li>
+            <li>视频 D 残差：0.55 − 0.525 = +0.025</li>
+            <li>视频 E 残差：0.9 − 0.925 = −0.025</li>
+            <li>视频 F 残差：0.95 − 0.925 = +0.025</li>
+          </ul>
+
+          <p><strong>第二层均衡 K-Means 作用在残差上（$K=3$，$w=2$）：</strong><br>
+          残差只有 ±0.025 两种，cluster 大小均衡后：</p>
+          <ul>
+            <li>Cluster 0（负残差）← {视频 A, 视频 C, 视频 E}，但 $w=2$，所以只能取 2 个！</li>
+            <li>这里体现均衡约束的关键：普通 K-Means 会把 A/C/E 都分到同一个 cluster，而均衡 K-Means 强制每个 cluster ≤ 2 个，会把第 3 个负残差视频分到其他 cluster</li>
+            <li>假设最终：Cluster 0 ← {A, C}，Cluster 1 ← {E, B}，Cluster 2 ← {D, F}</li>
+          </ul>
+          <p>→ 第二层 SID token（$s_i^2$）：A→<strong>0</strong>, C→<strong>0</strong>, E→<strong>1</strong>, B→<strong>1</strong>, D→<strong>2</strong>, F→<strong>2</strong></p>
+
+          <p><strong>最终 2 层 SID：</strong></p>
+          <ul>
+            <li>视频 A：(<strong>0</strong>, <strong>0</strong>) &nbsp;|&nbsp; 视频 B：(<strong>0</strong>, <strong>1</strong>) &nbsp;|&nbsp; 视频 C：(<strong>1</strong>, <strong>0</strong>)</li>
+            <li>视频 D：(<strong>1</strong>, <strong>2</strong>) &nbsp;|&nbsp; 视频 E：(<strong>2</strong>, <strong>1</strong>) &nbsp;|&nbsp; 视频 F：(<strong>2</strong>, <strong>2</strong>)</li>
+          </ul>
+
+          <p><strong>对比普通 RQ-VAE 沙漏现象：</strong>如果不加均衡约束，极端情况下所有视频第一层都分到同一个大 cluster（比如都在 embedding 空间中某个高密度区域），导致 $s_i^1$ 对所有视频都是同一个数字，失去区分能力。均衡约束强制每个 cluster 只有 $w$ 个视频，保证 ID 空间被充分利用。</p>
         </div>
 
         <h3 id="session">2.2 Session-wise 列表生成（Session-wise List Generation）</h3>
@@ -286,10 +340,65 @@
           </ul>
         </div>
 
+        <div class="callout callout-amber">
+          <strong>常见疑问：NTP 学的是旧系统推出来的 session，有意义吗？</strong><br><br>
+          有意义，但要理解 NTP 和 DPO 在这里各自的角色：<br><br>
+
+          <strong>原因一：NTP 是"地基"，不是终点</strong><br>
+          OneRec 的目标是用一个生成模型<strong>替代</strong>整个三阶段系统。第一步要做的，就是让这个生成模型至少能达到旧系统的水平——否则连基线都达不到，谈什么超越。<br>
+          NTP 学旧系统的高质量 session，是在告诉模型："历史上用户真正喜欢的是这类 session，你先学会生成这个水平的东西。"这是<strong>知识迁移</strong>，不是无意义的复制。<br><br>
+
+          <strong>原因二：DPO（IPA）才是超越旧系统的关键</strong><br>
+          NTP 只能让模型<strong>复现旧系统的上限</strong>，而 DPO 的作用是让模型<strong>超越旧系统</strong>。DPO 的训练数据来自 Beam Search 生成的合成 session，Beam Search 可以探索出旧系统<strong>从来没推过的组合</strong>，RM 给这些组合打分，选出比旧系统更好的 session 作为 chosen，再用 DPO 拉高这类 session 的概率。<br>
+          整体逻辑：<code>NTP → 学会旧系统水平（地基）</code> &nbsp;→&nbsp; <code>DPO → 探索并强化旧系统未发现的更优解（超越）</code><br><br>
+
+          <strong>原因三：99% NTP 在混合训练里起正则作用</strong><br>
+          IPA 阶段 99% 的数据仍然是 NTP，目的是防止模型在 DPO 优化偏好方向时<strong>灾难性遗忘</strong>——如果只做 DPO，模型可能过度拟合 RM 的偏好打分，忘掉"如何生成语义合法的 session token 序列"。NTP 持续提供正则，保持模型的生成能力稳定。
+        </div>
+
         <div class="example-box">
-          <div class="ex-title">💡 举例：Next-Item vs Session-wise 生成</div>
-          <p><strong>Next-Item（传统，逐点生成）：</strong>Decoder 每次输出 1 个视频的 SID：[a_9, b_3, c_1]。然后把这个视频加入历史，再预测下一个：[a_4, b_5, c_4]。再加入历史再预测第三个……。生成第 3 个视频时，Decoder 只看到历史 + 第 1、2 个生成视频，不知道第 1 和第 2 个视频合在一起是否多样，也不知道加入第 3 个后 session 整体质量如何。</p>
-          <p><strong>Session-wise（OneRec，整体生成）：</strong>Decoder 一次性生成 5 个视频的完整 SID 序列：[BOS, a_9, b_3, c_1, BOS, a_4, b_5, c_4, BOS, a_6, b_1, c_5, BOS, a_2, b_7, c_2, BOS, a_9, b_1, c_3]。训练 loss 对整个 session 的每个 token 同时计算，模型能感知"整个 session 是否高质量"，自然学会了 session 内的多样性和连贯性控制，无需人工规则。</p>
+          <div class="ex-title">💡 Next-Item vs Session-wise：用训练代码对比最清晰</div>
+
+          <p><strong>两者训练代码对比（Encoder-Decoder 架构）：</strong></p>
+          <pre style="background:#f8f8f8;border-radius:8px;padding:14px;font-size:12.5px;line-height:1.7;overflow-x:auto;">
+# ── Next-Item 训练 ─────────────────────────────────────────
+# target: 下一个视频的 SID，shape [3]，例如 [9, 3, 1]
+
+enc_out        = encoder(H_u)            # 用户历史，只跑一次
+decoder_input  = [BOS, 9, 3]            # 长度 3，去掉最后一个 token
+decoder_target = [9, 3, 1]              # 长度 3，去掉开头 BOS
+
+logits = decoder(decoder_input, enc_out) # shape [3, vocab_size]
+loss   = cross_entropy(logits, decoder_target)
+# ↑ loss 只覆盖 3 个 token（1 个视频）
+
+
+# ── Session-wise 训练 ──────────────────────────────────────
+# target: 完整 5 个视频 session，形式化为带 BOS 分隔的序列
+
+enc_out        = encoder(H_u)            # 完全一样，只跑一次
+target_seq     = [BOS,9,3,1, BOS,4,5,4, BOS,6,1,5, BOS,2,7,2, BOS,9,1,3]  # 长度 20
+decoder_input  = target_seq[:-1]         # 长度 19
+decoder_target = target_seq[1:]          # 长度 19
+
+logits = decoder(decoder_input, enc_out) # shape [19, vocab_size]
+loss   = cross_entropy(logits, decoder_target)
+# ↑ loss 覆盖 19 个 token（5 个视频）
+          </pre>
+
+          <p><strong>结论一：训练方式完全相同</strong>，encoder 调用一模一样，decoder 内部也是标准 causal mask teacher forcing，唯一区别是 <strong>decoder_input 的长度（3 vs 19）</strong>，即 loss 覆盖的 token 数不同。</p>
+
+          <p><strong>结论二：为什么 Session-wise 能感知完整 session？</strong><br>
+          不是因为 Encoder，而是因为 <strong>5 个视频的所有 token 都在同一个 decoder_input 序列里</strong>。Decoder 的 causal self-attention 在生成视频3的 token 时，天然能"看到"视频1和视频2已经生成了什么——这是 Transformer 自回归的固有能力，与 Encoder 无关。Encoder 只负责处理用户历史 $H_u$，对 session 内部的感知没有贡献。</p>
+
+          <p><strong>结论三：Next-Item 推理时的额外问题（Encoder-Decoder 架构下被放大）</strong><br>
+          推理时 Next-Item 需要循环 5 次：每次生成 1 个视频 → 把它<strong>加入 $H_u$ 重新跑 Encoder</strong> → 再生成下一个。这导致两个问题：</p>
+          <ul>
+            <li><strong>Exposure Bias：</strong>训练时 decoder_input 始终是真实视频 SID，推理时却要把模型自己生成的视频加入历史——这个模式训练中从未出现过，误差逐步累积</li>
+            <li><strong>推理代价高：</strong>需要调用 5 次 Encoder forward，而 Session-wise 只需 1 次</li>
+          </ul>
+
+          <p><strong>如果把两者都改成纯 Decoder（GPT 风格，把历史和目标拼成一条序列），则 Next-Item 推理时也不需要反馈进 Encoder，两者推理行为等价，唯一区别只剩"训练时 loss 覆盖多少个 token"。</strong> 这说明 Next-Item 的额外劣势本质上是 Encoder-Decoder 架构下"训练时序列短、推理时要迭代循环 Encoder"这一不一致带来的。</p>
         </div>
 
         <h3 id="architecture">2.3 Encoder-Decoder + Sparse MoE 架构</h3>
@@ -303,39 +412,77 @@
         <div class="formula-vars">
           <div class="var-title">符号说明</div>
           <ul>
-            <li>$N_\text{MoE} = 24$：总 expert 数量（每层 24 个 FFN）</li>
-            <li>$K_\text{MoE} = 2$：每次前向只激活 2 个 expert（稀疏性 = 2/24 ≈ 8%）</li>
+            <li>$N_\text{MoE} = 24$：总 expert 数量（每层 24 个 FFN expert）</li>
+            <li>$K_\text{MoE} = 2$：每次前向只激活 2 个 expert（FFN 层稀疏性 = $2/24 \approx 8.3\%$）</li>
             <li>$g_{i,t}$：第 $i$ 个 expert 对第 $t$ 个 token 的 gate 权重（仅 top-2 非零）</li>
             <li>$s_{i,t} = \text{Softmax}_i(H_t^l \cdot e_i^l)$：token $t$ 对 expert $i$ 的路由分数</li>
-            <li>推理时仅 13% 的参数被激活，大幅降低推理延迟</li>
           </ul>
         </div>
 
         <div class="callout callout-blue">
-          <strong>参数效率：</strong>OneRec-1B 部署到线上时，虽然总参数量达 10 亿，但每次前向传播仅激活约 13%（~1.3亿个参数的计算量），实际 FLOPs 等价于约 0.13B 的 dense 模型。MoE 让 OneRec 在不显著增加推理成本的前提下显著提升模型容量。
+          <strong>参数效率：</strong>OneRec 论文原文描述为 "scale model capacity <em>without proportionally increasing computational FLOPs</em>"。每个 MoE 层只激活 $K_\text{MoE}=2$ 个 expert，FFN 层的计算量稀疏性为 $2/24 \approx 8.3\%$。注意：这里的 8.3% 是 FFN 层的激活比例，Attention 层参数仍然 100% 激活（Attention 不是 MoE）。整体模型（Attention + FFN 合计）的参数激活比介于 8.3%～100% 之间，论文并未给出具体的整体激活率数字。MoE 的核心价值是：以较小的推理 FLOPs 代价，大幅扩展模型总参数量（专家的总知识量），从而提升模型容量。
         </div>
 
         <h3 id="reward">2.4 奖励模型设计（Reward Model）</h3>
 
-        <p>DPO 训练需要 preference pairs（好的 session vs 差的 session）。NLP 中可以用人工标注，但推荐系统中用户不会明确表示"我更喜欢这个 session"。OneRec 训练一个<strong>多目标奖励模型</strong>来模拟用户偏好：</p>
+        <div class="callout callout-amber">
+          <strong>常见疑问：日志里不是已经有真实的 swt/ltr 标签了么，为什么还要另外训一个 RM？</strong><br><br>
 
-        <div class="formula-block">
-          $$\hat{r}_{swt} = \text{Tower}_{swt}(\text{Sum}(\mathbf{h}^f))$$
-          $$\hat{r}_{vtr} = \text{Tower}_{vtr}(\text{Sum}(\mathbf{h}^f))$$
-          $$\text{Tower}(\cdot) = \text{Sigmoid}(\text{MLP}(\cdot))$$
-        </div>
-        <div class="formula-vars">
-          <div class="var-title">符号说明</div>
-          <ul>
-            <li>$\mathbf{h}^f$：session 内各视频 target-aware embedding 经 self-attention 融合后的序列</li>
-            <li>$\hat{r}_{swt}$：预测的 session 观看时长（session watch time）</li>
-            <li>$\hat{r}_{vtr}$：预测的视频观看率（view-through rate）</li>
-            <li>还有 $\hat{r}_{wtr}$（关注率）和 $\hat{r}_{ltr}$（点赞率）</li>
-            <li>$\text{Sum}(\mathbf{h}^f)$：session 内所有视频 embedding 的求和池化</li>
-          </ul>
+          <strong>原因一：日志给不了"对比对"（反事实问题）</strong><br>
+          DPO 需要的是：同一用户、同一历史状态 $H_u$ 下，一个 chosen session 和一个 rejected session 的对比。但历史日志中，每次刷新只有一条真实曝光记录——系统当时推了什么，就只有这一条，<strong>没有"如果推了另一个 session 用户会怎么反应"的记录</strong>。这是反事实问题，在现实中不存在。<br><br>
+          Beam Search 的作用正是：用当前模型为同一个 $H_u$ 生成 $N$ 条不同路径，<strong>人工制造出可对比的候选集</strong>，再由 RM 从中挑出最好和最差，构成合法的 DPO pair。<br><br>
+
+          <strong>原因二：直接用旧系统日志做 DPO 数据，log-ratio 会不稳定</strong><br>
+          标准 DPO 理论上可以用 off-policy 数据（提前收集好的固定数据集），但有一个实践问题：DPO loss 需要计算当前模型对 chosen/rejected session 的 log 概率。如果偏好对来自旧系统（比如一个月前的推荐系统生成的 session），当前模型对这些序列的概率可能极低甚至接近 0——当前模型根本不会生成这些 token 组合，导致 log 概率趋向 $-\infty$，log-ratio 数值爆炸，梯度噪声极大。<br>
+          Beam Search 生成的候选 session 来自<strong>当前模型本身</strong>，模型对它们的概率在合理范围内，log-ratio 稳定，训练收敛正常。这是 IPA 每轮重新采样的工程动机之一。<br><br>
+
+          <strong>原因三：RM 的训练数据和 DPO 的数据需求是两件不同的事</strong><br>
+          RM 用真实日志（<code>历史session + 真实swt/ltr标签</code>）训练，学会了"给任意 session 打分的能力"。<br>
+          IPA 利用这个打分能力，给 Beam Search 产生的合成 session 评分，再选出 chosen/rejected。<br>
+          <strong>不能反过来</strong>——直接把真实日志当 DPO 数据，因为真实日志根本给不了对比对（原因一），且旧 session 会导致 log-ratio 不稳定（原因二），合成 session 也没有真实用户行为标签。<br><br>
+
+          <strong>类比：</strong>厨师（RM）从 10 万道顾客真实点评的菜里学会了"什么好吃"。比赛中他给自己新发明的菜（Beam Search 合成 session）打分，选最好和最差的配方来改进。真实日志给了 RM 的<em>知识来源</em>，但比较对象是模型自己生成的合成 session——两件事的数据需求完全不同。<br><br>
+
+          <table style="border-collapse:collapse;font-size:13px;width:100%;margin-top:4px;">
+            <thead><tr style="background:#fef3c7;">
+              <th style="padding:6px 10px;border:1px solid #fcd34d;text-align:left;"></th>
+              <th style="padding:6px 10px;border:1px solid #fcd34d;">RM 训练数据</th>
+              <th style="padding:6px 10px;border:1px solid #fcd34d;">IPA DPO 数据</th>
+            </tr></thead>
+            <tbody>
+              <tr><td style="padding:6px 10px;border:1px solid #fcd34d;font-weight:600;">数据来源</td><td style="padding:6px 10px;border:1px solid #fcd34d;">历史真实曝光 session</td><td style="padding:6px 10px;border:1px solid #fcd34d;">Beam Search 生成的合成 session</td></tr>
+              <tr><td style="padding:6px 10px;border:1px solid #fcd34d;font-weight:600;">标签</td><td style="padding:6px 10px;border:1px solid #fcd34d;">真实 swt/ltr（用户行为日志）</td><td style="padding:6px 10px;border:1px solid #fcd34d;">RM 预测分数（无真实标签）</td></tr>
+              <tr><td style="padding:6px 10px;border:1px solid #fcd34d;font-weight:600;">用途</td><td style="padding:6px 10px;border:1px solid #fcd34d;">让 RM 学会打分</td><td style="padding:6px 10px;border:1px solid #fcd34d;">构造 (chosen, rejected) 偏好对</td></tr>
+              <tr><td style="padding:6px 10px;border:1px solid #fcd34d;font-weight:600;">为什么不能互换</td><td style="padding:6px 10px;border:1px solid #fcd34d;">真实 session 没有可比对的"另一条路径"</td><td style="padding:6px 10px;border:1px solid #fcd34d;">合成 session 没有真实用户行为标签</td></tr>
+            </tbody>
+          </table>
         </div>
 
-        <p>Reward Model 用历史真实用户行为数据预训练，使用二值交叉熵 loss 在多个目标上联合训练，输出一个综合奖励分数 $r = R(u, S)$。</p>
+        <p>DPO 训练需要 preference pairs（好的 session vs 差的 session）。推荐系统中用户不会明确表示"我更喜欢这个 session"，且 Beam Search 生成的合成 session 没有真实用户行为标签，因此 OneRec 训练一个<strong>多目标奖励模型（session 级别打分，非 point-wise）</strong>来模拟用户偏好。</p>
+
+        <div class="example-box">
+          <div class="ex-title">📄 论文原文翻译（Section 3.3.1 Reward Model Training）</div>
+
+          <p>我们用 $R(\bm{u}, \mathcal{S})$ 表示奖励模型，它负责为不同用户选择偏好数据。其中，输出 $r$ 表示用户 $u$（通常由用户行为表示）对 session $\mathcal{S}=\{\bm{v}_1, \bm{v}_2, \ldots, \bm{v}_m\}$ 的偏好奖励值。</p>
+
+          <p>为了使 RM 具备对 session 进行排序的能力，我们首先对 session $\mathcal{S}$ 中每个 item $\bm{v}_i$ 提取 target-aware 表示 $\bm{e}_i = \bm{v}_i \odot \bm{u}$，其中 $\odot$ 表示 target-aware 操作（例如对用户行为做 target attention）。由此得到 session $\mathcal{S}$ 的 target-aware 表示序列 $\bm{h} = \{\bm{e}_1, \bm{e}_2, \cdots, \bm{e}_m\}$。</p>
+
+          <p>接着，session 内各 item 通过 self-attention 层相互交互，融合不同 item 之间的必要信息：</p>
+          <div style="text-align:center;margin:8px 0;">$$\bm{h}_f = \mathrm{SelfAttention}(\bm{h}\bm{W}^Q_s,\ \bm{h}\bm{W}^K_s,\ \bm{h}\bm{W}^V_s)$$</div>
+
+          <p>然后，我们使用不同的 tower 对多目标奖励进行预测，<strong>RM 使用大量推荐数据进行预训练</strong>：</p>
+          <div style="text-align:center;margin:8px 0;">
+            $$\hat{r}^{swt} = \texttt{Tower}^{swt}\big(\texttt{Sum}(\bm{h}_f)\big),\quad \hat{r}^{vtr} = \texttt{Tower}^{vtr}\big(\texttt{Sum}(\bm{h}_f)\big)$$
+            $$\hat{r}^{wtr} = \texttt{Tower}^{wtr}\big(\texttt{Sum}(\bm{h}_f)\big),\quad \hat{r}^{ltr} = \texttt{Tower}^{ltr}\big(\texttt{Sum}(\bm{h}_f)\big)$$
+            $$\text{其中}\quad \texttt{Tower}(\cdot) = \texttt{Sigmoid}\big(\texttt{MLP}(\cdot)\big)$$
+          </div>
+
+          <p>在得到每个 session 的所有预测奖励 $\hat{r}^{swt}, \ldots$ 以及真实标签（ground-truth labels）$y^{swt}, \ldots$ 之后，我们直接最小化二值交叉熵损失来训练 RM：</p>
+          <div style="text-align:center;margin:8px 0;">$$\mathcal{L}_{\rm RM} = -\sum_{swt,\ldots}^{xtr}\left(y^{xtr}\log(\hat{r}^{xtr}) + (1-y^{xtr})\log(1-\hat{r}^{xtr})\right)$$</div>
+
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:12px 0;">
+          <p style="font-size:13px;color:#6b7280;margin:0;"><strong>补充说明：</strong>论文未具体说明 ground-truth label 的构造方式（如 swt 是绝对时长还是归一化比例），仅说"使用大量推荐数据预训练 + binary cross-entropy loss"。RM 是 <strong>session 级别</strong>打分，而非 point-wise 对单个视频打分——通过 self-attention 让 session 内 5 个视频互相感知后 Sum 池化得到整体表示，能捕捉单视频排序做不到的多样性/连贯性信息。</p>
+        </div>
 
         <div class="example-box">
           <div class="ex-title">💡 举例：奖励模型给 Session 打分</div>
@@ -354,7 +501,7 @@
           <li class="step"><span class="step-num">1</span><div>用当前模型 $\mathcal{M}_t$ 通过 Beam Search（beam size=128）为每个用户生成 $N$ 个不同 session</div></li>
           <li class="step"><span class="step-num">2</span><div>用 Reward Model $R(u, S)$ 对每个 session 打分</div></li>
           <li class="step"><span class="step-num">3</span><div>选分数最高的 session 为 chosen $S^w_u$，分数最低的为 rejected $S^l_u$</div></li>
-          <li class="step"><span class="step-num">4</span><div>混合 NTP loss 和 DPO loss 训练，DPO 采样比例 $r_\text{DPO} = 1\%$（其余 99% 仍用 NTP）</div></li>
+          <li class="step"><span class="step-num">4</span><div>对每个训练样本，以概率 $r_\text{DPO}=1\%$ 进入 DPO 分支：若进入，则在线构造偏好对并计算 $\mathcal{L}_\text{NTP}+\lambda\mathcal{L}_\text{DPO}$；否则只计算 $\mathcal{L}_\text{NTP}$</div></li>
           <li class="step"><span class="step-num">5</span><div>得到新模型 $\mathcal{M}_{t+1}$，用新模型重新生成候选 session，回到步骤 1</div></li>
         </ol>
 
@@ -376,7 +523,30 @@
         <div class="formula-block">
           $$\mathcal{L} = \mathcal{L}_\text{NTP} + \lambda \cdot \mathcal{L}_\text{DPO}$$
         </div>
-        <p>论文消融发现 1% DPO 比例在 4/5 个目标上达到 5% 比例的 95% 性能，GPU 资源节省 80%——这是 OneRec 能在工业场景实际落地的关键工程决策。</p>
+
+        <div class="callout callout-blue">
+          <strong>IPA 里 NTP 和 DPO 是同一训练阶段联合优化，但论文没有把实现细节写到“每个 batch 如何拼”这么细</strong><br><br>
+          按论文 Algorithm 2 的写法：对每个训练 sample，先按概率 $r_\text{DPO}=1\%$ 判断本次是否进入 DPO 分支。<br>
+          若进入 DPO 分支：当前模型先在线生成候选 session，RM 选出 best / worst，再计算总损失 $\mathcal{L}=\mathcal{L}_\text{NTP}+\lambda\mathcal{L}_\text{DPO}$；若不进入 DPO 分支：只计算 $\mathcal{L}_\text{NTP}$。<br><br>
+          因此，可以确定的是：<br>
+          ① IPA 阶段不是“先完全做完 NTP 再切到 DPO”的两阶段；<br>
+          ② DPO 所需的偏好对不是固定离线数据，而是由当前模型在线生成；<br>
+          ③ 论文明确保留了 $\mathcal{L}_\text{NTP}$，用于在偏好对齐时继续稳定生成能力。<br><br>
+          但要注意：论文<strong>没有明确展开说明</strong> DPO 分支中的 $\mathcal{L}_\text{NTP}$ 具体是对哪条序列计算，因此这里不能擅自写成“对 chosen 做 teacher forcing”之类超出原文的信息。
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 怎么理解“DPO 样本”这件事</div>
+          <p>这里的“DPO 样本”不是像传统监督学习那样，提前放在离线数据集里的固定样本，而是 <strong>IPA 训练过程中由当前模型在线生成</strong> 的偏好对：</p>
+          <ul>
+            <li>先给定一个用户历史 $H_u$</li>
+            <li>当前模型 $\mathcal{M}_t$ 用 Beam Search 生成 $N$ 个候选 session</li>
+            <li>RM 给这 $N$ 个候选打分</li>
+            <li>最高分作为 chosen $S^w_u$，最低分作为 rejected $S^l_u$</li>
+          </ul>
+          <p>于是得到一个在线构造的偏好对 $(H_u, S^w_u, S^l_u)$，再用于计算 $\mathcal{L}_{\text{DPO}}$。因此，DPO 数据不是“事先标好的训练集”，而是“训练过程中当前模型自己生成、RM 再筛出来的 pair”。</p>
+          <p style="font-size:13px;color:#6b7280;margin-top:8px;">注意：论文确认了进入 DPO 分支时总损失写作 $\mathcal{L}_{\text{NTP}} + \lambda \mathcal{L}_{\text{DPO}}$，但没有展开说明这个分支里 $\mathcal{L}_{\text{NTP}}$ 的监督对象具体是哪条序列，因此这里不再额外假设实现细节。</p>
+        </div>
 
         <div class="example-box">
           <div class="ex-title">💡 举例：为什么要"迭代"而非一次 DPO</div>
@@ -400,6 +570,46 @@
           <li><strong>在线推理服务：</strong>KV Cache 加速 + float16 量化减少内存，Beam Search beam_size=128（平衡质量与延迟）</li>
           <li><strong>DPO Sample Server：</strong>仅对 1% 请求进行 DPO 采样（用 Reward Model 打分生成偏好对），供持续在线学习使用</li>
         </ul>
+
+        <div class="callout callout-blue">
+          <strong>这个模型在线上到底怎么用？</strong><br><br>
+          论文给出的核心思路很明确：<strong>OneRec 在线上不是当“召回器”或“打分器”用，而是直接充当完整的推荐生成器</strong>。也就是说，它一次性完成传统系统里“召回 + 排序 + 列表组织”三件事。<br><br>
+          在线请求到来时，大致流程是：<br>
+          ① 取用户最近的行为历史，编码成语义 ID 序列，送入 Encoder；<br>
+          ② Decoder 以自回归方式生成目标 session 的语义 ID 序列（例如 5 个视频，每个视频 3 个 SID token，中间用 BOS 分隔）；<br>
+          ③ 在线服务使用 <strong>Beam Search</strong> 在 SID 空间搜索多个候选序列，beam size = 128；<br>
+          ④ 得到最终的 SID 序列后，再映射回真实视频 ID，作为这一屏的推荐结果返回给用户。<br><br>
+          所以从线上 serving 角度看，它不是“先召回一堆候选视频，再用模型逐个打分重排”，而是<strong>直接生成最终的推荐列表</strong>。
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：一次线上请求是怎么走的</div>
+          <p>假设某用户最近看过的历史是：[搞笑A, 搞笑B, 科技C, 美食D, 搞笑E, 健身F, ...]。</p>
+          <ul>
+            <li><strong>Step 1：Encoder 读历史</strong><br>
+              系统先把这些历史视频转成语义 ID token 序列，Encoder 对整段历史做编码，得到用户当前兴趣状态的表示。</li>
+            <li><strong>Step 2：Decoder 生成 session</strong><br>
+              Decoder 从 <code>[BOS]</code> 开始，自回归生成一整屏推荐的 SID 序列，比如：<br>
+              <code>[BOS, a9, b3, c1, BOS, a4, b5, c4, BOS, a6, b1, c5, BOS, a2, b7, c2, BOS, a9, b1, c3]</code></li>
+            <li><strong>Step 3：Beam Search 选最优序列</strong><br>
+              在线推理不是只保留一条贪心路径，而是保留 beam size = 128 条候选路径，在 SID 空间中比较哪条完整 session 概率最高。</li>
+            <li><strong>Step 4：SID → 视频</strong><br>
+              最终把生成出的 5 组 SID 映射回真实视频，得到这一屏真正展示给用户的 5 个视频。</li>
+          </ul>
+          <p>这就是 OneRec 在线 serving 的本质：<strong>用户历史 → 生成语义 ID 列表 → 映射回视频 → 直接展示</strong>。</p>
+        </div>
+
+        <div class="callout callout-amber">
+          <strong>论文明确写了哪些，没写哪些？</strong><br><br>
+          论文明确写了：<br>
+          <ul>
+            <li>在线推理用 <strong>KV Cache</strong> 加速自回归解码</li>
+            <li>使用 <strong>float16 量化</strong> 降低显存/内存开销</li>
+            <li>在线搜索使用 <strong>Beam Search</strong>，beam size = 128</li>
+            <li>单独有一个 <strong>DPO Sample Server</strong>，只采样 1% 在线流量，用于构造偏好对回流训练</li>
+          </ul>
+          但论文<strong>没有展开实现细节</strong>，例如：SID 到真实视频 ID 的索引服务怎么做、在线缓存怎么组织、服务拆分成多少个微服务、延迟预算是多少、是否还有额外的规则后处理等。这些都属于工程落地细节，论文图里只给了高层结构，没有写源码级实现。
+        </div>
       </section>
 
       <!-- 实验 -->

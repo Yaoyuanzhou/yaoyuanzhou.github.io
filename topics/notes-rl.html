@@ -188,7 +188,9 @@
         </li>
         <li><a href="#grpo">§6 GRPO：自己练习找答案（DeepSeek-R1）</a>
           <ul class="toc-sub">
-            <li><a href="#grpo-idea">6.1 不需要 Critic，靠组内对比</a></li>
+            <li><a href="#grpo-from-policy">6.0 从 Policy-Based 到 GRPO 的演化链</a></li>
+            <li><a href="#pass-at-n">Pass@N：能力上限指标</a></li>
+            <li><a href="#grpo-idea">6.1 GRPO 算法细节</a></li>
             <li><a href="#grpo-math">6.2 数学推理为什么特别适合 GRPO</a></li>
           </ul>
         </li>
@@ -781,50 +783,113 @@
           <p>优势函数 $\hat{A}(s,a) = Q(s,a) - V(s)$ 就是：<strong>这一步的实际回报（Q值）减去这个状态的平均期望回报（V值）</strong>，得到"超出平均水平多少"。</p>
         </div>
 
-        <p>实践中，PPO 用<strong>广义优势估计（GAE，Generalized Advantage Estimation）</strong>来计算：</p>
+        <!-- GAE 完整讲解 -->
+        <div style="background:#fff;border:1.5px solid #e5e7eb;border-radius:16px;overflow:hidden;margin:16px 0;">
+          <div style="background:#1e3a8a;color:#fff;padding:12px 20px;font-weight:700;font-size:15px;">📐 GAE 完整讲解：从直觉到公式到数字</div>
+          <div style="padding:20px 22px;">
 
-        <div class="formula-block">
-          $$\hat{A}_t^{GAE(\gamma, \lambda)} = \sum_{l=0}^{T-t-1} (\gamma\lambda)^l \cdot \underbrace{\delta_{t+l}}_{\text{TD 误差}}$$
-        </div>
-        <div class="formula-vars">
-          <div class="var-title">每个符号的含义</div>
-          <ul>
-            <li>$\delta_t = r_t + \gamma V(s_{t+1}) - V(s_t)$：TD（时序差分）误差，即"实际回报 - 预测回报"</li>
-            <li>$\gamma$：折扣因子（0.99），远处的奖励打折</li>
-            <li>$\lambda$：GAE 衰减因子（通常 0.95），控制向前看多少步</li>
-            <li><strong>直觉：</strong>把未来多步的 TD 误差加权求和，比只看一步更准确，比看无限步更稳定</li>
-          </ul>
+            <!-- 一、出发点 -->
+            <h4 style="color:#1e3a8a;margin:0 0 10px;">一、出发点：终态奖励怎么分配给每个 token？</h4>
+            <p style="margin-bottom:12px;">最终奖励是所有 token 共同贡献得到的，但谁贡献多少不好量化。一个符合直觉的假设是：<strong>离奖励越近的 token，贡献越大</strong>（因果链更短，影响更直接）。所以我们按这个假设，把终态奖励往前分配。</p>
+
+            <!-- 二、V 的定义 -->
+            <h4 style="color:#1e3a8a;margin:0 0 10px;">二、$V(s_t)$：有衰减的贡献总和</h4>
+            <p style="margin-bottom:8px;">定义 $V(s_t)$ 为<strong>从第 t 步起，后续所有 token 贡献的衰减总和</strong>：</p>
+            <div class="formula-block" style="margin:0 0 8px;">
+              $$V(s_t) = r_t + \gamma r_{t+1} + \gamma^2 r_{t+2} + \cdots$$
+            </div>
+            <p style="margin-bottom:8px;font-size:13.5px;"><strong>注意："衰减"是定义的一部分，不能省略。</strong>原因是数学上的必要性——如果没有 $\gamma &lt; 1$，无限长序列求和会发散，训练无法进行。所以 $V(s_t)$ 不是"总贡献"，而是"有衰减的贡献总和"。</p>
+            <p style="margin-bottom:14px;font-size:13.5px;">因为 LLM 只有终态有奖励（$r_T$），中间全是 0，所以 $V(s_t) = \gamma^{T-t} \cdot r_T$。<strong>越靠近终态，折扣次数越少，$V$ 越大</strong>——就像 10 年后的 100 万现值只有 61 万，1 年后的现值有 95 万。</p>
+            <p style="margin-bottom:8px;font-size:13.5px;">由衰减求和的定义，自然推出 <strong>Bellman 恒等式</strong>：</p>
+            <div class="formula-block" style="margin:0 0 14px;">
+              $$V(s_t) = r_t + \gamma \cdot V(s_{t+1})$$
+            </div>
+            <p style="margin-bottom:18px;font-size:13.5px;color:#6b7280;">这是<strong>理论上成立的恒等式</strong>——第 t 步的衰减贡献总和 = 第 t 步自己的贡献 + 折扣后的剩余部分。如果 Critic 估得完全准，两边完全相等。</p>
+
+            <!-- 三、TD 误差 -->
+            <h4 style="color:#1e3a8a;margin:0 0 10px;">三、TD 误差 $\delta_t$：Critic 偏了多少</h4>
+            <p style="margin-bottom:8px;">Critic 是神经网络，估值不一定准，所以 Bellman 恒等式两边实际上不相等。两边的差就是 <strong>TD 误差</strong>：</p>
+            <div class="formula-block" style="margin:0 0 10px;">
+              $$\delta_t = r_t + \gamma \cdot V(s_{t+1}) - V(s_t)$$
+            </div>
+            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:18px;font-size:13.5px;">
+              <div style="line-height:2;">
+                <strong style="color:#1d4ed8;">$\delta_t > 0$</strong>：右边 &gt; 左边，Critic <strong>低估</strong>了 —— 这个 token 的实际贡献比预期多<br>
+                <strong style="color:#dc2626;">$\delta_t < 0$</strong>：右边 &lt; 左边，Critic <strong>高估</strong>了 —— 实际贡献不如预期<br>
+                <strong>$\delta_t = 0$</strong>：Critic 估得刚好准，Bellman 恒等式成立
+              </div>
+            </div>
+
+            <!-- 四、GAE -->
+            <h4 style="color:#1e3a8a;margin:0 0 10px;">四、GAE：把后续每步的误差累加</h4>
+            <p style="margin-bottom:8px;">第 t 个 token 的 Advantage，不只看它自己这步的 $\delta_t$，还要累加后续步骤的误差——因为<strong>一个 token 选得好不好，不只看它自己这步超出预期多少，还要看它带动了后续哪些步也超出预期</strong>，越远的影响折扣越多：</p>
+            <div class="formula-block" style="margin:0 0 10px;">
+              $$\hat{A}_t = \delta_t + (\gamma\lambda)\delta_{t+1} + (\gamma\lambda)^2\delta_{t+2} + \cdots$$
+            </div>
+            <p style="margin-bottom:8px;font-size:13.5px;">等价的递推形式（代码实现从后往前算）：$\hat{A}_t = \delta_t + (\gamma\lambda)\hat{A}_{t+1}$</p>
+            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:18px;font-size:13.5px;">
+              <strong>$\lambda$ 参数的权衡：</strong>
+              <ul style="margin:6px 0 0;padding-left:18px;line-height:2;">
+                <li>$\lambda = 0$：只看自己这步，方差小但视野窄，忽略了连锁效应</li>
+                <li>$\lambda = 1$：看到最后一步，理论无偏但受远处噪声影响大</li>
+                <li>$\lambda = 0.95$：常用折中，保留连锁效应的同时对远处影响衰减</li>
+              </ul>
+            </div>
+
+            <!-- 五、数字例子 -->
+            <h4 style="color:#1e3a8a;margin:0 0 10px;">五、完整数字例子（$\gamma=0.99$，$\lambda=0.95$）</h4>
+            <p style="margin-bottom:10px;">假设模型生成了 5 个 token，只有终态拿到奖励 +1.0，Critic 当前的估值如下（尚未训好，有偏差）：</p>
+            <div style="overflow-x:auto;margin-bottom:12px;">
+              <table style="border-collapse:collapse;width:100%;font-size:13.5px;">
+                <thead>
+                  <tr style="background:#f1f5f9;">
+                    <th style="padding:8px 12px;text-align:left;border:1px solid #e2e8f0;">t</th>
+                    <th style="padding:8px 12px;border:1px solid #e2e8f0;">token</th>
+                    <th style="padding:8px 12px;border:1px solid #e2e8f0;">$r_t$</th>
+                    <th style="padding:8px 12px;border:1px solid #e2e8f0;">Critic $V(s_t)$（估值）</th>
+                    <th style="padding:8px 12px;border:1px solid #e2e8f0;">理论 $V = \gamma^{4-t}$</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td style="padding:8px 12px;border:1px solid #e2e8f0;">0</td><td style="padding:8px 12px;border:1px solid #e2e8f0;">量子</td><td style="padding:8px 12px;border:1px solid #e2e8f0;color:#6b7280;">0</td><td style="padding:8px 12px;border:1px solid #e2e8f0;">0.50</td><td style="padding:8px 12px;border:1px solid #e2e8f0;color:#6b7280;">0.9606（未训好所以偏低）</td></tr>
+                  <tr style="background:#f8fafc;"><td style="padding:8px 12px;border:1px solid #e2e8f0;">1</td><td style="padding:8px 12px;border:1px solid #e2e8f0;">纠缠</td><td style="padding:8px 12px;border:1px solid #e2e8f0;color:#6b7280;">0</td><td style="padding:8px 12px;border:1px solid #e2e8f0;">0.60</td><td style="padding:8px 12px;border:1px solid #e2e8f0;color:#6b7280;">0.9703</td></tr>
+                  <tr><td style="padding:8px 12px;border:1px solid #e2e8f0;">2</td><td style="padding:8px 12px;border:1px solid #e2e8f0;">是指</td><td style="padding:8px 12px;border:1px solid #e2e8f0;color:#6b7280;">0</td><td style="padding:8px 12px;border:1px solid #e2e8f0;">0.70</td><td style="padding:8px 12px;border:1px solid #e2e8f0;color:#6b7280;">0.9801</td></tr>
+                  <tr style="background:#f8fafc;"><td style="padding:8px 12px;border:1px solid #e2e8f0;">3</td><td style="padding:8px 12px;border:1px solid #e2e8f0;">两粒子</td><td style="padding:8px 12px;border:1px solid #e2e8f0;color:#6b7280;">0</td><td style="padding:8px 12px;border:1px solid #e2e8f0;">0.80</td><td style="padding:8px 12px;border:1px solid #e2e8f0;color:#6b7280;">0.9900</td></tr>
+                  <tr><td style="padding:8px 12px;border:1px solid #e2e8f0;">4</td><td style="padding:8px 12px;border:1px solid #e2e8f0;">关联</td><td style="padding:8px 12px;border:1px solid #e2e8f0;color:#16a34a;font-weight:700;">+1.0</td><td style="padding:8px 12px;border:1px solid #e2e8f0;">1.00</td><td style="padding:8px 12px;border:1px solid #e2e8f0;color:#6b7280;">1.0000</td></tr>
+                  <tr style="background:#f8fafc;"><td style="padding:8px 12px;border:1px solid #e2e8f0;">5（终态后）</td><td style="padding:8px 12px;border:1px solid #e2e8f0;">—</td><td style="padding:8px 12px;border:1px solid #e2e8f0;color:#6b7280;">—</td><td style="padding:8px 12px;border:1px solid #e2e8f0;">0（episode 结束）</td><td style="padding:8px 12px;border:1px solid #e2e8f0;color:#6b7280;">0</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:14px;font-size:13.5px;">
+              <div style="font-weight:700;margin-bottom:8px;color:#374151;">第一步：计算 TD 误差 $\delta_t = r_t + 0.99 \times V(s_{t+1}) - V(s_t)$</div>
+              <div style="font-family:monospace;line-height:2.2;color:#374151;">
+                δ₀ = 0 + 0.99×0.60 − 0.50 = <strong style="color:#1d4ed8;">+0.094</strong>（Critic 低估了 t=0，实际比预期好）<br>
+                δ₁ = 0 + 0.99×0.70 − 0.60 = <strong style="color:#1d4ed8;">+0.093</strong><br>
+                δ₂ = 0 + 0.99×0.80 − 0.70 = <strong style="color:#1d4ed8;">+0.092</strong><br>
+                δ₃ = 0 + 0.99×1.00 − 0.80 = <strong style="color:#1d4ed8;">+0.190</strong>（Critic 对 t=3 估了 0.80，实际下一步是 1.0，低估）<br>
+                δ₄ = 1.0 + 0.99×0 − 1.00 = <strong style="color:#6b7280;">0.000</strong>（t=4 时 Critic 估得准，刚好等于拿到的奖励）
+              </div>
+            </div>
+
+            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:16px;font-size:13.5px;">
+              <div style="font-weight:700;margin-bottom:8px;color:#374151;">第二步：从后往前递推 $\hat{A}_t = \delta_t + 0.9405 \times \hat{A}_{t+1}$（$\gamma\lambda=0.9405$）</div>
+              <div style="font-family:monospace;line-height:2.4;color:#374151;">
+                Â₄ = 0.000<br>
+                Â₃ = +0.190 + 0.9405×0.000 = <strong>+0.190</strong><br>
+                Â₂ = +0.092 + 0.9405×0.190 = <strong>+0.271</strong><br>
+                Â₁ = +0.093 + 0.9405×0.271 = <strong>+0.348</strong><br>
+                Â₀ = +0.094 + 0.9405×0.348 = <strong>+0.421</strong>
+              </div>
+            </div>
+
+            <p style="font-size:13.5px;margin-bottom:0;">所有 Advantage 都是正数，说明这条回答整体优于 Critic 的平均预期——Actor 会把每个 token 的生成概率都调高。如果某条差劲的回答终态得了 −0.5，$\hat{A}_t$ 就会是负数，对应 token 的概率被压低。</p>
+          </div>
         </div>
 
         <div class="callout-blue">
           <strong>为什么 LLM RL 中的优势估计特别困难？</strong><br>
-          游戏 RL 中，通常每步都有即时奖励（吃到金币立刻 +10 分）。但 LLM 的奖励是稀疏的——生成完整回答后才有一个总分。这意味着中间每一步的 $r_t = 0$，只有最后一步有 $r_T$。<br>
-          计算优势时，价值网络（Critic）需要"猜测"每个中间步的期望回报，这本身就是个难题，需要单独训练一个和策略网络规模相当的价值网络。
-        </div>
-
-        <h3 id="four-models">4.4 PPO 的工程现实：4 个模型同时运行</h3>
-
-        <p>这是 PPO 在实践中让很多工程师头疼的地方——完整的 PPO 训练需要同时维护 4 个不同的神经网络：</p>
-
-        <div class="flow-diagram">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-            <div style="background:#ede9fe;border:1px solid #c4b5fd;border-radius:12px;padding:14px;">
-              <div style="font-weight:700;color:#4c1d95;margin-bottom:6px;">① 策略模型（Actor）</div>
-              <div style="font-size:13px;">当前被训练的语言模型 $\pi_\theta$。负责生成回答。这是我们最终要得到的模型。<br><strong>状态：持续更新</strong></div>
-            </div>
-            <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:12px;padding:14px;">
-              <div style="font-weight:700;color:#92400e;margin-bottom:6px;">② 参考模型（Reference）</div>
-              <div style="font-size:13px;">SFT 后冻结的模型 $\pi_{\text{ref}}$。用于计算 KL 惩罚，防止训练偏离太远。<br><strong>状态：完全冻结，不更新</strong></div>
-            </div>
-            <div style="background:#dcfce7;border:1px solid #86efac;border-radius:12px;padding:14px;">
-              <div style="font-weight:700;color:#166534;margin-bottom:6px;">③ 奖励模型（Reward Model）</div>
-              <div style="font-size:13px;">第二阶段训练好的 RM $r_\phi$。对生成的回答打分。<br><strong>状态：冻结，不更新</strong></div>
-            </div>
-            <div style="background:#dbeafe;border:1px solid #93c5fd;border-radius:12px;padding:14px;">
-              <div style="font-weight:700;color:#1e40af;margin-bottom:6px;">④ 价值模型（Critic）</div>
-              <div style="font-size:13px;">估计每个状态的价值 $V(s_t)$，用于计算优势函数 $\hat{A}_t$。通常和策略模型同规模。<br><strong>状态：和策略模型一起更新</strong></div>
-            </div>
-          </div>
+          游戏 RL 中，通常每步都有即时奖励（吃到金币立刻 +10 分）。但 LLM 的奖励是稀疏的——生成完整回答后才有一个总分，中间 $r_t = 0$。Critic 需要仅凭序列前缀，学会预测"这个开头最终能得多少分"，这是一个非常难的预测任务，需要大量样本才能学准。这也正是 GRPO 被广泛采用的原因——它用组内对比代替 Critic，省掉了这个难以训练的价值网络。
         </div>
 
         <!-- ── Critic 深度解析 ───────────────────────────────────── -->
@@ -896,6 +961,39 @@
             </div>
             <p style="margin-bottom:14px;font-size:13.5px;">其中 $\hat{R}_t$ 是"目标价值"——由 Reward Model 的终态打分 + GAE 逐步反向传播计算得来。</p>
 
+            <div class="callout-blue" style="margin-bottom:18px;">
+              <strong>❓ label 都来自终态奖励，Critic 能学到什么？</strong><br><br>
+              这是个关键问题。<strong>$\hat{R}_t$ 对每个位置是不同的值</strong>，不是把终态奖励复制给每一步——GAE 传播后，每个位置的 label 是经折扣衰减的值：<br><br>
+              <div style="font-family:monospace;font-size:13px;background:rgba(255,255,255,0.6);border-radius:8px;padding:10px;margin:8px 0;">
+                终态奖励 $r_T = 1.0$，$\gamma = 0.99$，5 个 token 的 label：<br>
+                t=4（最后）→ $\hat{R}_4 ≈ 1.00$<br>
+                t=3 → $\hat{R}_3 ≈ 0.99$<br>
+                t=2 → $\hat{R}_2 ≈ 0.98$<br>
+                t=0（最早）→ $\hat{R}_0 ≈ 0.96$
+              </div>
+              <strong>为什么这样算？</strong>$\hat{R}_t$ 的定义是从第 t 步起的折扣累计奖励：<br>
+              <div style="font-family:monospace;font-size:13px;background:rgba(255,255,255,0.6);border-radius:8px;padding:10px;margin:8px 0;">
+                $\hat{R}_t = r_t + \gamma r_{t+1} + \gamma^2 r_{t+2} + \cdots + \gamma^{T-t} r_T$
+              </div>
+              LLM 里中间步奖励全是 0，只有终态 $r_T = 1.0$，所有为零的项消掉，只剩：<br>
+              <div style="font-family:monospace;font-size:13px;background:rgba(255,255,255,0.6);border-radius:8px;padding:10px;margin:8px 0;">
+                $\hat{R}_t = \gamma^{T-t} \cdot r_T$
+              </div>
+              代入 $T=4$，$r_T=1.0$，$\gamma=0.99$：<br>
+              <div style="font-family:monospace;font-size:13px;background:rgba(255,255,255,0.6);border-radius:8px;padding:10px;margin:8px 0;">
+                t=4：$0.99^{4-4} \times 1.0 = 0.99^0 = 1.00$<br>
+                t=3：$0.99^{4-3} \times 1.0 = 0.99^1 = 0.99$<br>
+                t=2：$0.99^{4-2} \times 1.0 = 0.99^2 \approx 0.98$<br>
+                t=1：$0.99^{4-1} \times 1.0 = 0.99^3 \approx 0.97$<br>
+                t=0：$0.99^{4-0} \times 1.0 = 0.99^4 \approx 0.96$
+              </div>
+              终态奖励是 1.0，每往前退一步就乘一次 $\gamma=0.99$，退了几步就乘几次，所以<strong>越靠前的 label 越小</strong>。这就是"衰减"的含义。
+              Critic 用不同的前缀序列作为输入，对应不同的 label，因此它学的是一个<strong>真正的状态价值函数</strong>：<br><br>
+              • <strong>位置越靠后</strong>，label 越大（接近终态奖励），Critic 会输出更高的 $V(s_t)$<br>
+              • <strong>不同前缀内容</strong>，即使在同样的 token 位置，label 也不同——因为好的回答结局是 1.0，差的是 -0.5，Critic 自然学到"什么样的前缀内容预示着好结局"<br>
+              • <strong>举例：</strong>同样是第 100 个 token，前缀是"量子纠缠是指两粒子间存在…"的 $V(s)$ 会学得比"量子纠缠就是量子相互缠在一起…"高，因为前者的后续回答质量更好、终态奖励更高
+            </div>
+
             <div style="background:#fff;border:1px solid #bfdbfe;border-radius:10px;padding:16px;margin-bottom:8px;">
               <div style="font-weight:700;margin-bottom:10px;color:#1e40af;">📋 每个 batch 的完整训练流程</div>
               <ol style="font-size:13.5px;color:#374151;line-height:2;padding-left:20px;margin:0;">
@@ -912,6 +1010,31 @@
           </div>
         </div>
         <!-- ── Critic 深度解析 END ───────────────────────────────── -->
+
+        <h3 id="four-models">4.4 PPO 的工程现实：4 个模型同时运行</h3>
+
+        <p>这是 PPO 在实践中让很多工程师头疼的地方——完整的 PPO 训练需要同时维护 4 个不同的神经网络：</p>
+
+        <div class="flow-diagram">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+            <div style="background:#ede9fe;border:1px solid #c4b5fd;border-radius:12px;padding:14px;">
+              <div style="font-weight:700;color:#4c1d95;margin-bottom:6px;">① 策略模型（Actor）</div>
+              <div style="font-size:13px;">当前被训练的语言模型 $\pi_\theta$。负责生成回答。这是我们最终要得到的模型。<br><strong>状态：持续更新</strong></div>
+            </div>
+            <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:12px;padding:14px;">
+              <div style="font-weight:700;color:#92400e;margin-bottom:6px;">② 参考模型（Reference）</div>
+              <div style="font-size:13px;">SFT 后冻结的模型 $\pi_{\text{ref}}$。用于计算 KL 惩罚，防止训练偏离太远。<br><strong>状态：完全冻结，不更新</strong></div>
+            </div>
+            <div style="background:#dcfce7;border:1px solid #86efac;border-radius:12px;padding:14px;">
+              <div style="font-weight:700;color:#166534;margin-bottom:6px;">③ 奖励模型（Reward Model）</div>
+              <div style="font-size:13px;">第二阶段训练好的 RM $r_\phi$。对生成的回答打分。<br><strong>状态：冻结，不更新</strong></div>
+            </div>
+            <div style="background:#dbeafe;border:1px solid #93c5fd;border-radius:12px;padding:14px;">
+              <div style="font-weight:700;color:#1e40af;margin-bottom:6px;">④ 价值模型（Critic）</div>
+              <div style="font-size:13px;">估计每个状态的价值 $V(s_t)$，用于计算优势函数 $\hat{A}_t$。通常和策略模型同规模。<br><strong>状态：和策略模型一起更新</strong></div>
+            </div>
+          </div>
+        </div>
 
         <div class="warn-box">
           <div class="warn-title">⚠️ 工程挑战：GPU 内存是最大瓶颈</div>
@@ -940,6 +1063,150 @@
           </ol>
           <p>整个流程一次 batch 可能需要几分钟（在单张 A100 上），训练几千步就是几天。这就是工业级 RLHF 的代价。</p>
         </div>
+
+        <!-- PPO 完整目标函数汇总 -->
+        <h3 id="ppo-full-objective">4.5 PPO 完整目标函数汇总</h3>
+        <p>前面几节分散讲了 PPO 的各个组成部分，这里把所有公式汇总在一起，看清楚每一项对应的是哪个模型在优化什么。</p>
+
+        <div style="background:#fff;border:1.5px solid #e5e7eb;border-radius:16px;overflow:hidden;margin:16px 0;">
+          <div style="background:#1e3a8a;color:#fff;padding:12px 20px;font-weight:700;font-size:15px;">📋 PPO-RLHF 完整目标函数</div>
+          <div style="padding:20px 24px;">
+
+            <h4 style="color:#1e3a8a;margin:0 0 10px;">第一步：构造最终奖励信号</h4>
+            <p style="margin-bottom:8px;font-size:13.5px;">Reward Model 打的分不能直接用——还需要减去 KL 惩罚，防止 Actor 偏离 SFT 模型太远：</p>
+            <div class="formula-block" style="margin:0 0 6px;">
+              $$r_{\text{final}}(x, y) = \underbrace{r_\phi(x, y)}_{\text{RM 打分}} - \beta \cdot \underbrace{\text{KL}\!\left[\pi_\theta(\cdot|x) \,\|\, \pi_{\text{ref}}(\cdot|x)\right]}_{\text{偏离 SFT 的惩罚}}$$
+            </div>
+            <p style="margin-bottom:18px;font-size:13px;color:#6b7280;">$\beta$ 控制 KL 惩罚强度，通常取 0.01–0.1。$\beta$ 越大，模型越不敢偏离 SFT 的输出。</p>
+
+            <h4 style="color:#1e3a8a;margin:0 0 10px;">第二步：Actor 优化目标（完全展开）</h4>
+            <p style="margin-bottom:8px;font-size:13.5px;">把所有中间变量代入，Actor 的 loss 完全展开如下：</p>
+            <div class="formula-block" style="margin:0 0 6px;">
+              $$\mathcal{L}^{\text{Actor}}(\theta) = -\mathbb{E}_t\!\left[\min\!\left(\frac{\pi_\theta(a_t|s_t)}{\pi_{\theta_\text{old}}(a_t|s_t)} \cdot \hat{A}_t,\;\; \text{clip}\!\left(\frac{\pi_\theta(a_t|s_t)}{\pi_{\theta_\text{old}}(a_t|s_t)},\, 1\!-\!\varepsilon,\, 1\!+\!\varepsilon\right) \cdot \hat{A}_t\right)\right] - c_2 \cdot S[\pi_\theta]$$
+            </div>
+            <p style="margin-bottom:8px;font-size:13.5px;">其中 $\hat{A}_t$ 继续展开为 GAE：</p>
+            <div class="formula-block" style="margin:0 0 6px;">
+              $$\hat{A}_t = \sum_{l=0}^{T-t-1}(\gamma\lambda)^l \delta_{t+l}, \qquad \delta_t = \underbrace{r_{\text{final}} \cdot \mathbf{1}[t=T]}_{\text{只有终态非零}} + \gamma V_\theta(s_{t+1}) - V_\theta(s_t)$$
+            </div>
+            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:8px;font-size:13.5px;">
+              <div style="font-weight:700;margin-bottom:8px;color:#374151;">每个符号对应关系</div>
+              <ul style="margin:0;padding-left:18px;line-height:2;color:#374151;">
+                <li>$\pi_\theta(a_t|s_t)$：当前 Actor 在状态 $s_t$ 下选择 token $a_t$ 的概率</li>
+                <li>$\pi_{\theta_\text{old}}(a_t|s_t)$：上一轮生成时的旧概率（采样时固定，不随训练变）</li>
+                <li>$\varepsilon$：裁剪阈值，通常 0.2，限制每次更新步幅</li>
+                <li>$c_2$：熵正则系数（通常 0.01），$S[\pi_\theta]$ 是输出分布的熵，防止 Actor 过早变成确定性模型、丧失探索能力</li>
+                <li>$r_{\text{final}} = r_\phi(x,y) - \beta \cdot \text{KL}_t$：RM 打分减 KL 惩罚，只赋给最后一个 token</li>
+                <li>$V_\theta(s_t)$：Critic 对当前状态的估值（有衰减的未来回报预测）</li>
+              </ul>
+            </div>
+            <p style="margin-bottom:8px;font-size:13.5px;color:#6b7280;">注意：$r_\phi(x,y)$ 并不直接出现在 loss 里——它先通过 GAE 传播变成每个 token 的 $\hat{A}_t$，再以 $\hat{A}_t$ 的形式影响每个 token 的梯度更新。</p>
+
+            <!-- 为什么会让优势变大劣势变小 -->
+            <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:12px;padding:16px 18px;margin-bottom:18px;">
+              <div style="font-weight:700;color:#166534;margin-bottom:10px;">❓ 为什么梯度下降会让"好 token 概率升高、坏 token 概率降低"？</div>
+              <p style="margin-bottom:10px;font-size:13.5px;color:#374151;">看 loss 最前面有个<strong>负号</strong>——最小化 loss = 最大化 $\rho_t \cdot \hat{A}_t$：</p>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13.5px;">
+                <div style="background:#fff;border:1px solid #bbf7d0;border-radius:8px;padding:12px;">
+                  <div style="font-weight:700;color:#166534;margin-bottom:6px;">📈 当 $\hat{A}_t > 0$（好 token）</div>
+                  <div style="line-height:1.8;color:#374151;">
+                    要最大化 $\rho_t \cdot \hat{A}_t$<br>
+                    → 让 $\rho_t = \pi_\theta / \pi_{\theta_\text{old}}$ 变大<br>
+                    → $\pi_\theta(a_t|s_t)$ 升高<br>
+                    → <strong>这个 token 被更频繁地生成</strong>
+                  </div>
+                </div>
+                <div style="background:#fff;border:1px solid #fecaca;border-radius:8px;padding:12px;">
+                  <div style="font-weight:700;color:#dc2626;margin-bottom:6px;">📉 当 $\hat{A}_t < 0$（坏 token）</div>
+                  <div style="line-height:1.8;color:#374151;">
+                    要最大化 $\rho_t \cdot \hat{A}_t$（负数）<br>
+                    → 让 $\rho_t$ 变小（乘负数，越小越大）<br>
+                    → $\pi_\theta(a_t|s_t)$ 降低<br>
+                    → <strong>这个 token 被更少地生成</strong>
+                  </div>
+                </div>
+              </div>
+              <p style="margin-top:10px;margin-bottom:0;font-size:13px;color:#6b7280;">裁剪（clip）只是在说：不管好坏，每次最多改变 ±20%，防止单次更新过猛导致训练崩溃。</p>
+            </div>
+
+            <h4 style="color:#1e3a8a;margin:0 0 10px;">第三步：Critic 优化目标（MSE 回归）</h4>
+            <p style="margin-bottom:8px;font-size:13.5px;">Critic（价值模型）最小化预测误差，让 $V(s_t)$ 逼近真实折扣回报 $\hat{R}_t$：</p>
+            <div class="formula-block" style="margin:0 0 6px;">
+              $$\mathcal{L}^{\text{Critic}}(\theta) = \mathbb{E}_t\!\left[\left(V_\theta(s_t) - \hat{R}_t\right)^2\right]$$
+            </div>
+            <p style="margin-bottom:18px;font-size:13px;color:#6b7280;">$\hat{R}_t = \gamma^{T-t} \cdot r_{\text{final}}$，越靠前的 token label 越小（折扣次数越多）。</p>
+
+            <h4 style="color:#1e3a8a;margin:0 0 12px;">汇总：每个模型优化什么</h4>
+            <div style="overflow-x:auto;">
+              <table style="border-collapse:collapse;width:100%;font-size:13.5px;">
+                <thead>
+                  <tr style="background:#f1f5f9;">
+                    <th style="padding:9px 14px;text-align:left;border:1px solid #e2e8f0;">模型</th>
+                    <th style="padding:9px 14px;border:1px solid #e2e8f0;">状态</th>
+                    <th style="padding:9px 14px;text-align:left;border:1px solid #e2e8f0;">优化目标</th>
+                    <th style="padding:9px 14px;text-align:left;border:1px solid #e2e8f0;">作用</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style="padding:9px 14px;border:1px solid #e2e8f0;font-weight:700;color:#4c1d95;">① Actor $\pi_\theta$</td>
+                    <td style="padding:9px 14px;border:1px solid #e2e8f0;color:#16a34a;">持续更新</td>
+                    <td style="padding:9px 14px;border:1px solid #e2e8f0;">最大化 $\mathcal{L}^{\text{Actor}}$</td>
+                    <td style="padding:9px 14px;border:1px solid #e2e8f0;">学会生成高分回答，且不偏离太远</td>
+                  </tr>
+                  <tr style="background:#f8fafc;">
+                    <td style="padding:9px 14px;border:1px solid #e2e8f0;font-weight:700;color:#92400e;">② Reference $\pi_{\text{ref}}$</td>
+                    <td style="padding:9px 14px;border:1px solid #e2e8f0;color:#6b7280;">完全冻结</td>
+                    <td style="padding:9px 14px;border:1px solid #e2e8f0;">不优化</td>
+                    <td style="padding:9px 14px;border:1px solid #e2e8f0;">提供 KL 惩罚的基准，防止 Actor 崩坏</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:9px 14px;border:1px solid #e2e8f0;font-weight:700;color:#166534;">③ Reward Model $r_\phi$</td>
+                    <td style="padding:9px 14px;border:1px solid #e2e8f0;color:#6b7280;">冻结</td>
+                    <td style="padding:9px 14px;border:1px solid #e2e8f0;">不优化</td>
+                    <td style="padding:9px 14px;border:1px solid #e2e8f0;">对生成的回答打分，给出 $r_\phi(x,y)$</td>
+                  </tr>
+                  <tr style="background:#f8fafc;">
+                    <td style="padding:9px 14px;border:1px solid #e2e8f0;font-weight:700;color:#1e40af;">④ Critic $V_\theta$</td>
+                    <td style="padding:9px 14px;border:1px solid #e2e8f0;color:#16a34a;">持续更新</td>
+                    <td style="padding:9px 14px;border:1px solid #e2e8f0;">最小化 $\mathcal{L}^{\text{Critic}}$</td>
+                    <td style="padding:9px 14px;border:1px solid #e2e8f0;">学会预测 $V(s_t)$，为 GAE 计算 Advantage 提供基线</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="callout-blue" style="margin-top:18px;margin-bottom:18px;">
+              <strong>关键依赖关系：</strong>Critic 估得越准 → GAE 算出的 $\hat{A}_t$ 越准 → Actor 的更新信号越准确 → Actor 学得越快。这就是为什么 Critic 和 Actor 要同步训练，而不是先训一个再训另一个。
+            </div>
+
+            <!-- 整体流程总结 -->
+            <div style="background:#fafafa;border:1.5px solid #d1d5db;border-radius:12px;padding:18px 20px;margin-bottom:0;">
+              <div style="font-weight:700;font-size:14px;color:#111827;margin-bottom:12px;">🔁 PPO-RLHF 完整流程一句话总结</div>
+              <div style="display:flex;flex-direction:column;gap:8px;font-size:13.5px;color:#374151;">
+                <div style="display:flex;align-items:flex-start;gap:10px;">
+                  <span style="background:#1e40af;color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">1</span>
+                  <span><strong>奖励模型给出真实信号</strong>：对整条回答打一个标量分 $r_\phi(x,y)$，减去 KL 惩罚后赋给最后一个 token</span>
+                </div>
+                <div style="display:flex;align-items:flex-start;gap:10px;">
+                  <span style="background:#1e40af;color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">2</span>
+                  <span><strong>GAE 把终态信号分摊到每个 token</strong>：通过 TD 误差 + 衰减累加，算出每个 token 的优势估计 $\hat{A}_t$</span>
+                </div>
+                <div style="display:flex;align-items:flex-start;gap:10px;">
+                  <span style="background:#1e40af;color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">3</span>
+                  <span><strong>Critic 提供预期基线</strong>：估计每个状态的"平均期望回报" $V(s_t)$，$\hat{A}_t > 0$ 意味着这次实际表现超出均值，$\hat{A}_t < 0$ 则低于均值</span>
+                </div>
+                <div style="display:flex;align-items:flex-start;gap:10px;">
+                  <span style="background:#1e40af;color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">4</span>
+                  <span><strong>$\hat{A}_t$ 决定梯度方向</strong>：loss 里的负号让梯度下降 = 最大化期望回报——好 token（$\hat{A}_t > 0$）概率升高，坏 token（$\hat{A}_t < 0$）概率降低，每次步幅由 clip 限制在 ±$\varepsilon$ 以内</span>
+                </div>
+              </div>
+              <div style="margin-top:12px;padding-top:12px;border-top:1px solid #e5e7eb;font-size:13px;color:#6b7280;">
+                <strong>一句话：</strong>RM 给出真实信号，Critic 给出预期基线，GAE 算出每个 token 比基线好多少，好的升高概率，差的降低概率。
+              </div>
+            </div>
+          </div>
+        </div>
+
       </section>
 
       <!-- ═══════════════════════════════════════════════════════════ -->
@@ -996,21 +1263,93 @@
         </div>
 
         <div class="example-box">
-          <div class="ex-title">💡 超具体的例子：DPO 一步更新过程</div>
+          <div class="ex-title">💡 超具体的例子：DPO 一步更新过程（代入数值计算）</div>
+
           <p><strong>偏好数据（一条）：</strong></p>
           <ul>
             <li><strong>Prompt $x$：</strong>「帮我写一首关于失恋的诗」</li>
-            <li><strong>$y_w$（好回答，被人类选中）：</strong>「月落乌啼霜满天，离人泪洒别离船。此情若问何时了，问取芳心可有缘。」（有意境，符合诗歌形式）</li>
-            <li><strong>$y_l$（差回答，被人类淘汰）：</strong>「失恋很痛苦，但是要振作起来。时间会治愈一切，加油！」（回答了用户问题，但完全没写诗）</li>
+            <li><strong>$y_w$（好回答）：</strong>「月落乌啼霜满天，离人泪洒别离船。」（真正写了诗）</li>
+            <li><strong>$y_l$（差回答）：</strong>「失恋很痛苦，要振作起来，加油！」（没写诗）</li>
           </ul>
-          <p><strong>DPO 怎么更新：</strong></p>
-          <ol>
-            <li>计算当前模型生成 $y_w$ 的总对数概率（把每个词的概率相加），与参考模型做对比</li>
-            <li>计算当前模型生成 $y_l$ 的总对数概率，与参考模型做对比</li>
-            <li>梯度方向：增大「生成古诗风格」的概率，减小「生成励志话语」的概率</li>
-          </ol>
-          <p><strong>训练几千条这样的偏好对之后：</strong>模型对"写诗"请求的理解从"给建议"变成了"真的写诗"。</p>
-          <p style="font-size:13px;color:#166534;margin-top:8px;"><strong>注意：</strong>整个过程只需要两个模型（当前模型 + 参考模型），没有奖励模型，没有在线采样，没有 RL 循环。实现代码只需要几十行。</p>
+
+          <p><strong>超参数：</strong>$\beta = 0.1$（KL 惩罚强度，越小越允许偏离参考模型）</p>
+
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:12px 0;">
+
+          <!-- Step 1 -->
+          <p><strong>① 计算四个对数概率（前向传播）</strong></p>
+          <p style="font-size:13px;color:#6b7280;margin:-4px 0 8px;">对数概率 = 每个 token 的 log P 之和（log P(月|x) + log P(落|x,月) + ...）</p>
+
+          <div style="overflow-x:auto;">
+            <table style="border-collapse:collapse;font-size:12px;width:100%;">
+              <thead>
+                <tr style="background:#ede9fe;">
+                  <th style="padding:7px 10px;border:1px solid #ddd6fe;">模型</th>
+                  <th style="padding:7px 10px;border:1px solid #ddd6fe;">$\log \pi(y_w \mid x)$（好回答）</th>
+                  <th style="padding:7px 10px;border:1px solid #ddd6fe;">$\log \pi(y_l \mid x)$（差回答）</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td style="padding:6px 10px;border:1px solid #ede9fe;font-weight:600;">参考模型 $\pi_{\text{ref}}$（SFT 模型，冻结）</td><td style="padding:6px 10px;border:1px solid #ede9fe;">$-12.0$</td><td style="padding:6px 10px;border:1px solid #ede9fe;">$-8.0$</td></tr>
+                <tr style="background:#faf5ff;"><td style="padding:6px 10px;border:1px solid #ede9fe;font-weight:600;">当前模型 $\pi_\theta$（被训练）</td><td style="padding:6px 10px;border:1px solid #ede9fe;">$-11.0$</td><td style="padding:6px 10px;border:1px solid #ede9fe;">$-8.5$</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p style="font-size:12px;color:#6b7280;margin:6px 0 12px;">解读：参考模型更倾向于输出差回答（-8.0 &gt; -12.0）；当前模型对好回答已经提升了一点（-11.0 &gt; -12.0），对差回答稍微下降了（-8.5 &lt; -8.0）。</p>
+
+          <!-- Step 2 -->
+          <p><strong>② 计算两个 log ratio（当前模型相对参考模型的变化）</strong></p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+            <div style="background:#f0fdf4;border-radius:8px;padding:10px 12px;font-size:13px;">
+              <strong style="color:#166534;">好回答的 log ratio：</strong><br>
+              $$\log\frac{\pi_\theta(y_w|x)}{\pi_{\text{ref}}(y_w|x)} = -11.0 - (-12.0) = +1.0$$
+              <span style="font-size:12px;color:#374151;">→ 当前模型对好回答的概率<strong>提高了</strong>（相对参考模型）</span>
+            </div>
+            <div style="background:#fef2f2;border-radius:8px;padding:10px 12px;font-size:13px;">
+              <strong style="color:#991b1b;">差回答的 log ratio：</strong><br>
+              $$\log\frac{\pi_\theta(y_l|x)}{\pi_{\text{ref}}(y_l|x)} = -8.5 - (-8.0) = -0.5$$
+              <span style="font-size:12px;color:#374151;">→ 当前模型对差回答的概率<strong>降低了</strong>（相对参考模型）</span>
+            </div>
+          </div>
+
+          <!-- Step 3 -->
+          <p><strong>③ 乘以 $\beta$，相减，得到 sigmoid 的输入</strong></p>
+          <div style="background:#f5f3ff;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:12px;">
+            $$\beta \cdot ({\rm log\ ratio}_w - {\rm log\ ratio}_l) = 0.1 \times (1.0 - (-0.5)) = 0.1 \times 1.5 = 0.15$$
+          </div>
+
+          <!-- Step 4 -->
+          <p><strong>④ 过 sigmoid，取负对数，得到 loss</strong></p>
+          <div style="background:#f5f3ff;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:12px;">
+            $$\sigma(0.15) = \frac{1}{1 + e^{-0.15}} \approx \frac{1}{1 + 0.861} \approx 0.537$$
+            $$\mathcal{L}_{DPO} = -\log(0.537) \approx 0.622$$
+          </div>
+
+          <!-- Step 5 -->
+          <p><strong>⑤ 梯度方向：让 loss 更小</strong></p>
+          <p style="font-size:13px;color:#374151;margin:0 0 6px;">为了让 $\mathcal{L}_{DPO}$ 减小，需要让 sigmoid 的输入 $0.15$ 变大，也就是需要：</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+            <div style="background:#f0fdf4;border-radius:8px;padding:9px 12px;font-size:12px;color:#374151;">
+              <strong style="color:#166534;">log ratio_w 更大</strong>（从 +1.0 继续增大）<br>
+              = $\pi_\theta(y_w|x)$ 相对参考模型进一步提升<br>
+              = <strong>好回答的概率往上调</strong>
+            </div>
+            <div style="background:#fef2f2;border-radius:8px;padding:9px 12px;font-size:12px;color:#374151;">
+              <strong style="color:#991b1b;">log ratio_l 更小</strong>（从 -0.5 继续减小）<br>
+              = $\pi_\theta(y_l|x)$ 相对参考模型进一步降低<br>
+              = <strong>差回答的概率往下调</strong>
+            </div>
+          </div>
+
+          <!-- 反例：loss 大的情况 -->
+          <div style="background:#fef9c3;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#374151;">
+            <strong style="color:#92400e;">对比：如果模型训练方向反了（差回答概率更高），loss 会更大：</strong><br>
+            假设 log ratio_w = -0.5，log ratio_l = +1.0（和上面反过来）<br>
+            sigmoid 输入 = 0.1 × (-0.5 - 1.0) = -0.15，sigmoid(-0.15) ≈ 0.463<br>
+            loss = -log(0.463) ≈ 0.770 &gt; 0.622 ✗ → 梯度会把模型推回正确方向
+          </div>
+
+          <p style="font-size:13px;color:#166534;margin-top:8px;"><strong>整个过程只需要两个模型（当前模型 + 参考模型），没有奖励模型，没有在线采样，没有 RL 循环。</strong>实现代码只需要几十行。</p>
         </div>
 
         <h3 id="dpo-vs-ppo">5.3 DPO vs PPO：什么时候用哪个？</h3>
@@ -1035,6 +1374,41 @@
               <li>有足够的算力（大公司的生产环境）</li>
               <li>需要最高质量，不在乎训练成本（如 GPT-4 这个级别）</li>
             </ul>
+          </div>
+        </div>
+
+        <!-- DPO 数据来源 -->
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:14px 18px;margin:16px 0;">
+          <p style="font-size:13px;font-weight:700;color:#92400e;margin:0 0 12px;">🤔 DPO 只能用人工标注数据吗？数据来源有哪些？</p>
+
+          <p style="font-size:13px;color:#374151;margin:0 0 12px;line-height:1.7;">DPO 需要 <strong>(prompt, chosen, rejected)</strong> 三元组，但这个三元组不一定要人工一条条标注。有四种来源：</p>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+
+            <div style="background:#fff;border-radius:10px;padding:11px 14px;border:1px solid #e2e8f0;">
+              <p style="font-size:12px;font-weight:700;color:#374151;margin:0 0 6px;">① 人工标注（最贵，数据最少）</p>
+              <p style="font-size:12px;color:#374151;margin:0;line-height:1.7;">人工对同一 prompt 的多个回答做偏好排序。Anthropic HH、OpenAI InstructGPT 用的就是这种。贵、慢、规模上不去——这也是 DPO 数据量有限的根源。</p>
+            </div>
+
+            <div style="background:#fff;border-radius:10px;padding:11px 14px;border:1px solid #e2e8f0;">
+              <p style="font-size:12px;font-weight:700;color:#374151;margin:0 0 6px;">② 用 RM 打分构造（最常用，数据可无限扩展）</p>
+              <p style="font-size:12px;color:#374151;margin:0;line-height:1.7;">先用少量人工数据训好一个 RM，再让模型对同一 prompt 生成多个回答，RM 打分后取高分当 chosen、低分当 rejected。数据量不再受人工瓶颈限制。</p>
+            </div>
+
+            <div style="background:#fff;border-radius:10px;padding:11px 14px;border:1px solid #e2e8f0;">
+              <p style="font-size:12px;font-weight:700;color:#374151;margin:0 0 6px;">③ AI 反馈 / RLAIF（完全自动化）</p>
+              <p style="font-size:12px;color:#374151;margin:0;line-height:1.7;">用更强的模型（如 GPT-4）充当裁判，自动判断哪个回答更好。Anthropic 的 Constitutional AI 就是这个思路——完全不需要人工，可以大规模自动化生成偏好对。</p>
+            </div>
+
+            <div style="background:#fff;border-radius:10px;padding:11px 14px;border:1px solid #e2e8f0;">
+              <p style="font-size:12px;font-weight:700;color:#374151;margin:0 0 6px;">④ Iterative DPO / Online DPO（迭代式自我进化）</p>
+              <p style="font-size:12px;color:#374151;margin:0;line-height:1.7;">让当前模型生成多个回答 → RM 或规则判断好坏 → DPO 训练 → 更新模型 → 再生成。数据分布跟着模型进步，每轮用的都是"当前模型产出的对"，类似在线 RL 的效果。</p>
+            </div>
+          </div>
+
+          <div style="background:#fef2f2;border-left:3px solid #f87171;border-radius:0 8px 8px 0;padding:10px 14px;">
+            <p style="font-size:13px;font-weight:700;color:#991b1b;margin:0 0 6px;">DPO 真正的局限不是"只能用人工数据"，而是它是离线的</p>
+            <p style="font-size:12px;color:#374151;margin:0;line-height:1.7;">数据集收集完就固定了，模型在训练过程中无法自己探索新的解法，容易对数据集过拟合，能力上限比在线 RL（PPO/GRPO）低。这也是 DeepSeek-R1 选 GRPO 而不是 DPO 的核心原因——推理能力需要模型在大量自我探索中自发涌现，离线偏好数据给不了这个。</p>
           </div>
         </div>
 
@@ -1071,6 +1445,111 @@
           <p>这就是 GRPO 的本质：<strong>组内相对比较，取代逐步点评</strong>。</p>
         </div>
 
+        <!-- ────────────────────────────────────────────────────── -->
+        <h3 id="grpo-from-policy">6.0 从 Policy-Based 到 GRPO：一条清晰的演化链</h3>
+
+        <p>理解 GRPO 最清晰的路径不是从 PPO 出发，而是从最基础的 Policy-Based 方法讲起，逐步去掉每一个"多余"的组件。</p>
+
+        <h4>① Policy-Based：把策略当多分类器</h4>
+
+        <p>强化学习里，智能体要根据当前状态选动作。如果动作空间是离散的（LLM 里就是词表里每个 token），这件事本质上和多分类没有区别：</p>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>监督学习（多分类）</h4>
+            <p style="font-size:13px;color:#374151;">有 label $y$，直接用交叉熵：</p>
+            <div class="formula-block" style="font-size:13px;">$$\mathcal{L} = -\log \pi(y \mid s)$$</div>
+            <p style="font-size:13px;color:#374151;">有明确的"正确动作"，往正确方向拉概率即可。</p>
+          </div>
+          <div class="mini-card">
+            <h4>Policy-Based RL</h4>
+            <p style="font-size:13px;color:#374151;">没有 label，只有做完动作后的 reward。目标是最大化期望回报：</p>
+            <div class="formula-block" style="font-size:13px;">$$J(\theta) = \mathbb{E}_{\tau \sim \pi_\theta}[R(\tau)]$$</div>
+            <p style="font-size:13px;color:#374151;">对 $J$ 求梯度（Policy Gradient 定理）：</p>
+            <div class="formula-block" style="font-size:13px;">$$\nabla_\theta J = \mathbb{E}\!\left[\sum_t \nabla_\theta \log \pi_\theta(a_t|s_t) \cdot R(\tau)\right]$$</div>
+          </div>
+        </div>
+
+        <div class="callout-blue">
+          <strong>为什么乘 reward 就能调节概率？</strong><br>
+          $\nabla \log \pi_\theta(a_t|s_t)$ 是"让动作 $a_t$ 概率变大的方向"。乘上 $R(\tau)$：
+          <ul style="margin:6px 0;">
+            <li>$R > 0$ → 梯度方向不变 → 概率调大</li>
+            <li>$R < 0$ → 梯度方向反转 → 概率调小</li>
+            <li>$|R|$ 越大 → 步长越大，调节力度越强</li>
+          </ul>
+          没有显式 label，reward 信号本身就是监督信号的替代：好的动作变得更可能，差的动作变得更不可能。
+        </div>
+
+        <h4>② reward 全正数的问题 → REINFORCE with baseline</h4>
+
+        <p>实际设计 reward 时往往 $R \geq 0$（最低 0 分，不会是负分）。这导致所有动作的概率都在被调大，只是力度不同——差动作的概率不会真正降下去，训练效率很差。</p>
+
+        <p>解决办法：用 reward 减去一个 baseline $b$，让"比平均差的动作"拿到负值：</p>
+
+        <div class="formula-block">$$\nabla_\theta J \approx \mathbb{E}\!\left[\sum_t \nabla_\theta \log \pi_\theta(a_t|s_t) \cdot (R(\tau) - b)\right]$$</div>
+
+        <p>这就是 <strong>REINFORCE with baseline</strong>。最直接的启发式做法是用当前 batch 或历史轨迹的 reward 均值当 $b$，让 reward 有正有负，概率调节方向才有实际意义。</p>
+
+        <div class="callout-amber">
+          <strong>baseline 到底用哪个均值？</strong>理论上 $b = \mathbb{E}[R]$（期望值），实践中有几种近似：
+          <ul style="margin:6px 0;">
+            <li><strong>全局滑动均值</strong>（REINFORCE 原始论文）：历史所有轨迹的 reward 滚动平均，更新慢但稳定</li>
+            <li><strong>batch 均值</strong>：当前 batch 的 reward 均值，更新及时但方差稍大</li>
+            <li><strong>GRPO 的做法</strong>：同一个 prompt 生成的 G 条轨迹的均值 $\bar{r} = \frac{1}{G}\sum r_i$，粒度最细——不同 prompt 难度差异大，用全局均值会引入跨 prompt 噪声；组内对比语义上更准确</li>
+          </ul>
+        </div>
+
+        <h4>③ 均值 baseline 不够精准 → Actor-Critic</h4>
+
+        <p>均值 baseline 是启发式的（凭直觉设计，没有严格理论保证它是最优的）。更好的 baseline 应该是"当前状态的期望价值" $V(s)$——在这个状态下，我预期能拿多少总回报？</p>
+
+        <p>于是引入第二个神经网络专门来估计 $V(s)$，叫 <strong>Critic</strong>。原来的概率网络叫 <strong>Actor</strong>。两个网络合起来就是 Actor-Critic。这样优势函数变成：</p>
+
+        <div class="formula-block">$$A(s_t, a_t) = R(\tau) - V(s_t)$$</div>
+
+        <p><strong>PPO 就属于 Actor-Critic</strong>，带着两个网络。</p>
+
+        <h4>④ 干掉 Critic → GRPO</h4>
+
+        <p>GRPO 的出发点：Critic 的训练很难（需要从稀疏终态奖励学会预测每步价值），且和 Actor 一样大，成本极高。能不能不用 Critic？</p>
+
+        <p>做法：对同一个 prompt，生成 $G$ 条轨迹，用这 $G$ 条的 reward 均值当 baseline，这叫 <strong>self-critic</strong>（蒙特卡洛方法）：</p>
+
+        <div class="formula-block">$$\hat{A}_i = \frac{r_i - \frac{1}{G}\sum_{j=1}^G r_j}{\text{std}(r_1,\ldots,r_G)}$$</div>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>PPO（Actor-Critic）</h4>
+            <p style="font-size:13px;color:#374151;"><strong>TD Error</strong>：用 Critic 网络预测 $V(s_t)$，不需要跑完整个轨迹。需要额外训练 Critic，方差小但有 Critic 估值 bias。</p>
+          </div>
+          <div class="mini-card">
+            <h4>GRPO（self-critic）</h4>
+            <p style="font-size:13px;color:#374151;"><strong>蒙特卡洛</strong>：实际跑 G 条完整轨迹，用真实 reward 统计均值。不需要 Critic，省显存，用采样成本换掉了 Critic 的训练成本。</p>
+          </div>
+        </div>
+
+        <div class="callout-green">
+          <strong>演化链总结：</strong>Policy Gradient → REINFORCE with baseline（加均值扣分）→ Actor-Critic（加 Critic 网络精确估 baseline）→ PPO（给更新步长加限速器）→ GRPO（去掉 Critic，用组内均值替代）
+        </div>
+
+        <!-- ────────────────────────────────────────────────────── -->
+        <h3 id="pass-at-n">Pass@N：衡量模型的能力上限</h3>
+
+        <p>在 GRPO 和工业应用里经常提到 <strong>Pass@N</strong>（来自代码生成评测 HumanEval）：对同一道题让模型独立采样 N 次，只要 N 次里<strong>至少有一次答对</strong>就算通过。Pass@N 准确率 = 测试集里"至少答对一次"的样本比例。</p>
+
+        <div class="analogy-box">
+          <div class="analogy-title">📝 类比：给差生多次机会取最高分</div>
+          <p>Pass@N 相当于给一个差生 N 次考试机会，取最高分——机会越多，最高分越容易接近满分，<strong>N 越大 Pass@N 越高是数学必然</strong>（只要有一次对就通过，机会越多越容易命中）。</p>
+          <p>但这只是<strong>评估指标</strong>，不是推理策略——不是跑 N 次然后投票选答案（那是"多数投票/self-consistency"）。线上推理最终还是只跑一次（Pass@1）。</p>
+        </div>
+
+        <div class="callout-blue">
+          <strong>Pass@1 vs Pass@N 的 gap = RL 的优化空间。</strong>Pass@1=67% 但 Pass@5=82% 说明：模型知道怎么做对，但不够稳定，有时候会偏。DPO/GRPO 的目标就是把"偶尔能答对"训练成"稳定答对"，最终让 Pass@1 追上 Pass@N。
+        </div>
+
+        <p>注意：Pass@N = 0（N 次全错）的样本说明模型根本不知道正确答案长什么样，GRPO 对这类样本无能为力（全错 batch 梯度为 0 直接丢弃），这类样本只能靠 DPO 外挂 oracle 注入外部知识。</p>
+
         <h3 id="grpo-idea">6.1 GRPO 的算法细节</h3>
 
         <p>对每个 prompt $x$，让当前模型生成 $G$ 个（通常 8–16 个）不同的输出 $\{y_1, y_2, \ldots, y_G\}$，得到各自的奖励分数 $\{r_1, r_2, \ldots, r_G\}$。</p>
@@ -1093,11 +1572,46 @@
           </ul>
         </div>
 
+        <!-- 每个 token 的 Advantage 怎么算 -->
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:14px 18px;margin:16px 0;">
+          <p style="font-size:13px;font-weight:700;color:#92400e;margin:0 0 12px;">🤔 等等——$\hat{A}_i$ 是整条回答的一个数，那每个 token 的 Advantage 怎么算？PPO 不是要给每个 token 单独估计吗？</p>
+
+          <div style="background:#fff;border-left:3px solid #f59e0b;border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:10px;">
+            <p style="font-size:13px;font-weight:700;color:#78350f;margin:0 0 6px;">GRPO 的做法：整条回答共享同一个 Advantage，广播给所有 token</p>
+            <p style="font-size:13px;color:#374151;margin:0 0 8px;line-height:1.7;">对于第 $i$ 条输出里的每一个 token $t$，Advantage 就是：</p>
+            <div style="background:#f5f3ff;border-radius:8px;padding:8px 14px;font-size:13px;text-align:center;margin-bottom:8px;">
+              $$\hat{A}_{i,t} = \hat{A}_i \quad \text{（对这条输出里的所有 token 都一样）}$$
+            </div>
+            <p style="font-size:12px;color:#374151;margin:0;line-height:1.7;">PPO 用 Critic + GAE 给每个 token 算出独立的 $\hat{A}_t$（"第 3 步写得好 +0.5，第 5 步符号错误 -0.3"）。GRPO 直接用整条回答的结果好坏广播给所有 token——整条正确的回答里每个 token 都拿到 $+0.97$，整条错误的回答里每个 token 都拿到 $-1.31$。</p>
+          </div>
+
+          <div style="background:#fff;border-left:3px solid #f59e0b;border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:10px;">
+            <p style="font-size:13px;font-weight:700;color:#78350f;margin:0 0 6px;">这样"粗糙广播"能工作的原因</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
+              <div style="background:#f0fdf4;border-radius:8px;padding:9px 11px;">
+                <strong style="color:#166534;">组间对比隐式定位错误</strong><br>
+                <span style="color:#374151;line-height:1.7;">同一道题里，正确和错误回答共享的 token（如"移项"写法）会在两条轨迹里得到相反符号的 Advantage，梯度相互抵消。真正不同的 token（答案"4"vs"3"）才会持续收到单方向的信号，模型自然学会区分。</span>
+              </div>
+              <div style="background:#eff6ff;border-radius:8px;padding:9px 11px;">
+                <strong style="color:#1d4ed8;">大量样本噪声平均掉了</strong><br>
+                <span style="color:#374151;line-height:1.7;">每个 prompt 跑 G 条，跑几千个 batch，"无辜被牵连的 token"在不同轨迹里得到正负信号相互抵消，最终对模型的净影响趋近于零。真正关键的 token 才会在统计上持续得到单向梯度。</span>
+              </div>
+            </div>
+          </div>
+
+          <div style="background:#fef2f2;border-left:3px solid #f59e0b;border-radius:0 8px 8px 0;padding:10px 14px;">
+            <p style="font-size:13px;font-weight:700;color:#991b1b;margin:0 0 6px;">这个简化的代价与适用边界</p>
+            <p style="font-size:12px;color:#374151;margin:0;line-height:1.7;">GRPO 的广播 Advantage 是一个有意识的简化。它在数学/代码上工作好，是因为这类任务中正确回答整体质量一致（不太会出现"前半段写得好、后半段算错了"的情况）。对于更复杂的 Agentic 任务（几十步轨迹），这个简化引入的噪声就更明显，这也是 PRM（过程奖励模型）和 Dual-discounting GAE 等研究方向存在的原因。</p>
+          </div>
+        </div>
+
         <p>然后用类似 PPO 的裁剪目标来更新策略：</p>
 
         <div class="formula-block">
-          $$\mathcal{L}_{GRPO}(\theta) = -\mathbb{E}\left[\frac{1}{G}\sum_{i=1}^{G}\min\!\left(\rho_i \hat{A}_i,\; \text{clip}(\rho_i, 1-\varepsilon, 1+\varepsilon)\hat{A}_i\right) - \beta \cdot \text{KL}(\pi_\theta \| \pi_{\text{ref}})\right]$$
+          $$\mathcal{L}_{GRPO}(\theta) = -\mathbb{E}\left[\frac{1}{G}\sum_{i=1}^{G}\frac{1}{|y_i|}\sum_{t=1}^{|y_i|}\min\!\left(\rho_{i,t} \hat{A}_i,\; \text{clip}(\rho_{i,t}, 1-\varepsilon, 1+\varepsilon)\hat{A}_i\right) - \beta \cdot \text{KL}(\pi_\theta \| \pi_{\text{ref}})\right]$$
         </div>
+        <p style="font-size:13px;color:#6b7280;margin:-8px 0 12px;">注意：$\rho_{i,t}$ 下标有 $t$（每个 token 的概率比不同），但 $\hat{A}_i$ 下标只有 $i$（整条回答共享同一个 Advantage）。这就是 GRPO 与 PPO 的核心区别。</p>
+        <p style="font-size:13px;color:#6b7280;margin:-4px 0 12px;"><strong>补充说明：</strong>$\rho_{i,t}$ 是<strong>当前策略 $\pi_\theta$ 与旧策略 $\pi_{\text{old}}$ 的概率比</strong>，即 $\rho_{i,t}=\dfrac{\pi_\theta(y_{i,t}|x,y_{i,&lt;t})}{\pi_{\text{old}}(y_{i,t}|x,y_{i,&lt;t})}$，用于 PPO-style clipping，防止单步更新过大。它与公式末尾的 $\pi_{\text{ref}}$（参考模型）不是同一回事：$\pi_{\text{ref}}$ 固定不变，只出现在 KL 惩罚项里，用来防止策略整体跑偏太远；$\pi_{\text{old}}$ 则随训练推进而更新。</p>
 
         <div class="example-box">
           <div class="ex-title">💡 完整例子：GRPO 如何训练解方程能力</div>
@@ -1172,6 +1686,19 @@
         <div class="section-title">
           <div class="icon" style="background:#ecfeff;">🤖</div>
           §7 RLAIF：用 AI 代替人类裁判
+        </div>
+
+        <!-- 定位说明 -->
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px 16px;margin-bottom:16px;">
+          <p style="font-size:13px;font-weight:700;color:#92400e;margin:0 0 8px;">💡 先说清楚 RLAIF 是什么、不是什么</p>
+          <p style="font-size:13px;color:#374151;margin:0 0 6px;line-height:1.7;"><strong>RLAIF 跟 RL 算法本身（PPO / GRPO / DPO）没有关系</strong>，它只解决一个更上游的问题：<strong>RM 的训练数据怎么来</strong>。</p>
+          <div style="background:#fff;border-radius:8px;padding:9px 12px;font-size:12px;color:#374151;line-height:1.8;">
+            RLHF 完整流程：<br>
+            &nbsp;&nbsp;① <span style="color:#dc2626;font-weight:600;">人工标注偏好数据</span> → ② 训练 Reward Model（RM） → ③ 用 RM 做 RL 训练（PPO/GRPO/DPO）<br><br>
+            RLAIF 只改了第①步，把"<span style="color:#dc2626;">人工标注</span>"换成"<span style="color:#16a34a;">AI 标注（如让 Claude/GPT-4 来判断哪个回答更好）</span>"。<br>
+            第②步和第③步<strong>完全不变</strong>。
+          </div>
+          <p style="font-size:12px;color:#6b7280;margin:8px 0 0;">名字里的"RL"是跟着 RLHF 一起沿用的，并不代表 RLAIF 本身是一种 RL 方法。更准确的叫法应该是"AI Feedback"。</p>
         </div>
 
         <p>RLAIF（Reinforcement Learning from <strong>AI</strong> Feedback）是 RLHF 的变体，用 AI 的反馈代替人类标注员的反馈。Anthropic 的 Constitutional AI（CAI）是这个方向的代表性工作。</p>
@@ -1294,7 +1821,7 @@
                 <td><strong>GRPO</strong></td>
                 <td>规则奖励或 RM 均可</td>
                 <td>✅ 组内采样</td>
-                <td>2 个模型（无 Critic）</td>
+                <td>3 个模型（current policy + old policy + ref model，无 Critic）</td>
                 <td>数学、代码，可验证任务</td>
                 <td>DeepSeek-R1, Qwen2.5-Math</td>
               </tr>

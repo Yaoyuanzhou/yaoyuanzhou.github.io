@@ -1,0 +1,1170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UniMixer 论文解读</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false }
+          ],
+          throwOnError: false
+        });
+      }
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #2563eb; --primary-soft: #eff6ff;
+      --accent: #7c3aed; --accent-soft: rgba(124,58,237,0.06);
+      --shadow: 0 10px 30px rgba(15,23,42,0.08); --radius: 18px; --max: 1120px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: linear-gradient(180deg,#f8fbff 0%,var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      line-height: 1.8;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .page { max-width: var(--max); margin: 0 auto; padding: 32px 20px 80px; }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    .back-link:hover { color: var(--primary); text-decoration: none; }
+    .hero {
+      background: radial-gradient(circle at top right,rgba(37,99,235,0.14),transparent 30%),
+                  radial-gradient(circle at left bottom,rgba(124,58,237,0.10),transparent 24%), var(--card);
+      border: 1px solid rgba(37,99,235,0.08); border-radius: 24px;
+      box-shadow: var(--shadow); padding: 34px 34px 28px; margin-bottom: 22px;
+    }
+    .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--primary-soft); color: var(--primary); font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+    h1 { font-size: 34px; line-height: 1.25; letter-spacing: -0.02em; margin-bottom: 10px; }
+    .subtitle { color: var(--muted); font-size: 16px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-top: 24px; }
+    .meta-card { background: #fbfdff; border: 1px solid #e7eefb; border-radius: 16px; padding: 14px 16px; }
+    .meta-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .meta-value { font-size: 14px; font-weight: 600; word-break: break-word; }
+    .layout { display: grid; grid-template-columns: 260px minmax(0,1fr); gap: 22px; align-items: start; }
+    .toc { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; }
+    .toc h2 { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+    .toc-list { list-style: none; }
+    .toc-list li { margin: 7px 0; }
+    .toc-list a { font-size: 13.5px; color: var(--muted); }
+    .toc-list a:hover { color: var(--primary); text-decoration: none; }
+    .toc-list a.active { color: var(--primary); background: #eff6ff; font-weight: 600; border-left: 3px solid var(--primary); padding-left: 5px; }
+    .toc-sub { padding-left: 14px; margin-top: 4px; }
+    .toc-sub li { margin: 4px 0; }
+    .toc-sub a { font-size: 12.5px; }
+    .content { display: flex; flex-direction: column; gap: 20px; }
+    .section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 28px 30px; }
+    .section-title { font-size: 22px; font-weight: 800; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 2px solid #f0f4ff; display: flex; align-items: center; gap: 10px; }
+    .section-title .icon { width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+    h3 { font-size: 18px; font-weight: 700; margin: 26px 0 12px; color: #111827; }
+    h4 { font-size: 15px; font-weight: 700; margin: 20px 0 10px; color: #1d4ed8; }
+    p { margin-bottom: 12px; }
+    p:last-child { margin-bottom: 0; }
+    ul, ol { padding-left: 22px; }
+    li { margin-bottom: 8px; }
+    .callout { border-radius: 14px; padding: 14px 18px; margin: 16px 0; font-size: 14.5px; }
+    .callout-blue { background: linear-gradient(180deg,rgba(37,99,235,0.08),rgba(37,99,235,0.04)); border: 1px solid rgba(37,99,235,0.16); }
+    .callout-blue strong { color: #1d4ed8; }
+    .callout-amber { background: #fffbeb; border: 1px solid #fde68a; }
+    .callout-amber strong { color: #92400e; }
+    .callout-green { background: #f0fdf4; border: 1px solid #86efac; }
+    .callout-green strong { color: #166534; }
+    .callout-purple { background: var(--accent-soft); border: 1px solid rgba(124,58,237,0.18); }
+    .callout-purple strong { color: #6d28d9; }
+    .note { background: #f8faff; border: 1px dashed #cbd5e1; border-radius: 12px; padding: 12px 16px; color: #475467; font-size: 13.5px; margin: 12px 0; }
+    .example-box { background: #f0fdf4; border: 1px solid #86efac; border-radius: 14px; padding: 16px 20px; margin: 16px 0; }
+    .example-box .ex-title { font-size: 12px; font-weight: 700; color: #166534; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+    .example-box p { margin-bottom: 8px; font-size: 14px; color: #166534; }
+    .example-box p:last-child { margin-bottom: 0; }
+    blockquote { margin: 16px 0; padding: 14px 18px; border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 0 12px 12px 0; color: #3f3f46; font-size: 14.5px; }
+    .paper-info { background: #fafbff; border-left: 4px solid var(--primary); border-radius: 12px; padding: 14px 16px; margin: 16px 0; color: #334155; font-size: 14px; }
+    .paper-info p { margin: 5px 0; }
+    figure { margin: 22px 0; background: #fbfdff; border: 1px solid #e8edf5; border-radius: 16px; padding: 14px; }
+    figure img { width: 100%; display: block; border-radius: 12px; background: #fff; }
+    figcaption { margin-top: 10px; font-size: 13.5px; color: var(--muted); line-height: 1.6; }
+    .fig-placeholder { padding: 36px 24px; text-align: center; background: #f8faff; border-radius: 12px; color: #94a3b8; font-size: 14px; border: 2px dashed #e2e8f0; line-height: 1.9; }
+    .formula-block { background: #fafbff; border: 1px solid #e8edf5; border-radius: 14px; padding: 16px 20px; margin: 14px 0; overflow-x: auto; }
+    .formula-vars { background: #f0f7ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 12px 16px; margin: 6px 0 16px; font-size: 13.5px; color: #374151; }
+    .formula-vars .var-title { font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+    .formula-vars ul { margin: 0; padding-left: 18px; }
+    .formula-vars li { margin: 5px 0; }
+    .katex-display { overflow-x: auto; overflow-y: hidden; padding: 6px 0; }
+    .table-wrap { overflow-x: auto; margin: 16px 0; }
+    table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 12px; font-size: 13.5px; }
+    thead th { background: #f3f6fb; color: #334155; font-weight: 700; border-bottom: 2px solid var(--line); text-align: left; padding: 12px 14px; }
+    td { padding: 11px 14px; border-bottom: 1px solid #eef2f7; vertical-align: top; }
+    tbody tr:nth-child(even) { background: #fafcff; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; }
+    .badge-green { background: #dcfce7; color: #166534; }
+    .badge-red { background: #fee2e2; color: #991b1b; }
+    .badge-blue { background: #dbeafe; color: #1e40af; }
+    .badge-gray { background: #f3f4f6; color: #374151; }
+    .badge-yellow { background: #fef9c3; color: #854d0e; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+    .mini-card { border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; background: #fff; }
+    .mini-card h4 { margin-top: 0; font-size: 14px; }
+    .step-list { list-style: none; padding: 0; margin: 16px 0; }
+    .step { display: flex; gap: 14px; margin-bottom: 14px; }
+    .step-num { width: 28px; height: 28px; border-radius: 50%; background: var(--primary); color: #fff; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
+    .flow-diagram { display: flex; flex-direction: column; gap: 8px; margin: 16px 0; }
+    .flow-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .flow-box { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 8px 14px; font-size: 13.5px; font-weight: 600; color: #1e40af; }
+    .flow-arrow { color: #94a3b8; font-size: 18px; }
+    footer { margin-top: 48px; text-align: center; color: var(--muted); font-size: 13.5px; padding-top: 24px; border-top: 1px solid var(--line); }
+    @media (max-width: 768px) {
+      .layout { grid-template-columns: 1fr; }
+      .toc { position: static; }
+      .meta-grid { grid-template-columns: 1fr 1fr; }
+      .two-col { grid-template-columns: 1fr; }
+      h1 { font-size: 26px; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <a href="../index.html" class="back-link">← 返回论文列表</a>
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="eyebrow">🔬 Kuaishou Technology · 2026</div>
+    <h1>UniMixer</h1>
+    <p class="subtitle">UniMixer: A Unified Architecture for Scaling Laws in Recommendation Systems</p>
+    <div class="meta-grid">
+      <div class="meta-card">
+        <div class="meta-label">作者</div>
+        <div class="meta-value">Mingming Ha, Guanchen Wang, Han Li, Kun Gai 等</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">机构</div>
+        <div class="meta-value">快手（Kuaishou Technology）</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">发表时间</div>
+        <div class="meta-value">2026年4月（arXiv:2604.00590v2）</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">核心贡献</div>
+        <div class="meta-value">统一推荐系统三大 Scaling 架构的理论框架 + 轻量版 UniMixer-Lite</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="layout">
+    <!-- TOC -->
+    <aside class="toc">
+      <h2>目录</h2>
+      <ul class="toc-list">
+        <li><a href="#highlights">⭐ 核心贡献速览</a></li>
+        <li><a href="#background">§1 背景与动机</a>
+          <ul class="toc-sub">
+            <li><a href="#bg-three-paradigms">三大范式现状</a></li>
+            <li><a href="#bg-problem">核心挑战</a></li>
+          </ul>
+        </li>
+        <li><a href="#method">§2 方法详解</a>
+          <ul class="toc-sub">
+            <li><a href="#m-tokenization">特征 Tokenization</a></li>
+            <li><a href="#m-parameterization">TokenMixer 等价参数化</a></li>
+            <li><a href="#m-unimixing">UniMixing 统一模块</a></li>
+            <li><a href="#m-lite">UniMixing-Lite</a></li>
+            <li><a href="#m-siamese">SiameseNorm</a></li>
+            <li><a href="#m-unified">统一理论框架</a></li>
+            <li><a href="#m-training">训练策略</a></li>
+          </ul>
+        </li>
+        <li><a href="#experiments">§3 实验结果</a>
+          <ul class="toc-sub">
+            <li><a href="#exp-main">主结果对比</a></li>
+            <li><a href="#exp-scaling">Scaling Laws</a></li>
+            <li><a href="#exp-ablation">消融实验</a></li>
+            <li><a href="#exp-online">线上 A/B</a></li>
+          </ul>
+        </li>
+        <li><a href="#insight">§4 亮点与思考</a></li>
+      </ul>
+    </aside>
+
+    <!-- Content -->
+    <main class="content">
+
+      <!-- 核心贡献速览 -->
+      <section class="section" id="highlights">
+        <div class="section-title">
+          <span class="icon" style="background:#fef9c3;">⭐</span>
+          这篇论文做得好的地方——核心贡献速览
+        </div>
+
+        <p style="color:#475569;font-size:14px;margin-bottom:20px;">读完这篇论文，以下几个设计思路值得重点关注：</p>
+
+        <div style="display:flex;flex-direction:column;gap:14px;">
+
+          <!-- 贡献1 -->
+          <div style="border-left:4px solid #2563eb;background:#f8faff;border-radius:0 12px 12px 0;padding:14px 18px;">
+            <div style="font-size:13.5px;font-weight:800;color:#1d4ed8;margin-bottom:6px;">① 把 TokenMixer 看成矩阵乘法（等价参数化）</div>
+            <div style="font-size:13.5px;color:#374151;line-height:1.8;">
+              把 TokenMixer 的 reshape + transpose 操作等价成 $W_\text{perm} \cdot \text{flatten}(X)$，这是全文最关键的理论洞察。一旦有了这个视角，操作就变成了矩阵，后续所有的参数化、约束、压缩都有了统一的数学基础。这是一种"换角度看已有工作"的思路，而不是凭空设计新模块。
+            </div>
+          </div>
+
+          <!-- 贡献2 -->
+          <div style="border-left:4px solid #7c3aed;background:#faf5ff;border-radius:0 12px 12px 0;padding:14px 18px;">
+            <div style="font-size:13.5px;font-weight:800;color:#6d28d9;margin-bottom:6px;">② 大矩阵拆成两部分（Kronecker 分解 + 可学习化）</div>
+            <div style="font-size:13.5px;color:#374151;line-height:1.8;">
+              $W_\text{perm} = G \otimes I_B$ 分解为块间（$W_G$）和块内（$W^i_B$）两层，分别替换成可学习浮点矩阵。收益双重：参数量从 $L^2$ 压缩到 $(L/B)^2 + (L/B) \cdot B^2$；计算复杂度从 $O(L^2)$ 降为 $O(L^2/B + LB)$，两步独立执行无需构造大矩阵。这是 Kronecker 积结构性质的直接利用，不是工程 trick。
+            </div>
+          </div>
+
+          <!-- 贡献3 -->
+          <div style="border-left:4px solid #059669;background:#f0fdf4;border-radius:0 12px 12px 0;padding:14px 18px;">
+            <div style="font-size:13.5px;font-weight:800;color:#065f46;margin-bottom:6px;">③ 对矩阵施加三条结构约束（继承置换矩阵的性质）</div>
+            <div style="font-size:13.5px;color:#374151;line-height:1.8;">
+              不是让 $W_G$ 随便学，而是通过对称化 + 温度退火 + Sinkhorn 归一化，保持置换矩阵原本就满足的双随机性（信息不丢失不重复）、稀疏性（每块有明确去向，不退化成均值池化）、对称性（互换关系）。每条约束都有消融实验支撑：稀疏性（AUC ↓ 0.1645%）、热启动（↓ 0.0856%）、对称性（↓ 0.0573%）。
+            </div>
+          </div>
+
+          <!-- 贡献4 -->
+          <div style="border-left:4px solid #d97706;background:#fffbeb;border-radius:0 12px 12px 0;padding:14px 18px;">
+            <div style="font-size:13.5px;font-weight:800;color:#92400e;margin-bottom:6px;">④ 统一三大 Scaling 范式（最大的理论贡献）</div>
+            <div style="font-size:13.5px;color:#374151;line-height:1.8;">
+              用同一个公式把 Attention、TokenMixer、FM 三条孤立路线统一了：$W_G$ 固定置换 = TokenMixer，$W_G$ 由内积动态计算 = Attention，局部投影固定 = FM。这让"三条路谁更好"的争论变成"同一框架下的不同特例"。UniMixer 是同时学习两层的一般解，三者都是它的特殊情况。
+            </div>
+          </div>
+
+          <!-- 贡献5 SiameseNorm -->
+          <div style="border-left:4px solid #dc2626;background:#fff5f5;border-radius:0 12px 12px 0;padding:14px 18px;">
+            <div style="font-size:13.5px;font-weight:800;color:#991b1b;margin-bottom:6px;">⑤ SiameseNorm——让深度 Scaling 真正可行</div>
+            <div style="font-size:13.5px;color:#374151;line-height:1.8;">
+              RankMixer 堆 4 层比 2 层 AUC 反而低 0.1066%，根本原因是 Pre-Norm 与 Post-Norm 的矛盾：Pre-Norm 训练稳定但弱化梯度，Post-Norm 表达力强但不稳定。SiameseNorm 用双流结构同时解决——一路每层归一化保稳定，另一路跳过归一化直接累积保梯度。有了它，UniMixer 堆 4 层比 2 层 AUC 再高 +0.1575%，8 层继续涨 +0.1647%。没有这个，前四条贡献的理论价值都无法在实验中体现。
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- §1 背景 -->
+      <section class="section" id="background">
+        <div class="section-title">
+          <span class="icon" style="background:#eff6ff;">📖</span>
+          §1 背景与动机
+        </div>
+
+        <div class="paper-info">
+          <p><strong>论文链接：</strong><a href="https://arxiv.org/abs/2604.00590" target="_blank">arXiv:2604.00590</a></p>
+          <p><strong>一句话摘要：</strong>通过对 TokenMixer 的等价参数化，将推荐系统三大 Scaling 架构（Attention、TokenMixer、FM）统一到一个理论框架下，并提出更高效的 UniMixer 和 UniMixer-Lite。</p>
+        </div>
+
+        <h3 id="bg-three-paradigms">三大 Scaling 范式</h3>
+        <p>LLM 的成功揭示了 Scaling Laws 的巨大潜力——随着参数量和计算量的增长，性能持续提升。推荐系统社区也开始探索其自己的 Scaling 框架。目前有三条主流路线：</p>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>① Attention-Based（注意力机制）</h4>
+            <p>HiFormer、FAT、HHFT 等。用 token 特有的 Q、K、V 投影实现异构特征交互。优点：表达能力强；缺点：attention score 计算是二次复杂度，且在推荐场景中异构特征会导致注意力矩阵呈对角线主导，训练初期梯度不稳定。</p>
+          </div>
+          <div class="mini-card">
+            <h4>② TokenMixer-Based（Token 混合）</h4>
+            <p>RankMixer、TokenMixer-Large 等。用静态无参数规则做 token 混合，避免了异构空间内积计算。优点：FLOPs 低、高效；缺点：没有可学习性，且严格要求 head 数 = token 数（$H=T$）。</p>
+          </div>
+          <div class="mini-card">
+            <h4>③ FM-Based（分解机）</h4>
+            <p>Wukong、Kunlun 等。用 FM Block 计算 embedding 之间的显式交互，配合线性压缩层堆叠。优点：可解释性好；缺点：低阶交互限制了 Scaling 性能上限。</p>
+          </div>
+          <div class="mini-card">
+            <h4>核心问题</h4>
+            <p>三大范式设计哲学截然不同，彼此孤立，缺乏统一的理论框架。能否构建一个兼具三者优点的统一 Scaling 模块？这是本文的出发点。</p>
+          </div>
+        </div>
+
+        <h3 id="bg-problem">推荐系统 Scaling 的核心挑战</h3>
+        <div class="callout callout-amber">
+          <strong>异构特征空间</strong>——推荐系统中用户特征、物品特征、行为序列等来自不同语义空间，不能像 NLP 中直接将 Transformer 移植过来（NLP 的所有 token 共享同一嵌入空间）。因此，每种方法都需要专门设计异构特征交互机制。
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2604.00590v2/x1.png"
+               alt="Figure 1: UniMixer/UniMixer-Lite 与 RankMixer 的 Scaling Law 曲线"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+                 <b>Figure 1：Scaling Law 对比</b><br><br>
+                 UniMixer-Lite（4 Blocks）在同等参数量下 AUC 显著高于 RankMixer，且 Scaling 曲线斜率更大，说明其 Scaling 效率最优。
+               </div>`" />
+          <figcaption><strong>Figure 1（论文原图）：</strong>UniMixer、UniMixer-Lite 与 RankMixer 的 AUC-参数量/AUC-FLOPs Scaling 曲线。UniMixer-Lite 的曲线斜率最大，意味着单位参数/算力提升 AUC 的幅度最高。</figcaption>
+        </figure>
+      </section>
+
+      <!-- §3 方法 -->
+      <section class="section" id="method">
+        <div class="section-title">
+          <span class="icon" style="background:#f5f3ff;">🏗️</span>
+          §2 方法详解
+        </div>
+
+        <div class="callout callout-blue">
+          <strong>整体架构流程：</strong>输入多域异构特征 → Embedding Layer → Token-Specific 线性投影 → $M$ 个 UniMixer Block（每个 Block 含 UniMixing/UniMixing-Lite + Pertoken SwiGLU + SiameseNorm） → Task Tower（多任务）→ 预测输出
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2604.00590v2/x2.png"
+               alt="Figure 2: UniMixer 整体架构图"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+                 <b>Figure 2：UniMixer 整体架构</b><br><br>
+                 左侧为 UniMixing 模块（全局混合矩阵 WG + 局部混合 WiB），右侧为 UniMixing-Lite（低秩近似 AG×BG + 基矩阵加权 WiB*）。整体通过 SiameseNorm 双流结构保证深层训练稳定性。
+               </div>`" />
+          <figcaption><strong>Figure 2（论文原图）：</strong>UniMixer 完整架构图。左侧展示 UniMixing 模块结构（Local Mixing + Global Mixing），右侧展示 UniMixing-Lite 结构，上下以 SiameseNorm 双流连接。</figcaption>
+        </figure>
+
+        <h3 id="m-tokenization">2.1 特征 Tokenization</h3>
+        <p>输入特征按语义类别分为多个域（User Profile、Item Features、Behavior Sequence、Query Features 等），每个域通过 Embedding 层得到该域的 embedding，拼接后等分为若干块，每块通过 token 特有的线性投影得到最终 token embedding：</p>
+
+        <div class="formula-block">
+          $$x_i = W^i_{\text{proj}} E_{d_i:d_i+d} + b^i_{\text{proj}} \in \mathbb{R}^D$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$E$：所有域 embedding 拼接后的向量</li>
+            <li>$W^i_{\text{proj}} \in \mathbb{R}^{D \times d}$：第 $i$ 个 token 特有的投影矩阵</li>
+            <li>$D$：统一 token 维度（模型隐藏维）</li>
+            <li>$d_i$：第 $i$ 个分块在 $E$ 中的起始位置</li>
+            <li>$X \in \mathbb{R}^{T \times D}$：$T$ 个 token 的隐状态矩阵</li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：特征 Tokenization 过程</div>
+          <p>假设推荐场景有 3 个域：用户档案（年龄、性别等，embedding 维 64）、商品特征（类别、价格等，embedding 维 128）、行为序列（过去点击的商品 ID，embedding 维 64）。</p>
+          <p>三个域 embedding 拼接：$E = [e_\text{user}, e_\text{item}, e_\text{behavior}] \in \mathbb{R}^{256}$</p>
+          <p>等分为 4 块（每块 64 维），每块分别通过各自的 $W^i_\text{proj} \in \mathbb{R}^{128 \times 64}$ 投影到统一的 128 维 token 空间，最终得到 $T=4$ 个 token，$X \in \mathbb{R}^{4 \times 128}$。</p>
+        </div>
+
+        <h3 id="m-parameterization">2.2 TokenMixer 的等价参数化（核心洞察）</h3>
+        <p>这是全文最关键的理论发现。传统 TokenMixer 是一种静态无参的操作：将 $X \in \mathbb{R}^{T \times D}$ 中每个 token 按 head 拆分后重排，本质上等价于一个置换矩阵 $W_\text{perm} \in \mathbb{R}^{TD \times TD}$ 乘以 $\text{flatten}(X)$：</p>
+
+        <div class="formula-block">
+          $$\text{TokenMixer}(X) = \text{reshape}(W_\text{perm} \cdot \text{flatten}(X))$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$W_\text{perm} \in \mathbb{R}^{TD \times TD}$：置换矩阵，每行每列恰好一个 1</li>
+            <li>$\text{flatten}(X)$：将 $X$ 展平为 $TD$ 维向量</li>
+            <li>$T$：token 数；$D$：每个 token 的维度</li>
+          </ul>
+        </div>
+
+        <!-- 置换矩阵介绍 + 四条性质 -->
+        <div class="example-box">
+          <div class="ex-title">💡 置换矩阵是什么？</div>
+          <p><strong>置换矩阵（Permutation Matrix）</strong> 是一种特殊的方阵：每行有且仅有一个 1，其余全为 0；每列同理。作用是把向量元素按规则换位置——本质就是一个"排列重组"操作。</p>
+          <p><strong>最小例子：</strong>把 $[a, b, c]$ 变成 $[c, a, b]$（第3个挪到第1位）：</p>
+          <p>$$P = \begin{pmatrix} 0 & 0 & 1 \\ 1 & 0 & 0 \\ 0 & 1 & 0 \end{pmatrix}, \quad P \cdot [a,\ b,\ c]^T = [c,\ a,\ b]^T$$</p>
+          <p>第1行 $[0,0,1]$：新第1位 = 原第3位；第2行 $[1,0,0]$：新第2位 = 原第1位，以此类推。<br>
+          TokenMixer 的操作（按 head 切分再重拼）恰好等价于这样一个置换矩阵左乘 $\text{flatten}(X)$。</p>
+        </div>
+
+        <p style="font-weight:700;font-size:15px;margin:22px 0 12px;color:#111827;">置换矩阵的四条性质——以及 UniMixer 怎么用它们</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px;">
+
+          <div style="border:1px solid #e5e7eb;border-radius:12px;padding:18px;background:#fff;">
+            <div style="font-size:13px;font-weight:700;color:#1d4ed8;margin-bottom:6px;">① 稀疏性（Sparsity）</div>
+            <div style="font-size:13px;color:#374151;line-height:1.75;">
+              每行/列只有一个 1，每个输出只取一个输入的值，不叠加混合。<br><br>
+              <strong style="color:#1d4ed8;">对论文的意义：</strong>UniMixer 把 0/1 换成可学习的浮点数，稀疏性不再严格，但通过温度系数 $\tau$ 做退火（从 1.0 降到 0.05），让权重逐渐集中到少数位置。消融实验：去掉温度系数（始终 $\tau=1.0$）AUC 下降 <strong>0.1645%</strong>，是所有因素中影响最大的一条。
+            </div>
+          </div>
+
+          <div style="border:1px solid #e5e7eb;border-radius:12px;padding:18px;background:#fff;">
+            <div style="font-size:13px;font-weight:700;color:#1d4ed8;margin-bottom:6px;">② 双随机性（Doubly Stochastic）</div>
+            <div style="font-size:13px;color:#374151;line-height:1.75;">
+              "随机"是数学术语 = "归一化/和为1"，不是随机采样。普通 softmax 只有行和=1（行随机矩阵）；置换矩阵行和=1 且列和=1，所以叫"双随机"。<br>
+              验证 $P$：行 $[0,0,1]$、$[1,0,0]$、$[0,1,0]$ 行和都=1；第1列 $[0,1,0]^T$、第2列 $[0,0,1]^T$、第3列 $[1,0,0]^T$ 列和也都=1 ✅<br><br>
+              <strong style="color:#1d4ed8;">对论文的意义：</strong>双随机性保证信息既不重复放大也不丢失（能量守恒）。UniMixer 用 Sinkhorn-Knopp 迭代来保持这个约束——把可学习矩阵交替对行/列归一化直到收敛。
+            </div>
+          </div>
+
+          <div style="border:1px solid #e5e7eb;border-radius:12px;padding:18px;background:#fff;grid-column:1/-1;">
+            <div style="font-size:13px;font-weight:700;color:#1d4ed8;margin-bottom:10px;">③ 可压缩性（Compressibility）</div>
+            <div style="font-size:13px;color:#374151;line-height:1.85;">
+
+              <p style="margin-bottom:10px;"><strong>问题：置换矩阵太大了</strong><br>
+              假设有 $T=2$ 个 token，每个 token 维度 $D=3$（方便手算）。把 $X \in \mathbb{R}^{2 \times 3}$ 展平得到 $\text{flatten}(X) \in \mathbb{R}^{6}$，那么置换矩阵 $W_\text{perm}$ 就是 $6 \times 6$ 的。真实场景 $T=16, D=512$，矩阵大小是 $8192 \times 8192 \approx 6700$ 万个数——存都存不下。</p>
+
+              <p style="margin-bottom:10px;"><strong>关键发现：这个大矩阵可以拆开</strong><br>
+              置换矩阵做的事情其实有两层：① <em>哪个 token 换到哪个位置</em>（token 间的搬运，由 $G \in \mathbb{R}^{T \times T}$ 描述）；② <em>一个 token 的 $D$ 个维度整体一起搬</em>，内部顺序不变（由 $I_D$，即 $D \times D$ 单位矩阵描述）。<br>
+              这两层可以用 <strong>Kronecker 积</strong>合并：$W_\text{perm} = G \otimes I_D$。</p>
+
+              <p style="margin-bottom:6px;"><strong>Kronecker 积是什么？——用数字说话</strong><br>
+              $A \otimes B$ 的含义：把矩阵 $A$ 的<em>每一个元素</em>，替换成"该元素 × 矩阵 $B$"这个子块，然后拼在一起。</p>
+
+              <div style="background:#f8faff;border:1px solid #e0e7ff;border-radius:10px;padding:16px 18px;margin-bottom:10px;overflow-x:auto;">
+                <p style="font-size:12.5px;color:#374151;margin:0 0 10px;"><strong>设定：</strong>token 0 的特征 $[a_1, a_2]$，token 1 的特征 $[b_1, b_2]$（$D=2$）。<br>
+                $G = \begin{pmatrix}0&1\\1&0\end{pmatrix}$（含义：第0行是 $[0,1]$ → 新 token 0 = 旧 token 1；第1行是 $[1,0]$ → 新 token 1 = 旧 token 0，即两者互换）</p>
+
+                <p style="font-size:12.5px;color:#374151;margin:0 0 10px;"><strong>第一步：写出 Kronecker 积的结构</strong><br>
+                $G \otimes I_2$ 的含义 = 把 $G$ 的每个元素替换成「该元素 × $I_2$」的子块：</p>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px;color:#374151;margin:0 0 10px;">
+                  <div>$G_{00}=0$：$0{\cdot}I_2 = \begin{pmatrix}0&0\\0&0\end{pmatrix}$</div>
+                  <div>$G_{01}=1$：$1{\cdot}I_2 = \begin{pmatrix}1&0\\0&1\end{pmatrix}$</div>
+                  <div>$G_{10}=1$：$1{\cdot}I_2 = \begin{pmatrix}1&0\\0&1\end{pmatrix}$</div>
+                  <div>$G_{11}=0$：$0{\cdot}I_2 = \begin{pmatrix}0&0\\0&0\end{pmatrix}$</div>
+                </div>
+
+                <p style="font-size:12.5px;color:#374151;margin:0 0 6px;"><strong>第二步：代入大矩阵</strong>（左上=第00块，右上=第01块，左下=第10块，右下=第11块）：</p>
+                <p style="font-size:12.5px;color:#374151;margin:0 0 10px;text-align:center;">
+                $G \otimes I_2 =
+                \begin{pmatrix}
+                  0 & 0 & 1 & 0 \\
+                  0 & 0 & 0 & 1 \\
+                  1 & 0 & 0 & 0 \\
+                  0 & 1 & 0 & 0
+                \end{pmatrix}$
+                </p>
+
+                <p style="font-size:12.5px;color:#374151;margin:0 0 4px;"><strong>第三步：验证</strong>，令输入 $v=[a_1,a_2,b_1,b_2]^T$：</p>
+                <div style="font-size:12px;color:#374151;line-height:1.9;margin:0 0 6px;">
+                  行1 $[0,0,1,0]$：输出 $= b_1$ ✓<br>
+                  行2 $[0,0,0,1]$：输出 $= b_2$ ✓<br>
+                  行3 $[1,0,0,0]$：输出 $= a_1$ ✓<br>
+                  行4 $[0,1,0,0]$：输出 $= a_2$ ✓
+                </div>
+                <p style="font-size:12px;color:#166534;margin:0;font-weight:600;">结果 $[b_1,b_2,a_1,a_2]^T$ ✅ — token 0 和 token 1 整体互换，内部维度顺序不变</p>
+              </div>
+
+              <p style="margin-bottom:10px;"><strong>参数量对比</strong><br>
+              直接存 $W_\text{perm} \in \mathbb{R}^{L \times L}$（$L = TD$）：参数量 $L^2 = (TD)^2$<br>
+              用 $G \otimes I_B$，只需存 $G \in \mathbb{R}^{(L/B) \times (L/B)}$：参数量 $(L/B)^2$，<strong>$B^2$ 倍压缩</strong>（$B$ 为块大小，即每个 head 的维度 $d$）<br>
+              以上面的例子为例：$L=12$，$B=d=3$，$G$ 只有 $4 \times 4 = 16$ 个参数，而 $W_\text{perm}$ 有 $12 \times 12 = 144$ 个，压缩 $B^2 = 9$ 倍。<br>
+              在 UniMixing 中，块大小 $B$ 是超参数，$G$（即 $W_G$）的大小为 $\frac{TD}{B} \times \frac{TD}{B}$，参数量为 $\left(\frac{TD}{B}\right)^2$。</p>
+
+              <p style="margin-bottom:0;"><strong style="color:#1d4ed8;">对论文的意义：</strong>UniMixer 把固定的 $G$ 换成可学习的 $W_G$，继续保持这个分解结构。UniMixer-Lite 进一步用低秩分解 $W_G \approx A_G B_G$（$r \ll T$）压缩 $W_G$ 本身，总参数再降约 78%。</p>
+            </div>
+          </div>
+
+          <div style="border:1px solid #e5e7eb;border-radius:12px;padding:18px;background:#fff;">
+            <div style="font-size:13px;font-weight:700;color:#1d4ed8;margin-bottom:6px;">④ 对称性（Symmetry）</div>
+            <div style="font-size:13px;color:#374151;line-height:1.75;">
+              置换矩阵在 head 数 = token 数（$H=T$）时是对称的，否则不对称。这是原始 TokenMixer 的一个硬限制，灵活性差。<br><br>
+              <strong style="color:#1d4ed8;">对论文的意义：</strong>UniMixer 通过 $\tilde{W}_G = (W_G + W_G^T)/2$ 主动施加对称约束，让可学习矩阵也满足这一性质。消融实验：去掉对称化后 AUC 下降 <strong>0.0573%</strong>。
+            </div>
+          </div>
+
+        </div>
+
+        <div class="callout callout-blue">
+          <strong>UniMixer 的核心创新：</strong>把固定的 0/1 置换矩阵换成可学习的浮点矩阵 $W_G$，同时用 Sinkhorn 保持双随机性、温度退火保持稀疏性、显式对称化保持对称性、Kronecker 分解降低参数量——四条性质全部继承并升级为可学习版本。
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：置换矩阵等价变换</div>
+          <p>给定输入 $X \in \mathbb{R}^{2 \times 6}$（2 个 token，每个维度 6），TokenMixer 操作（head=2，每 head 维度 $d=3$）将每个 token 按 head 切分后转置重排：</p>
+          <p>$X = [[x_1,x_2,x_3,x_4,x_5,x_6],[x_7,x_8,x_9,x_{10},x_{11},x_{12}]]$</p>
+          <p>$\text{TokenMixer}(X) = [[x_1,x_2,x_3,x_7,x_8,x_9],[x_4,x_5,x_6,x_{10},x_{11},x_{12}]]$</p>
+          <p>这等价于用一个 $12 \times 12$ 的置换矩阵 $W_\text{perm}$ 乘以 $\text{flatten}(X)$。而 $W_\text{perm} = G \otimes I_3$，其中：</p>
+          <ul style="font-size:14px;color:#166534;margin:6px 0 8px;padding-left:20px;">
+            <li>$I_3$：$3 \times 3$ 单位矩阵（每个 head 内部的 3 个维度<strong>顺序不变</strong>）</li>
+            <li>$G$：$4 \times 4$ 置换矩阵，作用于 4 个"块"（block 0=[x1-3]、block 1=[x4-6]、block 2=[x7-9]、block 3=[x10-12]），描述<strong>块与块之间怎么换位</strong>：block 0↔block 0，block 1↔block 2，block 3↔block 3，即：</li>
+          </ul>
+          <p style="text-align:center;">$G = \begin{pmatrix}1&0&0&0\\0&0&1&0\\0&1&0&0\\0&0&0&1\end{pmatrix}$（block 1 和 block 2 互换，对应 head0/head1 在两 token 间的转置）</p>
+          <p>$G$ 只有 $4 \times 4 = 16$ 个参数，而直接存 $W_\text{perm}$ 需要 $12 \times 12 = 144$ 个数。这正是 Kronecker 分解压缩参数的出发点。</p>
+        </div>
+
+        <h3 id="m-unimixing">2.3 UniMixing 统一混合模块</h3>
+        <p>通过对 $G$ 和各块的局部投影矩阵 $W^i_B$ 进行参数化，UniMixing 模块将原来固定的置换变成了可学习的：</p>
+
+        <div class="callout callout-amber">
+          <strong>从 $W_\text{perm} = G \otimes I_B$ 到 UniMixing 的推导：</strong><br>
+          原始 TokenMixer 的置换矩阵有两层结构：① <strong>$G$（块间）</strong>：描述哪个块换到哪个位置，固定 0/1 置换；② <strong>$I_B$（块内）</strong>：每个块内部维度顺序不变，恒等映射。<br><br>
+          UniMixing 做了两个"可学习化"替换：
+          <ul style="margin:8px 0 4px;padding-left:20px;">
+            <li>把固定的 $G \in \{0,1\}^{(L/B)\times(L/B)}$ → 换成<strong>可学习的浮点矩阵 $W_G \in \mathbb{R}^{(L/B)\times(L/B)}$</strong>（保持双随机约束），控制块与块之间的交互强度</li>
+            <li>把固定的 $I_B$（恒等，无参）→ 换成<strong>可学习的 $W^i_B \in \mathbb{R}^{B\times B}$</strong>，每个块有各自独立的局部混合矩阵，控制块内特征如何交互</li>
+          </ul>
+          这样整个操作就从"固定置换"变成了"可学习的广义 Kronecker 积"：$W_\text{perm} = G \otimes I_B \;\longrightarrow\; W_G \otimes \{W^i_B\}$
+        </div>
+
+        <div class="formula-block">
+          $$\text{UniMixing}(X) = \text{reshape}\left(\left(W_G \otimes \{W^i_B\}_{i=1}^{L//B}\right)\text{flatten}(X),\ 1, L\right)$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$B$：块大小（Block Size），将 $\text{flatten}(X)$ 等分为 $L/B$ 个向量</li>
+            <li>$L$：输入 embedding 的总维度（$= T \times D$）</li>
+            <li>$W^i_B \in \mathbb{R}^{B \times B}$：第 $i$ 块的局部混合矩阵（控制块内交互模式）</li>
+            <li>$W_G \in \mathbb{R}^{(L/B) \times (L/B)}$：全局混合矩阵（控制块间交互强度）</li>
+            <li>$\otimes$：广义 Kronecker 积</li>
+          </ul>
+        </div>
+
+        <p>Kronecker 积 $W_G \otimes \{W^i_B\}$ 按定义是分块结构——$W_G$ 的每个元素 $w_{ij}$ 对应一个块操作 $W^j_B$，因此天然可以分两步独立执行，而不需要构造完整的 $L \times L$ 大矩阵：</p>
+
+        <div class="note">
+          <strong>两步执行的推导：</strong>将 $\text{flatten}(X) \in \mathbb{R}^L$ 切成 $L/B$ 段，每段 $x_i \in \mathbb{R}^B$。利用 Kronecker 积的混合乘积性质 $(A \otimes B)(C \otimes D) = (AC)\otimes(BD)$，可以先对每段独立做局部变换，再对结果统一做全局变换——两步的顺序就是 Kronecker 积定义的直接展开：
+          <ul style="margin:8px 0 4px;padding-left:20px;">
+            <li><strong>局部先算：</strong>每段 $x_i$ 乘以 $W^i_B$，共 $L/B$ 段，每段代价 $B^2$，总代价 $\frac{L}{B} \times B^2 = LB$</li>
+            <li><strong>全局后算：</strong>把 $L/B$ 段的结果拼成矩阵 $H \in \mathbb{R}^{(L/B)\times B}$，再用 $W_G \in \mathbb{R}^{(L/B)\times(L/B)}$ 作用于 $H$ 的行维，代价 $\left(\frac{L}{B}\right)^2 \times B = \frac{L^2}{B}$</li>
+          </ul>
+          总代价 $O(LB + L^2/B)$，远小于直接展开大矩阵的 $O(L^2)$（当 $B$ 取合适值时）。
+        </div>
+
+        <div class="step-list">
+          <div class="step">
+            <span class="step-num">1</span>
+            <div>
+              <strong>局部混合（Local Mixing）：</strong>将 $\text{flatten}(X)$ 等分为 $L/B$ 段，每段 $x_i \in \mathbb{R}^B$ 与其对应的 $W^i_B$ 相乘：
+              $H = [x_1 W^1_B \mid x_2 W^2_B \mid \cdots \mid x_{L/B} W^{L/B}_B]$，得到局部交互矩阵 $H \in \mathbb{R}^{(L/B) \times B}$。计算量 $O(LB)$。
+            </div>
+          </div>
+          <div class="step">
+            <span class="step-num">2</span>
+            <div>
+              <strong>全局混合（Global Mixing）：</strong>$W_G \in \mathbb{R}^{(L/B) \times (L/B)}$ 作用在局部交互矩阵的行维上，得到最终输出。计算量 $O(L^2/B)$。
+            </div>
+          </div>
+        </div>
+
+        <p>总计算量从直接使用 $W_\text{perm}$ 的 $O(L^2)$ 降为 $O(L^2/B + LB)$，同时避免了中间大矩阵的 GPU 显存占用。</p>
+
+        <!-- 三步串联处理卡片 -->
+        <div style="border:1.5px solid #c7d7f9;border-radius:16px;background:#f8faff;padding:22px 26px;margin:18px 0;">
+
+          <div style="font-size:14px;font-weight:800;color:#1d4ed8;margin-bottom:4px;">每次 forward 时对 $W_G$（及 $W^i_B$）执行三步串联处理</div>
+          <div style="font-size:13px;color:#64748b;margin-bottom:18px;">得到满足双随机性 + 稀疏性 + 对称性约束的最终矩阵 $\bar{W}_G$，用于 UniMixing 计算</div>
+
+          <!-- 流水线示意 -->
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:20px;font-size:13px;">
+            <div style="background:#e0e7ff;border-radius:8px;padding:6px 12px;color:#3730a3;font-weight:600;">$W_G$<br><span style="font-size:11px;font-weight:400;">可学习参数</span></div>
+            <div style="color:#94a3b8;font-size:18px;">→</div>
+            <div style="background:#fef3c7;border-radius:8px;padding:6px 12px;color:#92400e;font-weight:600;">① 对称化<br><span style="font-size:11px;font-weight:400;">$\tilde{W}_G$</span></div>
+            <div style="color:#94a3b8;font-size:18px;">→</div>
+            <div style="background:#fef3c7;border-radius:8px;padding:6px 12px;color:#92400e;font-weight:600;">② 除以 $\tau$<br><span style="font-size:11px;font-weight:400;">控制稀疏</span></div>
+            <div style="color:#94a3b8;font-size:18px;">→</div>
+            <div style="background:#fef3c7;border-radius:8px;padding:6px 12px;color:#92400e;font-weight:600;">③ Sinkhorn<br><span style="font-size:11px;font-weight:400;">双随机归一</span></div>
+            <div style="color:#94a3b8;font-size:18px;">→</div>
+            <div style="background:#dcfce7;border-radius:8px;padding:6px 12px;color:#166534;font-weight:600;">$\bar{W}_G$<br><span style="font-size:11px;font-weight:400;">用于计算</span></div>
+          </div>
+
+          <!-- 公式 -->
+          <div style="background:#fff;border:1px solid #e0e7ff;border-radius:10px;padding:12px 16px;margin-bottom:18px;overflow-x:auto;text-align:center;font-size:14px;">
+            $$\bar{W}_G = \text{Sinkhorn-Knopp}\!\left(\frac{\tilde{W}_G}{\tau}\right),\quad \bar{W}^i_B = \text{Sinkhorn-Knopp}\!\left(\frac{\tilde{W}^i_B}{\tau}\right)$$
+          </div>
+
+          <!-- 三步详解 -->
+          <div style="display:flex;flex-direction:column;gap:12px;">
+
+            <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 18px;">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+                <span style="width:24px;height:24px;border-radius:50%;background:#2563eb;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">1</span>
+                <span style="font-size:13.5px;font-weight:700;color:#1e40af;">对称化：$\tilde{W}_G = (W_G + W_G^T)/2$</span>
+              </div>
+              <div style="font-size:13px;color:#374151;line-height:1.8;padding-left:34px;">
+                <strong>为什么能对称？</strong>$\tilde{W}_{ij} = (w_{ij}+w_{ji})/2$，$\tilde{W}_{ji} = (w_{ji}+w_{ij})/2$，两者必然相等，所以 $\tilde{W}_{ij}=\tilde{W}_{ji}$ 对所有 $i,j$ 成立。<br>
+                <strong>为什么要对称？</strong>置换矩阵里"block $i$ 换到 block $j$"与"block $j$ 换到 block $i$"是互换关系，权重天然相等。显式对称化让可学习的 $W_G$ 继承这一结构约束。<span style="color:#6b7280;font-size:12px;">（消融：去掉后 AUC ↓ 0.0573%）</span>
+              </div>
+            </div>
+
+            <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 18px;">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+                <span style="width:24px;height:24px;border-radius:50%;background:#2563eb;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">2</span>
+                <span style="font-size:13.5px;font-weight:700;color:#1e40af;">除以温度系数 $\tau$（$1.0 \to 0.05$ 退火）</span>
+              </div>
+              <div style="font-size:13px;color:#374151;line-height:1.8;padding-left:34px;">
+                <strong>为什么要稀疏？</strong>稀疏的 $\bar{W}_G$ 每行只有一个大权重，趋近置换矩阵，每个 block 被明确分配到某位置；若不稀疏则退化为均值池化，失去特征选择能力。<br>
+                <strong>为什么 $\tau$ 小 → Sinkhorn 后更稀疏？</strong>除以小 $\tau$ 放大了元素间差距（$(w_{ij}-w_{ik})/\tau$ 比 $w_{ij}-w_{ik}$ 大得多），Sinkhorn 归一化后大元素更压倒性，结果更接近 one-hot。类比：softmax 低温趋近 argmax。
+              </div>
+            </div>
+
+            <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 18px;">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+                <span style="width:24px;height:24px;border-radius:50%;background:#2563eb;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">3</span>
+                <span style="font-size:13.5px;font-weight:700;color:#1e40af;">Sinkhorn-Knopp 迭代 → $\bar{W}_G$（双随机归一化）</span>
+              </div>
+              <div style="font-size:13px;color:#374151;line-height:1.8;padding-left:34px;">
+                交替做：行归一化（每行 ÷ 行和）→ 列归一化（每列 ÷ 列和）→ 反复 3～10 次收敛，得到行和=1 且 列和=1 的双随机矩阵 $\bar{W}_G$。<br>
+                <strong>注意：这是每次 forward 里临时执行的少量迭代，不是训练多轮。</strong>$W_G$ 本身只由反向传播更新一次；Sinkhorn 是可微操作，梯度正常从 $\bar{W}_G$ 反传回 $W_G$。
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2604.00590v2/x3.png"
+               alt="Figure 3: 不同方法的 global mixing weights 及 TokenMixer 等价参数化"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+                 <b>Figure 3：Global Mixing Weights 可视化</b><br><br>
+                 左图：不同方法的注意力/混合权重矩阵可视化，Heterogeneous Attention 呈对角线主导，Self-Attention 较均匀，UniMixer 的 WG 分布合理；右图：TokenMixer 的等价参数化流程图（置换矩阵 → Kronecker 分解）。
+               </div>`" />
+          <figcaption><strong>Figure 3（论文原图）：</strong>(a) 不同方法的全局混合权重分布。Heterogeneous Attention 的权重矩阵呈对角线主导（某些行稀疏集中），容易导致梯度消失。(b) TokenMixer 的等价参数化：原始 TokenMixer 操作等价于置换矩阵，可通过 Kronecker 压缩降低参数量。</figcaption>
+        </figure>
+
+        <h3 id="m-lite">2.4 UniMixing-Lite（轻量版）</h3>
+        <p>UniMixing 模块存在两个冗余问题：① 局部矩阵 $W^i_B$ 数量随块数线性增长，引入局部交互冗余；② 全局矩阵 $W_G$ 较大，参数效率不高。UniMixing-Lite 用以下方法解决：</p>
+
+        <div class="callout callout-purple">
+          <strong>基矩阵组合（Basis Composition）：</strong>定义 $b$ 个基矩阵 $\{Z_\ell\}_{\ell=1}^b$ 和每块的权重向量 $\omega_i$，局部混合矩阵变为：$W^{*i}_B = \sum_{\ell=1}^b \omega_{i\ell} Z_\ell$。所有块共享基矩阵，只学习各自的加权系数，大幅减少参数。<br><br>
+          <strong>低秩近似（Low-Rank Approximation）：</strong>全局矩阵 $W_G$ 改用低秩分解：$W_r = \text{Sinkhorn}(A_G B_G)$，其中 $A_G \in \mathbb{R}^{(L/B) \times r}$，$B_G \in \mathbb{R}^{r \times (L/B)}$，$r \ll L/B$。
+        </div>
+
+        <div class="formula-block">
+          $$\text{UniMixing-Lite}(X) = \text{reshape}\left(W_r \cdot \text{reshape}\left([x_1 W^{*1}_B \mid \cdots \mid x_{L/B} W^{*L/B}_B],\ \frac{L}{B}, B\right),\ 1, L\right)$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$W_r = \text{Sinkhorn-Knopp}(A_G B_G)$：低秩近似的全局混合矩阵</li>
+            <li>$W^{*i}_B = \text{Sinkhorn-Knopp}(\sum_\ell \omega_{i\ell} Z_\ell)$：基矩阵加权合成的局部混合矩阵</li>
+            <li>$r$：低秩近似的秩，越小参数越少</li>
+            <li>$b$：基矩阵数量，越多表达能力越强</li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：UniMixing-Lite 参数节省</div>
+          <p>设 $L=768$，$B=6$，则共有 $L/B = 128$ 个块。</p>
+          <p><strong>UniMixing（原版）：</strong>局部参数 = $128 \times 6 \times 6 = 4608$，全局参数 = $128 \times 128 = 16384$，总计约 21K。</p>
+          <p><strong>UniMixing-Lite（$b=4$，$r=16$）：</strong>基矩阵参数 = $4 \times 6 \times 6 = 144$，权重参数 = $128 \times 4 = 512$，低秩全局参数 = $128 \times 16 \times 2 = 4096$，总计约 4.7K，<strong>参数量减少约 78%</strong>。</p>
+          <p>更重要的是，UniMixing-Lite 同时保留了 TokenMixer 的轻量全局交互 和 Attention 的局部表达能力，兼得两家优点。</p>
+        </div>
+
+        <h3 id="m-siamese">2.5 SiameseNorm（孪生归一化）</h3>
+
+        <!-- 问题：Pre-Norm vs Post-Norm 矛盾 -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+          <div style="border:1px solid #fca5a5;border-radius:12px;padding:14px 16px;background:#fff5f5;">
+            <div style="font-size:13px;font-weight:700;color:#dc2626;margin-bottom:8px;">❌ Pre-Norm 的问题：梯度越深越弱</div>
+            <div style="font-size:12.5px;color:#374151;line-height:1.8;font-family:monospace;background:#f8f8f8;border-radius:6px;padding:8px;margin-bottom:8px;">x_out = x + Module(RMSNorm(x))</div>
+            <div style="font-size:13px;color:#374151;line-height:1.8;">
+              RMSNorm 先把 $x$ 压缩到均值0、方差1，Module 的输出 $\delta$ 因此变得很小；残差连接 $x + \delta$ 里 $x$ 的量级远大于 $\delta$，<strong>Module 的贡献被稀释</strong>。<br><br>
+              梯度反传时，残差路（$x$ 那条）畅通无阻，但 Module 参数拿到的梯度信号微弱——层数越多，深层 Module 几乎学不到东西。<br><br>
+              ✅ 训练稳定 &nbsp;&nbsp; ❌ <strong>深层模块梯度衰减，Scaling 深度无收益</strong>
+            </div>
+          </div>
+          <div style="border:1px solid #fca5a5;border-radius:12px;padding:14px 16px;background:#fff5f5;">
+            <div style="font-size:13px;font-weight:700;color:#dc2626;margin-bottom:8px;">❌ Post-Norm 的问题：训练初期数值爆炸</div>
+            <div style="font-size:12.5px;color:#374151;line-height:1.8;font-family:monospace;background:#f8f8f8;border-radius:6px;padding:8px;margin-bottom:8px;">x_out = RMSNorm(x + Module(x))</div>
+            <div style="font-size:13px;color:#374151;line-height:1.8;">
+              Module 直接作用在未归一化的原始 $x$ 上，训练初期 $x$ 量级不稳定，两者相加 $x + \text{Module}(x)$ 时没有任何"安全网"——<strong>在 Norm 保护到来之前，数值就已经可能爆炸</strong>。<br><br>
+              梯度通过 $x + \text{Module}(x)$ 反传时不受控，深层网络梯度爆炸概率高，很难稳定收敛。<br><br>
+              ✅ 梯度信号强、表达力强 &nbsp;&nbsp; ❌ <strong>初期不稳定，深层难收敛</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="note" style="margin-bottom:16px;">
+          这就是 RankMixer 堆 4 层反而比 2 层 AUC 低 0.1066% 的根本原因——它用 Pre-Norm，越深梯度越弱，新增的层几乎没学到东西。
+        </div>
+
+        <!-- 解决方案：双流 -->
+        <p><strong>SiameseNorm 的解法：让稳定性和梯度信号走两条独立的路。</strong>每层维护两条流，初始化 $\bar{X}_0 = \bar{Y}_0 = X$。下图展示单层内的完整数据流：</p>
+
+        <!-- 双流流程图（SVG内联） -->
+        <div style="background:#f8faff;border:1.5px solid #c7d7f9;border-radius:14px;padding:20px 24px;margin:14px 0;overflow-x:auto;">
+          <div style="font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:14px;">第 ℓ 层数据流（两条流共享同一个 UniMixer 输出 Oₗ）</div>
+          <!-- 主流（左列蓝色） -->
+          <div style="display:flex;gap:24px;align-items:flex-start;">
+
+            <!-- 副流（Y） -->
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0;">
+              <div style="background:#dcfce7;border:1.5px solid #4ade80;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:700;color:#166534;text-align:center;width:100%;box-sizing:border-box;">Ȳₗ（副流）</div>
+              <div style="width:2px;height:18px;background:#4ade80;"></div>
+              <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:7px 12px;font-size:12.5px;color:#166534;text-align:center;width:100%;box-sizing:border-box;">① RMSNorm(Ȳₗ) → <strong>Ỹₗ</strong></div>
+              <div style="width:2px;height:14px;background:#4ade80;"></div>
+              <div style="font-size:12px;color:#6b7280;text-align:center;">送入 UniMixer（与主流相加）</div>
+              <div style="width:2px;height:14px;background:#94a3b8;"></div>
+              <div style="background:#fef9c3;border:1.5px solid #facc15;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:700;color:#854d0e;text-align:center;width:100%;box-sizing:border-box;">Oₗ = UniMixer(X̄ₗ + Ỹₗ)</div>
+              <div style="width:2px;height:14px;background:#4ade80;"></div>
+              <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:7px 12px;font-size:12.5px;color:#166534;text-align:center;width:100%;box-sizing:border-box;">② Ȳₗ + Oₗ → <strong>Ȳₗ₊₁</strong><br><span style="font-size:11px;color:#6b7280;">只加，不做任何归一化</span></div>
+              <div style="width:2px;height:18px;background:#4ade80;"></div>
+              <div style="background:#dcfce7;border:1.5px solid #4ade80;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:700;color:#166534;text-align:center;width:100%;box-sizing:border-box;">Ȳₗ₊₁（副流输出）</div>
+              <div style="margin-top:8px;font-size:11.5px;color:#16a34a;text-align:center;background:#f0fdf4;border-radius:6px;padding:4px 8px;">✅ 梯度不被 Norm 截断，直通回浅层</div>
+            </div>
+
+            <!-- 分隔 -->
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding-top:40px;color:#94a3b8;font-size:20px;">⟷</div>
+
+            <!-- 主流（X） -->
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0;">
+              <div style="background:#dbeafe;border:1.5px solid #60a5fa;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:700;color:#1d4ed8;text-align:center;width:100%;box-sizing:border-box;">X̄ₗ（主流）</div>
+              <div style="width:2px;height:18px;background:#60a5fa;"></div>
+              <div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:7px 12px;font-size:12.5px;color:#1d4ed8;text-align:center;width:100%;box-sizing:border-box;">直接作为 UniMixer 输入的一部分</div>
+              <div style="width:2px;height:14px;background:#60a5fa;"></div>
+              <div style="background:#fef9c3;border:1.5px solid #facc15;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:700;color:#854d0e;text-align:center;width:100%;box-sizing:border-box;">Oₗ = UniMixer(X̄ₗ + Ỹₗ)</div>
+              <div style="width:2px;height:14px;background:#60a5fa;"></div>
+              <div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:7px 12px;font-size:12.5px;color:#1d4ed8;text-align:center;width:100%;box-sizing:border-box;">③ RMSNorm(X̄ₗ + Oₗ) → <strong>X̄ₗ₊₁</strong><br><span style="font-size:11px;color:#6b7280;">先残差连接，再归一化</span></div>
+              <div style="width:2px;height:18px;background:#60a5fa;"></div>
+              <div style="background:#dbeafe;border:1.5px solid #60a5fa;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:700;color:#1d4ed8;text-align:center;width:100%;box-sizing:border-box;">X̄ₗ₊₁（主流输出）</div>
+              <div style="margin-top:8px;font-size:11.5px;color:#1d4ed8;text-align:center;background:#eff6ff;border-radius:6px;padding:4px 8px;">✅ 每层归一化，训练不爆炸</div>
+            </div>
+
+          </div>
+
+          <!-- 最终融合 -->
+          <div style="margin-top:16px;border-top:1px solid #e0e7ff;padding-top:12px;text-align:center;font-size:13px;color:#374151;">
+            <strong>M 层后融合输出：</strong>$X_\text{output} = \bar{X}_M + \text{RMSNorm}(\bar{Y}_M)$
+            <div style="font-size:12px;color:#6b7280;margin-top:4px;">主流（稳定的归一化特征）+ 副流归一化后的累积信号 → 最终表示</div>
+          </div>
+        </div>
+
+        <!-- 公式总结 -->
+        <div class="formula-block">
+          $$\tilde{Y}_\ell = \text{RMSNorm}(\bar{Y}_\ell),\quad O_\ell = \text{UniMixer}(\bar{X}_\ell + \tilde{Y}_\ell)$$
+          $$\underbrace{\bar{X}_{\ell+1} = \text{RMSNorm}(\bar{X}_\ell + O_\ell)}_{\text{主流：每层归一化，保稳定}},\quad \underbrace{\bar{Y}_{\ell+1} = \bar{Y}_\ell + O_\ell}_{\text{副流：只加不归一化，保梯度}}$$
+        </div>
+
+        <div class="callout callout-green">
+          <strong>效果：</strong>UniMixer 2→4→8 层，AUC 持续提升（+0.1575% → +0.1647%）；而 RankMixer 4 层比 2 层反降 0.1066%。SiameseNorm 是让深度 Scaling 真正可行的工程关键。
+        </div>
+
+        <h3 id="m-unified">2.6 统一理论框架</h3>
+        <p>UniMixer 的最大理论贡献是：将现有三大主流推荐 Scaling 架构统一为同一个公式：</p>
+
+        <div class="formula-block">
+          $$\text{UniMixing}(X) = \text{reshape}\left(\underbrace{G(X, W_G)}_{\text{全局混合}} \cdot \underbrace{\begin{bmatrix}x_1 W^1_B \\ \vdots \\ x_{L/B} W^{L/B}_B\end{bmatrix}}_{\text{局部混合}},\ 1, L\right)$$
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>方法</th>
+                <th>局部混合（Local Mixing）</th>
+                <th>全局混合模式 $G(X, W_G)$</th>
+                <th>核心特点</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Self-Attention</td>
+                <td>$X W^V$</td>
+                <td>$\text{softmax}((XW^Q)(XW^K)^T / \sqrt{d})$</td>
+                <td>全局依赖于输入 $X$（动态权重）</td>
+              </tr>
+              <tr>
+                <td>Heterogeneous Attention</td>
+                <td>$X\tilde{W}^V$（token-specific）</td>
+                <td>$\text{softmax}((X\tilde{W}^Q)(X\tilde{W}^K)^T / \sqrt{d})$</td>
+                <td>token-specific 投影解决异构问题</td>
+              </tr>
+              <tr>
+                <td><strong>TokenMixer</strong></td>
+                <td>$X$（恒等映射，无参）</td>
+                <td>$G$（固定置换，与 $X$ 无关）</td>
+                <td>静态无参，高效但无法学习</td>
+              </tr>
+              <tr>
+                <td>FM（Wukong）</td>
+                <td>$Y$（固定投影）</td>
+                <td>$XI(XI)^T$（当 $W^Q=W^K=I$ 时退化为 FM）</td>
+                <td>显式低阶特征交互</td>
+              </tr>
+              <tr>
+                <td><strong>UniMixing（本文）</strong></td>
+                <td>$W^i_B$（可学习 token-specific）</td>
+                <td>$\bar{W}_G$（可学习，满足双随机性）</td>
+                <td>统一三大范式，兼具可学习性和高效性</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-green">
+          <strong>统一视角的关键洞察：</strong>当 $W_G$ 固定为置换矩阵时 = TokenMixer；当 $W_G$ 由 $X$ 内积计算时 = Attention；当 $W_G = XI(XI)^T$，局部投影固定时 = FM。UniMixer 将这三者统一在一个参数化框架下，通过梯度下降同时学习全局和局部的最优混合模式。
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin:16px 0;">
+          <div style="border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;background:#fff;">
+            <div style="font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">Attention（异构）</div>
+            <div style="font-size:13px;color:#374151;line-height:1.75;">
+              <strong>token 内部改造</strong>：通过 $W_V^{ih}$ 对每个 token 的特征做线性变换，再加权聚合<br>
+              <strong>token 间交互</strong>：$Q_h K_h^T$ 内积<strong>动态计算</strong>（每次 forward 依赖输入 $X$）<br>
+              <span style="color:#dc2626;font-size:12px;">问题：注意力分数易被各域 embedding norm 主导，塌缩到固定列</span>
+            </div>
+          </div>
+          <div style="border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;background:#fff;">
+            <div style="font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">TokenMixer</div>
+            <div style="font-size:13px;color:#374151;line-height:1.75;">
+              <strong>token 内部</strong>：恒等映射，不改变块内特征<br>
+              <strong>token 间交互</strong>：按 head 固定拼接，完全不可学习，块间换位规则由 $H, T$ 的几何关系预先决定<br>
+              <span style="color:#dc2626;font-size:12px;">问题：无参数，无法根据数据自适应调整交互模式</span>
+            </div>
+          </div>
+          <div style="border:1px solid #dbeafe;border-radius:12px;padding:14px 16px;background:#eff6ff;">
+            <div style="font-size:12px;font-weight:700;color:#1d4ed8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">UniMixer（本文）</div>
+            <div style="font-size:13px;color:#374151;line-height:1.75;">
+              <strong>token 内部（$W^i_B$）</strong>：可学习，每块独立学习块内特征的最优重组方式<br>
+              <strong>token 间（$W_G$）</strong>：可学习，学习块间最优交互强度；<strong>静态参数</strong>（训练后固定，不依赖 $X$），介于 TokenMixer（静态无参）和 Attention（动态有参）之间<br>
+              <span style="color:#166534;font-size:12px;">✅ 既有可学习性，又避免了 Attention 的 norm 塌缩问题</span>
+            </div>
+          </div>
+        </div>
+
+        <h3 id="m-training">2.7 训练策略：温度退火 + 热启动</h3>
+        <p>稀疏性对性能至关重要，但低温度（高稀疏）会导致梯度稀疏不稳定。论文采用线性温度退火：</p>
+
+        <div class="formula-block">
+          $$\tau_j = \max\left\{\tau_\text{start} - (\tau_\text{start} - \tau_\text{end}) \cdot \frac{j}{J},\ \tau_\text{end}\right\}$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\tau_\text{start} = 1.0$：初始高温（矩阵均匀分布，易于探索）</li>
+            <li>$\tau_\text{end} = 0.05$：最终低温（矩阵稀疏，性能最优）</li>
+            <li>$j$：当前迭代步；$J$：退火的总迭代步数</li>
+          </ul>
+        </div>
+
+        <p>当数据量不足时，还可采用<strong>热启动（Warm-Up）</strong>策略：先用高温（$\tau=1.0$）训练直到收敛，再以此作为初始化重新用低温（$\tau=0.05$）训练。</p>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：温度系数对矩阵稀疏性的影响</div>
+          <p>从 Figure 5 可以看出：当 $\tau=1.0$ 时，$\bar{W}_G$ 和 $\bar{W}^i_B$ 的元素分布较均匀（类似均匀置换，信息混合平滑）；当 $\tau=0.05$ 时，矩阵呈现明显的稀疏集中（类似接近置换矩阵，每行/列只有少数几个大权重），这种稀疏模式对应更精准的特征交互选择，显著提升 AUC。</p>
+          <p>消融实验显示，移除温度系数（始终使用 $\tau=1.0$）会导致 AUC 下降 <strong>0.1645%</strong>，是所有消融项中影响最大的。</p>
+        </div>
+      </section>
+
+      <!-- §4 实验 -->
+      <section class="section" id="experiments">
+        <div class="section-title">
+          <span class="icon" style="background:#fff7ed;">📊</span>
+          §3 实验结果
+        </div>
+
+        <p><strong>实验设置：</strong>使用快手广告投放场景的真实数据集（超过 7 亿用户样本，涵盖数百个异构特征，时间跨度一年）。任务是预测"用户次日留存"（二分类）。评估指标：AUC、UAUC（用户级 AUC）。</p>
+
+        <h3 id="exp-main">3.1 主结果对比</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>模型</th>
+                <th>AUC ↑</th>
+                <th>ΔAUC</th>
+                <th>参数量</th>
+                <th>FLOPs/Batch</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Heterogeneous Attention（基线）</td>
+                <td>0.744577</td>
+                <td>–</td>
+                <td>132.7M</td>
+                <td>1.68T</td>
+              </tr>
+              <tr>
+                <td>HiFormer</td>
+                <td>0.741685</td>
+                <td>-0.2892%</td>
+                <td>107.5M</td>
+                <td>1.37T</td>
+              </tr>
+              <tr>
+                <td>Wukong（FM-based）</td>
+                <td>0.744477</td>
+                <td>-0.0100%</td>
+                <td>107.1M</td>
+                <td>1.40T</td>
+              </tr>
+              <tr>
+                <td>FAT</td>
+                <td>0.744883</td>
+                <td>+0.0306%</td>
+                <td>138.4M</td>
+                <td>1.83T</td>
+              </tr>
+              <tr>
+                <td>RankMixer（TokenMixer-based）</td>
+                <td>0.749329</td>
+                <td>+0.4752%</td>
+                <td>135.5M</td>
+                <td>1.68T</td>
+              </tr>
+              <tr>
+                <td>TokenMixer-Large</td>
+                <td>0.748410</td>
+                <td>+0.3833%</td>
+                <td>103.3M</td>
+                <td>1.27T</td>
+              </tr>
+              <tr style="background: #eff6ff;">
+                <td><strong>UniMixer-2-Blocks 67.5M（本文）</strong></td>
+                <td><strong>0.749770</strong></td>
+                <td><strong>+0.5193%</strong></td>
+                <td><strong>67.5M</strong></td>
+                <td>2.07T</td>
+              </tr>
+              <tr style="background: #eff6ff;">
+                <td><strong>UniMixer-2-Blocks 101.5M（本文）</strong></td>
+                <td><strong>0.750238</strong></td>
+                <td><strong>+0.5661%</strong></td>
+                <td><strong>101.5M</strong></td>
+                <td>2.50T</td>
+              </tr>
+              <tr style="background: #f0fdf4;">
+                <td><strong>UniMixer-Lite-2-Blocks 42.4M（本文）</strong></td>
+                <td><strong>0.751121</strong></td>
+                <td><strong>+0.6544%</strong></td>
+                <td><strong>42.4M</strong></td>
+                <td>2.17T</td>
+              </tr>
+              <tr style="background: #f0fdf4;">
+                <td><strong>UniMixer-Lite-4-Blocks 84.5M（本文）</strong></td>
+                <td><strong>0.752718</strong></td>
+                <td><strong>+0.8141%</strong></td>
+                <td><strong>84.5M</strong></td>
+                <td>4.24T</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-green">
+          <strong>关键结论：</strong>UniMixer-Lite-4-Blocks（84.5M）以更少的参数量（相比 Heterogeneous Attention 的 132.7M）实现了 <strong>+0.8141%</strong> 的 AUC 提升，且 FLOPs 远低于注意力机制类方法。UniMixer-Lite 是参数效率和计算效率的双重赢家。
+        </div>
+
+        <h3 id="exp-scaling">3.2 Scaling Law 曲线</h3>
+        <p>三种模型（RankMixer、UniMixer、UniMixer-Lite）均呈现清晰的幂律 Scaling 关系：</p>
+
+        <div class="formula-block">
+          $$\Delta\text{AUC}_{\text{UniMixer-Lite}} = 0.003767 \cdot \text{Params}^{0.141903}$$
+          $$\Delta\text{AUC}_{\text{UniMixer}} = 0.003032 \cdot \text{Params}^{0.131973}$$
+          $$\Delta\text{AUC}_{\text{RankMixer}} = 0.002718 \cdot \text{Params}^{0.116043}$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\Delta\text{AUC}$：相对基线（Heterogeneous Attention）的 AUC 提升量</li>
+            <li>系数（如 0.003767）：Scaling 起点的高低</li>
+            <li>指数（如 0.141903）：<strong>Scaling 效率的核心指标</strong>，越大意味着每扩大一倍参数量，AUC 提升幅度越大</li>
+          </ul>
+        </div>
+
+        <p>UniMixer-Lite 的 Scaling 指数（0.1419）比 RankMixer（0.1160）高出约 22%，这意味着模型越大，两者的差距越来越悬殊。</p>
+
+        <figure>
+          <img src="https://arxiv.org/html/2604.00590v2/x4.png"
+               alt="Figure 4: Scaling Laws 曲线"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+                 <b>Figure 4：Scaling Laws 曲线</b><br><br>
+                 横坐标（对数刻度）：参数量 / FLOPs；纵坐标：ΔAUC。三条曲线均呈幂律趋势，UniMixer-Lite 斜率最大，说明 Scaling 效率最优。
+               </div>`" />
+          <figcaption><strong>Figure 4（论文原图）：</strong>AUC 与参数量/FLOPs 的 Scaling Law 曲线（对数刻度）。三条曲线均符合幂律，UniMixer-Lite 斜率最大，随着参数量增加优势持续扩大。</figcaption>
+        </figure>
+
+        <h3 id="exp-ablation">3.3 消融实验</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>消融设置</th>
+                <th>ΔAUC（相对完整 UniMixer）</th>
+                <th>结论</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>w/o 温度系数（始终 τ=1.0）</td>
+                <td class="badge badge-red">-0.1645%</td>
+                <td>影响最大，稀疏性至关重要</td>
+              </tr>
+              <tr>
+                <td>w/o 模型热启动（Warm-Up）</td>
+                <td class="badge badge-red">-0.0856%</td>
+                <td>数据不足时热启动收益显著</td>
+              </tr>
+              <tr>
+                <td>w/o 对称约束</td>
+                <td class="badge badge-red">-0.0573%</td>
+                <td>对称性有效约束混合模式</td>
+              </tr>
+              <tr>
+                <td>w/o 块特有局部权重（共享 $W_B$）</td>
+                <td class="badge badge-red">-0.0436%</td>
+                <td>块特异性提升局部表达力</td>
+              </tr>
+              <tr>
+                <td>SiameseNorm → Post-Norm</td>
+                <td class="badge badge-red">-0.0273%</td>
+                <td>SiameseNorm 改善深层训练稳定性</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2604.00590v2/x5.png"
+               alt="Figure 5: 不同温度系数下的混合权重矩阵可视化"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+                 <b>Figure 5：混合矩阵可视化</b><br><br>
+                 (a)(b) τ=1.0 时全局/局部矩阵分布均匀；(c)(d) τ=0.05 时矩阵分布稀疏集中，交互选择更精准，对应更高 AUC。
+               </div>`" />
+          <figcaption><strong>Figure 5（论文原图）：</strong>UniMixer-Lite 中 $\bar{W}_G$ 和 $\bar{W}^i_B$ 在不同温度系数下的可视化。低温（0.05）时矩阵明显更稀疏集中，验证了温度退火策略的有效性。</figcaption>
+        </figure>
+
+        <h3 id="exp-online">3.4 线上 A/B 实验</h3>
+        <div class="callout callout-blue">
+          <strong>线上部署结论：</strong>UniMixer 和 UniMixer-Lite 已在快手多个广告投放场景全量部署。30 天留存（CAD D1-D30）平均提升超过 <strong>15%</strong>。这是工业推荐系统中非常显著的在线收益。
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2604.00590v2/x6.png"
+               alt="Figure 6: 2 Blocks vs 4 Blocks 的 Scaling 曲线对比"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+                 <b>Figure 6：深度 vs 宽度 Scaling 对比</b><br><br>
+                 UniMixer-Lite 4 Blocks 优于 2 Blocks，而 RankMixer 随 Blocks 增加性能反而退化。说明深度 Scaling 比宽度 Scaling 更高效，且 UniMixer 架构更适合深度扩展。
+               </div>`" />
+          <figcaption><strong>Figure 6（论文原图）：</strong>UniMixer/UniMixer-Lite 的 2 Blocks vs 4 Blocks Scaling 曲线，与 RankMixer 对比。UniMixer-Lite 4 Blocks 持续优于 2 Blocks，证明深度 Scaling 比宽度 Scaling 更高效。</figcaption>
+        </figure>
+
+        <h4>深度 Scaling 的优势</h4>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Block 数</th>
+                <th>UniMixer-Lite ΔAUC</th>
+                <th>RankMixer ΔAUC</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>2 Blocks</td>
+                <td class="badge badge-green">基线</td>
+                <td class="badge badge-green">基线</td>
+              </tr>
+              <tr>
+                <td>4 Blocks</td>
+                <td class="badge badge-green">+0.1575%</td>
+                <td class="badge badge-red">-0.1066%（退化！）</td>
+              </tr>
+              <tr>
+                <td>8 Blocks</td>
+                <td class="badge badge-green">+0.1647%</td>
+                <td>–</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>RankMixer 增加深度反而性能下降，根本原因是缺乏针对深层架构的专门设计。而 UniMixer 通过 SiameseNorm 彻底解决了这一问题。</p>
+      </section>
+
+      <!-- §4 亮点与思考 -->
+      <section class="section" id="insight">
+        <div class="section-title">
+          <span class="icon" style="background:#fefce8;">💡</span>
+          §4 亮点、不足与启发
+        </div>
+
+        <h3>核心亮点</h3>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>1. 理论统一框架</h4>
+            <p>通过 TokenMixer 的等价参数化，第一次把 Attention、TokenMixer、FM 三大孤立范式统一在一个理论框架下，揭示了它们的本质区别仅在于全局/局部混合模式的选择方式。</p>
+          </div>
+          <div class="mini-card">
+            <h4>2. 参数效率极高</h4>
+            <p>UniMixer-Lite 42.4M 参数实现的 AUC 超过 RankMixer 135.5M 参数，参数量缩减约 70% 而性能反超。对工业部署成本意义重大。</p>
+          </div>
+          <div class="mini-card">
+            <h4>3. 深度 Scaling 破解</h4>
+            <p>SiameseNorm 首次让推荐系统实现随深度增加持续性能提升，解决了 RankMixer 等模型深度扩展退化的顽症。</p>
+          </div>
+          <div class="mini-card">
+            <h4>4. 工业级验证</h4>
+            <p>线上 A/B 实验 CAD +15%，来自快手真实广告系统，7 亿样本规模，结论可信度高。</p>
+          </div>
+        </div>
+
+        <h3>潜在不足与局限</h3>
+        <ul>
+          <li><strong>FLOPs 更高：</strong>UniMixer-Lite-4-Blocks 的 FLOPs（4.24T/Batch）显著高于 RankMixer（1.68T）和 TokenMixer-Large（1.27T），实际部署时延是重要考量。</li>
+          <li><strong>超参数较多：</strong>温度系数 $\tau$、退火策略、块大小 $B$、基矩阵数 $b$、低秩 $r$ 等超参数需要仔细调优，工程复杂度较高。</li>
+          <li><strong>单场景验证：</strong>实验场景仅为快手广告投放（用户留存预测），在其他推荐场景（如内容推荐、电商排序）的泛化性尚未验证。</li>
+          <li><strong>Sinkhorn 迭代开销：</strong>Sinkhorn-Knopp 操作需要额外的迭代归一化，训练中会引入额外计算。</li>
+        </ul>
+
+        <h3>个人理解与启发</h3>
+        <blockquote>
+          最值得借鉴的核心思想是「参数化等价替换」：找到固定规则操作（TokenMixer）背后等价的矩阵结构，然后把这个矩阵变成可学习的，同时利用结构属性（Kronecker 分解、稀疏性）保持高效性。这种思路本质上是在「规则先验」和「数据驱动学习」之间取平衡——先验结构保证效率，可学习性保证适应性。
+        </blockquote>
+
+        <div class="callout callout-purple">
+          <strong>对推荐系统 Scaling 的宏观启示：</strong>Attention 的全局动态权重（强表达力但训练难）、TokenMixer 的静态全局混合（高效但不可学习）、FM 的显式低阶交互（可解释但上限低）——这三条路各有 tradeoff，UniMixer 的统一框架说明它们不是互相排斥的，而是同一框架下的不同特例。未来的 Scaling 架构设计可以在这个统一框架内做更系统的探索。
+        </div>
+
+        <h3>与相关工作的关键区别</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>方法</th>
+                <th>全局混合</th>
+                <th>局部混合</th>
+                <th>深度 Scaling</th>
+                <th>是否统一理论</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>RankMixer</td>
+                <td>固定置换（无参）</td>
+                <td>无</td>
+                <td>❌ 退化</td>
+                <td>❌</td>
+              </tr>
+              <tr>
+                <td>HiFormer</td>
+                <td>动态 softmax（依赖 X）</td>
+                <td>token-specific W_V</td>
+                <td>部分支持</td>
+                <td>❌</td>
+              </tr>
+              <tr>
+                <td>Wukong</td>
+                <td>FM 显式交互</td>
+                <td>固定 Y</td>
+                <td>支持</td>
+                <td>❌</td>
+              </tr>
+              <tr>
+                <td><strong>UniMixer（本文）</strong></td>
+                <td>可学习双随机矩阵 $\bar{W}_G$</td>
+                <td>可学习 token-specific $\bar{W}^i_B$</td>
+                <td>✅ SiameseNorm</td>
+                <td>✅ 统一三大范式</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <footer>
+    <p><a href="../index.html">← 返回论文列表</a></p>
+    <p style="margin-top: 8px;">UniMixer · Kuaishou Technology · arXiv:2604.00590 · 2026</p>
+  </footer>
+
+</div>
+</body>
+</html>

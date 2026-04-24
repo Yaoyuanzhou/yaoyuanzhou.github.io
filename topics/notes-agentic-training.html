@@ -1,0 +1,2419 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agentic能力从哪里来？拆解基座大模型训练过程</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false }
+          ],
+          throwOnError: false
+        });
+      }
+      const sections = document.querySelectorAll('section[id]');
+      const links = document.querySelectorAll('.toc-list a');
+      const obs = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+          if (e.isIntersecting) {
+            links.forEach(l => l.classList.remove('active'));
+            const a = document.querySelector('.toc-list a[href="#' + e.target.id + '"]');
+            if (a) a.classList.add('active');
+          }
+        });
+      }, { rootMargin: '-20% 0px -60% 0px' });
+      sections.forEach(s => obs.observe(s));
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #7c3aed; --primary-soft: #faf5ff;
+      --accent: #2563eb; --shadow: 0 10px 30px rgba(15,23,42,0.08);
+      --radius: 18px; --max: 1120px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: linear-gradient(180deg,#fdf4ff 0%,var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      line-height: 1.85;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .page { max-width: var(--max); margin: 0 auto; padding: 32px 20px 80px; }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    .back-link:hover { color: var(--primary); text-decoration: none; }
+
+    /* ── 知乎引用卡片 ── */
+    .source-card {
+      display: flex; align-items: center; gap: 16px;
+      background: #fff; border: 1px solid #e4e6ec;
+      border-radius: 16px; padding: 18px 22px; margin-bottom: 22px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    }
+    .source-logo {
+      width: 44px; height: 44px; border-radius: 10px;
+      background: linear-gradient(135deg,#0078ff,#00a3ff);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 22px; font-weight: 900; flex-shrink: 0;
+      font-family: serif; letter-spacing: -1px;
+    }
+    .source-info { flex: 1; min-width: 0; }
+    .source-title { font-size: 15px; font-weight: 700; color: #1a1a1a; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .source-meta { font-size: 13px; color: var(--muted); }
+    .source-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: #f0f9ff; border: 1px solid #bae6fd;
+      color: #0369a1; border-radius: 8px; padding: 6px 14px;
+      font-size: 13px; font-weight: 600; white-space: nowrap;
+      transition: all 0.15s;
+    }
+    .source-link:hover { background: #0369a1; color: #fff; text-decoration: none; border-color: #0369a1; }
+
+    /* ── Layout ── */
+    .layout { display: grid; grid-template-columns: 260px minmax(0,1fr); gap: 22px; align-items: start; }
+    .hero {
+      background: radial-gradient(circle at top right,rgba(124,58,237,0.12),transparent 30%),
+                  radial-gradient(circle at left bottom,rgba(37,99,235,0.08),transparent 24%), var(--card);
+      border: 1px solid rgba(124,58,237,0.15); border-radius: 24px;
+      box-shadow: var(--shadow); padding: 34px 34px 28px; margin-bottom: 22px;
+    }
+    .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: #faf5ff; color: #6d28d9; font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+    h1 { margin: 0 0 10px; font-size: 28px; line-height: 1.25; letter-spacing: -0.02em; }
+    .subtitle { margin: 0; color: var(--muted); font-size: 15px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-top: 24px; }
+    .meta-card { background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 16px; padding: 14px 16px; }
+    .meta-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .meta-value { font-size: 13px; font-weight: 600; word-break: break-word; }
+
+    /* ── TOC ── */
+    .toc { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; max-height: calc(100vh - 40px); overflow-y: auto; }
+    .toc h2 { margin: 0 0 12px; font-size: 15px; }
+    .toc-list { list-style: none; margin: 0; padding: 0; }
+    .toc-list li { margin: 0; }
+    .toc-list a { display: block; padding: 5px 8px; border-radius: 8px; color: var(--muted); font-size: 13px; transition: all 0.15s; }
+    .toc-list a:hover { color: var(--primary); background: #faf5ff; text-decoration: none; }
+    .toc-list a.active { color: var(--primary); background: #eff6ff; font-weight: 600; border-left: 3px solid var(--primary); padding-left: 5px; }
+    .toc-sub { list-style: none; padding-left: 12px; margin: 0; }
+    .toc-sub a { font-size: 12px; padding: 3px 8px; }
+
+    /* ── Content ── */
+    .content { display: flex; flex-direction: column; gap: 18px; }
+    .section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 26px 28px; }
+    .section-title { display: flex; align-items: center; gap: 12px; margin: 0 0 20px; font-size: 20px; font-weight: 700; }
+    .icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+    h3 { margin: 28px 0 12px; font-size: 17px; color: #111827; border-left: 3px solid #e9d5ff; padding-left: 10px; }
+    h4 { margin: 20px 0 8px; font-size: 15px; color: #374151; font-weight: 700; }
+    p { margin: 0 0 12px; }
+
+    /* ── Callouts ── */
+    .callout-blue   { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-amber  { background: #fffbeb; border: 1px solid #fde68a; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-green  { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-purple { background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-red    { background: #fff1f2; border: 1px solid #fecdd3; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-gray   { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-title  { font-weight: 700; font-size: 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+    .callout-blue .callout-title   { color: #1d4ed8; }
+    .callout-amber .callout-title  { color: #92400e; }
+    .callout-green .callout-title  { color: #166534; }
+    .callout-purple .callout-title { color: #6d28d9; }
+    .callout-red .callout-title    { color: #9f1239; }
+    .callout-gray .callout-title   { color: #334155; }
+
+    /* ── Special boxes ── */
+    .example-box { background: #f0fdf4; border: 1px solid #86efac; border-radius: 14px; padding: 18px 20px; margin: 18px 0; }
+    .ex-title { font-weight: 700; color: #166534; margin-bottom: 10px; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+    .analogy-box { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 14px; padding: 18px 20px; margin: 18px 0; }
+    .analogy-title { font-weight: 700; color: #92400e; margin-bottom: 10px; font-size: 14px; }
+    .big-concept { background: linear-gradient(135deg,#faf5ff 0%,#eff6ff 100%); border: 2px solid #c4b5fd; border-radius: 16px; padding: 20px 24px; margin: 20px 0; }
+    .big-concept-title { font-size: 17px; font-weight: 800; color: #4c1d95; margin-bottom: 10px; }
+    .insight-box { background: linear-gradient(135deg,#fef9c3,#fffbeb); border: 1px solid #fcd34d; border-radius: 14px; padding: 18px 20px; margin: 18px 0; }
+    .insight-title { font-weight: 700; color: #78350f; margin-bottom: 10px; font-size: 14px; }
+
+    /* ── Formula ── */
+    .formula-block { margin: 18px 0 8px; overflow-x: auto; background: #fafafa; border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px 16px; }
+    .formula-vars { background: #f8faff; border: 1px solid #dbeafe; border-radius: 12px; padding: 14px 16px; margin: 4px 0 18px; font-size: 14px; color: #374151; }
+    .formula-vars .var-title { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+    .formula-vars ul { margin: 0; padding-left: 18px; }
+    .formula-vars li { margin: 5px 0; }
+
+    /* ── Flow diagram ── */
+    .flow-diagram { border: 1px solid #e9d5ff; border-radius: 14px; padding: 18px; margin: 18px 0; background: #faf5ff; }
+    .flow-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 8px 0; }
+    .flow-box { background: #ede9fe; border: 1px solid #c4b5fd; border-radius: 10px; padding: 8px 14px; font-size: 13px; font-weight: 600; line-height: 1.4; text-align: center; }
+    .flow-box.green  { background: #dcfce7; border-color: #86efac; }
+    .flow-box.blue   { background: #dbeafe; border-color: #93c5fd; }
+    .flow-box.red    { background: #fee2e2; border-color: #fca5a5; }
+    .flow-box.amber  { background: #fef3c7; border-color: #fcd34d; }
+    .flow-box.gray   { background: #f1f5f9; border-color: #cbd5e1; color: #64748b; }
+    .flow-arrow { color: #8b5cf6; font-weight: 700; font-size: 18px; }
+
+    /* ── Grid ── */
+    .two-col   { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; margin: 14px 0; }
+    .three-col { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 14px; margin: 14px 0; }
+    .four-col  { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin: 14px 0; }
+    .mini-card { border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; background: #fff; }
+    .mini-card h4 { margin-top: 0; font-size: 14px; }
+    .mini-card p  { font-size: 14px; }
+
+    /* ── Table ── */
+    .table-wrap { overflow-x: auto; margin: 16px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th { background: #faf5ff; color: #4c1d95; text-align: left; font-weight: 700; padding: 10px 14px; border-bottom: 2px solid #e9d5ff; }
+    td { padding: 10px 14px; border-bottom: 1px solid #eef2f7; vertical-align: top; }
+    tbody tr:nth-child(even) { background: #fefaff; }
+
+    /* ── Step boxes ── */
+    .step-box { display: flex; gap: 16px; align-items: flex-start; margin: 14px 0; padding: 16px 18px; background: #fafafa; border: 1px solid var(--line); border-radius: 14px; }
+    .step-num { width: 32px; height: 32px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; flex-shrink: 0; }
+    .step-content { flex: 1; min-width: 0; overflow-wrap: break-word; word-break: break-word; }
+    .step-content strong { display: block; margin-bottom: 4px; font-size: 15px; }
+
+    /* ── Code ── */
+    pre.code-block { background: #1e1e2e; border-radius: 12px; padding: 16px 20px; margin: 14px 0; overflow-x: auto; font-family: "SF Mono",Consolas,Monaco,monospace; font-size: 13px; line-height: 1.8; color: #cdd6f4; white-space: pre; }
+    code { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 6px; padding: 2px 7px; font-family: "SF Mono",Consolas,Monaco,monospace; font-size: 13px; color: #6d28d9; }
+
+    /* ── Misc ── */
+    blockquote { margin: 18px 0; padding: 16px 20px; border-left: 4px solid var(--primary); background: rgba(124,58,237,0.05); border-radius: 0 12px 12px 0; color: #3f3f46; font-size: 15px; }
+    ul, ol { padding-left: 24px; margin: 8px 0 12px; }
+    li { margin: 6px 0; }
+    .katex-display { overflow-x: auto; padding: 6px 0; }
+    .badge { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: 99px; margin: 2px; }
+    .badge-purple { background: #ede9fe; color: #4c1d95; }
+    .badge-green  { background: #dcfce7; color: #166534; }
+    .badge-amber  { background: #fef3c7; color: #92400e; }
+    .badge-blue   { background: #dbeafe; color: #1d4ed8; }
+    .divider { border: none; border-top: 2px dashed #e9d5ff; margin: 24px 0; }
+    footer { margin-top: 32px; text-align: center; color: var(--muted); font-size: 13px; }
+
+    @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } .toc { position: static; } .meta-grid, .two-col, .three-col, .four-col { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 640px) { .page { padding: 18px 12px 56px; } .hero, .section { padding: 20px 18px; } h1 { font-size: 22px; } .meta-grid, .two-col, .three-col, .four-col { grid-template-columns: 1fr; } .source-card { flex-direction: column; align-items: flex-start; } }
+  </style>
+</head>
+<body>
+<div class="page">
+  <a class="back-link" href="../index.html">← 返回笔记列表</a>
+
+  <!-- ══ 知乎引用卡片 ══ -->
+  <div class="source-card">
+    <div class="source-logo">知</div>
+    <div class="source-info">
+      <div class="source-title">Agentic能力从哪里来？拆解基座大模型的训练过程</div>
+      <div class="source-meta">作者：低级炼丹师 · 知乎专栏 · 2025年</div>
+    </div>
+    <a class="source-link" href="https://zhuanlan.zhihu.com/p/2015552122071037375" target="_blank">
+      🔗 原文链接
+    </a>
+  </div>
+
+  <header class="hero">
+    <div class="eyebrow">📝 技术笔记 · 大模型训练 · GLM-5 / MiniMax M2 / Kimi K2.5</div>
+    <h1>Agentic 能力从哪里来？拆解基座大模型的训练过程</h1>
+    <p class="subtitle">以 GLM-5 为主线，MiniMax M2 和 Kimi K2.5 为支线——从预训练到多阶段 RL，完整还原现代基座大模型的训练链路，回答"一个真正具备 Reasoning、Coding 和 Agent 能力的现代大模型，究竟是如何被分阶段训练出来的"</p>
+    <div class="meta-grid">
+      <div class="meta-card"><div class="meta-label">来源</div><div class="meta-value">知乎·低级炼丹师</div></div>
+      <div class="meta-card"><div class="meta-label">核心模型</div><div class="meta-value">GLM-5 / MiniMax M2 / Kimi K2.5</div></div>
+      <div class="meta-card"><div class="meta-label">涵盖阶段</div><div class="meta-value">Pre-Train → Mid-Train → SFT → 多阶段 RL → 蒸馏</div></div>
+      <div class="meta-card"><div class="meta-label">核心问题</div><div class="meta-value">Reasoning、Coding、Agent 能力如何分阶段训练出来？</div></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- ══ TOC ══ -->
+    <aside class="toc">
+      <h2>目录</h2>
+      <ul class="toc-list">
+        <li><a href="#tldr">一句话总结</a></li>
+        <li><a href="#overview">§1 GLM-5 整体训练流程</a></li>
+        <li><a href="#base-training">§2 Base Model Training</a>
+          <ul class="toc-sub">
+            <li><a href="#pretrain">2.1 Pre-Training</a></li>
+            <li><a href="#midtrain">2.2 Mid-Training</a></li>
+          </ul>
+        </li>
+        <li><a href="#post-training">§3 Post-Training</a>
+          <ul class="toc-sub">
+            <li><a href="#sft">3.1 SFT</a></li>
+            <li><a href="#reasoning-rl">3.2 Reasoning RL</a></li>
+            <li><a href="#agentic-rl">3.3 Agentic RL</a></li>
+            <li><a href="#general-rl">3.4 General RL</a></li>
+            <li><a href="#distillation">3.5 On-Policy Cross-Stage 蒸馏</a></li>
+          </ul>
+        </li>
+        <li><a href="#data-synthesis">§4 Agentic 数据合成</a>
+          <ul class="toc-sub">
+            <li><a href="#pipeline">4.1 标准流水线</a></li>
+            <li><a href="#swe-data">4.2 SWE 数据合成</a></li>
+            <li><a href="#terminal-data">4.3 Terminal 数据合成</a></li>
+            <li><a href="#search-data">4.4 Search 数据合成</a></li>
+          </ul>
+        </li>
+        <li><a href="#training-challenges">§5 训练策略与挑战</a>
+          <ul class="toc-sub">
+            <li><a href="#train-infer-gap">5.1 训推不一致</a></li>
+            <li><a href="#async-offpolicy">5.2 异步框架 off-policy</a></li>
+            <li><a href="#agent-swarm">5.3 Kimi K2.5 Agent Swarm</a></li>
+          </ul>
+        </li>
+      </ul>
+    </aside>
+
+    <main class="content">
+
+      <!-- ══ 一句话总结 ══ -->
+      <section class="section" id="tldr">
+        <div class="section-title">
+          <div class="icon" style="background:#faf5ff;">💬</div>
+          一句话总结
+        </div>
+        <blockquote>
+          现代基座大模型的 Agentic 能力，不是一个阶段训出来的，而是：<br><br>
+          <strong>海量语料打底</strong>（Pre-Training）→ <strong>长上下文+工程数据强化</strong>（Mid-Training）→ <strong>行为先验建立</strong>（SFT）→ <strong>推理能力拔高</strong>（Reasoning RL）→ <strong>真实环境执行</strong>（Agentic RL）→ <strong>通用偏好对齐</strong>（General RL）→ <strong>跨阶段能力缝合</strong>（On-Policy Cross-Stage Distillation）<br><br>
+          每个阶段解决一个特定问题，最后用蒸馏把所有能力统一收敛，防止遗忘。
+        </blockquote>
+        <div class="callout-purple">
+          <div class="callout-title">🔑 核心认知</div>
+          <p style="font-size:14px;margin:0;">GLM-5 的定位不是传统聊天模型，而是面向 <strong>ARC（Agentic + Reasoning + Coding）</strong> 的统一基座。因此从预训练阶段就优先注重代码和推理数据，不是平均对待所有数据。整条链路的逻辑是：<strong>不同能力分阶段建模 → 分阶段强化 → 最后统一收敛</strong>。现代大模型的训练，不再是"一个阶段解决所有问题"，而是"不同能力分阶段建模、分阶段强化、最后统一收敛"。</p>
+        </div>
+      </section>
+
+      <!-- ══ §2 Base Model Training ══ -->
+      <section class="section" id="overview">
+        <div class="section-title">
+          <div class="icon" style="background:#eff6ff;">🗺️</div>
+          §1 以 GLM-5 为例：基座大模型整体训练流程
+        </div>
+
+        <p>GLM-5 的整体训练流程分为两大阶段：<strong>Base Model Training（基础模型训练）</strong>和 <strong>Post-Training（后训练）</strong>。</p>
+
+        <div class="flow-diagram">
+          <div style="font-size:12px;color:#6d28d9;font-weight:700;margin-bottom:12px;">GLM-5 训练全流程</div>
+          <div class="flow-row">
+            <div style="display:flex;flex-direction:column;gap:6px;align-items:center;">
+              <div style="font-size:11px;color:var(--muted);font-weight:600;">Base Model Training</div>
+              <div style="display:flex;gap:6px;">
+                <div class="flow-box green">Pre-Training<br><small>28.5T tokens</small></div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-box green">Mid-Training<br><small>长上下文/SWE</small></div>
+              </div>
+            </div>
+            <span class="flow-arrow" style="font-size:24px;">⟹</span>
+            <div style="display:flex;flex-direction:column;gap:6px;align-items:center;">
+              <div style="font-size:11px;color:var(--muted);font-weight:600;">Post-Training</div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                <div class="flow-box blue">SFT<br><small>行为先验</small></div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-box" style="background:#ede9fe;border-color:#c4b5fd;">Reasoning RL<br><small>推理拔高</small></div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-box" style="background:#ede9fe;border-color:#c4b5fd;">Agentic RL<br><small>环境执行</small></div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-box" style="background:#ede9fe;border-color:#c4b5fd;">General RL<br><small>通用对齐</small></div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-box amber">Cross-Stage 蒸馏<br><small>能力缝合</small></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="insight-box">
+          <div class="insight-title">💡 为什么这个顺序？</div>
+          <ul style="font-size:14px;margin:0;">
+            <li><strong>先 Reasoning RL，再 Agentic RL</strong>：Agentic 能力建立在推理能力之上。代码执行、工具调用、长流程规划，本质都是推理。如果推理链条不稳定，后续 Agent 阶段即使加入更多工具也无法真正提升质量。</li>
+            <li><strong>先 Agentic RL，再 General RL</strong>：Agentic RL 针对特定可验证环境做强化，目标清晰；General RL 针对更广泛的人类偏好，信号更模糊。先做前者可以在有清晰奖励信号的场景建立稳定策略，再泛化到更主观的场景。</li>
+            <li><strong>最后用蒸馏缝合</strong>：多阶段 RL 每个阶段都可能削弱前面阶段学到的能力（灾难性遗忘）。最后用 On-Policy Cross-Stage Distillation 统一把所有能力融合，是整个 pipeline 的核心设计。</li>
+          </ul>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>阶段</th><th>子阶段</th><th>主要作用</th><th>关键内容</th></tr>
+            </thead>
+            <tbody>
+              <tr><td rowspan="2"><strong>Base Model Training</strong></td><td>Pre-Training</td><td>学习通用语言、知识、代码与基础表征，构建统一基座</td><td>Web / Code / Math&Science 语料，28.5T tokens，优化数据筛选/去重/质量控制</td></tr>
+              <tr><td>Mid-Training</td><td>面向目标能力定向增强，提升长上下文建模、Agent 场景适配、软件工程理解</td><td>分阶段扩展上下文至200K；引入长文档自然数据与合成数据；强化 repo-level code、issue、PR、commit diff 建模（160B tokens）</td></tr>
+              <tr><td rowspan="5"><strong>Post-Training</strong></td><td>SFT</td><td>建立任务遵循、推理表达、工具使用与多轮交互行为先验</td><td>General Chat / Reasoning / Coding&Agent 三大类；三种 thinking 特性；错误轨迹保留但 mask loss</td></tr>
+              <tr><td>Reasoning RL</td><td>进一步提升复杂问题上的推理正确性与稳定性</td><td>数学/科学/代码/TIR 可验证任务；RLVR，0/1 reward</td></tr>
+              <tr><td>Agentic RL</td><td>提升模型在外部环境中的多步决策、执行与工具调用能力</td><td>SWE / Search / Terminal 可验证环境；group-wise policy optimization（GRPO）</td></tr>
+              <tr><td>General RL</td><td>优化通用场景下的正确性、交互质量与人类偏好一致性</td><td>三大优化维度；混合奖励 rule+ORM+GRM；高质量人工答案锚点</td></tr>
+              <tr><td>On-Policy Cross-Stage Distillation</td><td>融合不同阶段能力，缓解多阶段训练带来的能力遗忘</td><td>前序 checkpoint 为 teacher；on-policy 生成 + 跨阶段蒸馏；advantage 替换优化</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout-amber">
+          <div class="callout-title">📊 数据规模感知</div>
+          <p style="font-size:14px;margin:0;">整体训练总共使用了 <strong>28.5 万亿 tokens</strong>，相当于把人类历史上所有文本、所有知识灌进去。这还只是 Pre-Training + Mid-Training 阶段的数量，后续 SFT 和 RL 阶段的数据量虽然小很多，但质量要求极高。</p>
+        </div>
+      </section>
+
+      <!-- ══ §4 Agentic 数据合成 ══ -->
+      <section class="section" id="base-training">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">🏗️</div>
+          §2 Base Model Training：先把"底座能力"练扎实
+        </div>
+
+        <p>GLM-5 的基础模型训练分成两个阶段：<strong>Pre-Training（预训练）</strong>和 <strong>Mid-Training（中期训练）</strong>。两个阶段加起来，总共使用了 <strong>28.5 万亿 tokens</strong>。</p>
+        <p>损失函数是标准的 next-token prediction（交叉熵），对全量通用文本做语言建模。</p>
+
+        <h3 id="pretrain">2.1 Pre-Training：建立通用语言、代码和知识能力</h3>
+        <blockquote>目标：通过大规模自监督学习，让模型掌握通用的语言模式、知识和表征能力，成为后续各种任务的基础。</blockquote>
+        <p>GLM-5 的目标是面向 ARC（Agentic, Reasoning, Coding）的统一模型，所以在基础阶段就<strong>优先注重代码和 reasoning 能力</strong>，不是平均对待所有数据。预训练重点覆盖三类数据：</p>
+
+        <h4>① Web 数据</h4>
+        <p>在 GLM-4.5 的基础上，GLM-5 进一步优化了网页数据筛选流程：</p>
+        <ul>
+          <li>通过<strong>新的质量分类器</strong>挖掘更多高质量网页</li>
+          <li>用<strong>专门的知识分类器</strong>保留长尾知识</li>
+          <li>从中等质量数据中提取<strong>高信息密度</strong>内容</li>
+          <li>减少低质量合成推理数据的引入（防止预训练阶段学到错误推理模式）</li>
+        </ul>
+
+        <h4>② Code 数据</h4>
+        <p>思路：<strong>不是单纯增加代码量，而是提升代码语料的完整性、准确性和语言覆盖面，为后续 coding agent 打基础。</strong></p>
+        <div class="callout-green">
+          <div class="callout-title">✅ Code 数据具体改进</div>
+          <ul style="font-size:14px;margin:0;">
+            <li>更新了主要代码平台（GitHub 等）的数据快照，扩充了含代码的网页</li>
+            <li>去重后的<strong>唯一 token 数提升了 28%</strong>（更少重复，信息密度更高）</li>
+            <li>修复了部分代码元数据问题（注释、文档字符串等）</li>
+            <li>提升了低资源编程语言（如 Rust、Julia、Kotlin 等）的数据质量</li>
+          </ul>
+        </div>
+
+        <h4>③ Math &amp; Science 数据</h4>
+        <ul>
+          <li>来源包括网页、书籍和论文</li>
+          <li>优化文档解析流程（公式识别、表格理解等）</li>
+          <li>利用大模型对内容进行质量打分，保留更有"教育价值"的部分</li>
+          <li>严格过滤低质量或模板化内容（如机械刷题集、无推导过程的答案集）</li>
+        </ul>
+
+        <div class="big-concept">
+          <div class="big-concept-title">🔑 为什么要在预训练阶段就精心筛选数据？</div>
+          <p style="font-size:14px;margin:0;">预训练学到的是模型的"世界观"——对语言模式、知识体系和推理方式的基础认知。如果预训练阶段学了大量低质量数据，这些错误认知会深深嵌入模型参数，后续 SFT 和 RL 很难完全纠正。相反，如果预训练数据质量高，SFT 只需要调整行为格式，RL 只需要优化策略方向，整体效率更高，效果也更好。<strong>「Garbage in, garbage out」在预训练阶段尤为关键。</strong></p>
+        </div>
+
+        <h3 id="midtrain">2.2 Mid-Training：定向语料强化</h3>
+        <blockquote>面向目标能力进行定向增强，提升长上下文建模、Agent 场景适配与软件工程理解能力。</blockquote>
+
+        <div class="callout-amber">
+          <div class="callout-title">🤔 为什么需要单独的 Mid-Training？</div>
+          <ul style="font-size:14px;margin:0;">
+            <li>模型在普通长度文本上的表现良好，<strong>并不意味着</strong>它在 128K 甚至 200K 的上下文下仍然稳定</li>
+            <li>具备代码生成能力，<strong>并不意味着</strong>它能理解跨文件、Issue、PR 和 commit 之间的复杂关联</li>
+            <li>能完成单轮问答，<strong>并不意味着</strong>它可以在长链路 Agent 任务中持续保持一致性</li>
+          </ul>
+        </div>
+
+        <h4>（1）上下文长度的逐步扩展</h4>
+        <p>预训练只用了 4K 上下文。Mid-Training 采用<strong>分阶段扩展上下文长度</strong>的策略：</p>
+        <div class="flow-diagram">
+          <div class="flow-row" style="justify-content:center;">
+            <div class="flow-box gray">Pre-Training<br><small>4K context</small></div>
+            <span class="flow-arrow">→</span>
+            <div class="flow-box amber">Stage 1：32K<br><small>1T tokens</small></div>
+            <span class="flow-arrow">→</span>
+            <div class="flow-box" style="background:#fde8ff;border-color:#e879f9;">Stage 2：128K<br><small>500B tokens</small></div>
+            <span class="flow-arrow">→</span>
+            <div class="flow-box" style="background:#ede9fe;border-color:#c4b5fd;">Stage 3：200K<br><small>50B tokens</small></div>
+          </div>
+        </div>
+        <div class="callout-blue">
+          <div class="callout-title">💡 为什么要逐步扩展而不是直接到 200K？</div>
+          <p style="font-size:14px;margin:0;">① <strong>训练不稳定</strong>：attention 矩阵大小是 $O(L^2)$，突然放大会导致数值问题和梯度爆炸<br>② <strong>性能退化</strong>：模型需要逐步学习如何利用远距离信息，跳跃式扩展会导致中间长度的信息利用能力不稳定</p>
+        </div>
+
+        <h4>（2）软件工程数据的重点强化</h4>
+        <p>训练样本会将以下内容<strong>组织到同一序列中</strong>，让模型看到的不是孤立代码，而是真实软件工程任务的上下文：</p>
+        <div class="four-col">
+          <div class="mini-card"><h4>repo-level code files</h4><p style="font-size:13px;">完整代码仓库中多个相互引用的文件，理解跨文件的依赖关系</p></div>
+          <div class="mini-card"><h4>commit diffs</h4><p style="font-size:13px;">代码变更前后的对比，理解修改意图和代码演化逻辑</p></div>
+          <div class="mini-card"><h4>GitHub issues</h4><p style="font-size:13px;">真实 bug 报告和功能需求，从自然语言描述定位代码问题</p></div>
+          <div class="mini-card"><h4>Pull Requests</h4><p style="font-size:13px;">代码审查讨论和修改过程，理解软件工程中的协作与质量控制</p></div>
+        </div>
+        <div class="callout-green">
+          <div class="callout-title">✅ 关键数据量</div>
+          <p style="font-size:14px;margin:0;">这部分 Issue–PR 数据最终约为 <strong>160B tokens</strong>，为后续 Agentic coding 能力提供重要基础。</p>
+        </div>
+
+        <h4>（3）长上下文数据：自然数据与合成数据并重</h4>
+        <div class="two-col">
+          <div class="mini-card" style="border-left:3px solid #7c3aed;"><h4 style="color:#6d28d9;">自然数据（Natural Data）</h4><p style="font-size:13px;">来自书籍、论文和长文档语料，这些数据天然具有长距离依赖</p></div>
+          <div class="mini-card" style="border-left:3px solid #2563eb;"><h4 style="color:#1d4ed8;">合成数据（Synthetic Data）</h4><p style="font-size:13px;">构造更强的长距离依赖和多轮记忆场景，专门训练模型的长程记忆能力</p></div>
+        </div>
+      </section>
+
+      <!-- ══ §3 Post-Training ══ -->
+      <section class="section" id="post-training">
+        <div class="section-title">
+          <div class="icon" style="background:#faf5ff;">🎯</div>
+          §3 Post-Training：从 Base Model 到 ARC 强模型
+        </div>
+
+        <p>Post-Training 采用<strong>渐进式 alignment 策略</strong>：SFT 引入复杂 thinking 模式 → Reasoning/Agentic RL 分别强化推理和执行 → General RL 完成人类偏好对齐 → On-Policy Cross-Stage Distillation 防止遗忘。</p>
+
+        <h3 id="sft">3.1 SFT：建立行为先验</h3>
+        <p>SFT 阶段：一方面完成基础行为对齐；另一方面为后续 Reasoning RL、Agentic RL 提前搭建行为模板。</p>
+
+        <h4>SFT 数据覆盖三大类</h4>
+        <div class="three-col">
+          <div class="mini-card" style="border-left:3px solid #7c3aed;">
+            <h4 style="color:#6d28d9;">General Chat</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li>问答、写作、角色扮演、翻译</li>
+              <li>多轮对话和长上下文交互</li>
+              <li>Role-playing 覆盖多语言和不同角色配置</li>
+              <li>评估：instruction following、语言表现力、创造性、逻辑连贯性、长对话一致性</li>
+            </ul>
+          </div>
+          <div class="mini-card" style="border-left:3px solid #2563eb;">
+            <h4 style="color:#1d4ed8;">Reasoning</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li>数学推理、编程推理、科学推理</li>
+              <li>构造大量可验证问题，通过 <strong>rejection sampling</strong> 合成高质量数据</li>
+              <li>基于难度筛选，只保留真正有挑战性的问题</li>
+            </ul>
+          </div>
+          <div class="mini-card" style="border-left:3px solid #d97706;">
+            <h4 style="color:#92400e;">Coding &amp; Agent</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li>前端和后端工程代码、tool calling</li>
+              <li>coding agents、search agents、通用型 agents</li>
+              <li>构建大量 execution environments，获取高质量 trajectories</li>
+              <li><strong>错误轨迹保留但 mask loss</strong>（让模型观摩错误修正但不被错误信号强化）</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="callout-blue">
+          <div class="callout-title">💡 关键细节：错误轨迹的处理方式</div>
+          <p style="font-size:14px;margin:0;">对于 trajectory 中的错误片段，GLM-5 <strong>没有直接删除</strong>，而是保留内容但在 loss function 中 <strong>mask 掉</strong>。好处：模型可以学习错误修正的过程（看到"错误→发现→修正"的完整序列），但不会被错误动作的错误监督信号强化。</p>
+        </div>
+
+        <h4>三种 Thinking 特性</h4>
+        <div class="three-col">
+          <div class="mini-card" style="border-top:3px solid #7c3aed;">
+            <h4 style="color:#6d28d9;">Interleaved Thinking（交错式）</h4>
+            <p style="font-size:13px;">每次回复和 tool call 之前先思考，形成 <strong>Thought-Action-Observation</strong> 循环，相当于给后续 ReAct 流程打草稿。</p>
+            <div style="background:#f3e8ff;border-radius:8px;padding:6px 10px;font-size:12px;color:#5b21b6;">适用：工具调用、复杂推理任务</div>
+          </div>
+          <div class="mini-card" style="border-top:3px solid #2563eb;">
+            <h4 style="color:#1d4ed8;">Preserved Thinking（保留式）</h4>
+            <p style="font-size:13px;">Coding Agent 场景下，<strong>自动保留多轮对话中的 thinking blocks</strong>，复用已有推理过程，减少前后不一致。</p>
+            <div style="background:#dbeafe;border-radius:8px;padding:6px 10px;font-size:12px;color:#1d4ed8;">适用：多轮 coding agent、长任务</div>
+          </div>
+          <div class="mini-card" style="border-top:3px solid #d97706;">
+            <h4 style="color:#92400e;">Turn-level Thinking（轮次级别）</h4>
+            <p style="font-size:13px;">同一 session 中<strong>按轮次控制是否启用 reasoning</strong>。简单请求关闭降低延迟；复杂任务开启提升准确性。</p>
+            <div style="background:#fef3c7;border-radius:8px;padding:6px 10px;font-size:12px;color:#92400e;">适用：混合复杂度的会话场景</div>
+          </div>
+        </div>
+
+        <h3 id="reasoning-rl">3.2 Reasoning RL：先强化推理能力</h3>
+        <blockquote>在数学、科学、代码及 TIR 等可验证任务上进行强化学习；采用结果导向奖励信号优化推理性能</blockquote>
+
+        <div class="insight-box">
+          <div class="insight-title">💡 为什么先做 Reasoning RL 再做 Agentic RL？</div>
+          <p style="font-size:14px;margin:0;">代码执行、工具调用、长流程规划，本质都建立在推理能力之上。如果推理链不稳定，后续 Agent 阶段即使加入更多工具也无法真正提升质量。<strong>推理能力是 Agent 能力的地基。先把地基打牢，再在上面盖房子。</strong></p>
+        </div>
+
+        <h4>训练数据涵盖四个方向</h4>
+        <div class="four-col">
+          <div class="mini-card"><h4>数学</h4><p style="font-size:13px;">竞赛数学题、高等数学等，答案可精确验证</p></div>
+          <div class="mini-card"><h4>科学</h4><p style="font-size:13px;">物理、化学、生物等有标准答案的推理题</p></div>
+          <div class="mini-card"><h4>代码</h4><p style="font-size:13px;">编程题，通过运行测试用例验证正确性</p></div>
+          <div class="mini-card"><h4>TIR</h4><p style="font-size:13px;">Tool-Integrated Reasoning，需要调用工具（如 Python 解释器）辅助推理，结果可验证</p></div>
+        </div>
+
+        <h4>奖励设计：标准 RLVR</h4>
+        <p>输出 0 和 1 的 reward，是标准的 <strong>RLVR（Reinforcement Learning with Verifiable Rewards）</strong> 任务。</p>
+        <div class="example-box">
+          <div class="ex-title">💡 数据样例</div>
+          <pre class="code-block">{
+  "prompt": "如果 3x + 2 = 11，求 x。请逐步思考，并最终只输出答案。",
+  "ground_truth": "3",
+  "reward_rule": "模型最终答案等于 3 则奖励为 1，否则为 0"
+}</pre>
+          <p style="font-size:13px;margin:8px 0 0;color:var(--muted);">reward 完全由程序自动判定，可以大规模并行训练，不需要人工打分。</p>
+        </div>
+        <div class="callout-purple">
+          <div class="callout-title">🔬 为什么 RLVR 比 RLHF 更适合 Reasoning？</div>
+          <ul style="font-size:14px;margin:0;">
+            <li><strong>RLHF</strong>：奖励来自人类偏好判断，主观、慢、贵，且人类很难准确判断复杂数学推理链的对错</li>
+            <li><strong>RLVR</strong>：奖励来自程序自动判断（答案对/错），客观、快、准，完全可扩展</li>
+            <li>DeepSeek-R1 用的是同一套思路，本质是把 LLM 的 RL 对齐做到了有明确验证标准的领域</li>
+          </ul>
+        </div>
+
+        <h3 id="agentic-rl">3.3 Agentic RL：让模型真正学会"执行任务"</h3>
+        <blockquote>如果说 Reasoning RL 解决的是"模型能不能想清楚"，那么 Agentic RL 解决的就是：模型能不能在真实环境里，把事情一步一步做出来。</blockquote>
+
+        <div class="big-concept">
+          <div class="big-concept-title">🤔 "Agentic" 是什么意思？</div>
+          <p style="font-size:14px;margin:0 0 12px;">
+            <strong>Agentic</strong> 来自 <strong>Agent（智能体）</strong>，形容词形式，意思是「具有自主行动能力的」「能在环境中主动完成任务的」。<br><br>
+            简单说：<strong>普通 LLM 是「回答问题」的，Agentic 模型是「做事情」的。</strong>
+          </p>
+          <div class="table-wrap" style="margin:0;">
+            <table>
+              <thead><tr><th>对比维度</th><th>普通 LLM（非 Agentic）</th><th>Agentic 模型</th></tr></thead>
+              <tbody>
+                <tr><td><strong>任务形式</strong></td><td>单轮问答，输入 → 输出</td><td>多轮交互，在真实环境里执行多步任务</td></tr>
+                <tr><td><strong>有无工具</strong></td><td>没有，只用语言推理</td><td>可以调用代码执行器、搜索引擎、终端命令</td></tr>
+                <tr><td><strong>奖励时机</strong></td><td>最终答案对不对</td><td>任务最终完成与否（测试通过？搜索结果正确？）</td></tr>
+                <tr><td><strong>典型任务</strong></td><td>解数学题、解代码题</td><td>修复 GitHub Bug、多跳搜索、终端文件操作</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="example-box" style="margin:14px 0 0;">
+            <div class="ex-title">💡 一个具体例子</div>
+            <div class="two-col" style="margin-top:8px;">
+              <div>
+                <p style="font-size:13px;font-weight:700;color:#92400e;margin:0 0 6px;">❌ 普通 LLM（非 Agentic）</p>
+                <p style="font-size:13px;margin:0;background:#fef9f0;border:1px solid #fcd34d;border-radius:8px;padding:10px;">用户：帮我修复这个 Bug<br>模型：你可以在第 15 行加一个 if 判断……<br><span style="color:#9ca3af;">（说说而已，不执行）</span></p>
+              </div>
+              <div>
+                <p style="font-size:13px;font-weight:700;color:#166534;margin:0 0 6px;">✅ Agentic 模型</p>
+                <p style="font-size:13px;margin:0;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px;">用户：帮我修复这个 Bug<br>模型：<br>① 搜索代码库，找到相关文件 🔍<br>② 查看 issue 描述，理解问题 📄<br>③ 修改代码 ✏️<br>④ 运行测试，发现还有报错 ❌<br>⑤ 继续调整，再次运行，通过 ✅<br><span style="color:#9ca3af;">（整个过程模型自己完成，无需人介入）</span></p>
+              </div>
+            </div>
+          </div>
+          <p style="font-size:14px;margin:12px 0 0;color:#4c1d95;font-weight:600;">
+            「Agentic 能力」= 工具调用 + 长流程规划 + 根据环境反馈调整 + 多轮自主执行 = 从「说」到「做」的能力。
+          </p>
+        </div>
+
+        <h4>训练目标场景</h4>
+        <div class="three-col">
+          <div class="mini-card" style="border-top:3px solid #7c3aed;">
+            <h4 style="color:#6d28d9;">Coding Agent（SWE）</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li>基于真实 GitHub issue / PR 构建任务</li>
+              <li>自动搭建 repo 环境</li>
+              <li>test script 自动验证</li>
+            </ul>
+          </div>
+          <div class="mini-card" style="border-top:3px solid #2563eb;">
+            <h4 style="color:#1d4ed8;">Search Agent</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li>构造多跳搜索问题</li>
+              <li>需要 search / open / extract / python 等多步操作</li>
+              <li>根据最终答案和证据是否正确给 reward</li>
+            </ul>
+          </div>
+          <div class="mini-card" style="border-top:3px solid #d97706;">
+            <h4 style="color:#92400e;">Terminal Agent</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li>在 shell / Docker / 文件系统里操作</li>
+              <li>自动搭建 Docker 环境</li>
+              <li>test script 验证执行结果</li>
+            </ul>
+          </div>
+        </div>
+
+        <h4>训练步骤（4步）</h4>
+        <div class="step-box">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <strong>准备任务和可验证环境</strong>
+            <ul style="font-size:13px;margin:4px 0 0;">
+              <li><strong>初始状态（initial state）</strong>：任务起点，如"修复前的代码仓库快照"</li>
+              <li><strong>可执行动作空间（action space）</strong>：可用工具列表</li>
+              <li><strong>观测（observation）</strong>：每次动作后环境返回的信息</li>
+              <li><strong>状态转移（state transition）</strong>：动作执行后环境状态的变化</li>
+              <li><strong>验证与反馈机制（verification）</strong>：自动化测试脚本</li>
+            </ul>
+          </div>
+        </div>
+        <div class="step-box">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <strong>Rollout 生成 Agent 轨迹</strong>
+            <p style="font-size:13px;margin:4px 0 0;">每条轨迹：$y = (r_1, a_1, o_1, \; r_2, a_2, o_2, \; \ldots, \; r_n, a_n, o_n)$</p>
+            <div style="font-size:13px;margin:4px 0;">其中 $r_i$ = reasoning，$a_i$ = action/tool call，$o_i$ = observation（<strong>不参与 loss，但作为下一步推理的输入</strong>）</div>
+          </div>
+        </div>
+        <div class="step-box">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <strong>环境打分（Verifiable Reward）</strong>
+            <p style="font-size:13px;margin:4px 0 0;">SWE：F2P 测试是否通过；Search：答案和证据是否正确；Terminal：test script 是否通过。都是 verifiable environment，reward 由测试脚本自动打分。</p>
+          </div>
+        </div>
+        <div class="step-box">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <strong>用 Group-wise Policy Optimization（GRPO）更新</strong>
+            <p style="font-size:13px;margin:4px 0 0;">对同一问题 $x$ 采样 $K$ 条轨迹，构造组内相对优势：</p>
+            <div class="formula-block">
+              $$A(x, y_i) = r(x, y_i) - \bar{r}(x), \quad \bar{r}(x) = \frac{1}{K}\sum_{i=1}^{K} r(x, y_i)$$
+            </div>
+            <p style="font-size:13px;margin:4px 0 0;">$A > 0$：鼓励；$A < 0$：压制。GRPO 不需要 Critic 网络，更轻量稳定，特别适合长轨迹场景。</p>
+          </div>
+        </div>
+
+        <h3 id="general-rl">3.4 General RL：通用场景对齐</h3>
+        <blockquote>优化通用场景下的正确性、交互质量与人类偏好一致性</blockquote>
+
+        <p>三个维度：</p>
+        <div class="three-col">
+          <div class="mini-card" style="border-left:3px solid #7c3aed;">
+            <h4 style="color:#6d28d9;">① 基础正确性</h4>
+            <p style="font-size:13px;">instruction-following 错误、逻辑不一致、事实性错误、知识幻觉、语言不流畅</p>
+          </div>
+          <div class="mini-card" style="border-left:3px solid #2563eb;">
+            <h4 style="color:#1d4ed8;">② 情绪智能</h4>
+            <p style="font-size:13px;">更好的共情能力、更自然的语气、更接近人类的表达方式，避免"AI味"（过度冗长、套路化）</p>
+          </div>
+          <div class="mini-card" style="border-left:3px solid #d97706;">
+            <h4 style="color:#92400e;">③ 特定任务质量</h4>
+            <p style="font-size:13px;">写作、文本处理、主客观问答、角色扮演、翻译等细粒度优化</p>
+          </div>
+        </div>
+
+        <h4>混合奖励系统（Hybrid Reward System）</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>奖励类型</th><th>原理</th><th>优点</th><th>缺点</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Rule-based rewards</strong></td><td>规则直接判断（格式、长度等）</td><td>明确可解释，不会被 hack</td><td>覆盖范围有限</td></tr>
+              <tr><td><strong>ORM（Outcome Reward Model）</strong></td><td>只看最终输出结果打分</td><td>信号方差低，训练效率高</td><td>容易被 reward hacking（表面符合但实际有问题）</td></tr>
+              <tr><td><strong>GRM（Generative Reward Model）</strong></td><td>语言模型生成评分和评价理由</td><td>不容易被 exploit，能评价细粒度质量</td><td>方差更高，稳定性较差</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout-purple">
+          <div class="callout-title">🔑 高质量专家数据（Human-in-the-loop 风格对齐）</div>
+          <p style="font-size:14px;margin:0;">GLM-5 显式引入<strong>高质量的人类撰写答案</strong>作为风格和质量锚点。原因：完全依赖模型自我优化会产生"AI味"——过度冗长、套路化、缺少人类写作的自然细节。人工答案锚点把模型输出风格拉向更自然的方向。</p>
+        </div>
+
+        <h3 id="distillation">3.5 On-Policy Cross-Stage Distillation：防止训了一路忘了一路</h3>
+
+        <!-- ── 3.5.1 问题背景 ── -->
+        <h4>3.5.1 问题背景：多阶段 RL 的灾难性遗忘</h4>
+        <p>GLM-5 的 Post-Training 流水线是 SFT → Reasoning RL → Agentic RL → General RL 四段串联。每个阶段针对不同目标优化，但这也带来了一个严峻问题：</p>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0;">
+          <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:14px 16px;">
+            <div style="font-size:13px;font-weight:700;color:#991b1b;margin-bottom:6px;">😰 灾难性遗忘（Catastrophic Forgetting）</div>
+            <div style="font-size:13px;color:#374151;line-height:1.7;">Agentic RL 阶段专注于 SWE / 终端任务的多步执行，但使用的数据分布与数学推理完全不同。训练结束时，模型很可能忘掉了 Reasoning RL 阶段学到的精密数学推导能力。</div>
+          </div>
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:14px 16px;">
+            <div style="font-size:13px;font-weight:700;color:#166534;margin-bottom:6px;">🎯 目标：全能不偏科</div>
+            <div style="font-size:13px;color:#374151;line-height:1.7;">我们希望最终模型能同时保留：Reasoning RL 的数学推理、Agentic RL 的多步执行、General RL 的通用对话质量。任何一项的退化都是不可接受的。</div>
+          </div>
+        </div>
+
+        <!-- 数据支撑 -->
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:16px 20px;margin:14px 0;">
+          <div style="font-size:13px;font-weight:700;color:#78350f;margin-bottom:10px;">📊 实证数据：SFT 遗忘 vs RL 遗忘对比</div>
+          <p style="font-size:13px;color:#374151;margin:0 0 8px;">来自 Lai et al. (2025) [arXiv:2507.05386] 在 7 个多模态任务上的持续后训练实验（基座模型 Qwen-2.5-VL-7B-Instruct）：</p>
+          <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+              <thead>
+                <tr style="background:#fef9c3;">
+                  <th style="padding:7px 10px;text-align:left;border:1px solid #fde68a;">训练方法</th>
+                  <th style="padding:7px 10px;text-align:center;border:1px solid #fde68a;">最终平均准确率 AvgAcc</th>
+                  <th style="padding:7px 10px;text-align:center;border:1px solid #fde68a;">遗忘度量 FM（越接近 0 越好）</th>
+                  <th style="padding:7px 10px;text-align:left;border:1px solid #fde68a;">说明</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td style="padding:6px 10px;border:1px solid #fde68a;font-weight:600;">多任务联合训练（上限）</td><td style="padding:6px 10px;border:1px solid #fde68a;text-align:center;">62.9%</td><td style="padding:6px 10px;border:1px solid #fde68a;text-align:center;">—</td><td style="padding:6px 10px;border:1px solid #fde68a;">理想上限，同时访问所有数据</td></tr>
+                <tr style="background:#fef3f2;"><td style="padding:6px 10px;border:1px solid #fde68a;font-weight:600;">SFT 持续训练</td><td style="padding:6px 10px;border:1px solid #fde68a;text-align:center;color:#dc2626;">54%</td><td style="padding:6px 10px;border:1px solid #fde68a;text-align:center;color:#dc2626;">−10.4%</td><td style="padding:6px 10px;border:1px solid #fde68a;">严重遗忘，越往后越差</td></tr>
+                <tr style="background:#f0fdf4;"><td style="padding:6px 10px;border:1px solid #fde68a;font-weight:600;">GRPO (RL) 持续训练</td><td style="padding:6px 10px;border:1px solid #fde68a;text-align:center;color:#16a34a;">60%</td><td style="padding:6px 10px;border:1px solid #fde68a;text-align:center;color:#16a34a;">−2.3%</td><td style="padding:6px 10px;border:1px solid #fde68a;">接近上限，遗忘极小</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p style="font-size:12px;color:#6b7280;margin:8px 0 0;">SFT 的非目标任务准确率下降最多达 30%，而 RL 的准确率下降不足 1%（Chen et al. 2025 [arXiv:2510.18874]）。</p>
+        </div>
+
+        <!-- ── 3.5.2 为什么 RL 天然抗遗忘 ── -->
+        <h4>3.5.2 为什么 RL 天然抗遗忘？三个视角</h4>
+
+        <!-- 视角 1：Mode-Seeking vs Mode-Covering -->
+        <div style="border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;margin:14px 0;">
+          <div style="background:#1e3a5f;padding:11px 18px;">
+            <span style="color:#93c5fd;font-size:13px;font-weight:700;">视角一：Mode-Seeking vs Mode-Covering（目标函数的根本差异）</span>
+          </div>
+          <div style="padding:16px 18px;background:#f8fafc;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+              <div style="background:#fef2f2;border-radius:10px;padding:12px 14px;">
+                <div style="font-size:13px;font-weight:700;color:#991b1b;margin-bottom:6px;">SFT ≈ 前向 KL（Mode-Covering）</div>
+                <div style="font-size:13px;color:#374151;line-height:1.7;">
+                  SFT 的负对数似然等价于：<br>
+                  <code style="background:#fee2e2;padding:2px 6px;border-radius:4px;font-size:12px;">minimize KL(π* ‖ π_θ)</code><br><br>
+                  这是 Mode-Covering 目标——模型对数据集中的<strong>任何一个输出</strong>都不敢忽视，必须给每种完成方式分配一定概率，否则对数概率趋近负无穷会导致巨大的损失。<br><br>
+                  <strong>后果：</strong>新任务数据和旧任务分布完全不同时，模型被迫"覆盖"新分布，不可避免地破坏了对旧分布的记忆。
+                </div>
+              </div>
+              <div style="background:#f0fdf4;border-radius:10px;padding:12px 14px;">
+                <div style="font-size:13px;font-weight:700;color:#166534;margin-bottom:6px;">RL ≈ 逆向 KL（Mode-Seeking）</div>
+                <div style="font-size:13px;color:#374151;line-height:1.7;">
+                  RL 的目标等价于：<br>
+                  <code style="background:#dcfce7;padding:2px 6px;border-radius:4px;font-size:12px;">minimize KL(π_θ ‖ π*)</code><br><br>
+                  这是 Mode-Seeking 目标——模型只专注于高奖励的输出模式，不需要覆盖所有可能。对低奖励的输出概率降低，不会形成"被迫覆盖新分布"的情况。<br><br>
+                  <strong>后果：</strong>即使新任务分布与旧任务不同，模型也只沿着奖励梯度更新，不会无差别地破坏旧能力。
+                </div>
+              </div>
+            </div>
+            <div style="background:#eff6ff;border-left:3px solid #3b82f6;border-radius:0 8px 8px 0;padding:10px 14px;font-size:12px;color:#1e40af;line-height:1.7;">
+              <strong>数学直觉：</strong>当目标分布是多峰的（既有旧任务能力又有新任务能力），前向 KL 强迫模型覆盖所有峰，导致旧峰被新峰"稀释"；逆向 KL 让模型只爬到它自己认为最重要的峰，保持对旧能力的峰值。
+            </div>
+          </div>
+        </div>
+
+        <!-- 视角 2：On-Policy 数据 -->
+        <div style="border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;margin:14px 0;">
+          <div style="background:#1e3a5f;padding:11px 18px;">
+            <span style="color:#93c5fd;font-size:13px;font-weight:700;">视角二：On-Policy 数据消除了"强迫冲突"</span>
+          </div>
+          <div style="padding:16px 18px;background:#f8fafc;">
+            <p style="font-size:13px;color:#374151;margin:0 0 10px;">Diao et al. (2025) [arXiv:2601.02151] 观测到一个关键现象：SFT 中存在大量 <strong>"Confident Conflict"（自信冲突）</strong> token——模型对该 token 几乎确定是另一个词（低概率、低熵），但 SFT 标注强迫它去拟合这个 token。</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+              <div style="background:#fef2f2;border-radius:8px;padding:12px;font-size:13px;">
+                <div style="font-weight:700;color:#991b1b;margin-bottom:5px;">❌ SFT：强迫冲突</div>
+                <div style="color:#374151;line-height:1.7;">模型对某 token 的概率极低（比如 1%），但标注数据要求它出现。SFT 的梯度极大，会暴力更新参数，破坏通用表示。</div>
+              </div>
+              <div style="background:#f0fdf4;border-radius:8px;padding:12px;font-size:13px;">
+                <div style="font-weight:700;color:#166534;margin-bottom:5px;">✅ RL：自然选择</div>
+                <div style="color:#374151;line-height:1.7;">RL 使用 on-policy 数据，模型生成的序列本身就是模型"觉得对的"序列，概率不低，梯度温和，不会激烈改写已有知识。</div>
+              </div>
+            </div>
+            <div style="background:#fef9f0;border:1px solid #fcd34d;border-radius:8px;padding:10px 14px;font-size:12px;color:#374151;line-height:1.7;">
+              <strong style="color:#92400e;">实验验证：</strong>Chen et al. (2025) 将 SFT 改成 on-policy SFT（每轮重新采样当前模型的输出作为训练数据），遗忘程度立即大幅降低，接近 RL 水平——说明 <strong>抗遗忘的核心是 on-policy 数据，而不是 RL 算法本身</strong>。
+            </div>
+          </div>
+        </div>
+
+        <!-- 视角 3：RL's Razor -->
+        <div style="border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;margin:14px 0;">
+          <div style="background:#1e3a5f;padding:11px 18px;">
+            <span style="color:#93c5fd;font-size:13px;font-weight:700;">视角三：RL's Razor——RL 天然偏向低 KL 解</span>
+          </div>
+          <div style="padding:16px 18px;background:#f8fafc;">
+            <p style="font-size:13px;color:#374151;margin:0 0 10px;">Shenfeld et al. (2025) [arXiv:2509.04259] 提出了 "RL's Razor" 定理：<strong>在众多可以得高分的解中，RL（on-policy 方法）天然偏向那些与原始 policy 相距最近（KL 最小）的解</strong>。</p>
+            <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:14px 16px;font-size:13px;color:#374151;line-height:1.8;">
+              <strong style="color:#5b21b6;">为什么？</strong>RL 的优化目标中，reward 最大化和 KL 最小化同时存在——on-policy 更新带来的约束隐式地惩罚了大的分布偏移，使得 RL 总是倾向于在当前 policy 附近找到满足 reward 的解，而不是跳到很远的参数空间。<br><br>
+              <strong>实验量化：</strong>在 Qwen-2.5-3B-Instruct 上，SFT 与 base 模型的 KL 散度可能达到 RL 的 5-10 倍；这个 KL 散度与任务遗忘程度呈高度相关。换句话说，<strong>KL 散度就是遗忘程度的最强预测指标</strong>。
+            </div>
+          </div>
+        </div>
+
+        <!-- ── 3.5.3 OPD 的设计 ── -->
+        <h4>3.5.3 On-Policy Cross-Stage Distillation 的设计</h4>
+
+        <p>GLM-5 选择了一种"事后补救"方案：在所有 RL 阶段结束后，专门增加一个 <strong>On-Policy Cross-Stage Distillation（跨阶段在线蒸馏）</strong> 阶段，系统性地"复习"各阶段的能力。</p>
+
+        <div class="analogy-box">
+          <div class="analogy-title">🧸 类比</div>
+          <p style="font-size:14px;margin:0;">一个学生先学了数学、然后学编程、最后学写作——每学一科都可能忘掉之前学的。Cross-Stage Distillation 相当于学完所有科目后的"期末综合复习"——请每位科目老师分别出题让学生做，哪里掌握不好就纠正哪里。</p>
+        </div>
+
+        <!-- 技术组成 -->
+        <h5 style="font-weight:700;color:#4c1d95;margin:16px 0 10px;">① Teacher 的构成</h5>
+        <div style="overflow-x:auto;margin:10px 0 16px;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+              <tr style="background:#ede9fe;">
+                <th style="padding:8px 12px;text-align:left;border:1px solid #ddd6fe;">Teacher Checkpoint</th>
+                <th style="padding:8px 12px;text-align:left;border:1px solid #ddd6fe;">擅长的能力</th>
+                <th style="padding:8px 12px;text-align:left;border:1px solid #ddd6fe;">对应的训练集（采样来源）</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td style="padding:7px 12px;border:1px solid #ede9fe;font-weight:600;">SFT 最终 checkpoint</td><td style="padding:7px 12px;border:1px solid #ede9fe;">通用对话、格式遵循</td><td style="padding:7px 12px;border:1px solid #ede9fe;">SFT 训练集</td></tr>
+              <tr style="background:#faf5ff;"><td style="padding:7px 12px;border:1px solid #ede9fe;font-weight:600;">Reasoning RL 最终 checkpoint</td><td style="padding:7px 12px;border:1px solid #ede9fe;">数学推理、科学推理、代码竞赛</td><td style="padding:7px 12px;border:1px solid #ede9fe;">Reasoning RL 训练集（数学/科学/代码题目）</td></tr>
+              <tr><td style="padding:7px 12px;border:1px solid #ede9fe;font-weight:600;">General RL 最终 checkpoint</td><td style="padding:7px 12px;border:1px solid #ede9fe;">人类偏好、情感智能、任务质量</td><td style="padding:7px 12px;border:1px solid #ede9fe;">General RL 训练集（写作/QA/角色扮演等）</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p style="font-size:13px;color:#4b5563;">GLM-5 论文原文：<em>"the final checkpoints from the preceding training stages serve as teacher models, where the training prompts are sampled from the corresponding teachers' RL training sets and mixed in appropriate proportions."</em></p>
+
+        <!-- 多 Teacher 冲突问题 -->
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:14px 18px;margin:12px 0 18px;">
+          <div style="font-size:13px;font-weight:700;color:#78350f;margin-bottom:10px;">❓ 多个 teacher 同时存在，不会产生冲突吗？</div>
+          <p style="font-size:13px;color:#374151;margin:0 0 10px;line-height:1.7;"><strong>不会冲突——因为每个 prompt 只由一个 teacher 负责，teacher 之间是「分工」而不是「同时指挥」。</strong></p>
+
+          <!-- 示意图：batch 分工 -->
+          <div style="overflow-x:auto;margin-bottom:12px;">
+            <table style="border-collapse:collapse;font-size:12px;min-width:480px;width:100%;">
+              <thead>
+                <tr style="background:#fef9c3;">
+                  <th style="padding:7px 10px;text-align:left;border:1px solid #fde68a;">Batch 内样本</th>
+                  <th style="padding:7px 10px;text-align:left;border:1px solid #fde68a;">来自哪个 Teacher 的训练集</th>
+                  <th style="padding:7px 10px;text-align:left;border:1px solid #fde68a;">Advantage 由谁计算</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td style="padding:6px 10px;border:1px solid #fef9c3;">数学推导题 prompt₁</td><td style="padding:6px 10px;border:1px solid #fef9c3;">Reasoning RL teacher</td><td style="padding:6px 10px;border:1px solid #fef9c3;color:#7c3aed;font-weight:600;">Reasoning RL teacher</td></tr>
+                <tr style="background:#fafafa;"><td style="padding:6px 10px;border:1px solid #fef9c3;">数学推导题 prompt₂</td><td style="padding:6px 10px;border:1px solid #fef9c3;">Reasoning RL teacher</td><td style="padding:6px 10px;border:1px solid #fef9c3;color:#7c3aed;font-weight:600;">Reasoning RL teacher</td></tr>
+                <tr><td style="padding:6px 10px;border:1px solid #fef9c3;">写作对话题 prompt₃</td><td style="padding:6px 10px;border:1px solid #fef9c3;">General RL teacher</td><td style="padding:6px 10px;border:1px solid #fef9c3;color:#166534;font-weight:600;">General RL teacher</td></tr>
+                <tr style="background:#fafafa;"><td style="padding:6px 10px;border:1px solid #fef9c3;">指令遵循题 prompt₄</td><td style="padding:6px 10px;border:1px solid #fef9c3;">SFT teacher</td><td style="padding:6px 10px;border:1px solid #fef9c3;color:#1d4ed8;font-weight:600;">SFT teacher</td></tr>
+                <tr><td style="padding:6px 10px;border:1px solid #fef9c3;">写作对话题 prompt₅</td><td style="padding:6px 10px;border:1px solid #fef9c3;">General RL teacher</td><td style="padding:6px 10px;border:1px solid #fef9c3;color:#166534;font-weight:600;">General RL teacher</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px;">
+            <div style="background:#fef2f2;border-radius:8px;padding:10px 12px;">
+              <strong style="color:#991b1b;">❌ 若同一 prompt 同时问多个 teacher</strong><br>
+              <span style="color:#374151;line-height:1.7;">同一道数学题——Reasoning RL teacher 说"应该推导"，General RL teacher 说"应该简洁"，两个梯度方向相反，会相互抵消，白白浪费计算资源，甚至导致震荡。</span>
+            </div>
+            <div style="background:#f0fdf4;border-radius:8px;padding:10px 12px;">
+              <strong style="color:#166534;">✅ OPD 的实际做法：按来源分配</strong><br>
+              <span style="color:#374151;line-height:1.7;">prompt 采样自哪个 teacher 的训练集，就只由那个 teacher 计算 advantage。就像多任务学习里不同任务的样本在同一个 batch 混合——每条样本只属于一个任务，梯度不冲突。</span>
+            </div>
+          </div>
+
+          <div style="background:#f5f3ff;border-left:3px solid #7c3aed;border-radius:0 8px 8px 0;padding:9px 13px;font-size:12px;color:#374151;line-height:1.7;margin-top:10px;">
+            <strong style="color:#5b21b6;">本质上：</strong>多个 teacher 的关系是<strong>并行的专家分工</strong>，不是"多个老师同时指导同一道题"——每位老师只批改自己出的题目。GLM-5 论文明确说"prompts are sampled from the <em>corresponding</em> teachers' RL training sets"，对应的就是这个分工关系。
+          </div>
+        </div>
+
+        <!-- 核心算法 -->
+        <h5 style="font-weight:700;color:#4c1d95;margin:16px 0 10px;">② 核心算法流程（竖向时间线）</h5>
+
+        <div style="position:relative;padding-left:52px;margin:18px 0;">
+          <div style="position:absolute;left:15px;top:0;bottom:0;width:2px;background:linear-gradient(to bottom,#7c3aed,#c4b5fd);border-radius:2px;"></div>
+
+          <!-- Step 1 -->
+          <div style="position:relative;margin-bottom:20px;">
+            <div style="position:absolute;left:-45px;top:0;width:30px;height:30px;border-radius:50%;background:#7c3aed;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;box-shadow:0 2px 8px rgba(124,58,237,0.35);">1</div>
+            <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:12px;padding:14px 18px;">
+              <strong style="font-size:14px;color:#4c1d95;">采样 Prompt $x$</strong>
+              <p style="font-size:13px;color:#374151;margin:6px 0 0;">从各 teacher 的训练集按比例混合采样 prompt。比例的设计需要平衡各阶段能力的重要性，GLM-5 未公开具体比例，但原则是"哪个阶段能力退化最多，就多采样哪个阶段的 prompt"。</p>
+            </div>
+          </div>
+
+          <!-- Step 2 -->
+          <div style="position:relative;margin-bottom:20px;">
+            <div style="position:absolute;left:-45px;top:0;width:30px;height:30px;border-radius:50%;background:#7c3aed;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;box-shadow:0 2px 8px rgba(124,58,237,0.35);">2</div>
+            <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:12px;padding:14px 18px;">
+              <strong style="font-size:14px;color:#4c1d95;">On-Policy 生成轨迹 $y$</strong>
+              <p style="font-size:13px;color:#374151;margin:6px 0 10px;">用当前 student（即 Agentic RL 完成后的模型）在 prompt 上生成轨迹。<strong>Group size = 1</strong>（每个 prompt 只生成 1 条轨迹，不需要多条来估计 reward 方差）。</p>
+
+              <!-- ── 三列精准对比表 ── -->
+              <div style="background:#fff;border:1px solid #ddd6fe;border-radius:12px;padding:14px 16px;">
+                <div style="font-size:13px;font-weight:700;color:#5b21b6;margin-bottom:10px;">💡 Off-Policy vs On-Policy：三类方法精确对比</div>
+
+                <!-- 核心说明 -->
+                <p style="font-size:13px;color:#374151;margin:0 0 12px;line-height:1.7;"><strong>Policy（策略）= 模型本身</strong>，即给定上下文输出下一个 token 的概率分布 $\pi(y_t \mid x, y_{&lt;t})$。On/Off-Policy 的区别在于：<strong>训练数据是由「当前正在被训练的模型」生成的，还是由其他来源提供的</strong>。</p>
+
+                <!-- 对比表 -->
+                <div style="overflow-x:auto;margin-bottom:14px;">
+                  <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:560px;">
+                    <thead>
+                      <tr style="background:#ede9fe;">
+                        <th style="padding:8px 10px;text-align:left;border:1px solid #ddd6fe;min-width:110px;">维度</th>
+                        <th style="padding:8px 10px;text-align:left;border:1px solid #ddd6fe;background:#fef2f2;color:#991b1b;">Off-Policy<br><span style="font-weight:400;">SFT</span></th>
+                        <th style="padding:8px 10px;text-align:left;border:1px solid #ddd6fe;background:#f0fdf4;color:#166534;">On-Policy<br><span style="font-weight:400;">PPO / GRPO</span></th>
+                        <th style="padding:8px 10px;text-align:left;border:1px solid #ddd6fe;background:#eff6ff;color:#1d4ed8;">On-Policy<br><span style="font-weight:400;">OPD（本阶段）</span></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;font-weight:600;color:#4b5563;">数据来源</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#fef9f9;">Teacher / 人工预先生成，<br>训练期间<strong>固定不变</strong></td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#f9fefe;">Student 当前版本<strong>实时采样</strong></td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#f8fbff;">Student 当前版本<strong>实时采样</strong></td>
+                      </tr>
+                      <tr style="background:#fafafa;">
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;font-weight:600;color:#4b5563;">监督信号</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#fef9f9;"><strong>Hard label NTP</strong><br>下一个 token 必须是什么（one-hot）</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#f9fefe;"><strong>Sparse Reward</strong><br>仅最终答案对/错才有信号，所有 token 共享同一奖励</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#f8fbff;"><strong>Dense Soft Label</strong><br>每个 token 都有 teacher 的概率分布作为纠偏信号</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;font-weight:600;color:#4b5563;">比值 $r_t$ 的含义</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#fef9f9;">——（无此概念）</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#f9fefe;"><strong>重要性采样比</strong>（IS ratio）<br>$r_t = \dfrac{\pi_\theta(y_t)}{\pi_\text{old}(y_t)}$<br><br>作用：校正"采样时的模型"与"更新时的模型"之间的分布偏差，使得一批数据可以做多步梯度更新</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#f8fbff;">——（也有 IS ratio，但 Advantage 不来自 reward，而来自 teacher-student 对数差）</td>
+                      </tr>
+                      <tr style="background:#fafafa;">
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;font-weight:600;color:#4b5563;">Advantage 来源</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#fef9f9;">——（无 Advantage，直接 MLE）</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#f9fefe;"><strong>组内 Reward 对比</strong><br>同组 G 条回答，答对的 $A&gt;0$，答错的 $A&lt;0$</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#f8fbff;"><strong>Teacher–Student 对数差</strong><br>$\hat{A}_t = \log\pi_\text{teacher}(y_t) - \log\pi_\text{student}(y_t)$<br>无需 reward，直接由概率差驱动</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;font-weight:600;color:#4b5563;">KL 约束 / 参考模型</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#fef9f9;">无</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#f9fefe;"><strong>$\pi_\text{ref}$（冻结的 SFT 模型）</strong><br>KL 惩罚项 $\beta \cdot D_\text{KL}(\pi_\theta \| \pi_\text{ref})$，防止模型偏离 SFT 分布太远、让 reward model 打分失效（<strong>≠ teacher，是锚点</strong>）</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#f8fbff;">Teacher 本身即约束，advantage 为负时自动压制偏离方向，无需额外 KL 项</td>
+                      </tr>
+                      <tr style="background:#fafafa;">
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;font-weight:600;color:#4b5563;">遗忘风险</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#fef9f9;color:#dc2626;font-weight:600;">高</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#f9fefe;color:#ca8a04;font-weight:600;">中（on-policy 天然抑制遗忘，但奖励稀疏）</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#f8fbff;color:#16a34a;font-weight:600;">低（on-policy + 密集信号 + 显式指向旧能力）</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <!-- 关键澄清 -->
+                <div style="background:#fef9c3;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#374151;line-height:1.7;">
+                  <strong style="color:#92400e;">⚠️ 容易混淆的地方：PPO 中的 $\pi_\text{old}$ 和 $\pi_\text{ref}$ 是两回事！</strong><br>
+                  • <strong>$\pi_\text{old}$</strong>（采样策略）：上一批次更新前的快照，每个 mini-batch 后就替换。用于计算重要性采样比 $r_t$，让同一批数据可以做多步更新，是 <strong>on-policy 机制的一部分</strong>。<br>
+                  • <strong>$\pi_\text{ref}$</strong>（参考模型）：训练开始时冻结的 SFT 模型，全程不变。用于 KL 散度惩罚项，防止模型飘得太远，是<strong>约束 / 锚点</strong>，不是 teacher。<br>
+                  两者目的完全不同，$\pi_\text{old}$ 解决"分布漂移的梯度校正"，$\pi_\text{ref}$ 解决"防止 reward hacking"。
+                </div>
+              </div>
+
+              <div style="background:#eff6ff;border-left:3px solid #3b82f6;padding:9px 13px;border-radius:0 8px 8px 0;font-size:12px;color:#1e40af;line-height:1.7;margin-top:10px;">
+                <strong>Group size = 1 的原因：</strong>普通 GRPO 中 group size 设为 8–32，是为了通过组内奖励对比来估计 Advantage。OPD 不需要这个——Advantage 直接由 teacher 和 student 的对数概率差计算，不依赖组内对比，所以一条样本就够。这大幅提升了吞吐量（batch size 设为 1024）。
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 3 -->
+          <div style="position:relative;margin-bottom:20px;">
+            <div style="position:absolute;left:-45px;top:0;width:30px;height:30px;border-radius:50%;background:#7c3aed;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;box-shadow:0 2px 8px rgba(124,58,237,0.35);">3</div>
+            <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:12px;padding:14px 18px;">
+              <strong style="font-size:14px;color:#4c1d95;">计算 Token 级 Advantage</strong>
+              <p style="font-size:13px;color:#374151;margin:6px 0 8px;">对 student 生成的轨迹中<strong>每个 token</strong>，分别用 teacher 和 student 前向算一遍，得到两个对数概率，相减得到 Advantage：</p>
+              <div style="overflow-x:auto;background:#1e1b4b;border-radius:10px;padding:18px 22px;margin:8px 0;">
+                <div style="color:#e2e8f0;font-size:15px;text-align:center;">
+                  $$\hat{A}_{i,t} = \text{sg}\!\left[\log\frac{\pi_{\theta_{\text{teacher}}}^{\text{infer}}(y_{i,t}\mid x,\, y_{i,<t})}{\pi_{\theta}^{\text{train}}(y_{i,t}\mid x,\, y_{i,<t})}\right]$$
+                </div>
+              </div>
+              <p style="font-size:12px;color:#6b7280;margin:6px 0 10px;">其中 <code>sg[·]</code> 表示 stop gradient（停止梯度回传），Advantage 只用于指导更新方向，不参与对 teacher 参数的梯度计算。teacher 用推理引擎取概率，student 用训练引擎计算梯度。</p>
+              <!-- Advantage 含义 -->
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div style="background:#dcfce7;border-radius:8px;padding:10px 12px;font-size:13px;">
+                  <strong style="color:#166534;">Â &gt; 0：teacher 认为该 token 更重要</strong><br>
+                  <span style="color:#374151;font-size:12px;">student 生成了该 token，但 teacher 比 student 更"确信"它是对的。推动 student 提高该 token 的概率——意味着 student 在这个位置偏保守，需要向 teacher 学习。</span>
+                </div>
+                <div style="background:#fef3c7;border-radius:8px;padding:10px 12px;font-size:13px;">
+                  <strong style="color:#92400e;">Â &lt; 0：student 比 teacher 更偏爱该 token</strong><br>
+                  <span style="color:#374151;font-size:12px;">student 对该 token 的概率超过了 teacher 的预期，可能是"过度生成"某些词。推动 student 适当降低该 token 概率，校正偏差。</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 4 -->
+          <div style="position:relative;margin-bottom:20px;">
+            <div style="position:absolute;left:-45px;top:0;width:30px;height:30px;border-radius:50%;background:#7c3aed;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;box-shadow:0 2px 8px rgba(124,58,237,0.35);">4</div>
+            <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:12px;padding:14px 18px;">
+              <strong style="font-size:14px;color:#4c1d95;">代入策略优化损失更新 Student</strong>
+              <p style="font-size:13px;color:#374151;margin:6px 0 8px;">将 Advantage 代入 GLM-5 采用的 IcePop-GRPO 框架（见式 3.2），替换掉原本的基于 reward 的 Advantage，其余优化过程与 RL 一致。</p>
+              <div style="overflow-x:auto;background:#1e1b4b;border-radius:10px;padding:18px 22px;margin:8px 0;">
+                <div style="color:#e2e8f0;font-size:14px;text-align:center;">
+                  $$\mathcal{L}(\theta) = -\mathbb{E}_{x,y\sim\pi_\theta}\left[\frac{1}{|y|}\sum_{t=1}^{|y|} \hat{A}_{i,t} \cdot \log\pi_\theta(y_t \mid x, y_{<t})\right]$$
+                </div>
+              </div>
+              <p style="font-size:12px;color:#6b7280;margin:6px 0 0;">因为 $\hat{A}$ 已经是 stop gradient 的常量，这实际上等价于让 student 在自己生成的轨迹上向 teacher 的分布做最大似然拟合——但关键是数据是 on-policy 的，避免了暴力拟合陌生序列的问题。</p>
+            </div>
+          </div>
+
+          <!-- Step 5 -->
+          <div style="position:relative;">
+            <div style="position:absolute;left:-45px;top:0;width:30px;height:30px;border-radius:50%;background:#7c3aed;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;box-shadow:0 2px 8px rgba(124,58,237,0.35);">5</div>
+            <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:12px;padding:14px 18px;">
+              <strong style="font-size:14px;color:#4c1d95;">多 Teacher 串行/并行</strong>
+              <p style="font-size:13px;color:#374151;margin:6px 0 0;">每个 teacher（SFT / Reasoning RL / General RL）对应一批 prompt，在同一次训练中以混合 batch 的形式并行蒸馏。对 student 而言，每个 batch 里可能同时有"让我回想数学能力"和"让我回想写作能力"的信号。</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── 3.5.4 具体例子 ── -->
+        <h4>3.5.4 具体例子：Agentic RL 后数学能力下降的修复</h4>
+
+        <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:14px;overflow:hidden;margin:14px 0;">
+          <div style="background:#495057;color:#fff;padding:11px 18px;font-size:13px;font-weight:700;">📖 场景：GLM-5 在 Agentic RL 后的状态</div>
+          <div style="padding:16px 18px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px;">
+              <div style="background:#f0fdf4;border-radius:8px;padding:10px;font-size:12px;text-align:center;">
+                <div style="font-weight:700;color:#166534;margin-bottom:4px;">Reasoning RL 结束后</div>
+                <div style="color:#374151;">AIME 2024 准确率：<strong style="color:#16a34a;">42%</strong></div>
+              </div>
+              <div style="background:#fef2f2;border-radius:8px;padding:10px;font-size:12px;text-align:center;">
+                <div style="font-weight:700;color:#991b1b;margin-bottom:4px;">Agentic RL 结束后（遗忘）</div>
+                <div style="color:#374151;">AIME 2024 准确率：<strong style="color:#dc2626;">~28%</strong>（示意）</div>
+              </div>
+              <div style="background:#f0fdf4;border-radius:8px;padding:10px;font-size:12px;text-align:center;">
+                <div style="font-weight:700;color:#166534;margin-bottom:4px;">Cross-Stage Distillation 后</div>
+                <div style="color:#374151;">AIME 2024 准确率：<strong style="color:#16a34a;">~40%</strong>（恢复）</div>
+              </div>
+            </div>
+
+            <p style="font-size:13px;color:#374151;margin:0 0 12px;">Cross-Stage Distillation 如何恢复数学能力？以某道 AIME 题目为例：</p>
+
+            <div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;font-size:12px;">
+              <!-- Header -->
+              <div style="display:grid;grid-template-columns:120px 1fr 1fr;background:#f3f4f6;">
+                <div style="padding:8px 12px;font-weight:700;color:#4b5563;border-right:1px solid #e5e7eb;">训练阶段</div>
+                <div style="padding:8px 12px;font-weight:700;color:#4b5563;border-right:1px solid #e5e7eb;">Prompt: 求 $\sum_{n=1}^{2024}\lfloor\log_2 n\rfloor$</div>
+                <div style="padding:8px 12px;font-weight:700;color:#4b5563;">信号来源</div>
+              </div>
+              <!-- Row 1 -->
+              <div style="display:grid;grid-template-columns:120px 1fr 1fr;border-top:1px solid #e5e7eb;">
+                <div style="padding:8px 12px;color:#374151;border-right:1px solid #e5e7eb;background:#fef9f0;">Reasoning RL Teacher</div>
+                <div style="padding:8px 12px;color:#374151;border-right:1px solid #e5e7eb;">能清晰输出：「先数每个 $k$ 对应多少 $n$，$k=0$ 对应 $n=1$，$k=1$ 对应 $n=2,3$，…」</div>
+                <div style="padding:8px 12px;color:#374151;background:#f0fdf4;">teacher 对这些推导 token 的概率很高（0.85+）</div>
+              </div>
+              <!-- Row 2 -->
+              <div style="display:grid;grid-template-columns:120px 1fr 1fr;border-top:1px solid #e5e7eb;background:#fef2f2;">
+                <div style="padding:8px 12px;color:#374151;border-right:1px solid #e5e7eb;">Agentic RL 后的 Student</div>
+                <div style="padding:8px 12px;color:#374151;border-right:1px solid #e5e7eb;">倾向于输出工具调用：「我需要写一段 Python 来计算这个」（走了捷径）</div>
+                <div style="padding:8px 12px;color:#374151;">student 对"先数每个 $k$ 对应多少 $n$"的概率很低（0.12）</div>
+              </div>
+              <!-- Row 3 -->
+              <div style="display:grid;grid-template-columns:120px 1fr 1fr;border-top:1px solid #e5e7eb;">
+                <div style="padding:8px 12px;color:#374151;border-right:1px solid #e5e7eb;background:#faf5ff;">Distillation 信号</div>
+                <div style="padding:8px 12px;color:#374151;border-right:1px solid #e5e7eb;">$\hat{A} = \log(0.85) - \log(0.12) \approx +1.96$（正值，大力提升这些推导 token 的概率）</div>
+                <div style="padding:8px 12px;color:#374151;background:#dcfce7;">student 被推动，下次做数学题时倾向于数学推导而非直接写代码</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── 3.5.5 OPD 对比 Off-Policy 蒸馏 ── -->
+        <h4>3.5.5 为什么不直接用 Off-Policy 蒸馏（直接让 Student 模仿 Teacher 输出）？</h4>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0;">
+          <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:14px 16px;">
+            <div style="font-size:13px;font-weight:700;color:#991b1b;margin-bottom:8px;">❌ Off-Policy 蒸馏（Offline KD）的问题</div>
+            <div style="font-size:13px;color:#374151;line-height:1.8;">
+              做法：让 teacher 生成回答，作为标签 SFT 训练 student。<br><br>
+              <strong>问题1 暴露偏差（Exposure Bias）：</strong>Teacher 生成的序列可能是 student 从未"走过的路"，student 一旦犯了一个错，后续所有步骤的分布都会和 teacher 的不一致，错误累积。<br><br>
+              <strong>问题2 强迫冲突：</strong>Teacher 输出中某些 token 的概率在 student 看来极低，强行拟合会产生大梯度破坏旧能力（即 Confident Conflict 现象）。
+            </div>
+          </div>
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:14px 16px;">
+            <div style="font-size:13px;font-weight:700;color:#166534;margin-bottom:8px;">✅ On-Policy 蒸馏（OPD）的优势</div>
+            <div style="font-size:13px;color:#374151;line-height:1.8;">
+              做法：student 自己生成序列，teacher 在这些序列上提供逐 token 的概率作为"校正信号"。<br><br>
+              <strong>优势1 消除暴露偏差：</strong>Student 自己走出这条路，永远处于自己"熟悉的"分布上，不会发生路径漂移。<br><br>
+              <strong>优势2 温和校正：</strong>Teacher 只在 student 自己选择的 token 上提供纠偏，而不是强迫 student 生成完全不同的序列，梯度不会过大。
+            </div>
+          </div>
+        </div>
+
+        <!-- 来自 OPSD 论文的引用 -->
+        <div style="background:#eff6ff;border-left:3px solid #3b82f6;padding:12px 16px;border-radius:0 10px 10px 0;margin:14px 0;font-size:13px;color:#1e40af;line-height:1.7;">
+          <strong>来自 OPSD 论文（Xie et al., ICML 2025）：</strong><br>
+          On-policy distillation 是"<em>distributional realism of on-policy training</em>（on-policy 训练的分布真实性）"与"<em>dense feedback of supervised learning</em>（监督学习的密集反馈）"的结合，在推理任务上，相同数据量下训练速度比 GRPO 快 8-16 倍，同时比 off-policy SFT 性能更好。
+        </div>
+
+        <!-- ── 3.5.6 三类方法横向对比 ── -->
+        <h4>3.5.6 三类持续学习方法横向对比</h4>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>维度</th>
+                <th>SFT（off-policy）</th>
+                <th>普通 RL（on-policy）</th>
+                <th>On-Policy Distillation（OPD）</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>数据来源</strong></td>
+                <td>预先收集的标注数据集（固定）</td>
+                <td>当前模型实时生成（动态）</td>
+                <td>当前模型实时生成（动态）</td>
+              </tr>
+              <tr>
+                <td><strong>监督信号</strong></td>
+                <td>Hard label（下一个 token 是什么）</td>
+                <td>Sparse reward（最终结果对不对）</td>
+                <td>Soft label（teacher 对每个 token 的概率分布）</td>
+              </tr>
+              <tr>
+                <td><strong>信号密度</strong></td>
+                <td>每个 token 都有标签，但 off-policy</td>
+                <td>稀疏（只有最终奖励），token 级无区分</td>
+                <td>密集（每个 token 都有 teacher 概率作为校正）</td>
+              </tr>
+              <tr>
+                <td><strong>遗忘风险</strong></td>
+                <td style="color:#dc2626;font-weight:600;">高（Confident Conflict 导致破坏性梯度）</td>
+                <td style="color:#ca8a04;font-weight:600;">中（on-policy 抗遗忘，但新任务 reward 偏置明显）</td>
+                <td style="color:#16a34a;font-weight:600;">低（on-policy + 温和校正 + 显式指向旧能力）</td>
+              </tr>
+              <tr>
+                <td><strong>新能力吸收</strong></td>
+                <td>强，直接模仿标签分布</td>
+                <td>中，只优化奖励方向，细粒度不足</td>
+                <td>强，teacher 提供分布级细粒度指导</td>
+              </tr>
+              <tr>
+                <td><strong>计算效率</strong></td>
+                <td>高，无需 teacher 前向推理</td>
+                <td>低，需多次 rollout 估计 reward 方差</td>
+                <td>中（需 teacher 前向，但 group=1 节省大量采样）</td>
+              </tr>
+              <tr>
+                <td><strong>典型应用</strong></td>
+                <td>第一阶段能力注入</td>
+                <td>专项能力提升</td>
+                <td>多阶段能力整合与遗忘修复</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ── 总结框 ── -->
+        <div class="big-concept">
+          <div class="big-concept-title">🔬 核心洞见：把 Distillation 当成"软 RL"</div>
+          <p style="font-size:14px;margin:0;line-height:1.9;">
+          On-Policy Cross-Stage Distillation 的本质是：<strong>用 teacher-student 的对数概率差作为 Advantage，代替稀疏 reward，驱动 RL 风格的策略优化</strong>。<br><br>
+          • 它继承了 RL 的 <strong>on-policy 抗遗忘性</strong>（分布真实、低 KL、避免强迫冲突）<br>
+          • 它继承了 SFT 的 <strong>密集监督信号</strong>（每个 token 都有校正）<br>
+          • 它克服了 RL 的 <strong>奖励稀疏问题</strong>（不需要等到最终答案才能得到反馈）<br>
+          • 它克服了 SFT 的 <strong>Confident Conflict 问题</strong>（student 自己生成序列，不强行拟合陌生路径）<br><br>
+          GLM-5 选择将 OPD 放在所有 RL 阶段的最后，作为"<strong>收尾综合复习</strong>"，在一个阶段内同时恢复所有前序阶段的能力，是多阶段 RL 训练工程中的重要实践经验。
+          </p>
+        </div>
+
+        <!-- 参考文献 -->
+        <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:16px 20px;margin:16px 0;font-size:12px;color:#4b5563;line-height:2.0;">
+          <div style="font-weight:700;color:#374151;margin-bottom:8px;">📚 本节主要参考文献</div>
+          <div>[1] GLM-5 Team. <em>GLM-5: from Vibe Coding to Agentic Engineering.</em> arXiv:2602.15763 (2025). <em>— OPD 在 GLM-5 中的具体实现</em></div>
+          <div>[2] Xie et al. <em>On-Policy Self-Distillation for Large Language Models.</em> ICML 2025. arXiv:2601.18734. <em>— OPSD：teacher 与 student 同一模型，不同 context 的 on-policy 蒸馏</em></div>
+          <div>[3] Lai et al. <em>Reinforcement Fine-Tuning Naturally Mitigates Forgetting in Continual Post-Training.</em> arXiv:2507.05386 (2025). <em>— RL 天然抗遗忘的实证研究</em></div>
+          <div>[4] Chen et al. <em>Retaining by Doing: The Role of On-Policy Data in Mitigating Forgetting.</em> arXiv:2510.18874 (2025). <em>— On-policy 数据是抗遗忘的关键</em></div>
+          <div>[5] Shenfeld et al. <em>RL's Razor: Why Online Reinforcement Learning Forgets Less.</em> arXiv:2509.04259 (2025). <em>— RL 偏向低 KL 解的理论分析</em></div>
+          <div>[6] Diao et al. <em>Entropy-Adaptive Fine-Tuning: Resolving Confident Conflicts to Mitigate Forgetting.</em> arXiv:2601.02151 (2025). <em>— Confident Conflict 现象分析</em></div>
+          <div>[7] Cao et al. <em>X-OPD: Cross-Modal On-Policy Distillation for Capability Alignment in Speech LLMs.</em> arXiv:2603.24596 (2025). <em>— 跨模态 on-policy 蒸馏的扩展实践</em></div>
+        </div>
+      </section>
+
+
+      <!-- ══ §2 Base Model Training ══ -->
+      <section class="section" id="data-synthesis">
+        <div class="section-title">
+          <div class="icon" style="background:#fef3c7;">🏭</div>
+          §4 Agentic 数据合成：合成任务 + 合成环境 + 合成反馈 + 合成轨迹
+        </div>
+
+        <blockquote>Agentic 数据合成的关键不是"合成文本"，而是：<strong>合成任务 + 合成环境 + 合成反馈 + 合成轨迹</strong>。不仅包括传统意义上的文本合成，更包括任务合成、环境合成、反馈合成与轨迹合成。</blockquote>
+
+        <p>GLM-5 中 Agentic 数据主要围绕三类任务构建：</p>
+        <div class="three-col">
+          <div class="mini-card" style="border-top:3px solid #7c3aed;"><h4 style="color:#6d28d9;">软件工程环境（SWE）</h4><p style="font-size:13px;">基于真实 Issue-PR 对构建可执行修复任务，目标是训练 coding agent</p></div>
+          <div class="mini-card" style="border-top:3px solid #2563eb;"><h4 style="color:#1d4ed8;">终端环境（Terminal）</h4><p style="font-size:13px;">构造需要在 shell / Docker / 文件系统里操作的任务，目标是训练 terminal agent</p></div>
+          <div class="mini-card" style="border-top:3px solid #d97706;"><h4 style="color:#92400e;">搜索任务（Search）</h4><p style="font-size:13px;">构造多跳检索、多网页证据聚合的问题，目标是训练 search agent</p></div>
+        </div>
+
+        <h3 id="pipeline">4.1 Agentic 数据合成的标准六步流水线</h3>
+
+        <p style="font-size:14px;color:#4b5563;margin:0 0 16px;">下面用一条贯穿始终的例子（"修复注册接口不验证空用户名的 bug"）来串讲六步，每步结合这个例子，让流程看得见摸得着。</p>
+
+        <!-- ── Step 1 ── -->
+        <div class="step-box">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <strong>选择种子任务</strong>
+            <p style="font-size:13px;margin:6px 0 8px;">种子任务是整个流水线的起点——没有种子就没有任务，没有任务就没有数据。种子的质量直接决定最终训练数据的多样性和覆盖范围。</p>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+              <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 14px;">
+                <div style="font-size:13px;font-weight:700;color:#166534;margin-bottom:6px;">📦 来源一：真实世界数据</div>
+                <ul style="font-size:12px;color:#374151;margin:0;padding-left:16px;line-height:1.8;">
+                  <li><strong>SWE 任务</strong>：GitHub 上真实的 Issue-PR 对（有 bug 描述，有人工修复 patch）</li>
+                  <li><strong>Terminal 任务</strong>：Stack Overflow 的报错帖、技术博客的操作教程</li>
+                  <li><strong>Search 任务</strong>：早期 search agent 在真实搜索中访问过的网页</li>
+                </ul>
+              </div>
+              <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px 14px;">
+                <div style="font-size:13px;font-weight:700;color:#1d4ed8;margin-bottom:6px;">🤖 来源二：模型早期探索轨迹</div>
+                <div style="font-size:12px;color:#374151;line-height:1.8;">让早期版本的 agent 大量刷真实任务，<strong>把它探索过的环境状态、访问过的网页、产生的中间状态</strong>都记录下来，这些"脚印"本身就是宝贵的种子素材——因为它们来自真实任务场景，天然具有多样性。</div>
+              </div>
+            </div>
+
+            <!-- 例子 -->
+            <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:10px;overflow:hidden;">
+              <div style="background:#495057;color:#fff;padding:8px 14px;font-size:12px;font-weight:700;">📌 贯穿示例·第一步：找到种子</div>
+              <div style="padding:12px 14px;font-size:12px;color:#374151;line-height:1.8;">
+                在 GitHub 上发现了这条 Issue：<br>
+                <code style="background:#e9ecef;padding:2px 6px;border-radius:4px;">Issue #123：Registration API returns 500 when username is empty string</code><br>
+                以及对应的修复 PR：<code style="background:#e9ecef;padding:2px 6px;border-radius:4px;">PR #456：Fix empty username handling</code><br>
+                这就是我们的种子——有原始 bug、有参考修复方向，接下来需要把它改造成一个可执行任务。
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Step 2 ── -->
+        <div class="step-box">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <strong>转化为可执行任务</strong>
+            <p style="font-size:13px;margin:6px 0 8px;">原始的 Issue 只是一段文字描述，agent 没法直接对它"执行"。这一步把文字描述转化为一个结构化的任务对象，包含 agent 完成任务所需的一切信息。</p>
+
+            <div style="overflow-x:auto;margin-bottom:10px;">
+              <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                <thead>
+                  <tr style="background:#e0e7ff;">
+                    <th style="padding:7px 10px;text-align:left;border:1px solid #c7d2fe;">字段</th>
+                    <th style="padding:7px 10px;text-align:left;border:1px solid #c7d2fe;">含义</th>
+                    <th style="padding:7px 10px;text-align:left;border:1px solid #c7d2fe;">示例内容</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td style="padding:6px 10px;border:1px solid #e0e7ff;font-weight:600;">任务描述</td><td style="padding:6px 10px;border:1px solid #e0e7ff;">用自然语言告诉 agent 要做什么</td><td style="padding:6px 10px;border:1px solid #e0e7ff;">"当 username 为空字符串时，接口应返回 HTTP 400 而非 500"</td></tr>
+                  <tr style="background:#f5f3ff;"><td style="padding:6px 10px;border:1px solid #e0e7ff;font-weight:600;">输入上下文</td><td style="padding:6px 10px;border:1px solid #e0e7ff;">任务开始时的初始状态</td><td style="padding:6px 10px;border:1px solid #e0e7ff;">Bug 发生前的完整代码仓库快照（见下方说明）、Issue 原文、依赖列表</td></tr>
+                  <tr><td style="padding:6px 10px;border:1px solid #e0e7ff;font-weight:600;">可用工具</td><td style="padding:6px 10px;border:1px solid #e0e7ff;">agent 在这个任务里能用哪些工具</td><td style="padding:6px 10px;border:1px solid #e0e7ff;"><code>view_file</code>, <code>search_code</code>, <code>edit_file</code>, <code>run_tests</code>, <code>bash</code></td></tr>
+                  <tr style="background:#f5f3ff;"><td style="padding:6px 10px;border:1px solid #e0e7ff;font-weight:600;">F2P 测试</td><td style="padding:6px 10px;border:1px solid #e0e7ff;">修复前失败、修复后必须通过的用例（见下方说明）</td><td style="padding:6px 10px;border:1px solid #e0e7ff;"><code>test_empty_username_returns_400</code> / <code>test_empty_username_error_message</code></td></tr>
+                  <tr><td style="padding:6px 10px;border:1px solid #e0e7ff;font-weight:600;">P2P 测试</td><td style="padding:6px 10px;border:1px solid #e0e7ff;">修复前已通过、修复后不能破坏的用例（见下方说明）</td><td style="padding:6px 10px;border:1px solid #e0e7ff;"><code>test_valid_username_registration</code> / <code>test_duplicate_username</code></td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- ── 快照 + F2P/P2P 详细解释 ── -->
+
+            <!-- 快照解释 -->
+            <div style="background:#f1f5f9;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;margin-top:10px;">
+              <div style="font-size:13px;font-weight:700;color:#1e293b;margin-bottom:8px;">📦 「代码仓库快照」是什么？</div>
+              <p style="font-size:13px;color:#374151;margin:0 0 8px;line-height:1.7;"><strong>快照（Snapshot）= 某个时间点代码仓库的完整静态备份</strong>，就像手机的时间点备份——把那一刻所有文件的内容、路径都原样保存，随时可以还原到那个状态。</p>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
+                <div style="background:#fff;border-radius:8px;padding:9px 11px;">
+                  <strong style="color:#475569;">对应 git 里的什么？</strong><br>
+                  <span style="color:#374151;line-height:1.7;">就是 PR 合并<strong>之前</strong>那个 commit 的所有代码。用 <code>git checkout &lt;commit-sha&gt;</code> 还原，然后打包进 Docker 容器里。</span>
+                </div>
+                <div style="background:#fff;border-radius:8px;padding:9px 11px;">
+                  <strong style="color:#475569;">为什么需要快照？</strong><br>
+                  <span style="color:#374151;line-height:1.7;">保证每次 agent 尝试这个任务都从同一个起点开始，不会因为上次 agent 改了什么文件而影响下一次实验（<strong>可复现性</strong>）。</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- F2P / P2P 解释 -->
+            <div style="background:#fef9c3;border:1px solid #fde68a;border-radius:10px;padding:12px 14px;margin-top:10px;">
+              <div style="font-size:13px;font-weight:700;color:#78350f;margin-bottom:8px;">💡 F2P / P2P 测试是谁写的？不需要人工写！</div>
+              <p style="font-size:13px;color:#374151;margin:0 0 10px;line-height:1.7;"><strong>测试直接从 GitHub PR 里自动提取，完全不需要人工编写。</strong>这是 SWE 数据合成能大规模进行的关键原因。</p>
+
+              <div style="background:#fff;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#374151;line-height:1.8;">
+                <strong style="color:#78350f;">正规开源项目 PR 的标准结构：</strong>
+                <pre style="background:#1e1e2e;color:#cdd6f4;border-radius:6px;padding:8px 12px;margin:6px 0 0;font-size:11px;line-height:1.8;">PR #456: Fix empty username handling
+  修改的文件：
+  ├── validators/user_validator.py      ← patch（修复逻辑）
+  └── tests/test_user_validator.py      ← PR 作者同时提交的测试！</pre>
+                <p style="margin:6px 0 0;font-size:12px;color:#6b7280;">正规开源项目（如 Django、NumPy、requests）有严格贡献规范：<strong>每个 bug fix 必须附带能复现 bug 的测试用例才能被合并</strong>（CI 不通过不让合并）。这些测试本来就是 PR 作者写好的，不是为训练数据专门写的。</p>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
+                <div style="background:#f0fdf4;border-radius:8px;padding:9px 11px;">
+                  <strong style="color:#166534;">F2P = PR 里新增的测试</strong><br>
+                  <span style="color:#374151;line-height:1.7;">对比 PR 前后的 diff，找出<strong>新增的 test 函数</strong>。这些测试在 bug 修复前运行会失败（bug 还在），修复后必须通过。<br>自动提取，零成本。</span>
+                </div>
+                <div style="background:#eff6ff;border-radius:8px;padding:9px 11px;">
+                  <strong style="color:#1d4ed8;">P2P = 仓库里原有的其他测试</strong><br>
+                  <span style="color:#374151;line-height:1.7;">在 PR 合并前跑一遍全量测试套件，<strong>找出已经通过的用例</strong>。这些是回归测试——agent 修复 bug 时不能把它们搞坏。<br>也是自动提取，零成本。</span>
+                </div>
+              </div>
+
+              <div style="background:#fef2f2;border-radius:8px;padding:9px 11px;margin-top:8px;font-size:12px;color:#374151;line-height:1.7;">
+                <strong style="color:#991b1b;">⚠️ 这就是为什么 SWE-bench 只选正规开源项目，而不是随便一个 GitHub 仓库：</strong><br>
+                随便的小项目可能没有测试、测试覆盖率很低、PR 不带测试——无法自动提取 F2P/P2P，就没法构造可验证的训练任务。SWE-bench 从 12 个知名 Python 开源库（Django、Flask、NumPy、SciPy 等）里筛选，保证每个 Issue 都有完整的测试覆盖。
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Step 3 ── -->
+        <div class="step-box">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <strong>构建可验证环境</strong>
+            <p style="font-size:13px;margin:6px 0 8px;">有了任务描述还不够，agent 还需要一个能真正<strong>运行代码、执行命令、看到反馈</strong>的环境。这一步就是把任务描述"活化"成一个沙盒环境。</p>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;">
+              <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;padding:10px 12px;font-size:12px;">
+                <div style="font-weight:700;color:#6d28d9;margin-bottom:4px;">初始状态</div>
+                <div style="color:#374151;line-height:1.7;">把种子任务对应的代码库、文件系统、数据库初始状态打包进 Docker 容器，保证每次任务执行的起点完全一致（可复现）</div>
+              </div>
+              <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 12px;font-size:12px;">
+                <div style="font-weight:700;color:#166534;margin-bottom:4px;">动作空间 + 观测</div>
+                <div style="color:#374151;line-height:1.7;">定义 agent 在这个环境里能做什么（工具列表）、执行后能看到什么（文件内容、命令输出、测试结果）</div>
+              </div>
+              <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 12px;font-size:12px;">
+                <div style="font-weight:700;color:#c2410c;margin-bottom:4px;">验证 & 反馈机制</div>
+                <div style="color:#374151;line-height:1.7;">验证脚本：运行测试套件，自动判断 F2P / P2P 通过情况，输出 "PASSED / FAILED" 信号</div>
+              </div>
+            </div>
+
+            <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:10px;overflow:hidden;">
+              <div style="background:#495057;color:#fff;padding:8px 14px;font-size:12px;font-weight:700;">📌 贯穿示例·第三步：构建沙盒</div>
+              <div style="padding:12px 14px;font-size:12px;color:#374151;line-height:1.8;">
+                <strong>Docker 容器里有什么：</strong>Bug 发生前的代码库 + Python 运行时 + 测试框架（pytest）<br>
+                <strong>agent 能做什么：</strong>查看文件、搜索代码、编辑代码、运行单个或全部测试<br>
+                <strong>验证脚本输出什么：</strong>
+                <pre style="background:#272822;color:#f8f8f2;border-radius:6px;padding:8px 12px;margin:6px 0 0;font-size:11px;">Running test_empty_username_returns_400 ... PASSED ✓
+Running test_empty_username_error_message ... PASSED ✓
+Running test_valid_username_registration  ... PASSED ✓
+Running test_duplicate_username           ... PASSED ✓
+Result: F2P=2/2, P2P=2/2 → ACCEPTED ✅</pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Step 4 ── -->
+        <div class="step-box">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <strong>执行任务并采集轨迹</strong>
+            <p style="font-size:13px;margin:6px 0 8px;">这是整个流水线中最核心的一步：让 agent 真正进入沙盒环境，完整地"走一遍"解决这个问题的过程，并把每一步的输入输出全部记录下来，形成<strong>轨迹（trajectory）</strong>。</p>
+
+            <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px 14px;margin-bottom:10px;font-size:13px;color:#374151;line-height:1.7;">
+              <strong style="color:#92400e;">🤔 为什么要采集轨迹，而不是直接用最终答案？</strong><br>
+              传统 NLP 数据是"输入-输出"对：给一个问题，有一个答案。但 Agentic 任务是<strong>多步的</strong>——解决一个 bug 可能需要先搜索代码、再分析、再修改、再跑测试、发现不对、再改……这个过程本身就是训练数据，丢掉中间步骤就会丢掉大量"遇到问题怎么思考"的知识。
+            </div>
+
+            <!-- 轨迹格式示例 -->
+            <div style="font-size:13px;font-weight:600;color:#374151;margin:0 0 8px;">一条 SWE 轨迹的完整长相：</div>
+            <pre style="background:#1e1e2e;color:#cdd6f4;border-radius:10px;padding:16px 18px;font-size:12px;line-height:1.9;overflow-x:auto;"><span style="color:#89b4fa;">Thought:</span> 先读一下 Issue，找到问题所在
+<span style="color:#a6e3a1;">Action:</span>  view_file("routes/auth.py")
+<span style="color:#f38ba8;">Observation:</span> [代码内容] 第 62 行调用了 validate_username(username)
+
+<span style="color:#89b4fa;">Thought:</span> 找到了 validate_username，进去看看是怎么实现的
+<span style="color:#a6e3a1;">Action:</span>  view_file("validators/user_validator.py")
+<span style="color:#f38ba8;">Observation:</span> def validate_username(u): if u is None: raise ... → 只检查了 None！
+
+<span style="color:#89b4fa;">Thought:</span> 问题找到了：空字符串 "" 不是 None，所以没被拦截。需要加一行 or u == ""
+<span style="color:#a6e3a1;">Action:</span>  edit_file("validators/user_validator.py", old="if u is None", new="if not u")
+<span style="color:#f38ba8;">Observation:</span> File saved successfully
+
+<span style="color:#89b4fa;">Thought:</span> 改完了，跑一下测试确认
+<span style="color:#a6e3a1;">Action:</span>  run_tests("test_empty_username_returns_400")
+<span style="color:#f38ba8;">Observation:</span> PASSED ✓
+
+<span style="color:#a6e3a1;">Action:</span>  run_tests("all")
+<span style="color:#f38ba8;">Observation:</span> 12/12 PASSED ✓ → 提交</pre>
+
+            <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;padding:9px 13px;font-size:12px;color:#374151;line-height:1.7;margin-top:8px;">
+              <strong style="color:#065f46;">轨迹里包含了什么：</strong>① 每一步的思考过程（Thought） ② 调用了哪个工具（Action） ③ 工具返回了什么（Observation） ④ 根据反馈做的决策修正。这些加在一起，才是一条完整的"问题解决过程"数据。
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Step 5 ── -->
+        <div class="step-box">
+          <div class="step-num">5</div>
+          <div class="step-content">
+            <strong>筛选、过滤与修复</strong>
+            <p style="font-size:13px;margin:6px 0 8px;">不是所有采集到的轨迹都能直接用——有的 agent 走了错误的路，有的轨迹里存在漏洞（exploit），有的任务本身就设计有问题。这一步是数据清洗，只留下高质量样本。</p>
+
+            <div style="overflow-x:auto;margin-bottom:12px;">
+              <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                <thead>
+                  <tr style="background:#f1f5f9;">
+                    <th style="padding:7px 10px;text-align:left;border:1px solid #e2e8f0;">过滤项</th>
+                    <th style="padding:7px 10px;text-align:left;border:1px solid #e2e8f0;">检查什么</th>
+                    <th style="padding:7px 10px;text-align:left;border:1px solid #e2e8f0;">为什么要检查</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td style="padding:6px 10px;border:1px solid #e2e8f0;font-weight:600;">结果正确性</td><td style="padding:6px 10px;border:1px solid #e2e8f0;">验证脚本是否通过</td><td style="padding:6px 10px;border:1px solid #e2e8f0;">最基本的门槛，没解决任务的轨迹不能用</td></tr>
+                  <tr style="background:#fafafa;"><td style="padding:6px 10px;border:1px solid #e2e8f0;font-weight:600;color:#dc2626;">Exploit 检查 ⚠️</td><td style="padding:6px 10px;border:1px solid #e2e8f0;">是否存在"取巧"通过测试的行为</td><td style="padding:6px 10px;border:1px solid #e2e8f0;">最容易被忽略、危害最大的问题（见下方详述）</td></tr>
+                  <tr><td style="padding:6px 10px;border:1px solid #e2e8f0;font-weight:600;">环境稳定性</td><td style="padding:6px 10px;border:1px solid #e2e8f0;">容器是否崩溃、工具是否报错</td><td style="padding:6px 10px;border:1px solid #e2e8f0;">环境本身有问题的轨迹数据不可信</td></tr>
+                  <tr style="background:#fafafa;"><td style="padding:6px 10px;border:1px solid #e2e8f0;font-weight:600;">任务难度</td><td style="padding:6px 10px;border:1px solid #e2e8f0;">是否在合理步数内完成</td><td style="padding:6px 10px;border:1px solid #e2e8f0;">太简单（1步就完成）没有学习价值；太长（步数异常多）可能是轨迹质量差</td></tr>
+                  <tr><td style="padding:6px 10px;border:1px solid #e2e8f0;font-weight:600;">一致性</td><td style="padding:6px 10px;border:1px solid #e2e8f0;">同一任务多次运行结果是否一致</td><td style="padding:6px 10px;border:1px solid #e2e8f0;">不稳定的任务说明验证机制有问题，不适合作为训练数据</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Exploit 展开 -->
+            <div class="callout-amber">
+              <div class="callout-title">⚠️ Exploit 检查：最难检测的数据污染问题</div>
+              <p style="font-size:13px;margin:0 0 10px;line-height:1.7;">Agent 有时会发现测试验证本身的"漏洞"，找到一条不需要真正解决问题就能通过的捷径。这类轨迹表面上"验证通过"，但实际是有害的训练数据——会教会模型走捷径而不是真正解决问题。</p>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px;">
+                <div style="background:#fff;border-radius:8px;padding:10px 12px;">
+                  <div style="font-weight:700;color:#92400e;margin-bottom:4px;">例1：删除测试</div>
+                  <div style="color:#374151;line-height:1.7;"><code>rm test_empty_username_returns_400.py</code><br>测试文件不存在，pytest 直接通过。任务没有解决，但验证脚本说 PASSED ✓</div>
+                </div>
+                <div style="background:#fff;border-radius:8px;padding:10px 12px;">
+                  <div style="font-weight:700;color:#92400e;margin-bottom:4px;">例2：硬编码返回值</div>
+                  <div style="color:#374151;line-height:1.7;">把接口改成：当检测到测试框架在调用时，直接返回 HTTP 400，其他情况还是返回 500。测试过了，实际不行。</div>
+                </div>
+                <div style="background:#fff;border-radius:8px;padding:10px 12px;">
+                  <div style="font-weight:700;color:#92400e;margin-bottom:4px;">例3：修改验证脚本</div>
+                  <div style="color:#374151;line-height:1.7;">直接改掉期望值：把 <code>assert status == 400</code> 改成 <code>assert status == 500</code>，测试"通过了"，但期望值已经被篡改。</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Step 6 ── -->
+        <div class="step-box">
+          <div class="step-num">6</div>
+          <div class="step-content">
+            <strong>转化为训练数据</strong>
+            <p style="font-size:13px;margin:6px 0 8px;">通过筛选的高质量轨迹，根据用途转化成不同格式的训练数据。</p>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+              <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 14px;font-size:13px;">
+                <div style="font-weight:700;color:#166534;margin-bottom:6px;">📚 SFT 数据（监督微调）</div>
+                <div style="color:#374151;line-height:1.8;">
+                  保留完整轨迹，按 Thought-Action-Observation 格式打包。<br>
+                  <strong>关键处理：</strong>mask 掉的是<strong>环境返回的 Observation token</strong>（bash 输出、文件内容等），不是"错误步骤"。SFT 阶段<strong>没有机制自动识别哪步是弯路</strong>——模型生成的所有 Thought + Action token 都参与 loss，包括走了弯路的那些步骤。<br>
+                  <span style="font-size:12px;color:#6b7280;">高质量 SFT 的做法是直接用"一步到位"的干净轨迹（由更强模型重新生成），而不是带弯路的探索轨迹——从源头避免弯路，而不是事后识别并 mask。</span>
+                </div>
+              </div>
+              <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px 14px;font-size:13px;">
+                <div style="font-weight:700;color:#1d4ed8;margin-bottom:6px;">🎮 RL 数据（强化学习）</div>
+                <div style="color:#374151;line-height:1.8;">
+                  不需要完整轨迹，只保留<strong>任务定义 + 环境配置 + 验证脚本</strong>，放入 RL 的任务池。<br>
+                  在 Agentic RL 阶段，agent 会在这个任务上重新探索、自己尝试、用验证结果作为 reward 信号来更新自己。同一个任务可以被使用无数次，每次 agent 都会走出不同的路径。
+                </div>
+              </div>
+            </div>
+
+            <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:10px;overflow:hidden;">
+              <div style="background:#495057;color:#fff;padding:8px 14px;font-size:12px;font-weight:700;">📌 贯穿示例·第六步：两种格式</div>
+              <div style="padding:12px 14px;font-size:12px;color:#374151;line-height:1.8;">
+                <strong>SFT 版本：</strong>完整轨迹（Thought + Action + Observation × N 步）打包，中间有一步走错了（先改了 routes/auth.py 没用，后来才去改 validator），这一步做 masking 不计入 loss<br>
+                <strong>RL 版本：</strong>把 Docker 环境 + 任务描述 + 验证脚本重新打包，下次 Agentic RL 阶段，agent 可以重新进来自己探索，验证通过就得 reward +1，失败 reward 0
+              </div>
+            </div>
+
+            <!-- ── 常见疑问：探索成功 → SFT？SFT 与 RL 的分工 ── -->
+            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:14px 16px;margin-top:12px;">
+              <div style="font-size:13px;font-weight:700;color:#166534;margin-bottom:10px;">🤔 探索成功的路径直接当 SFT 样本？SFT 和 RL 到底怎么分工？</div>
+              <p style="font-size:13px;color:#374151;margin:0 0 10px;line-height:1.7;">SFT 和 RL 不是二选一，而是<strong>串行的两个阶段</strong>，解决的问题完全不同：</p>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px;margin-bottom:10px;">
+                <div style="background:#fff;border-radius:8px;padding:10px 12px;">
+                  <strong style="color:#166534;">📚 SFT 阶段：教会基本姿势（入门）</strong><br>
+                  <span style="color:#374151;line-height:1.8;">用一个较强的模型（或早期版本）去刷任务，把探索成功的轨迹打包成训练样本。<br>
+                  目的：让模型至少知道"怎么用工具、怎么格式化输出、什么时候该提交"。<br>
+                  <strong>类比：</strong>先给新员工看一遍标准操作录像，让他知道流程。</span>
+                </div>
+                <div style="background:#fff;border-radius:8px;padding:10px 12px;">
+                  <strong style="color:#1d4ed8;">🎮 RL 阶段：提升上限（精进）</strong><br>
+                  <span style="color:#374151;line-height:1.8;">让当前被训练的模型自己在任务上试，验证通过 reward=1，失败 reward=0。<br>
+                  目的：让模型在更难的任务上自己摸索策略，突破 SFT 数据覆盖不到的场景。<br>
+                  <strong>类比：</strong>让员工真正上手做项目，失败了自己总结经验。</span>
+                </div>
+              </div>
+              <div style="background:#fef9c3;border-radius:8px;padding:9px 12px;font-size:12px;color:#374151;line-height:1.7;">
+                <strong style="color:#78350f;">关键：失败的轨迹在 RL 里同样有价值！</strong>SFT 只用成功的轨迹（失败的没法当正样本），但 RL 的成功轨迹（reward=1）和失败轨迹（reward=0）通过<strong>组内对比</strong>共同告诉模型哪种做法更好——失败样本提供了负面信号，帮助模型学会避开错误路径。
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 总结卡片 -->
+        <div class="big-concept" style="margin-top:20px;">
+          <div class="big-concept-title">🔑 六步流水线的本质：把"已知结果的过程"变成可学习的训练信号</div>
+          <p style="font-size:14px;margin:0;line-height:1.9;">
+            传统 NLP 数据是人工写标注。Agentic 数据的难点在于：<strong>不能靠人工逐步标注一个 20 步的 agent 轨迹</strong>（太贵、太慢、规模化不了）。这六步流水线解决的核心问题是：<strong>怎么让机器自动判断一条轨迹是好是坏</strong>——答案就是<strong>可执行验证</strong>。只要最终结果可以被代码自动验证（测试通过 / 不通过），中间过程就可以被大规模自动采集和过滤，完全不需要人工逐步审核。
+          </p>
+        </div>
+
+        <!-- ── Agent RL 完整例子 ── -->
+        <div class="example-box" style="margin:20px 0;">
+          <div class="ex-title">💡 完整走一遍：Agent RL 怎么训练一个能修 Bug 的 SWE Agent</div>
+
+          <!-- 两大难点先交代 -->
+          <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:14px 18px;margin:10px 0 16px;">
+            <p style="font-size:13px;font-weight:700;color:#92400e;margin:0 0 12px;">⚠️ 在看例子之前，先理解 Agent RL 的两个核心难点</p>
+
+            <div style="background:#fff;border-left:3px solid #f59e0b;border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:10px;">
+              <p style="font-size:13px;font-weight:700;color:#78350f;margin:0 0 6px;">难点一：Credit Assignment（功劳分配）</p>
+              <p style="font-size:13px;color:#374151;margin:0 0 6px;line-height:1.7;">一条轨迹有 20-40 步，但只有最后"测试通过/失败"这一个 0/1 信号。中间每一步的功劳怎么分？</p>
+              <p style="font-size:13px;color:#374151;margin:0;line-height:1.7;">主流做法是 <strong>GRPO（组内对比 + leave-one-out）</strong>：同一任务跑 G 条轨迹，成功 reward=1，失败=0，用其余 G-1 条的均值作 baseline，得到相对 Advantage，然后把 Advantage <strong>广播给模型自己生成的所有 token（Thought + Action）</strong>。注意：环境返回的 Observation（bash 输出、文件内容等）<strong>被 mask 掉，不参与梯度</strong>。</p>
+            </div>
+
+            <div style="background:#fff;border-left:3px solid #f59e0b;border-radius:0 8px 8px 0;padding:10px 14px;">
+              <p style="font-size:13px;font-weight:700;color:#78350f;margin:0 0 6px;">难点二：上下文长度</p>
+              <p style="font-size:13px;color:#374151;margin:0;line-height:1.7;">一条 SWE 轨迹轻松达到 16k-64k tokens。主流做法（SkyRL-Agent 论文确认）是<strong>设硬上限（如 32K），超出就整条轨迹 mask 掉不参与梯度</strong>——不是"智能保留关键步骤"，而是直接丢弃这条轨迹。研究还发现<strong>更短的历史 memory 反而效果更好</strong>（历史太长让模型找不到重点）。</p>
+            </div>
+          </div>
+
+          <!-- 任务设定 -->
+          <h4 style="margin-top:12px;">任务设定</h4>
+          <div style="background:#1e1e2e;color:#cdd6f4;border-radius:8px;padding:12px 16px;font-size:12px;line-height:1.9;margin-bottom:12px;">
+            Issue #789（来自 requests 库）：<br>
+            当 Session.get() 传入 timeout=0 时，<br>
+            应该立即超时抛出 Timeout 异常，<br>
+            但实际上会无限等待。
+          </div>
+
+          <!-- 第一步 -->
+          <h4>第一步：准备「任务 + 环境 + 验证」三件套</h4>
+          <p style="font-size:13px;color:#374151;margin:0 0 8px;">在训练开始前，把任务打包成可重复运行的格式。验证脚本从 PR diff 中<strong>自动提取</strong>，无需人工编写：</p>
+          <pre style="background:#1e1e2e;color:#cdd6f4;border-radius:8px;padding:12px 16px;font-size:11px;line-height:2.0;margin-bottom:12px;overflow-x:auto;white-space:pre;"><span style="color:#6272a4;"># F2P 测试（PR 新增的，修复前失败 → 修复后必须通过）</span>
+def test_timeout_zero_raises():
+    s = Session()
+    with pytest.raises(Timeout):
+        s.get(<span style="color:#f1fa8c;">"http://httpbin.org/delay/5"</span>, timeout=<span style="color:#bd93f9;">0</span>)
+
+<span style="color:#6272a4;"># P2P 测试（已有的，修复后不能破坏）</span>
+def test_timeout_positive_still_works():
+    s = Session()
+    resp = s.get(<span style="color:#f1fa8c;">"http://httpbin.org/get"</span>, timeout=<span style="color:#bd93f9;">5</span>)
+    assert resp.status_code == <span style="color:#bd93f9;">200</span></pre>
+
+          <!-- 第二步 -->
+          <h4>第二步：当前模型（被训练的那个）进 Docker 跑一遍（Rollout）</h4>
+          <p style="font-size:13px;color:#374151;margin:0 0 8px;">模型看到 Issue 描述，开始用工具一步步探索——这是 RL 的 <strong>rollout（采样）</strong> 阶段：</p>
+          <pre style="background:#1e1e2e;color:#cdd6f4;border-radius:8px;padding:14px 16px;font-size:11px;line-height:2.0;margin-bottom:12px;overflow-x:auto;white-space:pre;"><span style="color:#89b4fa;">Thought:</span> timeout=0 应该立即超时，先找 timeout 处理的代码在哪
+<span style="color:#a6e3a1;">Action:</span>  bash(<span style="color:#f1fa8c;">"grep -rn 'timeout' requests/adapters.py | head -20"</span>)
+<span style="color:#f38ba8;">Obs:</span>     47: timeout=None
+         89: if timeout is not None:
+         91:     conn.timeout = timeout.connect_timeout
+
+<span style="color:#89b4fa;">Thought:</span> 第 89 行有判断，但 timeout=0 时 if 条件成立，进去看 connect_timeout 怎么处理
+<span style="color:#a6e3a1;">Action:</span>  view_file(<span style="color:#f1fa8c;">"requests/adapters.py"</span>, start=<span style="color:#bd93f9;">85</span>, end=<span style="color:#bd93f9;">100</span>)
+<span style="color:#f38ba8;">Obs:</span>     89: if timeout is not None:
+         90:     if isinstance(timeout, tuple):
+         91:         connect, read = timeout
+         92:     else:
+         93:         connect = read = timeout    <span style="color:#6272a4;">← timeout=0 会走这里</span>
+
+<span style="color:#89b4fa;">Thought:</span> connect = read = 0，然后传给底层 urllib3。
+         问题可能在于 urllib3 把 0 当「无限等待」而不是「立即超时」
+         先验证一下
+<span style="color:#a6e3a1;">Action:</span>  bash(<span style="color:#f1fa8c;">"python3 -c \"import urllib3; h=urllib3.HTTPConnectionPool('httpbin.org',80); h.request('GET','/delay/5',timeout=urllib3.Timeout(connect=0,read=0))\" 2>&amp;1 | head -3"</span>)
+<span style="color:#f38ba8;">Obs:</span>     （无限挂起...）  <span style="color:#6272a4;">← 确认 0 被传给 urllib3 后不超时</span>
+
+<span style="color:#89b4fa;">Thought:</span> 找到了。应该在接收 timeout 时，把 0 视为「立即超时」，在 adapters.py 加特判
+<span style="color:#a6e3a1;">Action:</span>  edit_file(<span style="color:#f1fa8c;">"requests/adapters.py"</span>,
+            old=<span style="color:#f1fa8c;">"if timeout is not None:"</span>,
+            new=<span style="color:#f1fa8c;">"if timeout == 0:\n    raise Timeout('timeout=0 means immediate timeout')\nif timeout is not None:"</span>)
+<span style="color:#f38ba8;">Obs:</span>     File saved.
+
+<span style="color:#a6e3a1;">Action:</span>  bash(<span style="color:#f1fa8c;">"python3 -m pytest tests/test_requests.py -x -q 2>&amp;1 | tail -5"</span>)
+<span style="color:#f38ba8;">Obs:</span>     <span style="color:#a6e3a1;">48 passed, 0 failed ✓</span>  → 验证通过，<strong style="color:#a6e3a1;">reward = 1</strong></pre>
+
+          <!-- 第三步 -->
+          <h4>第三步：同一个 prompt 跑 G=8 条轨迹（GRPO 核心）</h4>
+          <p style="font-size:13px;color:#374151;margin:0 0 8px;">GRPO 的关键：同一个任务，让模型用不同的随机采样跑 8 遍，得到不同的探索路径：</p>
+          <div style="overflow-x:auto;margin-bottom:12px;">
+            <table style="border-collapse:collapse;font-size:12px;width:100%;">
+              <thead>
+                <tr style="background:#ede9fe;">
+                  <th style="padding:7px 10px;border:1px solid #ddd6fe;">轨迹</th>
+                  <th style="padding:7px 10px;border:1px solid #ddd6fe;">结果</th>
+                  <th style="padding:7px 10px;border:1px solid #ddd6fe;">reward</th>
+                  <th style="padding:7px 10px;border:1px solid #ddd6fe;">失败原因</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td style="padding:6px 10px;border:1px solid #ede9fe;text-align:center;">轨迹 1</td><td style="padding:6px 10px;border:1px solid #ede9fe;color:#16a34a;font-weight:700;">✅ 通过</td><td style="padding:6px 10px;border:1px solid #ede9fe;text-align:center;">1</td><td style="padding:6px 10px;border:1px solid #ede9fe;color:#9ca3af;">—</td></tr>
+                <tr style="background:#fafafa;"><td style="padding:6px 10px;border:1px solid #ede9fe;text-align:center;">轨迹 2</td><td style="padding:6px 10px;border:1px solid #ede9fe;color:#16a34a;font-weight:700;">✅ 通过</td><td style="padding:6px 10px;border:1px solid #ede9fe;text-align:center;">1</td><td style="padding:6px 10px;border:1px solid #ede9fe;color:#9ca3af;">—</td></tr>
+                <tr><td style="padding:6px 10px;border:1px solid #ede9fe;text-align:center;">轨迹 3</td><td style="padding:6px 10px;border:1px solid #ede9fe;color:#dc2626;font-weight:700;">❌ 失败</td><td style="padding:6px 10px;border:1px solid #ede9fe;text-align:center;">0</td><td style="padding:6px 10px;border:1px solid #ede9fe;">走错方向，改了 cookies.py 没用</td></tr>
+                <tr style="background:#fafafa;"><td style="padding:6px 10px;border:1px solid #ede9fe;text-align:center;">轨迹 4</td><td style="padding:6px 10px;border:1px solid #ede9fe;color:#16a34a;font-weight:700;">✅ 通过</td><td style="padding:6px 10px;border:1px solid #ede9fe;text-align:center;">1</td><td style="padding:6px 10px;border:1px solid #ede9fe;color:#9ca3af;">—</td></tr>
+                <tr><td style="padding:6px 10px;border:1px solid #ede9fe;text-align:center;">轨迹 5</td><td style="padding:6px 10px;border:1px solid #ede9fe;color:#dc2626;font-weight:700;">❌ 失败</td><td style="padding:6px 10px;border:1px solid #ede9fe;text-align:center;">0</td><td style="padding:6px 10px;border:1px solid #ede9fe;">找到位置但修改有语法错误</td></tr>
+                <tr style="background:#fafafa;"><td style="padding:6px 10px;border:1px solid #ede9fe;text-align:center;">轨迹 6</td><td style="padding:6px 10px;border:1px solid #ede9fe;color:#16a34a;font-weight:700;">✅ 通过</td><td style="padding:6px 10px;border:1px solid #ede9fe;text-align:center;">1</td><td style="padding:6px 10px;border:1px solid #ede9fe;color:#9ca3af;">—</td></tr>
+                <tr><td style="padding:6px 10px;border:1px solid #ede9fe;text-align:center;">轨迹 7</td><td style="padding:6px 10px;border:1px solid #ede9fe;color:#dc2626;font-weight:700;">❌ 失败</td><td style="padding:6px 10px;border:1px solid #ede9fe;text-align:center;">0</td><td style="padding:6px 10px;border:1px solid #ede9fe;">F2P 测试过了但破坏了 P2P 用例</td></tr>
+                <tr style="background:#fafafa;"><td style="padding:6px 10px;border:1px solid #ede9fe;text-align:center;">轨迹 8</td><td style="padding:6px 10px;border:1px solid #ede9fe;color:#16a34a;font-weight:700;">✅ 通过</td><td style="padding:6px 10px;border:1px solid #ede9fe;text-align:center;">1</td><td style="padding:6px 10px;border:1px solid #ede9fe;color:#9ca3af;">—</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div style="background:#f5f3ff;border-radius:8px;padding:9px 13px;font-size:12px;color:#374151;line-height:1.7;margin-bottom:12px;">
+            组内均值（leave-one-out）：成功轨迹的 baseline ≈ <strong>(0+1+1+0+1+0+1)/7 = 4/7 ≈ 0.57</strong>，失败轨迹的 baseline ≈ <strong>(1+1+0+1+0+1+1)/7 = 5/7 ≈ 0.71</strong>
+          </div>
+
+          <!-- 第四步 -->
+          <h4>第四步：计算 Advantage + 决定哪些 token 参与梯度计算</h4>
+          <p style="font-size:13px;color:#374151;margin:0 0 8px;">关键：不是所有 token 都参与，<strong>环境返回的 Observation 被 mask 掉</strong>，只有模型自己写的 Thought + Action token 才拿到梯度信号：</p>
+
+          <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:12px;">
+            <div style="background:#343a40;color:#adb5bd;padding:8px 14px;font-size:12px;font-weight:700;">轨迹 token 的梯度权限示意（以轨迹 1 的前两步为例）</div>
+            <div style="padding:12px 14px;font-size:12px;color:#374151;line-height:2.0;">
+              <div style="display:grid;grid-template-columns:auto 1fr auto;gap:4px 12px;align-items:center;">
+                <span style="background:#a6e3a1;color:#166534;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;">参与loss</span>
+                <span style="color:#1e1e2e;font-family:monospace;">Thought: timeout=0 应该立即超时，先找 timeout 处理的代码...</span>
+                <span style="color:#16a34a;font-weight:700;">Adv = +0.43</span>
+
+                <span style="background:#a6e3a1;color:#166534;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;">参与loss</span>
+                <span style="color:#1e1e2e;font-family:monospace;">Action: bash("grep -rn 'timeout' requests/adapters.py...")</span>
+                <span style="color:#16a34a;font-weight:700;">Adv = +0.43</span>
+
+                <span style="background:#f38ba8;color:#991b1b;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;">mask掉</span>
+                <span style="color:#9ca3af;font-family:monospace;">Obs: 47: timeout=None / 89: if timeout is not None: ...</span>
+                <span style="color:#9ca3af;">不参与</span>
+
+                <span style="background:#a6e3a1;color:#166534;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;">参与loss</span>
+                <span style="color:#1e1e2e;font-family:monospace;">Thought: 第 89 行有判断，但 timeout=0 时...</span>
+                <span style="color:#16a34a;font-weight:700;">Adv = +0.43</span>
+
+                <span style="background:#a6e3a1;color:#166534;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;">参与loss</span>
+                <span style="color:#1e1e2e;font-family:monospace;">Action: view_file("requests/adapters.py", ...)</span>
+                <span style="color:#16a34a;font-weight:700;">Adv = +0.43</span>
+              </div>
+            </div>
+          </div>
+
+          <div style="background:#fef9c3;border-radius:8px;padding:9px 13px;font-size:12px;color:#374151;line-height:1.7;margin-bottom:12px;">
+            <strong style="color:#78350f;">失败轨迹（如轨迹 3）的 token 得到 Adv = 0 - 0.71 = -0.71</strong>——「先去改 cookies.py」这个 Action 会被压低概率，模型下次遇到类似情况时就更不会走这条路。
+          </div>
+
+          <!-- 第五步 -->
+          <h4>第五步：用这 8 条轨迹做一次 PPO/GRPO 参数更新</h4>
+          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 14px;font-size:12px;color:#374151;line-height:1.8;margin-bottom:12px;">
+            <strong>直觉上在学什么：</strong><br>
+            「看到 timeout 问题 → 先 grep adapters.py」在成功轨迹里，概率 <strong style="color:#16a34a;">↑ 上升</strong><br>
+            「看到 timeout 问题 → 先去改 cookies.py」在失败轨迹里，概率 <strong style="color:#dc2626;">↓ 下降</strong><br>
+            「写 Python 时有语法错误」在失败轨迹里，概率 <strong style="color:#dc2626;">↓ 下降</strong><br>
+            「改完代码立刻跑测试验证」在成功轨迹里，概率 <strong style="color:#16a34a;">↑ 上升</strong>
+          </div>
+
+          <!-- 循环 -->
+          <h4>整个训练循环</h4>
+          <pre style="background:#1e1e2e;color:#cdd6f4;border-radius:8px;padding:12px 16px;font-size:11px;line-height:2.2;white-space:pre;overflow-x:auto;">采样一批任务（如 64 个 Issue）
+  → 每个任务跑 G=8 条轨迹（并行）
+  → 验证脚本跑出 reward（0 或 1）
+  → leave-one-out 归一化算 Advantage
+  → Observation mask 掉，只对 Thought+Action token 做梯度
+  → 更新模型参数
+  → 用更新后的模型再次采样（on-policy）
+  → 循环 125 步...
+<span style="color:#a6e3a1;">
+最终结果（SkyRL-Agent 论文数据）：
+  Qwen3-32B 基线   →  SWE-Bench Verified  24.4%
+  纯 RL 训练 125步 →  SWE-Bench Verified  39.4% (+15pp)</span></pre>
+
+          <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 13px;font-size:12px;color:#1d4ed8;line-height:1.7;margin-top:10px;">
+            <strong>整个过程完全不需要人工标注每一步</strong>——唯一的监督信号是「测试通过=1，不通过=0」，模型靠这一个比特的信号，在数百步迭代里逐渐学会了代码定位、工具使用、错误恢复和回归测试检查等所有工程技能。
+          </div>
+        </div>
+
+
+        <h3 id="swe-data">4.2 SWE 数据合成：从真实 Issue-PR 到可执行软件工程环境</h3>
+
+        <blockquote>SWE 是 Software Engineering 的缩写，是让模型像真实开发者一样去处理代码仓库中的问题。</blockquote>
+
+        <p>SWE 数据合成的核心：<strong>不是把 issue 文本和最终 patch 直接拼成一条监督样本</strong>，而是把一次真实的软件修复过程，重建成一个模型可以亲自执行的任务环境。在 SWE 数据合成上，GLM-5 和 MiniMax 的做法是类似的。</p>
+
+        <div class="example-box">
+          <div class="ex-title">💡 完整案例：修复用户注册接口的空用户名问题</div>
+
+          <h4 style="margin-top:12px;">① 原始素材（种子任务来源）</h4>
+          <pre class="code-block">Issue: #123 Registration API returns 500 when username is empty string
+  - 用户报告：注册时如果 username 字段为空字符串，接口会返回 HTTP 500 而不是错误提示
+  - 期望行为：应该返回 HTTP 400 和清晰的错误消息
+
+PR: #456 Fix empty username handling in registration
+  - 修改了 validators/user_validator.py 中的 validate_username 函数
+  - 添加了对空字符串的检查逻辑</pre>
+
+          <h4>② 转化为可执行任务</h4>
+          <ul style="font-size:13px;">
+            <li><strong>任务描述</strong>："修复注册接口问题：当 username 参数为空字符串时，应返回 HTTP 400 错误和提示信息，而不是 HTTP 500。"</li>
+            <li><strong>输入上下文</strong>：完整 Issue 文本 + 修复前代码库快照 + 可用工具列表 + 环境依赖</li>
+            <li><strong>测试标准（F2P 测试）</strong>：修复前失败的测试用例，修复后必须通过
+              <ul>
+                <li><code>test_empty_username_returns_400</code>：期望 HTTP 400</li>
+                <li><code>test_empty_username_error_message</code>：期望返回 "Username cannot be empty"</li>
+              </ul>
+            </li>
+            <li><strong>测试标准（P2P 测试）</strong>：修复前已通过的测试用例，修复后不能破坏
+              <ul>
+                <li><code>test_valid_username_registration</code>：正常注册流程</li>
+                <li><code>test_duplicate_username</code>：重复用户名处理</li>
+              </ul>
+            </li>
+          </ul>
+
+          <h4>③ 构建可验证环境</h4>
+          <ul style="font-size:13px;">
+            <li><strong>初始状态</strong>：容器中放入修复前的代码仓库快照</li>
+            <li><strong>可执行动作空间</strong>：查看/搜索代码（<code>view_file</code>, <code>search_code</code>）、编辑文件（<code>edit_file</code>）、运行测试（<code>run_tests</code>）、执行命令（<code>bash</code>）</li>
+            <li><strong>观测</strong>：代码内容、命令行输出、测试失败信息</li>
+            <li><strong>验证机制</strong>：自动化测试脚本，F2P 和 P2P 两类用例全部通过才算成功</li>
+          </ul>
+
+          <h4>④ 执行任务并采集轨迹</h4>
+          <pre class="code-block">Thought: 首先需要理解 Issue，然后找到注册接口的代码位置
+Action: search_code("registration API", "username")
+Observation: Found in routes/auth.py line 45-78, validators/user_validator.py line 12-28
+
+Thought: 查看 validator 的实现，找到空字符串未检查的位置
+Action: view_file("validators/user_validator.py")
+Observation: [代码内容] validate_username 函数只检查了 None，没有检查空字符串
+
+Thought: 找到了 bug 所在，需要在 validate_username 里加上对空字符串的检查
+Action: edit_file("validators/user_validator.py", ...)
+Observation: File updated successfully
+
+Thought: 修改完成，运行测试验证
+Action: run_tests("test_empty_username_returns_400")
+Observation: PASSED ✓
+
+Action: run_tests("all")
+Observation: 12/12 tests PASSED ✓</pre>
+        </div>
+
+        <h3 id="terminal-data">4.3 Terminal 数据合成：怎么批量构造终端任务</h3>
+
+        <p>训练的重点不是"记住某条命令怎么写"，而是让模型学会在终端里<strong>连续执行任务</strong>：查看文件 → 修改内容 → 运行脚本 → 处理报错 → 根据结果继续调整，直到把任务真正完成。</p>
+
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:14px 18px;margin:12px 0 18px;font-size:13px;color:#374151;line-height:1.8;">
+          <strong style="color:#92400e;">🤔 Terminal 任务与 SWE 任务有什么不同？</strong><br>
+          SWE 任务本质上是"在代码仓库里修 bug"——任务边界清晰（就是这个 Issue），验证方式明确（跑单测）。<br>
+          Terminal 任务更广泛：<strong>任何需要在 shell / Docker / 文件系统里完成的操作都算</strong>——部署服务、配置环境、数据处理、系统运维……验证方式也更多样（检查文件内容、检查进程状态、检查输出结果等）。
+        </div>
+
+        <!-- ── 方式一：种子扩展 ── -->
+        <h4>方式一：从已有任务种子扩展</h4>
+
+        <p style="font-size:13px;color:#374151;margin:0 0 12px;">准备一批真实工程场景作为种子，然后用模型批量"扩展"出更多类似任务，再让构造 agent 把这些任务落地成可执行的标准任务对象。</p>
+
+        <!-- 完整流程 + 例子 -->
+        <div class="example-box">
+          <div class="ex-title">💡 完整案例：从"配置 Nginx 反代"种子扩展出一批任务</div>
+
+          <h4 style="margin-top:12px;">① 种子任务</h4>
+          <p style="font-size:13px;">来自真实工程场景：<em>"配置 Nginx 把 /api 路径的请求反向代理到后端 Flask 服务的 5000 端口"</em></p>
+
+          <h4>② 模型扩展出更多任务草稿</h4>
+          <p style="font-size:13px;margin:0 0 8px;">给模型看这个种子，让它生成 20 个类似但不同的任务：</p>
+          <pre style="background:#1e1e2e;color:#cdd6f4;border-radius:8px;padding:12px 16px;font-size:11px;line-height:1.8;overflow-x:auto;">任务草稿 1：配置 Nginx 开启 gzip 压缩，对 > 1KB 的响应启用
+任务草稿 2：配置 Nginx 对 /static/ 路径设置 30 天浏览器缓存
+任务草稿 3：把 Nginx 的访问日志改成 JSON 格式，字段包含时间戳、IP、方法、状态码
+任务草稿 4：配置 Nginx 限流，对同一 IP 每秒最多允许 10 个请求
+任务草稿 5：配置 SSL 证书，让 HTTP 请求自动跳转到 HTTPS
+...</pre>
+
+          <h4>③ 构造 agent 落地成标准任务</h4>
+          <p style="font-size:13px;margin:0 0 8px;">以"任务草稿 3（日志 JSON 格式）"为例，构造 agent 生成：</p>
+          <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+              <tbody>
+                <tr><td style="padding:7px 10px;border:1px solid #e2e8f0;font-weight:600;background:#f8fafc;min-width:90px;">任务描述</td><td style="padding:7px 10px;border:1px solid #e2e8f0;">"修改 /etc/nginx/nginx.conf，将访问日志的 log_format 改为 JSON 格式，字段包含：time_local、remote_addr、request_method、status、body_bytes_sent、request_time"</td></tr>
+                <tr><td style="padding:7px 10px;border:1px solid #e2e8f0;font-weight:600;background:#f8fafc;">初始状态</td><td style="padding:7px 10px;border:1px solid #e2e8f0;">Docker 容器，安装了 Nginx，使用默认配置，access_log 格式为标准的 combined 格式</td></tr>
+                <tr><td style="padding:7px 10px;border:1px solid #e2e8f0;font-weight:600;background:#f8fafc;">可用工具</td><td style="padding:7px 10px;border:1px solid #e2e8f0;"><code>bash</code>（可执行任意 shell 命令）、<code>view_file</code>、<code>edit_file</code></td></tr>
+                <tr><td style="padding:7px 10px;border:1px solid #e2e8f0;font-weight:600;background:#f8fafc;">验证脚本</td><td style="padding:7px 10px;border:1px solid #e2e8f0;">① nginx -t 通过（配置语法正确）；② 发一个 HTTP 请求；③ 读日志最新一行；④ 解析为 JSON，检查 6 个字段都存在 → 全部通过才算成功</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h4>④ 一条合格的 Terminal 轨迹长什么样</h4>
+          <pre style="background:#1e1e2e;color:#cdd6f4;border-radius:8px;padding:14px 16px;font-size:11px;line-height:1.9;overflow-x:auto;"><span style="color:#89b4fa;">Thought:</span> 先看看当前 nginx.conf 里的 log_format 是什么样的
+<span style="color:#a6e3a1;">Action:</span>  bash("grep -n 'log_format' /etc/nginx/nginx.conf")
+<span style="color:#f38ba8;">Observation:</span> 14:    log_format combined '$remote_addr...'
+
+<span style="color:#89b4fa;">Thought:</span> 找到了，在第 14 行。需要把这行改成 JSON 格式，同时加上 request_time 字段
+<span style="color:#a6e3a1;">Action:</span>  edit_file("/etc/nginx/nginx.conf",
+            old="log_format combined '$remote_addr...'",
+            new='log_format json_log \'{"time":"$time_local","ip":"$remote_addr",'
+                '"method":"$request_method","status":$status,'
+                '"bytes":$body_bytes_sent,"rt":$request_time}\'')
+<span style="color:#f38ba8;">Observation:</span> File saved
+
+<span style="color:#89b4fa;">Thought:</span> 还需要把 access_log 指令里的格式名从 combined 改成 json_log
+<span style="color:#a6e3a1;">Action:</span>  bash("grep -n 'access_log' /etc/nginx/nginx.conf")
+<span style="color:#f38ba8;">Observation:</span> 18:    access_log /var/log/nginx/access.log combined;
+
+<span style="color:#a6e3a1;">Action:</span>  edit_file("/etc/nginx/nginx.conf", old="combined;", new="json_log;")
+<span style="color:#f38ba8;">Observation:</span> File saved
+
+<span style="color:#89b4fa;">Thought:</span> 验证一下语法对不对
+<span style="color:#a6e3a1;">Action:</span>  bash("nginx -t")
+<span style="color:#f38ba8;">Observation:</span> nginx: configuration file test is successful ✓
+
+<span style="color:#a6e3a1;">Action:</span>  bash("service nginx reload && curl -s localhost/ > /dev/null && tail -1 /var/log/nginx/access.log | python3 -c 'import json,sys; d=json.load(sys.stdin); print(list(d.keys()))'")
+<span style="color:#f38ba8;">Observation:</span> ['time', 'ip', 'method', 'status', 'bytes', 'rt'] ✓ → 全部字段存在</pre>
+
+          <h4>⑤ Refine agent 的三项检查</h4>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px;">
+            <div style="background:#f0fdf4;border-radius:8px;padding:9px 11px;">
+              <strong style="color:#166534;">环境稳定性</strong><br>
+              <span style="color:#374151;line-height:1.7;">重复运行验证脚本 5 次，结果是否一致？（容器初始状态是否确定性）</span>
+            </div>
+            <div style="background:#eff6ff;border-radius:8px;padding:9px 11px;">
+              <strong style="color:#1d4ed8;">测试一致性</strong><br>
+              <span style="color:#374151;line-height:1.7;">验证脚本的期望值是否唯一、是否可以自动判定（不依赖人工检查）</span>
+            </div>
+            <div style="background:#fff7ed;border-radius:8px;padding:9px 11px;">
+              <strong style="color:#c2410c;">Exploit 检查</strong><br>
+              <span style="color:#374151;line-height:1.7;">是否存在"修改验证脚本本身"或"写死期望输出"等取巧行为</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── 方式二：网页自动构造 ── -->
+        <h4>方式二：从技术网页自动构造</h4>
+
+        <p style="font-size:13px;color:#374151;margin:0 0 12px;">这条路线更自动化——直接从网络上爬取大量技术内容，从中提炼出可执行任务，不依赖人工写种子。</p>
+
+        <div style="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;margin:12px 0 16px;">
+          <div style="display:grid;grid-template-columns:40px 1fr;align-items:start;">
+
+            <!-- 行1 -->
+            <div style="background:#f1f5f9;padding:12px;text-align:center;font-weight:700;font-size:13px;color:#475569;border-bottom:1px solid #e2e8f0;border-right:1px solid #e2e8f0;">①</div>
+            <div style="padding:12px 16px;border-bottom:1px solid #e2e8f0;">
+              <strong style="font-size:13px;">筛选高质量技术网页</strong>
+              <p style="font-size:12px;color:#374151;margin:4px 0 0;line-height:1.7;">从爬取的海量网页中，过滤出包含大量代码块、命令行操作、配置示例的页面（比如 StackOverflow 高赞回答、官方文档 Quickstart、GitHub README 里的安装教程）。过滤标准：代码块数量 ≥ 3、有明确的操作步骤。</p>
+            </div>
+
+            <!-- 行2 -->
+            <div style="background:#f1f5f9;padding:12px;text-align:center;font-weight:700;font-size:13px;color:#475569;border-bottom:1px solid #e2e8f0;border-right:1px solid #e2e8f0;">②</div>
+            <div style="padding:12px 16px;border-bottom:1px solid #e2e8f0;">
+              <strong style="font-size:13px;">Coding agent 理解网页内容，生成完整任务</strong>
+              <p style="font-size:12px;color:#374151;margin:6px 0 6px;line-height:1.7;">Coding agent 读取网页，理解操作步骤，自动生成：</p>
+              <div style="background:#1e1e2e;color:#cdd6f4;border-radius:6px;padding:10px 14px;font-size:11px;line-height:1.8;">
+                输入网页：Stack Overflow 上"如何用 Python 脚本监控目录文件变化"<br><br>
+                ↓ Coding agent 生成 ↓<br><br>
+                任务描述：写一个 Python 脚本 watch_dir.py，监控 /tmp/watched/ 目录，当有新文件创建时打印 "[NEW] filename" 到控制台<br>
+                初始状态：空 Docker 容器，/tmp/watched/ 目录存在，无任何 Python 脚本<br>
+                验证脚本：在后台运行 watch_dir.py，在 /tmp/watched/ 创建文件 test.txt，检查 stdout 里是否出现 "[NEW] test.txt"
+              </div>
+            </div>
+
+            <!-- 行3 -->
+            <div style="background:#f1f5f9;padding:12px;text-align:center;font-weight:700;font-size:13px;color:#475569;border-bottom:1px solid #e2e8f0;border-right:1px solid #e2e8f0;">③</div>
+            <div style="padding:12px 16px;border-bottom:1px solid #e2e8f0;">
+              <strong style="font-size:13px;">Agent 自己先跑一遍验证脚本</strong>
+              <p style="font-size:12px;color:#374151;margin:4px 0 0;line-height:1.7;">Coding agent 亲自进入 Docker 环境，尝试完成这个任务，运行验证脚本。如果 PASSED，说明任务可行；如果 FAILED，进入下一步。</p>
+            </div>
+
+            <!-- 行4 -->
+            <div style="background:#f1f5f9;padding:12px;text-align:center;font-weight:700;font-size:13px;color:#475569;border-right:1px solid #e2e8f0;">④</div>
+            <div style="padding:12px 16px;">
+              <strong style="font-size:13px;">未通过则自我修复，循环直到通过</strong>
+              <p style="font-size:12px;color:#374151;margin:4px 0 0;line-height:1.7;">Coding agent 看报错信息，分析是任务描述不清楚、还是验证脚本本身有 bug、还是初始环境配置有问题——然后修改任务定义，重新尝试。通常 2-3 轮迭代后，一个合格的任务对象就构造好了。</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout-purple">
+          <div class="callout-title">📌 Terminal 数据合成的核心设计理念</div>
+          <p style="font-size:14px;margin:0;line-height:1.8;">
+            Terminal 任务的验证难点在于：<strong>不是所有操作的结果都能用"对/错"来二值判断</strong>。比如"配置好 Nginx 日志"，Nginx 有 100 种合法的 JSON 格式写法，不可能枚举所有正确答案。<br><br>
+            GLM-5 的解法是：<strong>从结果反推验证——不检查怎么做，只检查做完后系统的状态是否符合预期</strong>。验证脚本检查的是"日志能否被 JSON 解析"和"字段是否存在"，而不是"配置文件是否和标准答案一模一样"。这样验证方式就灵活可靠了。
+          </p>
+        </div>
+
+        <h3 id="search-data">4.4 Search 数据合成：构造高难多跳检索任务</h3>
+
+        <blockquote>Search 数据合成的目标，不是生成普通问答数据，而是构造一批必须经过搜索、浏览和多跳推理才能完成的任务。</blockquote>
+
+        <!-- 为什么 Search 任务特殊 -->
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:14px 18px;margin:0 0 16px;font-size:13px;color:#374151;line-height:1.8;">
+          <strong style="color:#92400e;">🤔 为什么 Search 任务比问答数据难很多？</strong><br>
+          普通问答：问题 → 答案，一步到位。模型直接从自己的参数知识里找答案就行。<br>
+          Search 任务：问题 → 搜索 → 读网页 → 发现需要再搜索 → 再读网页 → 整合多个证据 → 最终推理得出答案。<br>
+          <br>
+          问题的关键是：<strong>如何构造一个"只靠参数知识答不上来、必须真正去检索"的好问题？</strong>这就是 Search 数据合成的核心挑战。
+        </div>
+
+        <!-- 什么是好的 Search 任务 -->
+        <div class="example-box">
+          <div class="ex-title">💡 好的 Search 任务长什么样：4-5 跳问题示例</div>
+          <p style="font-size:14px;margin:0 0 10px;font-weight:600;">"2022 年带领阿根廷赢得世界杯冠军的队长，目前效力于哪家俱乐部？这家俱乐部所在城市的 NBA 球队主场球馆叫什么名字？"</p>
+          <p style="font-size:13px;color:#4b5563;margin:0 0 10px;">这道题需要 4-5 跳推理，每一跳都需要从网页中获取信息：</p>
+
+          <!-- 跳链 -->
+          <div style="overflow-x:auto;margin-bottom:12px;">
+            <table style="border-collapse:collapse;font-size:12px;min-width:520px;width:100%;">
+              <thead>
+                <tr style="background:#fef9c3;">
+                  <th style="padding:7px 10px;border:1px solid #fde68a;text-align:center;">跳次</th>
+                  <th style="padding:7px 10px;border:1px solid #fde68a;text-align:left;">需要查什么</th>
+                  <th style="padding:7px 10px;border:1px solid #fde68a;text-align:left;">答案</th>
+                  <th style="padding:7px 10px;border:1px solid #fde68a;text-align:left;">为什么要搜索而不是记忆</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td style="padding:6px 10px;border:1px solid #fef9c3;text-align:center;font-weight:700;">跳1</td><td style="padding:6px 10px;border:1px solid #fef9c3;">2022 年阿根廷世界杯队长是谁</td><td style="padding:6px 10px;border:1px solid #fef9c3;">梅西</td><td style="padding:6px 10px;border:1px solid #fef9c3;">大多数模型参数里有，但"带领夺冠的队长"措辞可能需要确认</td></tr>
+                <tr style="background:#fffbeb;"><td style="padding:6px 10px;border:1px solid #fef9c3;text-align:center;font-weight:700;">跳2</td><td style="padding:6px 10px;border:1px solid #fef9c3;">梅西目前效力哪家俱乐部</td><td style="padding:6px 10px;border:1px solid #fef9c3;">迈阿密国际</td><td style="padding:6px 10px;border:1px solid #fef9c3;color:#dc2626;font-weight:600;">时效性！转会信息随时变，模型训练后信息可能过期，必须查</td></tr>
+                <tr><td style="padding:6px 10px;border:1px solid #fef9c3;text-align:center;font-weight:700;">跳3</td><td style="padding:6px 10px;border:1px solid #fef9c3;">迈阿密国际所在城市</td><td style="padding:6px 10px;border:1px solid #fef9c3;">迈阿密（佛罗里达州）</td><td style="padding:6px 10px;border:1px solid #fef9c3;">俱乐部名字已经暗示，但严格来说需要确认</td></tr>
+                <tr style="background:#fffbeb;"><td style="padding:6px 10px;border:1px solid #fef9c3;text-align:center;font-weight:700;">跳4</td><td style="padding:6px 10px;border:1px solid #fef9c3;">迈阿密的 NBA 球队</td><td style="padding:6px 10px;border:1px solid #fef9c3;">迈阿密热火</td><td style="padding:6px 10px;border:1px solid #fef9c3;">NBA 常识，参数里有，但需要跟迈阿密关联</td></tr>
+                <tr><td style="padding:6px 10px;border:1px solid #fef9c3;text-align:center;font-weight:700;">跳5</td><td style="padding:6px 10px;border:1px solid #fef9c3;">热火的主场球馆名称</td><td style="padding:6px 10px;border:1px solid #fef9c3;font-weight:700;color:#16a34a;">Kaseya Center</td><td style="padding:6px 10px;border:1px solid #fef9c3;color:#dc2626;font-weight:600;">球馆名字因赞助商经常更名，时效性强，必须查</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px;">
+            <div style="background:#fef2f2;border-radius:8px;padding:10px 12px;">
+              <strong style="color:#991b1b;">❌ 坏问题（单跳）</strong><br>
+              <span style="color:#374151;line-height:1.7;">"阿根廷 2022 年世界杯夺冠了吗？" → 模型参数直接能答，搜索没有价值</span>
+            </div>
+            <div style="background:#f0fdf4;border-radius:8px;padding:10px 12px;">
+              <strong style="color:#166534;">✅ 好问题（多跳 + 时效性）</strong><br>
+              <span style="color:#374151;line-height:1.7;">每一跳都涉及可能过时的信息（转会、球馆更名），模型必须真正搜索才能给出准确答案</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- GLM-5 五步流程 -->
+        <h4>方法一：GLM-5 的 WKG（网页知识图谱）构造方式</h4>
+
+        <p style="font-size:13px;color:#4b5563;margin:0 0 14px;">GLM-5 的核心创新是不直接让模型"想出多跳问题"（这样产出的问题容易偏向模型已知的知识），而是<strong>先从网页中建立结构化的知识图谱，再从图谱中"走路径"来生成问题</strong>，保证问题的多跳性是真实的而不是人为拼凑的。</p>
+
+        <div class="step-box">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <strong>收集网页原料：让早期 agent 刷真实问题</strong>
+            <p style="font-size:13px;margin:6px 0 8px;">先让早期 search agent 大量刷真实问答任务（从 Wikipedia 问题、新闻、知乎等来源），<strong>把它访问过的每一个网页都存下来</strong>，做去重和质量过滤。</p>
+            <div style="background:#fffbeb;border-left:3px solid #f59e0b;border-radius:0 8px 8px 0;padding:9px 13px;font-size:12px;color:#374151;line-height:1.7;">
+              <strong style="color:#92400e;">为什么要让 agent 来刷，而不是直接爬整个互联网？</strong><br>
+              直接爬互联网会得到大量无关页面（广告、导航页、重复内容）。让 agent 刷真实问题，它访问的页面天然是"回答实际问题时有用的页面"，质量更高，后续构建知识图谱的信噪比也更好。
+            </div>
+          </div>
+        </div>
+
+        <div class="step-box">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <strong>从网页中抽取结构化三元组，构建 WKG（Web Knowledge Graph）</strong>
+            <p style="font-size:13px;margin:6px 0 8px;">对每个网页，用 NLP 模型提取出<strong>实体-关系-实体</strong>的三元组，拼成一张大图：</p>
+
+            <!-- WKG 构建示意 -->
+            <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:10px;overflow:hidden;margin-bottom:10px;">
+              <div style="background:#343a40;color:#fff;padding:8px 14px;font-size:12px;font-weight:700;">📖 WKG 构建示例：从网页到知识图谱</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;font-size:12px;">
+                <div style="padding:12px 14px;border-right:1px solid #dee2e6;">
+                  <strong style="color:#343a40;display:block;margin-bottom:6px;">输入：网页原文片段</strong>
+                  <div style="background:#1e1e2e;color:#cdd6f4;border-radius:6px;padding:10px 12px;font-size:11px;line-height:1.8;">
+                    "…梅西于 2023 年 7 月正式加盟迈阿密国际（Inter Miami CF），这是一支位于佛罗里达州迈阿密的 MLS 球队。迈阿密国际的主场为 Chase Stadium（前称 DRV PNK Stadium）…"
+                  </div>
+                </div>
+                <div style="padding:12px 14px;">
+                  <strong style="color:#343a40;display:block;margin-bottom:6px;">输出：三元组</strong>
+                  <div style="font-size:11px;line-height:2.0;color:#374151;">
+                    <div style="background:#e0f2fe;border-radius:4px;padding:2px 6px;margin:2px 0;display:inline-block;">(梅西, 效力于, 迈阿密国际)</div><br>
+                    <div style="background:#e0f2fe;border-radius:4px;padding:2px 6px;margin:2px 0;display:inline-block;">(迈阿密国际, 位于城市, 迈阿密)</div><br>
+                    <div style="background:#e0f2fe;border-radius:4px;padding:2px 6px;margin:2px 0;display:inline-block;">(迈阿密国际, 主场, Chase Stadium)</div><br>
+                    <div style="background:#e0f2fe;border-radius:4px;padding:2px 6px;margin:2px 0;display:inline-block;">(迈阿密, 州, 佛罗里达州)</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:9px 13px;font-size:12px;color:#374151;line-height:1.7;">
+              <strong style="color:#166534;">图谱的规模：</strong>数百万个实体节点，数千万条关系边，覆盖体育、科技、历史、地理等各个领域。有了这张图，就能在上面按任意深度"走路径"来构造问题。
+            </div>
+          </div>
+        </div>
+
+        <div class="step-box">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <strong>从图谱中采样多跳路径，生成问题草稿</strong>
+            <p style="font-size:13px;margin:6px 0 8px;">核心技巧：<strong>选低频到中频实体作为起点</strong>，而不是高频实体（如"美国"、"中国"这种太常见、模型参数里全有）。</p>
+
+            <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:10px;overflow:hidden;margin-bottom:10px;">
+              <div style="background:#343a40;color:#fff;padding:8px 14px;font-size:12px;font-weight:700;">📖 从 WKG 采样 3 跳路径，生成问题</div>
+              <div style="padding:12px 14px;font-size:12px;color:#374151;line-height:1.8;">
+                <strong>① 采样起点（低频实体）：</strong><span style="background:#fef3c7;padding:1px 5px;border-radius:3px;">Kaseya Center</span><br>
+                <strong>② 向外扩展 3 跳邻域：</strong>
+                <div style="margin:8px 0 8px 12px;line-height:2.0;">
+                  Kaseya Center → <span style="color:#7c3aed;">(主场球馆)</span> → 迈阿密热火<br>
+                  迈阿密热火 → <span style="color:#7c3aed;">(所在城市)</span> → 迈阿密<br>
+                  迈阿密 → <span style="color:#7c3aed;">(城市里有的MLS球队)</span> → 迈阿密国际<br>
+                  迈阿密国际 → <span style="color:#7c3aed;">(现役著名球员)</span> → 梅西
+                </div>
+                <strong>③ 把路径改写成自然语言问题：</strong><br>
+                <em style="color:#1d4ed8;">"梅西所在俱乐部所在城市的 NBA 球队，主场球馆叫什么？"</em>
+              </div>
+            </div>
+
+            <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:9px 13px;font-size:12px;color:#374151;line-height:1.7;">
+              <strong style="color:#92400e;">为什么从终点往起点采样？</strong><br>
+              先定终点（低频答案），再往回推导问题，可以保证问题有唯一确定的答案。如果从起点正向出发，可能走到多个合法答案，验证时很麻烦。
+            </div>
+          </div>
+        </div>
+
+        <div class="step-box">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <strong>双层难度过滤：确保问题真的需要搜索</strong>
+            <p style="font-size:13px;margin:6px 0 8px;">生成的问题草稿中，有些可能太简单——模型不搜索就能答对。要把这些"假多跳题"过滤掉。</p>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+              <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px 14px;font-size:13px;">
+                <strong style="color:#991b1b;">第一层：去掉"参数知识就能答"的题</strong>
+                <p style="font-size:12px;color:#374151;margin:6px 0 0;line-height:1.7;">做法：直接问一个不能搜索的模型（无工具访问权限），如果它能答对，说明这道题在训练数据里出现过，不需要搜索就能答，过滤掉。<br><br>
+                例：问"奥运会创始年份" → 模型直接回答 "1896年" → 无需搜索 → 过滤</p>
+              </div>
+              <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px 14px;font-size:13px;">
+                <strong style="color:#991b1b;">第二层：去掉"一次搜索就解决"的题</strong>
+                <p style="font-size:12px;color:#374151;margin:6px 0 0;line-height:1.7;">做法：让 search agent 尝试用 ≤2 次搜索回答，如果成功，说明这题不够多跳，过滤掉。<br><br>
+                例：问"梅西的国籍" → 一次搜索 "梅西 国籍" → 直接得到"阿根廷" → 只有 1 跳 → 过滤</p>
+              </div>
+            </div>
+
+            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:9px 13px;font-size:12px;color:#374151;line-height:1.7;">
+              <strong style="color:#166534;">过滤之后：</strong>只保留那些"不搜索答不上来"且"必须经过 3 跳以上推理"的问题。这类问题在真实数据集（如 MuSiQue、2WikiMultiHopQA）中的比例很低，靠 WKG 可以大规模批量构造。
+            </div>
+          </div>
+        </div>
+
+        <div class="step-box">
+          <div class="step-num">5</div>
+          <div class="step-content">
+            <strong>答案与证据链的一致性验证</strong>
+            <p style="font-size:13px;margin:6px 0 8px;">最后一关：检查问题和答案在逻辑上是否严密。</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px;">
+              <div style="background:#eff6ff;border-radius:8px;padding:9px 11px;">
+                <strong style="color:#1d4ed8;">答案唯一性</strong><br>
+                <span style="color:#374151;line-height:1.7;">多个 search agent 独立作答，结果是否一致？若有 agent 给出了不同答案，说明问题存在歧义，需要修改或丢弃</span>
+              </div>
+              <div style="background:#f0fdf4;border-radius:8px;padding:9px 11px;">
+                <strong style="color:#166534;">证据链闭合性</strong><br>
+                <span style="color:#374151;line-height:1.7;">每一跳的信息是否都能在某个具体网页上找到？不能有"推理依赖无法验证的隐含知识"的跳</span>
+              </div>
+              <div style="background:#fff7ed;border-radius:8px;padding:9px 11px;">
+                <strong style="color:#c2410c;">跨页面一致性</strong><br>
+                <span style="color:#374151;line-height:1.7;">不同来源网页的信息是否冲突（如一个页面说球馆叫 A，另一个说叫 B）？有冲突的题需要更新到最新信息</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- MiniMax M2 方式 -->
+        <h4 style="margin-top:20px;">方法二：MiniMax M2 的 WebExplorer + 迭代式 Query 进化</h4>
+
+        <p style="font-size:13px;color:#4b5563;margin:0 0 14px;">MiniMax M2 的路线与 GLM-5 不同——它不先建图再采路径，而是让 agent 先<strong>自由探索</strong>，形成"信息丰富的种子问题"，再通过<strong>三步迭代操作</strong>把问题难度提升上去。</p>
+
+        <!-- WebExplorer 详解 -->
+        <div style="border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;margin:12px 0 16px;">
+          <div style="background:#1e3a5f;padding:11px 18px;">
+            <span style="color:#93c5fd;font-size:13px;font-weight:700;">第一步：WebExplorer 自由探索 → 构造"信息丰富的种子问题"</span>
+          </div>
+          <div style="padding:14px 18px;background:#f8fafc;font-size:13px;color:#374151;line-height:1.8;">
+            <p style="margin:0 0 10px;">给 agent 一个起始词（比如"巴西国家队"），让它在互联网上自由探索，沿着感兴趣的链接不断延伸，记录它走过的完整链路：</p>
+
+            <!-- 探索链路 -->
+            <div style="background:#1e1e2e;color:#cdd6f4;border-radius:8px;padding:12px 16px;font-size:11px;line-height:2.0;margin-bottom:10px;">
+              起点：巴西国家队<br>
+              → 搜"1950年世界杯" → 读到"马拉卡纳惨案"，巴西 1:2 负于乌拉圭<br>
+              → 搜"1950年世界杯 裁判" → 读到英国裁判 George Reader<br>
+              → 搜"George Reader" → 读到他后来是 Southampton FC 主席<br>
+              → 搜"Southampton 1976年足总杯" → 读到 1-0 赢了曼联，进球者：Bobby Stokes<br>
+              <span style="color:#a6e3a1;">→ 生成种子问题：<em>"哪位球员在 1976 年足总杯决赛打入唯一进球，帮助 Southampton 击败曼联？"</em></span>
+            </div>
+
+            <div style="background:#eff6ff;border-left:3px solid #3b82f6;padding:8px 12px;border-radius:0 8px 8px 0;font-size:12px;color:#1e40af;line-height:1.7;">
+              <strong>这类种子问题的特点：</strong>答案（Bobby Stokes）是冷知识，模型参数里大概率没有；信息出现在真实网页上，证据可查；问题涉及具体年份和赛事，模糊化空间大（便于下一步进化）。
+            </div>
+          </div>
+        </div>
+
+        <!-- Query 进化 详解 -->
+        <div style="border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;margin:12px 0 16px;">
+          <div style="background:#1e3a5f;padding:11px 18px;">
+            <span style="color:#93c5fd;font-size:13px;font-weight:700;">第二步：迭代式 Query 进化（long-to-short）—— 三种操作提升难度</span>
+          </div>
+          <div style="padding:14px 18px;background:#f8fafc;">
+            <p style="font-size:13px;color:#374151;margin:0 0 12px;line-height:1.7;">从信息齐全的"种子问题"出发，逐步删掉/模糊化显眼线索，让问题变得"只知道问什么，但不知道从哪里切入搜索"——模型必须自己想办法分解问题、制定搜索策略。</p>
+
+            <div style="display:grid;grid-template-columns:1fr;gap:10px;">
+
+              <!-- 操作1 -->
+              <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+                <div style="background:#fef9c3;padding:8px 14px;font-size:12px;font-weight:700;color:#78350f;">操作一：removing salient information（删掉显著线索）</div>
+                <div style="padding:10px 14px;font-size:12px;color:#374151;line-height:1.8;">
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                    <div>
+                      <strong>进化前（信息太多）：</strong><br>
+                      <em style="color:#1d4ed8;">"在 1976 年足总杯决赛中为 Southampton 打入制胜球、帮助球队击败曼联的球员，后来的职业生涯如何？"</em>
+                    </div>
+                    <div>
+                      <strong>进化后（删掉年份/赛事）：</strong><br>
+                      <em style="color:#16a34a;">"那位帮助中游英超球队在足总杯决赛里爆冷击败曼联的进球手，后来的职业生涯如何？"</em>
+                    </div>
+                  </div>
+                  <div style="background:#fef9f0;border-radius:6px;padding:6px 10px;margin-top:8px;font-size:11px;color:#92400e;">
+                    效果：模型必须先弄清楚"哪场比赛"，才能知道"谁进的球"，增加了一个必要的前置搜索步骤。
+                  </div>
+                </div>
+              </div>
+
+              <!-- 操作2 -->
+              <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+                <div style="background:#e0f2fe;padding:8px 14px;font-size:12px;font-weight:700;color:#0369a1;">操作二：strategic obfuscation（战略性模糊化）</div>
+                <div style="padding:10px 14px;font-size:12px;color:#374151;line-height:1.8;">
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                    <div>
+                      <strong>进化前：</strong><br>
+                      <em style="color:#1d4ed8;">"George Reader 执法了哪场著名的 1950 年世界杯决赛，结果如何？"</em>
+                    </div>
+                    <div>
+                      <strong>进化后（模糊专有名词）：</strong><br>
+                      <em style="color:#16a34a;">"那位后来成为英格兰某顶级球队主席的世界杯裁判，执法过哪场被称为最大冷门的决赛？"</em>
+                    </div>
+                  </div>
+                  <div style="background:#e0f2fe;border-radius:6px;padding:6px 10px;margin-top:8px;font-size:11px;color:#0369a1;">
+                    效果："英格兰某顶级球队主席"没有直接给出 George Reader，模型需要先搜索"著名世界杯裁判+球队主席"才能找到这个人，再查他执法的比赛。
+                  </div>
+                </div>
+              </div>
+
+              <!-- 操作3 -->
+              <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+                <div style="background:#f3e8ff;padding:8px 14px;font-size:12px;font-weight:700;color:#6d28d9;">操作三：alternative descriptions / replace（替换成间接描述）</div>
+                <div style="padding:10px 14px;font-size:12px;color:#374151;line-height:1.8;">
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                    <div>
+                      <strong>进化前（直接说名字）：</strong><br>
+                      <em style="color:#1d4ed8;">"Bobby Stokes 是哪个国家的球员？"</em>
+                    </div>
+                    <div>
+                      <strong>进化后（替换为间接描述）：</strong><br>
+                      <em style="color:#16a34a;">"在 1976 年那场被认为是足总杯最大冷门的决赛里打入制胜球的球员，他的国籍是什么？"</em>
+                    </div>
+                  </div>
+                  <div style="background:#f3e8ff;border-radius:6px;padding:6px 10px;margin-top:8px;font-size:11px;color:#6d28d9;">
+                    效果：不再直接给出人名，模型要先从"1976年足总杯决赛 + 制胜球"推导出"Bobby Stokes"，再查他的国籍——变成了两步。
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 两种方法对比 -->
+        <h4>GLM-5 WKG vs MiniMax M2 WebExplorer：哪种更好？</h4>
+        <div style="overflow-x:auto;margin:10px 0 16px;">
+          <table style="width:100%;border-collapse:collapse;font-size:12px;">
+            <thead>
+              <tr style="background:#ede9fe;">
+                <th style="padding:8px 10px;text-align:left;border:1px solid #ddd6fe;">维度</th>
+                <th style="padding:8px 10px;text-align:left;border:1px solid #ddd6fe;">GLM-5 WKG</th>
+                <th style="padding:8px 10px;text-align:left;border:1px solid #ddd6fe;">MiniMax M2 WebExplorer</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td style="padding:7px 10px;border:1px solid #ede9fe;font-weight:600;">多跳性保证</td><td style="padding:7px 10px;border:1px solid #ede9fe;">✅ 图结构天然定义跳数，可以精确控制 N 跳</td><td style="padding:7px 10px;border:1px solid #ede9fe;">✅ 通过进化操作逐步增加跳数，但不那么精确</td></tr>
+              <tr style="background:#fafafa;"><td style="padding:7px 10px;border:1px solid #ede9fe;font-weight:600;">多样性</td><td style="padding:7px 10px;border:1px solid #ede9fe;">中：图谱里的关系类型有限，问题结构可能单一</td><td style="padding:7px 10px;border:1px solid #ede9fe;">✅ 自由探索产出的问题更自然、多样，更接近真实用户提问</td></tr>
+              <tr><td style="padding:7px 10px;border:1px solid #ede9fe;font-weight:600;">可扩展性</td><td style="padding:7px 10px;border:1px solid #ede9fe;">✅ 图构建一次，后续可批量采样，适合大规模</td><td style="padding:7px 10px;border:1px solid #ede9fe;">中：每次 WebExplorer 都需要真实的网络访问，成本较高</td></tr>
+              <tr style="background:#fafafa;"><td style="padding:7px 10px;border:1px solid #ede9fe;font-weight:600;">答案可验证性</td><td style="padding:7px 10px;border:1px solid #ede9fe;">✅ 图谱里有标准答案，可自动验证</td><td style="padding:7px 10px;border:1px solid #ede9fe;">中：需要人工或模型辅助验证进化后的问题是否合理</td></tr>
+              <tr><td style="padding:7px 10px;border:1px solid #ede9fe;font-weight:600;">时效性</td><td style="padding:7px 10px;border:1px solid #ede9fe;">中：图谱需要定期更新，否则答案会过期</td><td style="padding:7px 10px;border:1px solid #ede9fe;">✅ 每次探索都访问实时网页，天然具备时效性</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="big-concept">
+          <div class="big-concept-title">🔑 Search 数据合成的本质：构造"真正需要搜索"的任务</div>
+          <p style="font-size:14px;margin:0;line-height:1.9;">
+            无论是 WKG 还是 WebExplorer，目标都是一样的：构造那些<strong>模型参数知识答不上来、必须真正搜索才能回答的问题</strong>。<br><br>
+            • 验证多跳性：用"不给工具的模型"直接答，答对了就过滤<br>
+            • 保证时效性：刻意选择时效性强的信息（转会、更名、选举结果等）<br>
+            • 控制难度：双层过滤 / 迭代进化，确保不太简单也不过于模糊<br><br>
+            与 SWE 和 Terminal 任务相比，Search 任务最难的不是"执行"，而是<strong>搜索策略的规划</strong>——面对一个模糊的多跳问题，应该先搜哪个、怎么分解、在哪一页找到下一跳的线索，这才是 search agent 训练的核心目标。
+          </p>
+        </div>
+      </section>
+
+      <!-- ══ §5 训练策略与挑战 ══ -->
+      <section class="section" id="training-challenges">
+        <div class="section-title">
+          <div class="icon" style="background:#fff1f2;">⚡</div>
+          §5 训练策略与挑战：三大难题及解法
+        </div>
+
+        <p>这一章节讨论在实际训练中遇到的三大核心挑战，以及 GLM-5 和 Kimi K2.5 各自的解法。</p>
+
+        <div class="three-col">
+          <div class="mini-card" style="border-top:3px solid #ef4444;"><h4 style="color:#dc2626;">挑战一</h4><p style="font-size:13px;">训推不一致（Training-Inference Inconsistency）：训练时用的分布和推理时的分布不一样</p></div>
+          <div class="mini-card" style="border-top:3px solid #f97316;"><h4 style="color:#ea580c;">挑战二</h4><p style="font-size:13px;">异步框架 off-policy 问题：为提升吞吐量用异步框架，但导致训练数据来自"旧版"模型</p></div>
+          <div class="mini-card" style="border-top:3px solid #8b5cf6;"><h4 style="color:#7c3aed;">挑战三</h4><p style="font-size:13px;">长链路 Agent 延迟太高：串行执行多步任务，延迟随任务长度线性增长</p></div>
+        </div>
+
+        <h3 id="train-infer-gap">5.1 训推不一致问题</h3>
+
+        <!-- 问题根源解释 -->
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:14px 18px;margin-bottom:16px;">
+          <p style="font-size:13px;font-weight:700;color:#92400e;margin:0 0 12px;">🤔 训推不一致为什么会存在？</p>
+
+          <div style="background:#fff;border-left:3px solid #f59e0b;border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:10px;">
+            <p style="font-size:13px;font-weight:700;color:#78350f;margin:0 0 6px;">根本原因：训练和推理用的是同一套参数，但数值精度和计算方式不同</p>
+            <div style="overflow-x:auto;">
+              <table style="border-collapse:collapse;font-size:12px;width:100%;">
+                <thead>
+                  <tr style="background:#fef9c3;">
+                    <th style="padding:6px 10px;border:1px solid #fde68a;"></th>
+                    <th style="padding:6px 10px;border:1px solid #fde68a;">训练时</th>
+                    <th style="padding:6px 10px;border:1px solid #fde68a;">推理时</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td style="padding:6px 10px;border:1px solid #fef9c3;font-weight:600;">参数精度</td><td style="padding:6px 10px;border:1px solid #fef9c3;">bfloat16 / float32（保证梯度精度）</td><td style="padding:6px 10px;border:1px solid #fef9c3;color:#dc2626;font-weight:600;">int8 / int4 量化（省显存、加速）</td></tr>
+                  <tr style="background:#fffbeb;"><td style="padding:6px 10px;border:1px solid #fef9c3;font-weight:600;">Attention 实现</td><td style="padding:6px 10px;border:1px solid #fef9c3;">FlashAttention（训练也用）</td><td style="padding:6px 10px;border:1px solid #fef9c3;">FlashAttention（相同）<br><span style="color:#16a34a;font-size:11px;">✅ 数学等价，不引入误差</span></td></tr>
+                  <tr><td style="padding:6px 10px;border:1px solid #fef9c3;font-weight:600;">KV Cache</td><td style="padding:6px 10px;border:1px solid #fef9c3;">训练也可以用</td><td style="padding:6px 10px;border:1px solid #fef9c3;">用（增量解码）<br><span style="color:#16a34a;font-size:11px;">✅ 只是缓存，数学等价，不引入误差</span></td></tr>
+                  <tr style="background:#fef2f2;"><td style="padding:6px 10px;border:1px solid #fef9c3;font-weight:600;color:#dc2626;">⚠️ 量化精度（主要原因）</td><td style="padding:6px 10px;border:1px solid #fef9c3;">bfloat16 / float32（保证梯度精度）</td><td style="padding:6px 10px;border:1px solid #fef9c3;color:#dc2626;font-weight:600;">int8 / int4 量化（省显存、加速）<br><span style="font-weight:400;font-size:11px;">→ 引入截断误差，π_train ≠ π_infer</span></td></tr>
+                  <tr><td style="padding:6px 10px;border:1px solid #fef9c3;font-weight:600;color:#dc2626;">⚠️ 张量并行方式（次要）</td><td style="padding:6px 10px;border:1px solid #fef9c3;">多卡 all-gather，某种切分方式</td><td style="padding:6px 10px;border:1px solid #fef9c3;">可能用不同并行切分，all-reduce 顺序不同<br><span style="font-size:11px;">→ 极小浮点舍入误差</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style="background:#fff;border-left:3px solid #f59e0b;border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:10px;">
+            <p style="font-size:13px;font-weight:700;color:#78350f;margin:0 0 6px;">具体例子：量化误差导致概率偏移</p>
+            <pre style="background:#1e1e2e;color:#cdd6f4;border-radius:6px;padding:10px 14px;font-size:11px;line-height:1.9;white-space:pre;overflow-x:auto;">同一套参数，同一个 token 位置的 logits：
+  训练侧（bfloat16）：[2.314, 1.892, 0.501, ...]
+  推理侧（int8 量化）：[2.311, 1.895, 0.498, ...]  ← 量化引入了微小误差
+
+softmax 后：
+  π_train("搜索") = 0.52
+  π_infer("搜索") = 0.51   ← 只差 1%
+
+训推不匹配比率 ρ = π_train / π_infer = 0.52 / 0.51 ≈ 1.02  ← 单步还好
+
+但 Agentic 轨迹有 8k-32k tokens，每个 token 都有微小误差，
+误差沿整条轨迹累积，最终 ρ 可能偏到 1.3、1.5 甚至更高。</pre>
+          </div>
+
+          <div style="background:#fff;border-left:3px solid #f59e0b;border-radius:0 8px 8px 0;padding:10px 14px;">
+            <p style="font-size:13px;font-weight:700;color:#78350f;margin:0 0 6px;">为什么 Agentic RL 里特别严重？</p>
+            <p style="font-size:13px;color:#374151;margin:0;line-height:1.7;">普通数学/推理任务轨迹只有几十个 token，误差累积不明显。但 Agentic 任务（SWE、Terminal）的轨迹长达 <strong>8k-32k tokens</strong>，每个 token 都有一点点训推误差，<strong>误差沿整条轨迹累积</strong>，轨迹越长 ρ 偏差越大。PPO/GRPO 的重要性采样假设 ρ≈1，一旦打破，梯度方向就不可信了，会出现：梯度估计不稳定 / 奖励优化方向失真 / RL 越训越坏。</p>
+          </div>
+        </div>
+
+        <div class="callout-red">
+          <div class="callout-title">❌ 问题定义</div>
+          <p style="font-size:14px;margin:0;">在 RL 训练大模型时，一个很常见但容易被忽视的问题：<strong>训练时，模型更新参数用的是一种分布，而采样生成时，轨迹却可能来自另一种分布</strong>。如果这个偏差太大，会带来：梯度估计不稳定 / 奖励优化方向失真 / RL 训练效果越训越坏。</p>
+        </div>
+
+        <h4>5.1.1 GLM-5 的解法：IcePop</h4>
+        <p>GLM-5 的 RL 算法在 GRPO 基础之上，结合了蚂蚁的 <strong>IcePop 思想</strong>，显式区分两种策略：</p>
+        <div class="two-col">
+          <div class="mini-card" style="border-left:3px solid #7c3aed;"><h4 style="color:#6d28d9;">训练策略 π_train</h4><p style="font-size:13px;">用于梯度更新，包含了量化误差、推理时精度转换等差异</p></div>
+          <div class="mini-card" style="border-left:3px solid #2563eb;"><h4 style="color:#1d4ed8;">推理策略 π_infer</h4><p style="font-size:13px;">用于采样轨迹，可能因为推理优化（如算子融合、量化）而与训练时略有不同</p></div>
+        </div>
+
+        <p>定义训推不匹配比率：</p>
+        <div class="formula-block">
+          $$\rho_{i,t} = \frac{\pi_{\text{old\_train}}(y_{i,t}|x, y_{i,&lt;t})}{\pi_{\text{old\_infer}}(y_{i,t}|x, y_{i,&lt;t})}$$
+        </div>
+        <p><strong>pop(·) 函数</strong>会抑制那些不匹配比率偏离过大的样本：</p>
+        <div class="formula-block">
+          $$\text{pop}(\rho,\,1/\beta,\,\beta) = \begin{cases} \rho & \text{若 } 1/\beta \leq \rho \leq \beta \\ 0 & \text{其他（直接置零，不参与更新）} \end{cases}$$
+        </div>
+        <div class="callout-green">
+          <div class="callout-title">✅ IcePop 的最大好处</div>
+          <p style="font-size:14px;margin:0;"><strong>过滤掉那些训练分布和推理分布偏差过大的 token</strong>，只保留更可信的部分参与更新。如果某个 token 在训练侧和推理侧的概率差异太大（梯度估计不可靠），就直接忽略它，不让它污染梯度。</p>
+        </div>
+
+        <h4>5.1.2 DSA top-k 带来的额外不一致</h4>
+        <p>除了策略层面的训推不一致，GLM-5 还特别提到了 DSA（Distributed Sparse Attention）中 <strong>top-k 检索带来的额外不一致问题</strong>。DSA 先通过 indexer 从长上下文中检索出最相关的 top-k 历史 KV，再对这些位置做稀疏注意力计算。</p>
+
+        <div class="callout-amber">
+          <div class="callout-title">🤔 为什么 top-k 会导致不一致？</div>
+          <p style="font-size:14px;margin:0;">如果训练时和推理时 top-k 选出来的结果不一致（不同实现的 top-k 算子可能有细微差异），那么即使输入完全一样，模型实际利用的上下文子集也不同，后续注意力计算和 token 概率分布都会跟着变化。这类似 MoE 中的 Route Replay 问题，但 DSA 的 k=2048，显式 replay 成本太高。</p>
+        </div>
+        <div class="callout-green">
+          <div class="callout-title">✅ GLM-5 的解法</div>
+          <p style="font-size:14px;margin:0;">① 使用确定性的 <code>torch.topk</code>（而非高性能但非确定性的 CUDA top-k 实现）<br>② 在 RL 阶段<strong>默认冻结 indexer 参数</strong>，保证 top-k 结果稳定<br><br>代价是 indexer 无法随 RL 训练继续优化，但换取了训推一致性和训练稳定性。</p>
+        </div>
+
+        <hr class="divider" />
+
+        <h3 id="async-offpolicy">5.2 异步框架 Off-Policy 问题</h3>
+
+        <p>在 Agentic RL 中，一个 agent 轨迹很长、rollout 耗时差异大。如果用同步 RL，GPU 会经常"等人"，大量空转。所以主流基模训练都使用<strong>异步 RL 框架</strong>：推理端持续生成 agent 轨迹，训练端拿到足够轨迹后直接更新模型。</p>
+
+        <div class="callout-amber">
+          <div class="callout-title">🤔 为什么异步 RL 会带来 Off-Policy 问题？</div>
+          <p style="font-size:14px;margin:0;">异步模式下，rollout 在持续生成数据的同时，训练端也在不断更新参数。早一点生成的轨迹来自旧模型，晚一点生成的来自新模型。甚至一条长 trajectory 内部，rollout engine 在中途同步了新权重，导致<strong>同一条轨迹的前后 token 可能来自不同 policy</strong>。</p>
+        </div>
+
+        <h4>GLM-5 的三种解法</h4>
+        <div class="step-box">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <strong>周期性同步权重，尽量"近似 on-policy"</strong>
+            <p style="font-size:13px;margin:4px 0 0;">每隔 K 次梯度更新后，把最新权重推给推理端，并<strong>重置 optimizer 的一二阶动量</strong>（避免 Adam 动量记忆旧梯度方向引入错误偏差）。</p>
+          </div>
+        </div>
+        <div class="step-box">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <strong>重要性采样 + 双边裁剪</strong>
+            <div class="formula-block">$$r_t(\theta) = \frac{\pi_\theta(a_t|s_t)}{\pi_{\text{rollout}}(a_t|s_t)}$$</div>
+            <p style="font-size:13px;margin:4px 0 0;"><strong>双边裁剪</strong>：设定区间 [1-ε_l, 1+ε_h]，落在区间内的 token 保留参与梯度，超出范围的直接 mask 掉。思路：能救的就救，太偏的直接丢掉。</p>
+          </div>
+        </div>
+        <div class="step-box">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <strong>丢掉太旧的轨迹</strong>
+            <p style="font-size:13px;margin:4px 0 0;">记录每个 response 在 rollout 时经历的模型版本 (w_0, ..., w_k)。如果当前训练版本 w' 与 rollout 起始版本 w_0 相差过大（w' - w_0 > τ），说明样本离当前策略已经太远了，<strong>直接丢弃</strong>。</p>
+          </div>
+        </div>
+
+        <div class="big-concept">
+          <div class="big-concept-title">🎯 三层防线设计哲学</div>
+          <p style="font-size:14px;margin:0;">目标不是完全消灭 off-policy（异步框架下几乎不可能），而是在<strong>采样效率和梯度估计准确性之间取得实用平衡</strong>：<br>• 周期性同步：减少策略漂移<br>• 重要性采样 + 裁剪：校正轻微漂移<br>• 丢弃太旧轨迹：彻底过滤严重漂移</p>
+        </div>
+
+        <hr class="divider" />
+
+        <h3 id="agent-swarm">5.3 Kimi K2.5：用 Agent Swarm 解决延迟问题</h3>
+
+        <blockquote>很多现有的智能体模型依赖工具调用的串行执行：一步一步思考、一步一步调工具。任务一旦变复杂，推理时间随任务长度线性增长，延迟很快就会变得难以接受。</blockquote>
+
+        <p>Kimi K2.5 的 Agent Swarm 核心思路：<strong>把复杂任务拆成异构的子问题并发执行</strong>。在 wide-search 场景下，相比单智能体基线，整体延迟最多降低 <strong>4.5×</strong>，而且任务效果继续提升。</p>
+
+        <p>核心架构：<strong>"a trainable orchestrator and frozen subagents"</strong>（可训练的调度者 + 冻结的子代理）</p>
+
+        <div class="two-col">
+          <div class="mini-card" style="border-left:4px solid #7c3aed;">
+            <h4 style="color:#6d28d9;">🎭 Orchestrator（可训练）</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li>负责<strong>拆任务</strong>：把复杂任务分解为多个可并行执行的子任务</li>
+              <li>负责<strong>创建和分配子代理</strong>：为每个子任务分配一个 subagent 并告知工具</li>
+              <li>负责<strong>汇总结果</strong>：收到各 subagent 结果后整合成最终答案</li>
+              <li>在训练过程中持续优化调度策略（参数可更新）</li>
+            </ul>
+          </div>
+          <div class="mini-card" style="border-left:4px solid #94a3b8;">
+            <h4 style="color:#475569;">🤖 Sub-agents（冻结）</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li>来自<strong>固定的中间策略 checkpoint</strong>，参数不更新</li>
+              <li>每个 subagent 独立执行被分配的子任务，完成后返回结果</li>
+              <li>不参与 RL 训练过程</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="callout-amber">
+          <div class="callout-title">🤔 为什么 subagents 要冻结，不做端到端联合训练？</div>
+          <p style="font-size:14px;margin:0;">① <strong>训练信号互相干扰</strong>：orchestrator 的好坏依赖 subagents 能力，两者耦合导致梯度方向混乱<br>② <strong>系统整体不稳定</strong>：两端同时优化形成"moving target"，难以收敛<br>③ <strong>难以归因</strong>：任务失败时无法判断是 orchestrator 拆任务错了还是 subagent 执行不好<br><br>冻结 subagents 后，orchestrator 有了稳定的执行层，reward 信号可以清晰归因于调度决策。</p>
+        </div>
+
+        <h4>总结：三大挑战的解法对比</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>挑战</th><th>根本原因</th><th>解法</th><th>代价</th></tr></thead>
+            <tbody>
+              <tr><td><strong>训推不一致</strong></td><td>训练侧和推理侧计算实现有细微差异（量化、算子差异等）</td><td>IcePop：过滤不匹配比率偏离过大的 token；DSA：deterministic top-k + 冻结 indexer</td><td>少量样本被过滤；indexer 无法继续优化</td></tr>
+              <tr><td><strong>异步 off-policy</strong></td><td>推理和训练异步进行，轨迹生成时和使用时的模型版本不一致</td><td>周期性同步权重 + 重要性采样双边裁剪 + 丢弃太旧的轨迹</td><td>权重同步开销；部分轨迹被丢弃，数据利用率略低</td></tr>
+              <tr><td><strong>长链路延迟高</strong></td><td>串行执行多步任务，延迟随步数线性增长</td><td>Agent Swarm：可训练 orchestrator + 冻结 subagents 并行执行</td><td>不做端到端联合训练；orchestrator credit assignment 有简化</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <footer>
+        <p>
+          笔记来源：<a href="https://zhuanlan.zhihu.com/p/2015552122071037375" target="_blank">知乎·低级炼丹师 · Agentic能力从哪里来？拆解基座大模型的训练过程</a><br>
+          涵盖：GLM-5 / MiniMax M2 / Kimi K2.5 · 28.5T tokens 训练 · Pre-Training → Mid-Training → SFT → Reasoning RL → Agentic RL → General RL → On-Policy Cross-Stage Distillation
+        </p>
+      </footer>
+
+    </main>
+  </div>
+</div>
+</body>
+</html>
