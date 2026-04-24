@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LLaMA-Factory 完整解读：100+ 模型一站式微调框架</title>
+  <style>
+    :root {
+      --bg:#f5f7fb; --card:#ffffff; --text:#1f2937; --muted:#667085;
+      --line:#e5e7eb; --primary:#2563eb; --shadow:0 10px 30px rgba(15,23,42,0.08);
+      --radius:18px; --max:1120px;
+    }
+    *{box-sizing:border-box;}
+    html{scroll-behavior:smooth;}
+    body{margin:0;background:linear-gradient(180deg,#eff6ff 0%,var(--bg) 200px);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;line-height:1.85;}
+    a{color:var(--primary);text-decoration:none;}
+    a:hover{text-decoration:underline;}
+    .page{max-width:var(--max);margin:0 auto;padding:32px 20px 80px;}
+    .back-link{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:14px;margin-bottom:18px;}
+    .back-link:hover{color:var(--primary);text-decoration:none;}
+    .hero{background:radial-gradient(circle at top right,rgba(37,99,235,0.12),transparent 30%),radial-gradient(circle at left bottom,rgba(16,185,129,0.08),transparent 24%),var(--card);border:1px solid rgba(37,99,235,0.15);border-radius:24px;box-shadow:var(--shadow);padding:34px 34px 28px;margin-bottom:22px;}
+    .eyebrow{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-size:13px;font-weight:600;margin-bottom:16px;}
+    h1{margin:0 0 10px;font-size:32px;line-height:1.25;letter-spacing:-0.02em;}
+    .subtitle{margin:0;color:var(--muted);font-size:15px;}
+    .meta-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:24px;}
+    .meta-card{background:#eff6ff;border:1px solid #bfdbfe;border-radius:16px;padding:14px 16px;}
+    .meta-label{color:var(--muted);font-size:12px;margin-bottom:4px;}
+    .meta-value{font-size:14px;font-weight:600;word-break:break-word;}
+    .layout{display:grid;grid-template-columns:240px minmax(0,1fr);gap:22px;align-items:start;}
+    .toc{position:sticky;top:20px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;max-height:calc(100vh - 40px);overflow-y:auto;}
+    .toc h2{margin:0 0 12px;font-size:15px;color:var(--text);}
+    .toc-list{list-style:none;margin:0;padding:0;}
+    .toc-list li{margin:0;}
+    .toc-list a{display:block;padding:5px 8px;border-radius:8px;color:var(--muted);font-size:13px;transition:all 0.15s;}
+    .toc-list a:hover{color:var(--primary);background:#eff6ff;text-decoration:none;}
+    .toc-list a.active{color:var(--primary);background:#eff6ff;font-weight:600;border-left:3px solid var(--primary);padding-left:5px;}
+    .toc-sub{list-style:none;padding-left:12px;margin:0;}
+    .toc-sub a{font-size:12px;padding:3px 8px;}
+    .content{display:flex;flex-direction:column;gap:18px;}
+    .section{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:26px 28px;}
+    .section-title{display:flex;align-items:center;gap:12px;margin:0 0 20px;font-size:20px;font-weight:700;}
+    .icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+    h3{margin:28px 0 12px;font-size:17px;color:#111827;border-left:3px solid #bfdbfe;padding-left:10px;}
+    h4{margin:20px 0 8px;font-size:15px;color:#374151;font-weight:700;}
+    p{margin:0 0 12px;}
+    .callout-blue{background:#eff6ff;border:1px solid #bfdbfe;border-radius:14px;padding:16px 18px;margin:14px 0;}
+    .callout-green{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;padding:16px 18px;margin:14px 0;}
+    .callout-amber{background:#fffbeb;border:1px solid #fde68a;border-radius:14px;padding:16px 18px;margin:14px 0;}
+    .callout-purple{background:#faf5ff;border:1px solid #e9d5ff;border-radius:14px;padding:16px 18px;margin:14px 0;}
+    .callout-cyan{background:#ecfeff;border:1px solid #a5f3fc;border-radius:14px;padding:16px 18px;margin:14px 0;}
+    .two-col{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:14px 0;}
+    .three-col{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:14px 0;}
+    .mini-card{border:1px solid var(--line);border-radius:14px;padding:16px 18px;background:#fff;}
+    .mini-card h4{margin-top:0;font-size:14px;}
+    .mini-card p,.mini-card li{font-size:14px;}
+    .table-wrap{overflow-x:auto;margin:16px 0;}
+    table{width:100%;border-collapse:collapse;font-size:14px;}
+    thead th{background:#eff6ff;color:#1e40af;text-align:left;font-weight:700;padding:10px 14px;border-bottom:2px solid #bfdbfe;}
+    td{padding:10px 14px;border-bottom:1px solid #eef2f7;vertical-align:top;}
+    tbody tr:nth-child(even){background:#f8fbff;}
+    ul,ol{padding-left:24px;margin:8px 0 12px;}
+    li{margin:6px 0;}
+    code{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:2px 7px;font-family:"SF Mono",Consolas,Monaco,monospace;font-size:13px;color:#2563eb;}
+    pre{background:#1e293b;color:#e2e8f0;border-radius:12px;padding:16px 20px;margin:14px 0;overflow-x:auto;font-size:13px;line-height:1.7;}
+    pre code{background:none;border:none;color:inherit;padding:0;font-size:inherit;}
+    .tag{display:inline-block;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:600;}
+    .big-concept{background:linear-gradient(135deg,#eff6ff 0%,#f0fdf4 100%);border:2px solid #93c5fd;border-radius:16px;padding:20px 24px;margin:20px 0;}
+    .big-concept-title{font-size:18px;font-weight:800;color:#1e40af;margin-bottom:10px;}
+    .step-box{display:flex;gap:14px;margin:12px 0;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:#fff;}
+    .step-num{width:28px;height:28px;border-radius:50%;background:#2563eb;color:#fff;font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;}
+    .step-content{flex:1;font-size:14px;}
+    .matrix-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin:16px 0;font-size:12px;}
+    .matrix-header{background:#1e40af;color:white;padding:8px 4px;border-radius:6px;text-align:center;font-weight:700;}
+    .matrix-row-header{background:#eff6ff;color:#1e40af;padding:8px 6px;border-radius:6px;font-weight:700;display:flex;align-items:center;}
+    .matrix-cell{background:#f0fdf4;color:#166534;padding:8px 4px;border-radius:6px;text-align:center;font-size:14px;}
+    .matrix-cell.empty{background:#fafafa;color:#9ca3af;}
+    footer{margin-top:32px;text-align:center;color:var(--muted);font-size:13px;}
+    @media(max-width:920px){.layout{grid-template-columns:1fr;}.toc{position:static;}.meta-grid,.two-col,.three-col{grid-template-columns:1fr 1fr;}}
+    @media(max-width:640px){.page{padding:18px 12px 56px;}.hero,.section{padding:20px 18px;}h1{font-size:26px;}.meta-grid,.two-col,.three-col{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+<div class="page">
+  <a class="back-link" href="../index.html">← 返回笔记列表</a>
+
+  <header class="hero">
+    <div class="eyebrow">🛠️ 工具框架 · LLM 微调</div>
+    <h1>LLaMA-Factory 完整解读：100+ 模型一站式微调框架</h1>
+    <p class="subtitle">零代码 CLI + LLaMA Board GUI，覆盖预训练/SFT/DPO/RLHF/GRPO，支持 LoRA/QLoRA/Full 微调。40k+ GitHub Stars，ACL 2024 论文。</p>
+    <div class="meta-grid">
+      <div class="meta-card"><div class="meta-label">定位</div><div class="meta-value">零代码、一站式 LLM 微调平台</div></div>
+      <div class="meta-card"><div class="meta-label">支持模型</div><div class="meta-value">100+ 系列（Llama/Qwen/DeepSeek/Gemma 等）</div></div>
+      <div class="meta-card"><div class="meta-label">训练方式</div><div class="meta-value">PT / SFT / RM / PPO / DPO / KTO / GRPO / ORPO</div></div>
+      <div class="meta-card"><div class="meta-label">微调方法</div><div class="meta-value">Full / Freeze / LoRA / QLoRA / OFT / QOFT</div></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="toc">
+      <h2>目录</h2>
+      <ul class="toc-list">
+        <li><a href="#overview">§0 项目总览</a></li>
+        <li><a href="#models">§1 支持的模型</a></li>
+        <li><a href="#training-matrix">§2 训练方式 × 微调方法矩阵</a></li>
+        <li><a href="#architecture">§3 代码架构解析</a>
+          <ul class="toc-sub">
+            <li><a href="#src-structure">3.1 src/ 目录结构</a></li>
+            <li><a href="#key-deps">3.2 核心依赖</a></li>
+          </ul>
+        </li>
+        <li><a href="#training-methods">§4 训练方法深度解析</a>
+          <ul class="toc-sub">
+            <li><a href="#sft-trainer">4.1 SFT</a></li>
+            <li><a href="#dpo-trainer">4.2 DPO/ORPO/SimPO</a></li>
+            <li><a href="#kto-trainer">4.3 KTO</a></li>
+            <li><a href="#ppo-trainer">4.4 PPO</a></li>
+            <li><a href="#grpo-trainer">4.5 GRPO</a></li>
+            <li><a href="#decision-guide">4.6 如何选择</a></li>
+          </ul>
+        </li>
+        <li><a href="#dataset">§5 数据集格式规范</a>
+          <ul class="toc-sub">
+            <li><a href="#alpaca-format">5.1 Alpaca 格式</a></li>
+            <li><a href="#sharegpt-format">5.2 ShareGPT 格式</a></li>
+            <li><a href="#preference-format">5.3 偏好数据格式</a></li>
+            <li><a href="#dataset-info">5.4 dataset_info.json</a></li>
+          </ul>
+        </li>
+        <li><a href="#quickstart">§6 快速上手</a>
+          <ul class="toc-sub">
+            <li><a href="#install">6.1 安装</a></li>
+            <li><a href="#first-train">6.2 第一次训练</a></li>
+            <li><a href="#yaml-config">6.3 YAML 配置详解</a></li>
+            <li><a href="#cli-ref">6.4 CLI 速查</a></li>
+          </ul>
+        </li>
+        <li><a href="#deploy">§7 推理与部署</a></li>
+        <li><a href="#summary">§8 选型速查</a></li>
+      </ul>
+    </aside>
+
+    <main class="content">
+
+      <!-- §0 项目总览 -->
+      <section class="section" id="overview">
+        <div class="section-title">
+          <div class="icon" style="background:#eff6ff;">🗺️</div>
+          §0 项目总览
+        </div>
+
+        <div class="big-concept">
+          <div class="big-concept-title">一句话定位</div>
+          <p style="margin:0;">LLaMA-Factory = 零代码 CLI + Web GUI，统一接口覆盖 LLM 微调全流程（PT → SFT → RM → RLHF → DPO → GRPO），所有差异只通过 YAML 配置文件区分。</p>
+        </div>
+
+        <div class="callout-blue">
+          <strong>核心设计理念：</strong>
+          <ul style="margin:8px 0 0;">
+            <li><strong>统一接口</strong>：所有训练方式通过同一个 <code>llamafactory-cli train</code> 命令触发</li>
+            <li><strong>零代码友好</strong>：LLaMA Board Web GUI 全程图形化，无需写代码</li>
+            <li><strong>参数效率优先</strong>：LoRA/QLoRA 作为默认推荐，单卡 6GB 可跑 7B QLoRA</li>
+            <li><strong>模型无关设计</strong>：通过 template.py 注册 Chat Template，新模型只需添加模板</li>
+            <li><strong>Day-0 追踪前沿</strong>：核心团队在新模型发布当天/次日提供支持</li>
+          </ul>
+        </div>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>📊 项目规模</h4>
+            <ul>
+              <li>GitHub Stars：40k+</li>
+              <li>论文：ACL 2024</li>
+              <li>支持模型：100+ 系列</li>
+              <li>支持训练方式：8 种</li>
+            </ul>
+          </div>
+          <div class="mini-card">
+            <h4>🔗 生态支持</h4>
+            <ul>
+              <li>模型仓库：HuggingFace / ModelScope / Modelers</li>
+              <li>推理后端：HF / vLLM / SGLang / KTransformers</li>
+              <li>实验追踪：W&amp;B / SwanLab / MLflow / TensorBoard</li>
+              <li>分布式：FSDP / DeepSpeed ZeRO-1/2/3</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- §1 支持的模型 -->
+      <section class="section" id="models">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">🤖</div>
+          §1 支持的模型
+        </div>
+
+        <h3 id="llm-models">主流语言模型（精选）</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>模型系列</th><th>支持规模</th><th>Chat Template</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Llama 3/3.1/3.2/3.3</strong></td><td>1B/3B/8B/70B</td><td><code>llama3</code></td></tr>
+              <tr><td><strong>Llama 4</strong></td><td>109B/402B</td><td><code>llama4</code></td></tr>
+              <tr><td><strong>Qwen2/2.5（含 Code/Math/MoE）</strong></td><td>0.5B～110B</td><td><code>qwen</code></td></tr>
+              <tr><td><strong>Qwen3（含 MoE/Thinking）</strong></td><td>0.6B～235B</td><td><code>qwen3 / qwen3_nothink</code></td></tr>
+              <tr><td><strong>DeepSeek-V3</strong></td><td>236B/671B</td><td><code>deepseek3</code></td></tr>
+              <tr><td><strong>DeepSeek-R1（含 Distill）</strong></td><td>1.5B～671B</td><td><code>deepseekr1</code></td></tr>
+              <tr><td><strong>Mistral / Mixtral</strong></td><td>7B/8x7B/8x22B</td><td><code>mistral</code></td></tr>
+              <tr><td><strong>Gemma 3 / Gemma 3n</strong></td><td>270M～27B</td><td><code>gemma3</code></td></tr>
+              <tr><td><strong>GLM-4 / GLM-Z1</strong></td><td>9B/32B</td><td><code>glm4</code></td></tr>
+              <tr><td><strong>Phi-4 / Phi-4-mini</strong></td><td>3.8B/14B</td><td><code>phi4</code></td></tr>
+              <tr><td><strong>InternLM 2/3</strong></td><td>7B/8B/20B</td><td><code>intern2</code></td></tr>
+              <tr><td><strong>Falcon / Granite / StarCoder 2</strong></td><td>多种</td><td>多种</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="multimodal-models">多模态模型</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>模型系列</th><th>规模</th><th>类型</th></tr></thead>
+            <tbody>
+              <tr><td><strong>LLaVA-1.5 / LLaVA-NeXT</strong></td><td>7B/13B/34B</td><td>图像理解</td></tr>
+              <tr><td><strong>InternVL 2.5/3.5</strong></td><td>1B～241B</td><td>图像/视频</td></tr>
+              <tr><td><strong>Qwen2-VL / Qwen2.5-VL / Qwen3-VL</strong></td><td>2B～235B</td><td>图像理解</td></tr>
+              <tr><td><strong>Qwen2.5-Omni / Qwen3-Omni</strong></td><td>3B/7B/30B</td><td>全模态</td></tr>
+              <tr><td><strong>PaliGemma / PaliGemma2</strong></td><td>3B/10B/28B</td><td>图像理解</td></tr>
+              <tr><td><strong>MiniCPM-o / MiniCPM-V 4.5</strong></td><td>8B/9B</td><td>多模态</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout-amber">
+          <strong>⚡ Day-0 支持</strong>：Qwen3 / Qwen2.5-VL / Gemma 3 / GLM-4.1V / InternLM 3 / MiniCPM-o-2.6<br>
+          <strong>Day-1 支持</strong>：Llama 3 / GLM-4 / Mistral Small / PaliGemma2 / Llama 4
+        </div>
+      </section>
+
+      <!-- §2 训练方式 × 微调方法矩阵 -->
+      <section class="section" id="training-matrix">
+        <div class="section-title">
+          <div class="icon" style="background:#faf5ff;">⚡</div>
+          §2 训练方式 × 微调方法矩阵
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>训练方式</th>
+                <th>Full</th>
+                <th>Freeze</th>
+                <th>LoRA</th>
+                <th>QLoRA</th>
+                <th>OFT</th>
+                <th>QOFT</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>Pre-Training (PT)</strong></td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+              <tr><td><strong>Supervised Fine-Tuning (SFT)</strong></td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+              <tr><td><strong>Reward Modeling (RM)</strong></td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+              <tr><td><strong>PPO Training</strong></td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+              <tr><td><strong>DPO / ORPO / SimPO</strong></td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+              <tr><td><strong>KTO Training</strong></td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+              <tr><td><strong>GRPO Training</strong></td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>显存需求参考（7B 模型）</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>方法</th><th>精度</th><th>7B</th><th>14B</th><th>70B</th></tr></thead>
+            <tbody>
+              <tr><td>Full-tuning</td><td>bf16/fp16</td><td>120GB</td><td>240GB</td><td>1200GB</td></tr>
+              <tr><td>Full-tuning (pure_bf16)</td><td>bf16</td><td>60GB</td><td>120GB</td><td>600GB</td></tr>
+              <tr><td>LoRA / Freeze</td><td>16-bit</td><td>16GB</td><td>32GB</td><td>160GB</td></tr>
+              <tr><td>QLoRA</td><td>8-bit</td><td>10GB</td><td>20GB</td><td>80GB</td></tr>
+              <tr><td><strong>QLoRA</strong></td><td><strong>4-bit</strong></td><td><strong>6GB ⭐</strong></td><td>12GB</td><td>48GB</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout-green">
+          <strong>✅ 高级算法扩展</strong><br>
+          <strong>优化器</strong>：GaLore、BAdam、APOLLO、Adam-mini、Muon<br>
+          <strong>LoRA 变体</strong>：DoRA、LongLoRA、LoRA+、LoftQ、PiSSA、rsLoRA<br>
+          <strong>加速</strong>：FlashAttention-2、Unsloth、Liger Kernel、KTransformers<br>
+          <strong>架构</strong>：LLaMA Pro（block expansion）、Mixture-of-Depths
+        </div>
+      </section>
+
+      <!-- §3 代码架构 -->
+      <section class="section" id="architecture">
+        <div class="section-title">
+          <div class="icon" style="background:#ecfeff;">🏗️</div>
+          §3 代码架构解析
+        </div>
+
+        <h3 id="src-structure">3.1 src/ 目录结构</h3>
+        <pre><code>src/
+├── api.py                    # OpenAI 兼容 API 服务入口
+├── train.py                  # 训练主入口
+├── webui.py                  # Gradio WebUI 启动入口
+└── llamafactory/             # 核心包
+    ├── cli.py                # CLI 命令分发（train/chat/export/eval/api/webui）
+    ├── launcher.py           # 分布式训练启动器（torchrun/deepspeed 封装）
+    │
+    ├── hparams/              # 超参数定义（dataclass 形式）
+    │   ├── data_args.py      # 数据相关参数
+    │   ├── finetuning_args.py # 微调方法参数（LoRA/QLoRA/Full 等）
+    │   ├── generating_args.py # 生成推理参数
+    │   └── model_args.py     # 模型加载参数
+    │
+    ├── data/                 # 数据处理模块
+    │   ├── template.py       # Chat Template 定义（所有模型的对话模板）
+    │   ├── dataset_info.json # 内置数据集注册表
+    │   ├── loader.py         # 数据集加载（HF/ModelScope/本地）
+    │   ├── processor/        # 数据预处理（SFT/PT/RM/RLHF 格式）
+    │   └── collator.py       # DataCollator（序列填充、打包训练）
+    │
+    ├── model/                # 模型加载与适配模块
+    │   ├── loader.py         # 模型加载（AutoModel/AutoTokenizer）
+    │   ├── patcher.py        # 模型 Patch（注入 Flash Attention、RoPE 等）
+    │   ├── adapter.py        # PEFT 适配器（LoRA/QLoRA/OFT 初始化）
+    │   └── model_utils/      # 工具函数（量化、合并、导出等）
+    │
+    ├── train/                # 训练流程（按任务类型拆分）
+    │   ├── sft/trainer.py    # CustomSeq2SeqTrainer (SFT)
+    │   ├── dpo/trainer.py    # CustomDPOTrainer (DPO/ORPO/SimPO/BCO)
+    │   ├── kto/trainer.py    # CustomKTOTrainer
+    │   ├── ppo/trainer.py    # CustomPPOTrainer (PPOTrainer + Trainer 多重继承)
+    │   └── grpo/trainer.py   # CustomGRPOTrainer
+    │
+    ├── chat/                 # 推理与对话模块
+    │   ├── hf_engine.py      # HuggingFace 推理引擎
+    │   ├── vllm_engine.py    # vLLM 推理引擎
+    │   └── sglang_engine.py  # SGLang 推理引擎
+    │
+    ├── api/                  # OpenAI 兼容 REST API（FastAPI）
+    ├── webui/                # Gradio Web UI（LLaMA Board）
+    └── extras/               # 常量、日志、回调（SwanLab/WandB/TensorBoard）</code></pre>
+
+        <h3 id="key-deps">3.2 核心依赖</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>包名</th><th>推荐版本</th><th>作用</th></tr></thead>
+            <tbody>
+              <tr><td><code>transformers</code></td><td>4.50.0</td><td>模型定义、tokenizer、生成逻辑，HuggingFace 核心库</td></tr>
+              <tr><td><code>peft</code></td><td>0.15.1</td><td>LoRA/QLoRA/OFT 等参数高效微调</td></tr>
+              <tr><td><code>trl</code></td><td>0.9.6</td><td>PPO/DPO/KTO/GRPO/ORPO 等 RLHF 训练器</td></tr>
+              <tr><td><code>datasets</code></td><td>3.2.0</td><td>数据集加载与 map 处理</td></tr>
+              <tr><td><code>accelerate</code></td><td>1.2.1</td><td>分布式训练支持（FSDP/DeepSpeed 封装）</td></tr>
+              <tr><td><code>bitsandbytes</code></td><td>≥0.39</td><td>INT4/INT8 量化（QLoRA 核心），可选</td></tr>
+              <tr><td><code>vllm</code></td><td>≥0.4.3</td><td>高速推理后端，可选</td></tr>
+              <tr><td><code>flash-attn</code></td><td>≥2.5.6</td><td>FlashAttention-2，可选</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- §4 训练方法深度解析 -->
+      <section class="section" id="training-methods">
+        <div class="section-title">
+          <div class="icon" style="background:#fffbeb;">🧪</div>
+          §4 训练方法深度解析
+        </div>
+
+        <div class="callout-blue">
+          <strong>训练器类继承关系：</strong>
+          <ul style="margin:8px 0 0;font-size:14px;">
+            <li><code>transformers.Seq2SeqTrainer</code> → <strong>CustomSeq2SeqTrainer</strong>（SFT）</li>
+            <li><code>trl.DPOTrainer</code> → <strong>CustomDPOTrainer</strong>（DPO/ORPO/SimPO/BCO）</li>
+            <li><code>trl.KTOTrainer</code> → <strong>CustomKTOTrainer</strong>（KTO）</li>
+            <li><code>trl.PPOTrainer + Trainer</code> → <strong>CustomPPOTrainer</strong>（PPO，多重继承）</li>
+            <li><code>trl.GRPOTrainer</code> → <strong>CustomGRPOTrainer</strong>（GRPO）</li>
+          </ul>
+        </div>
+
+        <h3 id="sft-trainer">4.1 SFT（监督微调）</h3>
+        <p>用有标注的输入-输出对，最大化正确回答的对数似然。损失只计算 <strong>回答部分</strong>的 token，忽略 prompt 部分（通过 <code>IGNORE_INDEX=-100</code> 实现）。</p>
+        <pre><code># 核心损失（标准交叉熵）
+loss = cross_entropy(logits, labels)  # labels 中 prompt 部分设为 -100
+
+# 可选：ASFT 损失（参考冻结模型）
+ref_logits = ref_model(input_ids).logits
+loss = asft_loss(logits, labels, ref_logits, alpha)</code></pre>
+        <div class="callout-green"><strong>适用场景</strong>：任务适配、指令跟随能力学习、数据有限（1K+ 条）快速适配。最简单、最稳定、数据效率最高。</div>
+
+        <h3 id="dpo-trainer">4.2 DPO / ORPO / SimPO</h3>
+        <p>绕过 Reward Model，直接用偏好对数据优化策略，使好回答相对差回答的 log 概率差更大。</p>
+        <pre><code># 标准 DPO 损失（beta * log_ratio_diff → sigmoid）
+logits = beta * (chosen_logps - ref_chosen_logps) \
+       - beta * (rejected_logps - ref_rejected_logps)
+loss = -log_sigmoid(logits)
+
+# ORPO：无需 Ref Model（log_odds 形式）
+# SimPO：长度归一化 + margin，无需 Ref Model</code></pre>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>变体</th><th>pref_loss 参数</th><th>是否需要 Ref Model</th><th>特点</th></tr></thead>
+            <tbody>
+              <tr><td>DPO</td><td><code>sigmoid</code></td><td>✅</td><td>标准偏好学习</td></tr>
+              <tr><td>ORPO</td><td><code>orpo</code></td><td>❌</td><td>节省显存，无 ref model</td></tr>
+              <tr><td>SimPO</td><td><code>simpo</code></td><td>❌</td><td>长度归一化，更好长度控制</td></tr>
+              <tr><td>BCO</td><td><code>bco</code></td><td>✅</td><td>运行均值基线</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="kto-trainer">4.3 KTO（Kahneman-Tversky Optimization）</h3>
+        <p>只需二元标签（好/坏），<strong>无需配对数据</strong>，标注成本最低。利用前景理论的损失函数。</p>
+        <pre><code># 数据格式：(prompt, response, kto_tag: True/False)
+kl = mean(policy_logps - ref_logps)  # KL 散度项
+chosen_loss = 1 - sigmoid(beta * (chosen_logps - ref_chosen_logps) - beta * kl)
+rejected_loss = 1 - sigmoid(beta * kl - beta * (rejected_logps - ref_rejected_logps))
+loss = mean(chosen_loss) + mean(rejected_loss)</code></pre>
+
+        <h3 id="ppo-trainer">4.4 PPO（完整 RLHF）</h3>
+        <p>完整在线强化学习流程：先训 Reward Model，再用 PPO 在线采样更新策略。效果最强，但流程最复杂、算力消耗最大。</p>
+        <pre><code># 两阶段：
+# 1. 训练 RM：llamafactory-cli train  stage=rm
+# 2. PPO 强化学习：
+for step in steps:
+    responses = model.generate(queries)        # 生成回答
+    rewards = reward_model(query + response)   # RM 打分
+    # PPO 更新：clipped surrogate + value loss + KL 惩罚
+    L = -min(r_t * A_t, clip(r_t, 1-ε, 1+ε) * A_t) + β * KL(π || π_ref)</code></pre>
+        <div class="callout-amber"><strong>注意</strong>：需要 <code>AutoModelForCausalLMWithValueHead</code>（额外的 value head）。TRL 版本锁定：<code>0.8.6 ≤ trl ≤ 0.9.6</code></div>
+
+        <h3 id="grpo-trainer">4.5 GRPO（DeepSeek-R1 同款）</h3>
+        <p>对每个 prompt 采样 G 个回答，组内相对奖励归一化为优势值，<strong>无需 Critic / Value Head</strong>，比 PPO 更简单。</p>
+        <pre><code># 每个 prompt 采样 G 个回答
+completions = [model.generate(prompt) for _ in range(G)]
+rewards = reward_func(prompts, completions)  # 规则函数 or RM
+
+# 组内归一化（无需 Critic！）
+advantages = (rewards - mean(rewards)) / (std(rewards) + 1e-8)
+
+# PPO-clip 风格梯度更新 + KL 惩罚
+ratio = exp(policy_logps - old_logps)
+loss = -min(ratio * advantages, clip(ratio, 1-ε, 1+ε) * advantages) + beta * kl</code></pre>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>维度</th><th>PPO</th><th>GRPO</th></tr></thead>
+            <tbody>
+              <tr><td>Critic / Value Head</td><td>✅ 需要</td><td>❌ 不需要</td></tr>
+              <tr><td>优势估计</td><td>GAE（时间差分）</td><td>组内相对奖励归一化</td></tr>
+              <tr><td>RM 形式</td><td>通常神经网络 RM</td><td>规则函数 or RM 均可</td></tr>
+              <tr><td>适用场景</td><td>通用 RLHF</td><td>可验证奖励的推理任务（数学/代码）</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="decision-guide">4.6 如何选择训练方法</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>场景</th><th>推荐方法</th><th>stage 参数</th></tr></thead>
+            <tbody>
+              <tr><td>提升特定任务能力，有标注输入-输出对</td><td><strong>SFT</strong></td><td><code>sft</code></td></tr>
+              <tr><td>有配对偏好数据（chosen/rejected），不想维护 RM</td><td><strong>DPO</strong></td><td><code>dpo</code>（pref_loss: sigmoid）</td></tr>
+              <tr><td>不想要 Reference Model，节省显存</td><td><strong>ORPO</strong></td><td><code>dpo</code>（pref_loss: orpo）</td></tr>
+              <tr><td>只有单条好/坏标签，无配对数据</td><td><strong>KTO</strong></td><td><code>kto</code></td></tr>
+              <tr><td>数学/代码等可验证奖励推理任务</td><td><strong>GRPO</strong></td><td><code>grpo</code></td></tr>
+              <tr><td>追求极致对齐，有充足算力</td><td><strong>PPO</strong></td><td><code>rm</code> → <code>ppo</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- §5 数据集格式 -->
+      <section class="section" id="dataset">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">📦</div>
+          §5 数据集格式规范
+        </div>
+
+        <div class="callout-blue">
+          <strong>两种主格式：</strong>
+          <ul style="margin:8px 0 0;">
+            <li><strong>Alpaca</strong>：单轮指令跟随、预训练、偏好数据，核心字段 <code>instruction / input / output</code></li>
+            <li><strong>ShareGPT</strong>：多轮对话、工具调用、多模态，核心字段 <code>conversations</code> 列表</li>
+          </ul>
+          支持文件格式：<code>json</code>、<code>jsonl</code>、<code>csv</code>、<code>parquet</code>、<code>arrow</code>
+        </div>
+
+        <h3 id="alpaca-format">5.1 Alpaca 格式（SFT 单轮）</h3>
+        <pre><code>[{
+  "instruction": "将下面的句子翻译为英文。",
+  "input": "今天天气真好。",         // 可选，与 instruction 拼接
+  "output": "The weather is really nice today.",
+  "system": "你是翻译助手。",        // 可选
+  "history": [["Q1", "A1"], ["Q2", "A2"]]  // 可选历史对话
+}]</code></pre>
+
+        <h3 id="sharegpt-format">5.2 ShareGPT 格式（多轮对话）</h3>
+        <pre><code>[{
+  "conversations": [
+    {"from": "human",        "value": "查询北京今天的天气"},
+    {"from": "function_call","value": "{\"name\": \"get_weather\", ...}"},
+    {"from": "observation",  "value": "{\"temperature\": \"25°C\"}"},
+    {"from": "gpt",          "value": "北京今天天气晴，25°C，适合出行。"}
+  ],
+  "system": "你是天气助手。",
+  "tools": "[{\"name\": \"get_weather\", ...}]"
+}]</code></pre>
+        <div class="callout-amber">
+          <strong>角色规则</strong>：<code>human</code> / <code>observation</code> 在奇数位置，<code>gpt</code> / <code>function_call</code> 在偶数位置，两者严格交替。
+        </div>
+
+        <h3 id="preference-format">5.3 偏好数据格式（DPO/RLHF）</h3>
+        <pre><code>// Alpaca 偏好格式（ranking: true）
+[{
+  "instruction": "写一首关于春天的诗",
+  "input": "",
+  "chosen": "春风送暖入屠苏，万紫千红总是春...",  // 更好的回复
+  "rejected": "春天来了，花开了，很好看。"         // 更差的回复
+}]
+
+// KTO 格式（只需好/坏标签）
+[{
+  "conversations": [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}],
+  "kto_tag": true   // true = 好回复，false = 差回复
+}]</code></pre>
+
+        <h3 id="dataset-info">5.4 dataset_info.json 配置</h3>
+        <p>所有数据集通过 <code>data/dataset_info.json</code> 注册，是 LLaMA-Factory 的数据集注册中心。</p>
+        <pre><code>{
+  // 最简 Alpaca（使用默认列名）
+  "my_sft": {
+    "file_name": "my_data.json"
+  },
+
+  // 自定义列名
+  "my_custom": {
+    "file_name": "data.json",
+    "columns": {
+      "prompt": "question",    // 默认 instruction
+      "response": "answer"     // 默认 output
+    }
+  },
+
+  // ShareGPT 多轮对话
+  "my_chat": {
+    "file_name": "chat.json",
+    "formatting": "sharegpt",
+    "columns": {"messages": "conversations", "tools": "tools"}
+  },
+
+  // DPO 偏好数据
+  "my_dpo": {
+    "file_name": "dpo.json",
+    "ranking": true,           // 必须 true
+    "formatting": "sharegpt",
+    "columns": {"messages": "conversations", "chosen": "chosen", "rejected": "rejected"}
+  },
+
+  // 从 HuggingFace 加载
+  "openorca": {
+    "hf_hub_url": "Open-Orca/OpenOrca",
+    "columns": {"prompt": "question", "response": "response", "system": "system_prompt"}
+  }
+}</code></pre>
+
+        <h3>快速准备自定义数据集（5 步）</h3>
+        <div class="step-box"><div class="step-num">1</div><div class="step-content"><strong>确定格式</strong>：SFT → Alpaca；多轮/工具调用 → ShareGPT；偏好 → 加 ranking:true</div></div>
+        <div class="step-box"><div class="step-num">2</div><div class="step-content"><strong>准备数据文件</strong>：JSON/JSONL 放入 <code>data/</code> 目录</div></div>
+        <div class="step-box"><div class="step-num">3</div><div class="step-content"><strong>注册到 dataset_info.json</strong>：若列名非默认值，在 columns 中显式映射</div></div>
+        <div class="step-box"><div class="step-num">4</div><div class="step-content"><strong>快速验证</strong>：<code>llamafactory-cli train --dataset my_custom --max_steps 5 --output_dir /tmp/test</code></div></div>
+        <div class="step-box"><div class="step-num">5</div><div class="step-content"><strong>正式训练</strong>：创建完整 YAML 配置文件，启动训练</div></div>
+
+        <div class="callout-amber">
+          <strong>⚠️ 常见注意事项：</strong>
+          <ul style="margin:8px 0 0;">
+            <li><code>cutoff_len</code>：超过该长度的样本被截断（非过滤），建议 2048~4096</li>
+            <li>ShareGPT：human/gpt 必须严格交替，不能有两个连续的 human 消息</li>
+            <li>DPO：SFT 推荐 1K+ 条，DPO 偏好对推荐 2K~50K 对，质量差距越大越好</li>
+            <li>多模态：<code>&lt;image&gt;</code> 占位符数量必须与 images 列表长度完全一致</li>
+            <li>多数据集混合：<code>dataset: alpaca_en,my_custom</code>，各数据集按顺序拼接</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- §6 快速上手 -->
+      <section class="section" id="quickstart">
+        <div class="section-title">
+          <div class="icon" style="background:#eff6ff;">🚀</div>
+          §6 快速上手
+        </div>
+
+        <h3 id="install">6.1 安装</h3>
+
+        <div class="three-col">
+          <div class="mini-card">
+            <h4>📦 方式一：源码安装（推荐）</h4>
+            <pre style="margin:0;font-size:12px;"><code>git clone --depth 1 \
+  https://github.com/hiyouga/LlamaFactory.git
+cd LlamaFactory
+pip install -e .</code></pre>
+          </div>
+          <div class="mini-card">
+            <h4>🐳 方式二：Docker</h4>
+            <pre style="margin:0;font-size:12px;"><code>docker run -it --rm \
+  --gpus=all --ipc=host \
+  hiyouga/llamafactory:latest</code></pre>
+          </div>
+          <div class="mini-card">
+            <h4>⚡ 方式三：uv</h4>
+            <pre style="margin:0;font-size:12px;"><code>uv run llamafactory-cli webui</code></pre>
+          </div>
+        </div>
+
+        <h4>可选依赖</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>功能</th><th>安装命令</th></tr></thead>
+            <tbody>
+              <tr><td>QLoRA 量化（4/8-bit）</td><td><code>pip install bitsandbytes</code></td></tr>
+              <tr><td>vLLM 高速推理</td><td><code>pip install vllm</code></td></tr>
+              <tr><td>FlashAttention-2</td><td><code>pip install flash-attn</code></td></tr>
+              <tr><td>DeepSpeed 分布式</td><td><code>pip install -r requirements/deepspeed.txt</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout-blue">
+          <strong>🇨🇳 国内加速</strong>：<code>export USE_MODELSCOPE_HUB=1</code>，然后在 YAML 中使用 ModelScope 的 model ID。
+        </div>
+
+        <h3 id="first-train">6.2 第一次训练（Qwen3-4B LoRA SFT）</h3>
+
+        <div class="step-box"><div class="step-num">1</div><div class="step-content"><strong>创建训练配置 YAML</strong>（<code>train_qwen3_lora_sft.yaml</code>）：
+<pre style="margin:8px 0 0;"><code>### model
+model_name_or_path: Qwen/Qwen3-4B-Instruct
+trust_remote_code: true
+
+### method
+stage: sft
+do_train: true
+finetuning_type: lora
+lora_rank: 8
+lora_target: all
+
+### dataset
+dataset: identity,alpaca_en_demo
+template: qwen3_nothink     # 必须与模型对应
+cutoff_len: 2048
+max_samples: 1000
+
+### output
+output_dir: saves/qwen3-4b/lora/sft
+logging_steps: 10
+save_steps: 500
+plot_loss: true
+overwrite_output_dir: true
+
+### train
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 8
+learning_rate: 1.0e-4
+num_train_epochs: 3.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.1
+bf16: true</code></pre>
+</div></div>
+
+        <div class="step-box"><div class="step-num">2</div><div class="step-content"><strong>启动训练</strong>：
+<pre style="margin:8px 0 0;"><code>CUDA_VISIBLE_DEVICES=0 llamafactory-cli train train_qwen3_lora_sft.yaml</code></pre>
+训练完成后输出目录包含：<code>adapter_model.safetensors</code>（LoRA 权重）+ <code>training_loss.png</code>（loss 曲线）
+</div></div>
+
+        <div class="step-box"><div class="step-num">3</div><div class="step-content"><strong>推理验证</strong>：
+<pre style="margin:8px 0 0;"><code>llamafactory-cli chat examples/inference/qwen3_lora_sft.yaml</code></pre>
+</div></div>
+
+        <div class="step-box"><div class="step-num">4</div><div class="step-content"><strong>合并 LoRA 权重（导出完整模型）</strong>：
+<pre style="margin:8px 0 0;"><code>llamafactory-cli export examples/merge_lora/qwen3_lora_sft.yaml
+# ⚠️ 合并时不要使用 quantization_bit</code></pre>
+</div></div>
+
+        <h3 id="yaml-config">6.3 核心 YAML 配置字段详解</h3>
+
+        <h4>模型配置</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>字段</th><th>说明</th><th>示例</th></tr></thead>
+            <tbody>
+              <tr><td><code>model_name_or_path</code> ⭐</td><td>HF/ModelScope ID 或本地路径</td><td><code>Qwen/Qwen3-4B-Instruct</code></td></tr>
+              <tr><td><code>template</code> ⭐</td><td>对话模板，必须与模型匹配</td><td><code>qwen3</code>, <code>llama3</code>, <code>deepseek3</code></td></tr>
+              <tr><td><code>quantization_bit</code></td><td>量化位数（QLoRA）</td><td><code>4</code> 或 <code>8</code></td></tr>
+              <tr><td><code>flash_attn</code></td><td>启用 FlashAttention</td><td><code>fa2</code> / <code>sdpa</code></td></tr>
+              <tr><td><code>rope_scaling</code></td><td>扩展上下文长度</td><td><code>linear</code> / <code>dynamic</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4>训练方法配置</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>字段</th><th>说明</th><th>可选值</th></tr></thead>
+            <tbody>
+              <tr><td><code>stage</code> ⭐</td><td>训练阶段</td><td><code>pt / sft / rm / ppo / dpo / kto / grpo</code></td></tr>
+              <tr><td><code>finetuning_type</code> ⭐</td><td>微调类型</td><td><code>lora / freeze / full</code></td></tr>
+              <tr><td><code>lora_rank</code></td><td>LoRA 秩，越大参数越多</td><td>8~64（默认 8）</td></tr>
+              <tr><td><code>lora_alpha</code></td><td>LoRA 缩放，通常 = rank*2</td><td>16</td></tr>
+              <tr><td><code>lora_target</code></td><td>应用 LoRA 的层</td><td><code>all</code>（全部）</td></tr>
+              <tr><td><code>use_dora</code></td><td>DoRA（权重分解 LoRA）</td><td><code>true/false</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4>训练超参数</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>字段</th><th>说明</th><th>推荐值</th></tr></thead>
+            <tbody>
+              <tr><td><code>per_device_train_batch_size</code></td><td>每卡 batch size</td><td>1~4</td></tr>
+              <tr><td><code>gradient_accumulation_steps</code></td><td>梯度累积（有效 batch = per_device × 卡数 × 此值）</td><td>8</td></tr>
+              <tr><td><code>learning_rate</code></td><td>学习率</td><td><code>1e-4</code>（LoRA）/ <code>5e-5</code>（Full）</td></tr>
+              <tr><td><code>num_train_epochs</code></td><td>训练轮数</td><td>3.0</td></tr>
+              <tr><td><code>lr_scheduler_type</code></td><td>学习率调度</td><td><code>cosine</code></td></tr>
+              <tr><td><code>bf16</code></td><td>bfloat16 精度（A100/H100/4090）</td><td><code>true</code></td></tr>
+              <tr><td><code>neftune_noise_alpha</code></td><td>NEFTune 噪声增强，提升泛化</td><td>5</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="cli-ref">6.4 CLI 命令速查</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>子命令</th><th>功能</th><th>示例</th></tr></thead>
+            <tbody>
+              <tr><td><code>train</code></td><td>训练/微调模型</td><td><code>llamafactory-cli train config.yaml</code></td></tr>
+              <tr><td><code>chat</code></td><td>CLI 对话推理</td><td><code>llamafactory-cli chat infer.yaml</code></td></tr>
+              <tr><td><code>webchat</code></td><td>Web 对话（Gradio）</td><td><code>llamafactory-cli webchat infer.yaml</code></td></tr>
+              <tr><td><code>api</code></td><td>OpenAI 兼容 API Server</td><td><code>llamafactory-cli api infer.yaml</code></td></tr>
+              <tr><td><code>export</code></td><td>合并 LoRA / 导出模型</td><td><code>llamafactory-cli export merge.yaml</code></td></tr>
+              <tr><td><code>eval</code></td><td>MMLU/C-Eval 评测</td><td><code>llamafactory-cli train eval.yaml</code></td></tr>
+              <tr><td><code>webui</code></td><td>LLaMA Board 完整 GUI</td><td><code>llamafactory-cli webui</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <pre><code># 常用训练命令
+CUDA_VISIBLE_DEVICES=0 llamafactory-cli train config.yaml                        # 单 GPU
+CUDA_VISIBLE_DEVICES=0,1 llamafactory-cli train config.yaml                      # 多 GPU
+FORCE_TORCHRUN=1 llamafactory-cli train config.yaml                              # torchrun
+FORCE_TORCHRUN=1 llamafactory-cli train config_ds3.yaml                          # DeepSpeed ZeRO-3
+
+# 命令行覆盖 YAML 参数
+llamafactory-cli train config.yaml learning_rate=5e-5 num_train_epochs=5</code></pre>
+      </section>
+
+      <!-- §7 推理与部署 -->
+      <section class="section" id="deploy">
+        <div class="section-title">
+          <div class="icon" style="background:#fdf4ff;">🌐</div>
+          §7 推理与部署
+        </div>
+
+        <h3>LLaMA Board WebUI</h3>
+        <pre><code>llamafactory-cli webui   # 本地访问 http://localhost:7860</code></pre>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Tab</th><th>功能</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Train</strong></td><td>选择模型、数据集、微调方法，启动/中断训练，实时查看 Loss</td></tr>
+              <tr><td><strong>Evaluate &amp; Predict</strong></td><td>加载模型，在验证集上评估指标或批量预测</td></tr>
+              <tr><td><strong>Chat</strong></td><td>交互式对话，测试训练后的模型效果</td></tr>
+              <tr><td><strong>Export</strong></td><td>合并 LoRA 权重，导出完整模型</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout-blue">
+          <strong>在线版本（无需本地部署）</strong>：
+          <a href="https://huggingface.co/spaces/hiyouga/LLaMA-Board" target="_blank">HuggingFace Spaces</a> ·
+          <a href="https://modelscope.cn/studios/hiyouga/LLaMA-Board" target="_blank">ModelScope Studios</a> ·
+          <a href="https://colab.research.google.com/drive/1eRTPn37ltBbYsISy9Aw2NuI2Aq5CQrD9" target="_blank">Google Colab（免费 T4）</a>
+        </div>
+
+        <h3>vLLM 高性能推理（推荐生产）</h3>
+        <pre><code># 启动 OpenAI 兼容 API Server（vLLM backend）
+API_PORT=8000 llamafactory-cli api infer.yaml infer_backend=vllm
+
+# 使用 OpenAI SDK 调用
+from openai import OpenAI
+client = OpenAI(base_url="http://localhost:8000/v1", api_key="0")
+response = client.chat.completions.create(
+    model="your-model",
+    messages=[{"role": "user", "content": "你好！"}]
+)
+
+# 先合并 LoRA 再用 vLLM 直接加载（性能最优）
+llamafactory-cli export merge.yaml
+vllm serve /path/to/merged_model --served-model-name my-ft-model</code></pre>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>推理后端</th><th>infer_backend 参数</th><th>适用场景</th></tr></thead>
+            <tbody>
+              <tr><td>HuggingFace</td><td><code>huggingface</code></td><td>调试、低并发</td></tr>
+              <tr><td><strong>vLLM</strong></td><td><code>vllm</code></td><td>生产部署，约 270% 速度提升</td></tr>
+              <tr><td>SGLang</td><td><code>sglang</code></td><td>结构化生成优化</td></tr>
+              <tr><td>KTransformers</td><td><code>ktransformers</code></td><td>CPU 混合推理</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>实验监控集成</h3>
+        <pre><code># W&B
+report_to: wandb
+
+# SwanLab（国产，支持中文）
+use_swanlab: true
+swanlab_api_key: YOUR_KEY</code></pre>
+      </section>
+
+      <!-- §8 选型速查 -->
+      <section class="section" id="summary">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">✅</div>
+          §8 选型速查
+        </div>
+
+        <div class="big-concept">
+          <div class="big-concept-title">5 分钟决策树</div>
+          <div class="table-wrap" style="margin:12px 0 0;">
+            <table>
+              <thead><tr><th>我的情况</th><th>推荐路线</th><th>YAML 关键参数</th></tr></thead>
+              <tbody>
+                <tr><td>🎯 单卡 24GB，快速适配特定任务</td><td>QLoRA + SFT</td><td><code>finetuning_type: lora, quantization_bit: 4</code></td></tr>
+                <tr><td>🎯 单卡 16GB，效果优先</td><td>LoRA + SFT</td><td><code>finetuning_type: lora, bf16: true</code></td></tr>
+                <tr><td>🎯 有偏好数据，想做对齐</td><td>LoRA + DPO</td><td><code>stage: dpo, pref_loss: sigmoid</code></td></tr>
+                <tr><td>🎯 节省显存，无 Ref Model</td><td>LoRA + ORPO</td><td><code>stage: dpo, pref_loss: orpo</code></td></tr>
+                <tr><td>🎯 推理/数学任务，可验证奖励</td><td>LoRA + GRPO</td><td><code>stage: grpo, reward_funcs: [accuracy]</code></td></tr>
+                <tr><td>🎯 多卡集群，极致对齐</td><td>LoRA + PPO</td><td><code>stage: rm</code> 先训 RM，再 <code>stage: ppo</code></td></tr>
+                <tr><td>🎯 零代码，图形界面操作</td><td>LLaMA Board</td><td><code>llamafactory-cli webui</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="callout-green">
+          <strong>资源汇总：</strong><br>
+          📖 <a href="https://github.com/hiyouga/LLaMA-Factory" target="_blank">GitHub 仓库</a> ·
+          📚 <a href="https://llamafactory.readthedocs.io" target="_blank">官方文档</a> ·
+          📄 <a href="https://arxiv.org/abs/2403.13372" target="_blank">ACL 2024 论文</a> ·
+          🖥️ <a href="https://huggingface.co/spaces/hiyouga/LLaMA-Board" target="_blank">在线体验（HF Spaces）</a>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <footer>
+    <p>整理自 LLaMA-Factory GitHub 源码及官方文档 · 2026-04-24 · <a href="../index.html">返回首页</a></p>
+  </footer>
+</div>
+
+<script>
+(function(){
+  var tocLinks = document.querySelectorAll('.toc-list a');
+  var targets = document.querySelectorAll('.section[id]');
+  var linkMap = {};
+  tocLinks.forEach(function(a){
+    var href = a.getAttribute('href');
+    if (href && href.startsWith('#')) linkMap[href.slice(1)] = a;
+  });
+  var activeId = null;
+  function setActive(id){
+    if (id === activeId) return;
+    activeId = id;
+    tocLinks.forEach(function(a){ a.classList.remove('active'); });
+    if (id && linkMap[id]){
+      linkMap[id].classList.add('active');
+      var toc = document.querySelector('.toc');
+      if (toc){
+        var li = linkMap[id];
+        var tocTop = toc.getBoundingClientRect().top;
+        var liTop  = li.getBoundingClientRect().top;
+        toc.scrollBy({ top: liTop - tocTop - toc.clientHeight / 2, behavior: 'smooth' });
+      }
+    }
+  }
+  var observer = new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      if (entry.isIntersecting) setActive(entry.target.id);
+    });
+  }, { rootMargin: '-10% 0px -60% 0px', threshold: 0 });
+  targets.forEach(function(el){ observer.observe(el); });
+})();
+</script>
+</body>
+</html>
