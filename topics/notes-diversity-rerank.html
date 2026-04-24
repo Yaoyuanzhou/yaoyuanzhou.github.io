@@ -1,0 +1,1560 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>多样性重排方法脉络：从 MMR 到 RL 端到端学习</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false }
+          ],
+          throwOnError: false
+        });
+      }
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #7c3aed; --primary-soft: #faf5ff;
+      --accent: #2563eb; --accent-soft: #eff6ff;
+      --green: #059669; --green-soft: #ecfdf5;
+      --amber: #d97706; --amber-soft: #fffbeb;
+      --red: #dc2626; --red-soft: #fef2f2;
+      --shadow: 0 10px 30px rgba(15,23,42,0.08);
+      --radius: 18px; --max: 1120px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: linear-gradient(180deg,#fdf4ff 0%,var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      line-height: 1.85;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .page { max-width: var(--max); margin: 0 auto; padding: 32px 20px 80px; }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    .back-link:hover { color: var(--primary); text-decoration: none; }
+    .hero {
+      background: radial-gradient(circle at top right, rgba(124,58,237,0.12), transparent 30%),
+                  radial-gradient(circle at left bottom, rgba(37,99,235,0.08), transparent 24%),
+                  var(--card);
+      border: 1px solid rgba(124,58,237,0.15);
+      border-radius: 24px; box-shadow: var(--shadow);
+      padding: 34px 34px 28px; margin-bottom: 22px;
+    }
+    .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: #faf5ff; color: #6d28d9; font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+    h1 { margin: 0 0 10px; font-size: 30px; line-height: 1.25; letter-spacing: -0.02em; }
+    .subtitle { margin: 0; color: var(--muted); font-size: 15px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 24px; }
+    .meta-card { background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 16px; padding: 14px 16px; }
+    .meta-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .meta-value { font-size: 14px; font-weight: 600; word-break: break-word; }
+    .layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 22px; align-items: start; }
+    .toc { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; max-height: calc(100vh - 40px); overflow-y: auto; }
+    .toc h2 { margin: 0 0 12px; font-size: 15px; color: var(--text); }
+    .toc-list { list-style: none; margin: 0; padding: 0; }
+    .toc-list li { margin: 0; }
+    .toc-list a { display: block; padding: 5px 8px; border-radius: 8px; color: var(--muted); font-size: 13px; transition: all 0.15s; }
+    .toc-list a:hover { color: var(--primary); background: #faf5ff; text-decoration: none; }
+    .toc-list a.active { color: var(--primary); background: #eff6ff; font-weight: 600; border-left: 3px solid var(--primary); padding-left: 5px; }
+    .toc-sub { list-style: none; padding-left: 12px; margin: 0; }
+    .toc-sub a { font-size: 12px; padding: 3px 8px; }
+    .content { display: flex; flex-direction: column; gap: 18px; }
+    .section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 26px 28px; }
+    .section-title { display: flex; align-items: center; gap: 12px; margin: 0 0 20px; font-size: 20px; font-weight: 700; }
+    .icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+    h3 { margin: 28px 0 12px; font-size: 17px; color: #111827; border-left: 3px solid #e9d5ff; padding-left: 10px; }
+    h4 { margin: 20px 0 8px; font-size: 15px; color: #374151; }
+    p { margin: 0 0 12px; }
+    ul, ol { margin: 0 0 12px; padding-left: 22px; }
+    li { margin-bottom: 5px; }
+    .callout-blue { background: var(--accent-soft); border: 1px solid #bfdbfe; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-amber { background: var(--amber-soft); border: 1px solid #fde68a; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-green { background: var(--green-soft); border: 1px solid #a7f3d0; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-purple { background: var(--primary-soft); border: 1px solid #e9d5ff; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-red { background: var(--red-soft); border: 1px solid #fecaca; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-title { font-weight: 700; font-size: 14px; margin-bottom: 6px; }
+    code { background: #f3f4f6; border-radius: 5px; padding: 1px 5px; font-size: 13px; font-family: "JetBrains Mono","Fira Code",monospace; }
+    pre { background: #1e1e2e; color: #cdd6f4; border-radius: 12px; padding: 18px 20px; overflow-x: auto; margin: 16px 0; font-size: 13px; line-height: 1.6; }
+    pre code { background: none; padding: 0; color: inherit; }
+    table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
+    th { background: #f9fafb; border: 1px solid var(--line); padding: 10px 14px; text-align: left; font-size: 13px; }
+    td { border: 1px solid var(--line); padding: 9px 14px; vertical-align: top; }
+    tr:hover td { background: #f9fafb; }
+    .paper-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
+    .badge-blue { background: #dbeafe; color: #1d4ed8; }
+    .badge-green { background: #d1fae5; color: #065f46; }
+    .badge-amber { background: #fef3c7; color: #92400e; }
+    .badge-purple { background: #ede9fe; color: #5b21b6; }
+    .badge-red { background: #fee2e2; color: #991b1b; }
+    .badge-rose { background: #ffe4e6; color: #9f1239; }
+    .timeline { position: relative; padding-left: 28px; }
+    .timeline::before { content:''; position: absolute; left: 6px; top: 0; bottom: 0; width: 2px; background: #e9d5ff; }
+    .timeline-item { position: relative; margin-bottom: 28px; }
+    .timeline-item::before { content:''; position: absolute; left: -26px; top: 6px; width: 12px; height: 12px; border-radius: 50%; background: var(--primary); border: 2px solid #fff; box-shadow: 0 0 0 2px var(--primary); }
+    .timeline-year { font-size: 12px; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+    .formula-block { background: #f9fafb; border: 1px solid var(--line); border-radius: 12px; padding: 16px 20px; margin: 14px 0; overflow-x: auto; }
+    .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0; }
+    .compare-grid.three { grid-template-columns: 1fr 1fr 1fr; }
+    .compare-card { background: #f9fafb; border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+    .compare-card h5 { margin: 0 0 8px; font-size: 14px; }
+    .algo-step { background: var(--primary-soft); border: 1px solid #e9d5ff; border-radius: 12px; padding: 14px 16px; margin: 12px 0; }
+    .algo-step .step-num { display: inline-block; background: var(--primary); color: #fff; font-size: 12px; font-weight: 700; border-radius: 50%; width: 22px; height: 22px; text-align: center; line-height: 22px; margin-right: 8px; }
+    .pros { background: var(--green-soft); border: 1px solid #a7f3d0; border-radius: 14px; padding: 14px 16px; }
+    .cons { background: var(--red-soft); border: 1px solid #fecaca; border-radius: 14px; padding: 14px 16px; }
+    .pros h5, .cons h5 { margin: 0 0 8px; font-size: 13px; font-weight: 700; }
+    .pros h5 { color: var(--green); }
+    .cons h5 { color: var(--red); }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .toc { position: static; max-height: none; }
+      .meta-grid { grid-template-columns: 1fr 1fr; }
+      .compare-grid, .compare-grid.three { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+  <a href="../index.html" class="back-link">← 返回首页</a>
+
+  <div class="hero">
+    <div class="eyebrow">📚 方法脉络笔记</div>
+    <h1>多样性重排：从 MMR 到 RL 端到端学习</h1>
+    <p class="subtitle">五篇经典工作：MMR（1998）· Adaptive PD（RecSys'16）· Calibrated Rec（RecSys'18）· Fast Greedy DPP（NeurIPS'18）· RL4CTE（KDD'20）</p>
+    <div class="meta-grid">
+      <div class="meta-card"><div class="meta-label">时间跨度</div><div class="meta-value">1998 — 2020</div></div>
+      <div class="meta-card"><div class="meta-label">核心问题</div><div class="meta-value">相关性 vs 多样性权衡</div></div>
+      <div class="meta-card"><div class="meta-label">方法类别</div><div class="meta-value">贪心重排 / 集合选择 / RL</div></div>
+      <div class="meta-card"><div class="meta-label">落地场景</div><div class="meta-value">搜索、电商发现、Feed 推荐</div></div>
+    </div>
+  </div>
+
+  <div class="layout">
+    <aside class="toc">
+      <h2>目录</h2>
+      <ul class="toc-list">
+        <li><a href="#overview">1. 问题背景与方法谱系</a>
+          <ul class="toc-sub">
+            <li><a href="#overview-problem">1.1 核心矛盾</a></li>
+            <li><a href="#overview-tension">1.2 两类多样性目标</a></li>
+            <li><a href="#overview-timeline">1.3 演进时间线</a></li>
+            <li><a href="#overview-map">1.4 方法谱系总图</a></li>
+          </ul>
+        </li>
+        <li><a href="#mmr">2. MMR (1998)</a>
+          <ul class="toc-sub">
+            <li><a href="#mmr-pipeline">2.0 推荐链路位置</a></li>
+            <li><a href="#mmr-problem">2.1 问题定义</a></li>
+            <li><a href="#mmr-formula">2.2 核心公式</a></li>
+            <li><a href="#mmr-algo">2.3 贪心算法</a></li>
+            <li><a href="#mmr-example">2.4 推荐系统实例</a></li>
+            <li><a href="#mmr-analysis">2.5 深度分析与局限</a></li>
+          </ul>
+        </li>
+        <li><a href="#apd">3. Adaptive Personalized Diversity (RecSys'16)</a>
+          <ul class="toc-sub">
+            <li><a href="#apd-problem">3.1 问题背景</a></li>
+            <li><a href="#apd-scoring">3.2 相关性打分</a></li>
+            <li><a href="#apd-submodular">3.3 次模多样化</a></li>
+            <li><a href="#apd-personalization">3.4 个性化权重</a></li>
+            <li><a href="#apd-example">3.5 完整推荐实例</a></li>
+            <li><a href="#apd-analysis">3.6 分析</a></li>
+          </ul>
+        </li>
+        <li><a href="#calibrated">4. Calibrated Recommendations (RecSys'18)</a>
+          <ul class="toc-sub">
+            <li><a href="#calib-idea">4.1 核心思想</a></li>
+            <li><a href="#calib-formula">4.2 分布度量：KL 散度</a></li>
+            <li><a href="#calib-tradeoff">4.3 目标函数与优化</a></li>
+            <li><a href="#calib-example">4.4 推荐系统实例</a></li>
+            <li><a href="#calib-analysis">4.5 分析</a></li>
+          </ul>
+        </li>
+        <li><a href="#dpp">5. Fast Greedy DPP (NeurIPS'18)</a>
+          <ul class="toc-sub">
+            <li><a href="#dpp-problem">5.1 问题背景</a></li>
+            <li><a href="#dpp-math">5.2 DPP 数学基础</a></li>
+            <li><a href="#dpp-map">5.3 MAP 推断</a></li>
+            <li><a href="#dpp-fast">5.4 快速 Cholesky 算法</a></li>
+            <li><a href="#dpp-window">5.5 滑动窗口流式 DPP</a></li>
+            <li><a href="#dpp-example">5.6 推荐系统实例</a></li>
+            <li><a href="#dpp-analysis">5.7 分析</a></li>
+          </ul>
+        </li>
+        <li><a href="#rl4cte">6. RL4CTE (KDD'20)</a>
+          <ul class="toc-sub">
+            <li><a href="#rl4cte-problem">6.1 问题背景</a></li>
+            <li><a href="#rl4cte-cte">6.2 CTE 目标函数</a></li>
+            <li><a href="#rl4cte-mdp">6.3 MDP 建模</a></li>
+            <li><a href="#rl4cte-model">6.4 模型架构</a></li>
+            <li><a href="#rl4cte-example">6.5 推荐系统实例</a></li>
+            <li><a href="#rl4cte-analysis">6.6 分析</a></li>
+          </ul>
+        </li>
+        <li><a href="#comparison">7. 五方法横向对比</a></li>
+        <li><a href="#summary">8. 总结与展望</a></li>
+      </ul>
+    </aside>
+
+    <main class="content">
+
+      <!-- ===== §1 OVERVIEW ===== -->
+      <div class="section" id="overview">
+        <div class="section-title">
+          <div class="icon" style="background:#faf5ff">🗺️</div>
+          <span>1. 问题背景与方法谱系</span>
+        </div>
+
+        <h3 id="overview-problem">1.1 核心矛盾：相关性 vs 多样性</h3>
+        <p>在信息检索和推荐系统中，最朴素的排序策略是按相关性/预测分数降序排列——但这会产生严重的<strong>冗余问题</strong>：</p>
+        <div class="callout-amber">
+          <div class="callout-title">⚠️ 纯相关性排序的典型问题</div>
+          <ul>
+            <li><strong>搜索场景：</strong>搜索"Python 教程"，前 10 条结果全是同一网站的不同入门页，用户得不到多样化视角。</li>
+            <li><strong>电商发现：</strong>用户随手浏览时，系统反复推同品类商品（比如一直推鞋），错失发现新品的机会。</li>
+            <li><strong>推荐系统：</strong>用户历史 70% 爱情片、30% 动作片，但推荐列表全是爱情片，违背用户真实兴趣分布。</li>
+            <li><strong>Feed 流：</strong>CTR 提升的同时，用户浏览深度反而下降——因为高 CTR 内容单调，用户更早离开（RL4CTE 的核心发现）。</li>
+          </ul>
+        </div>
+        <p>多样性的本质是：在候选集中选出一个<strong>集合</strong>，使得这个集合整体的信息量（覆盖度、用户满意度）最大，而不只是追求列表中每个单项的质量。这是一个<strong>集合优化问题（Set Optimization）</strong>，与逐条排序（point-wise ranking）有本质区别。</p>
+
+        <h3 id="overview-tension">1.2 两类多样性目标</h3>
+        <p>研究者逐渐发现"多样性"本身存在两种不同出发点，对应两套解法：</p>
+        <div class="compare-grid">
+          <div class="compare-card">
+            <h5 style="color:var(--accent)">📐 内容多样性（Content Diversity）</h5>
+            <p>集合内各元素之间的相互差异尽量大。目标是：已选的和新候选之间不要太相似。</p>
+            <p><strong>代表：</strong>MMR、DPP</p>
+          </div>
+          <div class="compare-card">
+            <h5 style="color:var(--green)">📊 分布校准（Calibration / Coverage）</h5>
+            <p>集合的类目/标签分布要和用户历史兴趣分布对齐。目标是：不要一类推到底，要反映用户多元口味。</p>
+            <p><strong>代表：</strong>Calibrated Rec、Adaptive PD</p>
+          </div>
+        </div>
+        <p>而 RL4CTE 则从更高层次出发：<strong>用强化学习直接优化用户 session 内总点击数</strong>，多样性成为提升长期目标的隐式手段，而非显式约束。</p>
+
+        <h3 id="overview-timeline">1.3 方法演进时间线</h3>
+        <div class="timeline">
+          <div class="timeline-item">
+            <div class="timeline-year">1998 — SIGIR</div>
+            <strong>MMR (Carbonell &amp; Goldstein)</strong><br/>
+            <span style="font-size:14px;color:var(--muted)">提出 Maximal Marginal Relevance，用 λ 参数在相关性与反冗余之间线性插值；引入"边际相关性"概念；通过贪心算法线性时间选集合。影响深远，被后世大量工作直接引用或泛化。</span>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-year">2016 — RecSys</div>
+            <strong>Adaptive Personalized Diversity (Amazon / Teo et al.)</strong><br/>
+            <span style="font-size:14px;color:var(--muted)">用次模函数（Submodular）替代 MMR 的简单相似度减法，加入个性化类目权重；Thompson Sampling 做 explore-exploit；上线 Amazon Stream 时 CTR 提升 9.82%～12.58%。</span>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-year">2018 — RecSys</div>
+            <strong>Calibrated Recommendations (Steck / Netflix)</strong><br/>
+            <span style="font-size:14px;color:var(--muted)">从"分布对齐"角度重新定义多样性：推荐列表的类目分布应与用户历史偏好分布一致；用 KL 散度度量偏差；用次模贪心求解 Relevance - λ·KL 目标。</span>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-year">2018 — NeurIPS</div>
+            <strong>Fast Greedy DPP (Chen, Zhang, Zhou / JD.com)</strong><br/>
+            <span style="font-size:14px;color:var(--muted)">把 DPP（行列式点过程）引入推荐多样化重排；提出基于 Cholesky 分解的快速增量贪心 MAP 推断（$O(Mk^2)$）；给出滑动窗口流式算法支持工业级实时推断；JD.com 平台 A/B 验证。</span>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-year">2020 — KDD</div>
+            <strong>RL4CTE (Liu &amp; Liu / Feed 推荐)</strong><br/>
+            <span style="font-size:14px;color:var(--muted)">发现"CTR 提升但总点击数下降"的矛盾现象；提出 CTE（Click-Through Expectation）作为 session 级累计优化目标；用 REINFORCE 训练 RNN 重排策略；引入 PBR（Position Bounce Rate）建模用户提前离开；离线仿真环境支持 on-policy 训练；线上 AC +6.22%、AD +4.92%。</span>
+          </div>
+        </div>
+
+        <h3 id="overview-map">1.4 方法谱系总图</h3>
+        <div class="callout-blue">
+          <div class="callout-title">🧭 核心设计空间对比</div>
+          <table>
+            <thead>
+              <tr><th>维度</th><th>MMR</th><th>Adaptive PD</th><th>Calibrated Rec</th><th>Fast DPP</th><th>RL4CTE</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>多样性定义</td><td>pair-wise 相似度</td><td>属性覆盖（次模）</td><td>类目分布 KL</td><td>行列式体积</td><td>隐式（session 总点击）</td></tr>
+              <tr><td>个性化</td><td>❌</td><td>✅ 类目权重</td><td>✅ 历史分布</td><td>⚠️ 可扩展</td><td>✅ 用户 embedding</td></tr>
+              <tr><td>优化目标</td><td>单步贪心</td><td>次模 + CELF</td><td>Rel - λKL</td><td>MAP 行列式</td><td>长期 CTE（RL）</td></tr>
+              <tr><td>是否端到端</td><td>❌</td><td>❌</td><td>❌</td><td>❌</td><td>✅</td></tr>
+              <tr><td>落地场景</td><td>文档摘要/检索</td><td>视觉发现（时装）</td><td>电影推荐</td><td>商品推荐</td><td>Feed 流推荐</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ===== §2 MMR ===== -->
+      <div class="section" id="mmr">
+        <div class="section-title">
+          <div class="icon" style="background:#dbeafe">📄</div>
+          <span>2. MMR — Maximal Marginal Relevance (1998)</span>
+        </div>
+        <div style="margin-bottom:14px">
+          <span class="paper-badge badge-blue">Carbonell &amp; Goldstein, 1998</span>
+          <span class="paper-badge badge-blue" style="margin-left:6px">SIGIR · ACL Anthology</span>
+          <span class="paper-badge badge-amber" style="margin-left:6px">信息检索 · 文档摘要</span>
+        </div>
+
+        <h3 id="mmr-pipeline">2.0 MMR 在推荐链路的位置</h3>
+        <p>先明确 MMR 做的是哪个环节，以及<strong>重排（Re-ranking）</strong>和<strong>混排（Blending/Fusion）</strong>的区别：</p>
+        <div class="callout-blue">
+          <div class="callout-title">🏭 推荐链路全景</div>
+          <div style="font-family:monospace;font-size:13px;background:#1e1e2e;color:#cdd6f4;border-radius:10px;padding:14px 18px;margin:8px 0;overflow-x:auto;">
+召回层（ANN 向量召回 / 倒排 / 规则召回）<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;↓ 数万 → 数千个候选<br/>
+粗排（轻量模型，线性/简单 NN，快速过滤）<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;↓ 数千 → 数百个候选<br/>
+精排（精细深度模型 DeepFM / DIN 等，输出 CTR/pctr 分）<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;↓ 数百个候选 + 每个的精排分<br/>
+<span style="color:#a6e3a1;font-weight:bold;">【重排 Re-ranking】← MMR / DPP / Calibrated Rec 在这里做</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;↓ 重排后的单一有序列表（约 50~200 条）<br/>
+<span style="color:#f38ba8;font-weight:bold;">【混排 Blending】← 广告插入 / 运营位 / 多路合并在这里做</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;↓ 最终 Feed 流（下发给用户）
+          </div>
+        </div>
+        <div class="compare-grid">
+          <div class="compare-card">
+            <h5 style="color:var(--accent)">🔵 重排（Re-ranking）</h5>
+            <p><strong>输入：</strong>精排给出的<em>单一候选列表</em>，每个 item 有精排分。</p>
+            <p><strong>做什么：</strong>在这一个列表内部调整顺序——减少冗余、保证类目覆盖、注入多样性。</p>
+            <p><strong>输出：</strong>同一批候选，不同顺序（也可能丢掉一些）。</p>
+            <p><strong>例：</strong>精排给 200 个商品，全是运动鞋。重排（MMR）后保留 10 双鞋 + 选入 5 个帽子 + 5 件上衣，共 50 个多样化商品。</p>
+          </div>
+          <div class="compare-card">
+            <h5 style="color:var(--red)">🔴 混排（Blending/Fusion）</h5>
+            <p><strong>输入：</strong><em>多个来源的候选列表</em>（推荐池 + 广告池 + 运营坑位 + 直播等）。</p>
+            <p><strong>做什么：</strong>按照频控规则、运营策略、竞价结果，把多路候选<em>交织插入</em>成一条展示流。</p>
+            <p><strong>输出：</strong>一条混合了不同来源 item 的最终 Feed。</p>
+            <p><strong>例：</strong>重排完的推荐商品 + 广告系统出的广告（每 4 条推荐插 1 条广告）+ 运营固定在位置 1 的 banner。</p>
+          </div>
+        </div>
+        <div class="callout-amber">
+          <div class="callout-title">⚠️ 为什么精排之后才做重排，而不是在精排里直接解决？</div>
+          <ul>
+            <li><strong>精排是 point-wise 的：</strong>精排模型对每个 item 独立打分（给定 user+item 特征预测 CTR），不感知"这个 item 和列表里其他 item 的关系"。它的目标是单项分数准，不是集合分数好。</li>
+            <li><strong>重排是 list-wise / set-wise 的：</strong>重排把整个候选集作为输入，目标是选出一个<em>集合</em>使得整体价值（相关性 + 多样性）最大。需要 item 之间互相感知。</li>
+            <li><strong>效率分层：</strong>精排需要对每个 item 单独跑复杂模型（DeepFM 级别），候选集缩减到几百以内再做集合优化才合理。</li>
+          </ul>
+        </div>
+
+        <h3 id="mmr-problem">2.1 问题定义</h3>
+        <p>MMR 产生于<strong>文档摘要</strong>和<strong>信息检索</strong>场景：给定查询 $Q$，从文档集 $R$ 中已选出一个子集 $S$，现在要再挑一篇文档加入 $S$，使得它既与 $Q$ 相关，又与 $S$ 中已有文档不重复。</p>
+        <p>这是一个非常经典的"<strong>边际效益递减</strong>"问题：第一篇搜索结果带来很多信息，第二篇如果和第一篇一模一样，边际信息量接近于零。MMR 的贡献就是把"边际相关性"（Marginal Relevance）这个直觉形式化。</p>
+
+        <h3 id="mmr-formula">2.2 核心公式</h3>
+        <p>每次贪心选下一个文档 $d_i$，选的标准是最大化：</p>
+        <div class="formula-block">
+          $$\text{MMR} := \arg\max_{d_i \in R \setminus S} \left[\lambda \cdot \text{Sim}_1(d_i, Q) - (1-\lambda) \cdot \max_{d_j \in S} \text{Sim}_2(d_i, d_j)\right]$$
+        </div>
+        <p>逐项解读：</p>
+        <ul>
+          <li>$\text{Sim}_1(d_i, Q)$：$d_i$ 与查询 $Q$ 的相关度（TF-IDF cosine 或 BM25 分数）。</li>
+          <li>$\max_{d_j \in S}\text{Sim}_2(d_i, d_j)$：$d_i$ 与已选集合 $S$ 中最相似文档的相似度——代表"冗余度"。</li>
+          <li>$\lambda \in [0,1]$：$\lambda=1$ 退化为纯相关性排序；$\lambda=0$ 只最大化多样性。</li>
+        </ul>
+        <div class="callout-purple">
+          <div class="callout-title">💡 "边际"一词的含义</div>
+          <p>经济学中"边际"是"再多一单位带来的额外收益"。在 MMR 里，$d_i$ 对查询 $Q$ 的边际相关性 = 全部相关性 − 已被 $S$ 覆盖掉的冗余部分。形式上用最大相似度来估计冗余。</p>
+          <p>注意：$\text{Sim}_1$ 和 $\text{Sim}_2$ 可以是不同的相似度函数，作者并不要求它们相同。</p>
+        </div>
+
+        <h3 id="mmr-algo">2.3 贪心算法流程</h3>
+        <div class="algo-step"><span class="step-num">1</span> 初始化：$S = \emptyset$，候选集 $R$ 包含所有候选文档（已用基础相关性模型初步筛选）。</div>
+        <div class="algo-step"><span class="step-num">2</span> 循环 $k$ 次（需要选 $k$ 篇文档）：计算 $R \setminus S$ 中每个文档的 MMR 分数，选出最大值者加入 $S$，并从 $R$ 中移除它。</div>
+        <div class="algo-step"><span class="step-num">3</span> 输出：$S$ 就是最终的多样化结果集，按加入顺序排列。</div>
+        <p>每轮需要计算所有剩余文档的 MMR 分数，总复杂度 $O(k \cdot n)$（$n$ 为候选集大小），是线性时间算法。</p>
+
+        <h3 id="mmr-example">2.4 推荐系统实例：快手/淘宝商品搜索重排</h3>
+        <p>场景：用户在电商 App 搜索"<strong>跑步装备</strong>"，精排输出 top-200 个商品（每个商品有精排分）。现在做 MMR 重排选出 top-20 展示。</p>
+        <div class="callout-blue">
+          <div class="callout-title">📦 精排 top-8 输出（简化版）</div>
+          <table>
+            <thead><tr><th>item</th><th>商品描述</th><th>精排分（Sim₁）</th><th>类目</th></tr></thead>
+            <tbody>
+              <tr><td>A</td><td>耐克 React 跑步鞋（黑）</td><td>0.92</td><td>跑步鞋</td></tr>
+              <tr><td>B</td><td>耐克 React 跑步鞋（白）</td><td>0.90</td><td>跑步鞋</td></tr>
+              <tr><td>C</td><td>阿迪 Ultraboost 跑步鞋</td><td>0.88</td><td>跑步鞋</td></tr>
+              <tr><td>D</td><td>跑步专用手臂包</td><td>0.72</td><td>跑步配件</td></tr>
+              <tr><td>E</td><td>耐克跑步短裤</td><td>0.70</td><td>运动服</td></tr>
+              <tr><td>F</td><td>运动水壶（650ml）</td><td>0.65</td><td>运动配件</td></tr>
+              <tr><td>G</td><td>跑步心率手表</td><td>0.62</td><td>运动配件</td></tr>
+              <tr><td>H</td><td>压缩裤（跑步款）</td><td>0.60</td><td>运动服</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>每个 item 用商品图文 embedding（维度 128）表示。<strong>相似度矩阵（关键值，越高越相似）：</strong>A-B 余弦相似度 0.95（都是 React 跑鞋，颜色不同）；A-C 相似度 0.78（都是跑鞋但不同品牌）；A-D 相似度 0.12（鞋 vs 手臂包）。设 $\lambda = 0.6$（略偏相关性）。</p>
+        <div class="callout-green">
+          <div class="callout-title">🔄 MMR 贪心选取过程（前 4 轮）</div>
+          <p><strong>第 1 轮</strong>：$S = \emptyset$，冗余项为 0，MMR 分 = 精排分。选 A（分 0.92）。$S = \{A\}$</p>
+          <p><strong>第 2 轮</strong>：计算各候选的 MMR 分：</p>
+          <ul>
+            <li>B：$0.6 \times 0.90 - 0.4 \times \max\text{Sim}(B,A) = 0.54 - 0.4 \times 0.95 = 0.54 - 0.38 = \mathbf{0.16}$（高冗余大幅扣分）</li>
+            <li>C：$0.6 \times 0.88 - 0.4 \times 0.78 = 0.528 - 0.312 = \mathbf{0.216}$</li>
+            <li>D：$0.6 \times 0.72 - 0.4 \times 0.12 = 0.432 - 0.048 = \mathbf{0.384}$（跑步手臂包，与鞋差异大！）</li>
+          </ul>
+          <p>选 D（MMR 分 0.384，手臂包虽然精排分较低，但与已选鞋高度不同，边际贡献最大）。$S = \{A, D\}$</p>
+          <p><strong>第 3 轮</strong>：</p>
+          <ul>
+            <li>E（跑步短裤）：与 A 相似度 0.30，与 D 相似度 0.15。$0.6 \times 0.70 - 0.4 \times 0.30 = 0.42 - 0.12 = \mathbf{0.30}$</li>
+            <li>F（运动水壶）：与 A 相似度 0.08，与 D 相似度 0.20。$0.6 \times 0.65 - 0.4 \times 0.20 = 0.39 - 0.08 = \mathbf{0.31}$</li>
+            <li>C（阿迪鞋）：与 A 相似度 0.78。$0.216$（和第 2 轮一样，未改变）</li>
+          </ul>
+          <p>选 F（运动水壶，0.31）。$S = \{A, D, F\}$</p>
+          <p><strong>第 4 轮</strong>：选 E（跑步短裤，与 A/D/F 都差异大）。</p>
+          <p>持续循环，最终 top-20 中：跑步鞋约 6 双（多品牌/色彩分散）+ 配件 6 个 + 运动服 5 件 + 心率手表等 3 个，比直接按精排分取 top-20（基本全是跑步鞋）多样化得多。</p>
+        </div>
+        <div class="callout-purple">
+          <div class="callout-title">🏭 工业实际落地细节</div>
+          <ul>
+            <li><strong>$\text{Sim}_1$（查询相关性）：</strong>直接用精排模型输出的 pctr 分，不需要重新计算。</li>
+            <li><strong>$\text{Sim}_2$（item 间相似度）：</strong>离线预计算好 item embedding（用图文多模态模型），上线时候选集不超过 200 个，计算 pair-wise 余弦相似度约 $200^2/2 = 2$ 万次，在 RT 预算内。</li>
+            <li><strong>$\lambda$ 的业务含义：</strong>搜索场景用户意图明确，$\lambda$ 通常取 0.7~0.8（偏相关性）；发现/浏览场景用户无明确意图，$\lambda$ 通常取 0.4~0.6（更看重多样性）。</li>
+            <li><strong>候选集截断：</strong>通常先把精排 top-200 压缩到 top-50（粗过滤）再做 MMR，进一步节省计算。</li>
+          </ul>
+        </div>
+
+        <h3 id="mmr-analysis">2.5 深度分析与局限</h3>
+        <div class="compare-grid">
+          <div class="pros">
+            <h5>✅ 优点</h5>
+            <ul>
+              <li>公式简洁，直觉清晰，实现极简（约 5 行代码）。</li>
+              <li>$\lambda$ 提供连续插值控制，业务调参方便。</li>
+              <li>与具体相似度函数无关，适配性强（可用任意 embedding）。</li>
+              <li>第一篇基础性工作，后续几乎所有多样化方法都引用。</li>
+            </ul>
+          </div>
+          <div class="cons">
+            <h5>❌ 局限</h5>
+            <ul>
+              <li><strong>无个性化：</strong>$\lambda$ 对所有用户相同，无法区分每个用户对多样性的偏好。</li>
+              <li><strong>pair-wise 视角不够全局：</strong>只考虑最相似的那篇，忽略集合整体多样性结构（DPP 用行列式解决）。</li>
+              <li><strong>贪心不可逆：</strong>每次选择不考虑后续影响，次优性有理论下界但实际可能不够好。</li>
+              <li><strong>无分布概念：</strong>不能保证结果集的类目分布满足某个目标（Calibrated Rec 补足了这点）。</li>
+              <li><strong>$\lambda$ 调参依赖经验：</strong>不同业务最优 $\lambda$ 差别很大，没有自动学习机制。</li>
+            </ul>
+          </div>
+        </div>
+        <div class="callout-amber">
+          <div class="callout-title">🔑 为什么 MMR 如此重要？</div>
+          <p>MMR 的核心贡献不是算法本身的效果，而是<strong>正式定义了"多样性重排"这个任务框架</strong>：从集合 $R$ 中选出子集 $S$ 使得相关性和多样性的加权目标最大。后来的 Adaptive PD、Calibrated Rec、DPP 都在这个框架下改进了"如何度量多样性"这个核心问题。</p>
+        </div>
+      </div>
+
+      <!-- ===== §3 APD ===== -->
+      <div class="section" id="apd">
+        <div class="section-title">
+          <div class="icon" style="background:#d1fae5">🛒</div>
+          <span>3. Adaptive Personalized Diversity (RecSys'16)</span>
+        </div>
+        <div style="margin-bottom:14px">
+          <span class="paper-badge badge-green">Teo et al., Amazon, 2016</span>
+          <span class="paper-badge badge-green" style="margin-left:6px">RecSys 2016</span>
+          <span class="paper-badge badge-amber" style="margin-left:6px">电商视觉发现 · 时装</span>
+        </div>
+
+        <h3 id="apd-problem">3.1 问题背景：视觉浏览发现</h3>
+        <p>这篇论文来自 Amazon Stream——一个类似"无限 feed 流"的时装浏览产品。用户没有明确搜索意图，只是随手滚动，期望被"惊喜"地发现感兴趣的商品。</p>
+        <p>系统面临两个核心挑战：</p>
+        <ul>
+          <li><strong>冷启动 + 曝光不足：</strong>新品或冷门商品被曝光少，模型对其点击概率估计不准，容易一直推热门商品。</li>
+          <li><strong>多样性需求：</strong>用户研究表明，多样化的展示流能让用户更快发现感兴趣的品类，从而提升 CTR 和停留时长。纯按预测分排序会造成品类聚集。</li>
+        </ul>
+        <p>解决方案分三层：<strong>① 相关性打分（Thompson Sampling）→ ② 次模多样化重排 → ③ 个性化类目权重</strong>。</p>
+
+        <h3 id="apd-scoring">3.2 第①层：Thompson Sampling 打分（解决"新品永远不被看见"）</h3>
+
+        <div class="callout-amber">
+          <div class="callout-title">🤔 先说为什么不能直接用历史 CTR 排序</div>
+          <p>最朴素的打分方法：每个商品有个历史点击率，直接按历史 CTR 排序。</p>
+          <p><strong>问题：</strong>一件新上架的 Gucci 白鞋，还没几个人看过，历史 CTR 为 0。一双已经卖了 3 年的耐克老款，历史 CTR = 5%。</p>
+          <p>→ 系统永远把老耐克排前面，Gucci 白鞋永远排不进首屏 → Gucci 白鞋永远没有曝光 → 永远没有点击数据 → CTR 永远是 0 → 死循环。</p>
+          <p>这就是<strong>冷启动 / 探索困境</strong>：热门商品一直被强化，新品没有机会证明自己。</p>
+        </div>
+
+        <h4>什么是 Beta 分布？</h4>
+        <p>Beta 分布是专门用来描述"一个概率值大概在哪个范围"的分布。它的参数是两个正整数 $\alpha$ 和 $\beta$：</p>
+        <div class="formula-block">
+          $$\text{Beta}(\alpha, \beta) \quad \text{均值} = \frac{\alpha}{\alpha+\beta}, \quad \text{方差} = \frac{\alpha\beta}{(\alpha+\beta)^2(\alpha+\beta+1)}$$
+        </div>
+        <p>直觉上：$\alpha$ 是"成功的次数"，$\beta$ 是"失败的次数"，均值 = 成功率。方差越大，说明数据越少，对这个成功率越不确定。</p>
+        <div class="callout-purple">
+          <div class="callout-title">🎲 三种 Beta 分布的直观对比</div>
+          <ul>
+            <li><strong>Beta(1, 1)</strong>：均值 0.5，方差极大 → 分布从 0 到 1 几乎均匀分布。这是"<strong>完全不知道</strong>点击率是多少"的初始状态。采样结果可能是 0.01，也可能是 0.99，完全随机。</li>
+            <li><strong>Beta(5, 95)</strong>：均值 0.05，方差中等 → 有一些数据了，但还不够多。分布主要集中在 2%~8% 区间，但偶尔也有偏离。</li>
+            <li><strong>Beta(150, 2850)</strong>：均值 0.05，方差极小 → 数据非常充足。分布窄到几乎是 4.8%~5.2% 的一个小尖峰。采样结果几乎总是 0.05 左右。</li>
+          </ul>
+          <p><strong>关键规律：</strong>$\alpha + \beta$ 越大（总观察次数越多），分布越窄，采样越稳定；$\alpha + \beta$ 越小（数据越少），分布越宽，采样越随机。</p>
+        </div>
+
+        <p><strong>Thompson Sampling 的核心思想：</strong>对每个商品不是存"一个固定的 CTR 数值"，而是维护一个<strong>Beta 分布</strong>，表示"这个商品的真实点击率大概在哪个范围"。每次打分时<strong>从 Beta 分布里随机抽一个值</strong>用，而不是总用均值。</p>
+        <p>更新规则很简单：如果展示后被点击了，$\alpha$ 加 1；如果没被点击，$\beta$ 加 1。不需要重新训练模型，O(1) 实时更新。</p>
+
+        <div class="callout-green">
+          <div class="callout-title">🎲 具体例子：两件商品打分</div>
+          <p>商品 A（耐克爆款跑鞋）：被展示了 <strong>3000 次</strong>，被点击了 <strong>150 次</strong>。<br/>
+          → Beta 分布参数：Beta(150, 2850)，均值 5%，分布极窄，采样值几乎总是 0.05 左右。</p>
+
+          <p>商品 B（Gucci 新款白鞋）：才上架 2 天，被展示了 <strong>2 次</strong>，点击了 <strong>1 次</strong>。<br/>
+          → Beta 分布参数：Beta(1, 1)，均值 50%（但完全不可信），分布极宽，采样值可能是 0.03 也可能是 0.82。</p>
+
+          <p><strong>本次请求打分结果：</strong></p>
+          <table>
+            <thead><tr><th>商品</th><th>Beta 分布</th><th>本次采样值</th><th>说明</th></tr></thead>
+            <tbody>
+              <tr><td>耐克爆款跑鞋（A）</td><td>Beta(150, 2850)，窄</td><td>0.051</td><td>✅（稳定利用）</td></tr>
+              <tr><td>Gucci 新款白鞋（B）</td><td>Beta(1, 1)，极宽</td><td><strong>0.82</strong>（运气好！）</td><td>✅（随机探索）</td></tr>
+              <tr><td>某热门凉鞋（C）</td><td>Beta(80, 720)，中等</td><td>0.09</td><td>❌（本次分低）</td></tr>
+            </tbody>
+          </table>
+          <p>这次 Gucci 白鞋采样得 0.82，排名第 1。如果用户点了，下次变成 Beta(2, 1)；没点变成 Beta(1, 2)。几十次展示后，系统就对它的真实质量有了准确估计。</p>
+          <p><strong>关键：</strong>不是每次都给 Gucci 白鞋高分——只是偶尔，概率性地给它高分。热门商品数据多，采样稳定，不会因为随机性被大幅拖累。新品数据少，随机性高，有机会"运气好"被看见。</p>
+        </div>
+
+        <p>论文中实际使用的打分模型比 Beta 分布更复杂——用 Bayesian Linear Probit 回归，考虑商品属性（品牌、颜色等）：</p>
+        <div class="formula-block">
+          $$P(\text{click} \mid \text{item viewed}) = \Phi^{-1}\!\left(\sum_{x_i \text{ active}} x_i\right)$$
+        </div>
+        <p>其中 $\Phi^{-1}$ 是 probit 函数，$x_i$ 是商品属性的权重（也用 Bayesian 后验分布维护）。但<strong>核心思想不变</strong>：每个参数不是存一个固定值，而是存一个分布，采样时随机抽取。</p>
+
+        <p>这一层解决的是：<strong>候选池里每个商品的打分</strong>（类似精排的功能，但加了探索性）。打完分后，进入第②层做多样化重排。</p>
+
+        <h3 id="apd-submodular">3.3 第②层：次模多样化重排（解决"品类全是鞋"）</h3>
+
+        <div class="callout-amber">
+          <div class="callout-title">🤔 先说为什么不能直接按第①层的分数排序</div>
+          <p>假设 Thompson Sampling 打完分，前 10 名分别是：耐克跑鞋 0.51、阿迪跑鞋 0.49、彪马跑鞋 0.48、新百伦跑鞋 0.46 ......</p>
+          <p>全是跑鞋！用户 Alice 确实喜欢鞋，所以鞋的分数高。但她的首页全是鞋，她会感到厌倦，甚至错失她也感兴趣的手表和包。</p>
+          <p>→ 需要一个算法，在保证总体相关性的前提下，强制引入品类多样性。</p>
+        </div>
+
+        <p><strong>核心目标函数：</strong>给定 $n$ 个商品的类目属性向量 $\mathbf{a}_i \in \{0,1\}^d$（one-hot 类目编码）和用户类目偏好向量 $\mathbf{w} \in \mathbb{R}^d$，选 $k$ 个商品子集 $A_k$ 最大化：</p>
+        <div class="formula-block">
+          $$\varrho(A_k, \mathbf{w}) = \left\langle \mathbf{w},\, \log\!\left(1 + \sum_{a_i \in A_k} a_i\right) \right\rangle + \sum_{a_i \in A_k} s(a_i)$$
+        </div>
+        <p>逐项翻译成大白话：</p>
+        <ul>
+          <li><strong>第一项（多样性项）：</strong>对每个类目 $j$，计算 $\log(1 + \text{已选商品中属于 }j\text{ 类的数量}) \times w_j$，然后对所有类目求和。<strong>log 保证同一品类选得越多，边际增益越小</strong>（这就是"次模"——边际收益递减）。$w_j$ 是类目 $j$ 的权重，来自第③层。</li>
+          <li><strong>第二项（相关性项）：</strong>$\sum s(a_i)$ 就是把选入的每件商品的 Thompson Sampling 打分加起来，鼓励整体相关性高。</li>
+        </ul>
+        <p><strong>次模函数的数学定义：</strong>集合函数 $f$ 是次模的，当且仅当 $\forall A \subseteq B$，$\forall x \notin B$：</p>
+        <div class="formula-block">
+          $$f(A \cup \{x\}) - f(A) \geq f(B \cup \{x\}) - f(B)$$
+        </div>
+        <p>大白话：集合越大，再加一个元素带来的边际收益越小。这保证了贪心算法有 $(1 - 1/e)$ 近似比——虽然贪心不是最优解，但至少不会比最优解差太多。</p>
+
+        <p><strong>贪心运行方式：</strong>从空集合 $A_0 = \emptyset$ 开始，每轮从候选池中找"加入后 $\varrho$ 增量最大的商品"，选它，重复 k 次。复杂度 $O(dkn)$，用 <strong>CELF</strong> 加速（利用次模性延迟重计算，实际比暴力快很多）。</p>
+
+        <div class="callout-green">
+          <div class="callout-title">📐 用数字说清楚边际收益递减</div>
+          <p>假设 Alice 的类目权重（来自第③层，先假设已知）：鞋=0.6，手表=0.3，其他=0.1。</p>
+          <p>目标函数中的多样性项（鞋类部分）= $0.6 \times \log(1 + \text{鞋的数量})$</p>
+          <table>
+            <thead><tr><th>当前已选鞋的数量</th><th>再加第 N 双鞋的多样性增量</th><th>说明</th></tr></thead>
+            <tbody>
+              <tr><td>0 → 1</td><td>$0.6 \times [\log 2 - \log 1] = 0.6 \times 0.693 = \mathbf{0.416}$</td><td>第 1 双鞋贡献很大（从无到有）</td></tr>
+              <tr><td>1 → 2</td><td>$0.6 \times [\log 3 - \log 2] = 0.6 \times 0.405 = \mathbf{0.243}$</td><td>第 2 双鞋贡献减半</td></tr>
+              <tr><td>2 → 3</td><td>$0.6 \times [\log 4 - \log 3] = 0.6 \times 0.288 = \mathbf{0.173}$</td><td>继续减小</td></tr>
+              <tr><td>5 → 6</td><td>$0.6 \times [\log 7 - \log 6] = 0.6 \times 0.154 = \mathbf{0.092}$</td><td>已经很小了</td></tr>
+            </tbody>
+          </table>
+          <p>相比之下，Alice 还没选过手表（手表数量=0），此时第 1 块手表的多样性增量 = $0.3 \times \log 2 = 0.208$。</p>
+          <p><strong>结论：</strong>当鞋选了 2~3 双之后，第 3 双鞋的多样性增量（0.173）已经低于第 1 块手表的增量（0.208）。只要手表的 Thompson Sampling 分不是太差，手表就会被选进来。</p>
+        </div>
+
+        <div class="callout-blue">
+          <div class="callout-title">🔄 前 3 轮贪心选取（候选：耐克鞋 s=0.51、Gucci鞋 s=0.82、Casio手表 s=0.18、运动短裤 s=0.15）</div>
+          <p><strong>第 1 轮（集合为空）：</strong>多样性增量全部是"从 0 到 1"的初始值。</p>
+          <ul>
+            <li>Gucci 鞋：多样性增量 0.416 + Thompson 分 0.82 = <strong>1.236</strong></li>
+            <li>耐克鞋：多样性增量 0.416 + Thompson 分 0.51 = <strong>0.926</strong></li>
+            <li>Casio 手表：多样性增量 0.208 + Thompson 分 0.18 = <strong>0.388</strong></li>
+          </ul>
+          <p>→ 选 Gucci 鞋（分最高）。集合 = {Gucci鞋}，鞋的数量=1。</p>
+
+          <p><strong>第 2 轮（鞋已有 1 双）：</strong></p>
+          <ul>
+            <li>耐克鞋（鞋的第 2 双）：多样性增量变为 0.243（边际递减！）+ 0.51 = <strong>0.753</strong></li>
+            <li>Casio 手表（手表第 1 块，还没选过手表）：多样性增量 0.208 + 0.18 = <strong>0.388</strong></li>
+          </ul>
+          <p>→ 选耐克鞋（0.753 仍高于 0.388，因为耐克 Thompson 分明显更高）。集合 = {Gucci鞋, 耐克鞋}，鞋的数量=2。</p>
+
+          <p><strong>第 3 轮（鞋已有 2 双）：</strong></p>
+          <ul>
+            <li>阿迪鞋（鞋的第 3 双，Thompson 分 0.48）：多样性增量 0.173 + 0.48 = <strong>0.653</strong></li>
+            <li>Casio 手表：多样性增量 0.208 + 0.18 = <strong>0.388</strong></li>
+            <li>Gucci 手提包（Thompson 分 0.55，包类第 1 件）：多样性增量 $0.1 \times 0.693 + 0.55 = \mathbf{0.619}$</li>
+          </ul>
+          <p>→ 选阿迪鞋（0.653）。但 Gucci 手提包已经很接近了（0.619）。随着鞋越选越多，包和手表的胜出只是时间问题。</p>
+
+          <p><strong>最终 10 件结果（示意）：</strong>鞋子 5 双 + 手表 2 块 + 包 2 个 + 运动短裤 1 条。</p>
+        </div>
+
+        <h3 id="apd-personalization">3.4 第③层：个性化类目权重（解决"每个人喜好不同"）</h3>
+
+        <div class="callout-amber">
+          <div class="callout-title">🤔 先说为什么不能用全局固定权重</div>
+          <p>第②层的次模函数里有个参数 $\mathbf{w}$（类目权重）。如果鞋=0.6、手表=0.3 对所有用户一样，就没有个性化。</p>
+          <ul>
+            <li>用户 Alice：历史 80% 点鞋，10% 手表 → 她应该看更多鞋</li>
+            <li>用户 Bob：历史 10% 点鞋，80% 手表 → 他应该看更多手表</li>
+          </ul>
+          <p>全局统一的 $\mathbf{w}$ 无法区分 Alice 和 Bob 的不同偏好。</p>
+        </div>
+
+        <h4>① 全局类目权重（Baseline）</h4>
+        <p>先用全局数据给每个类目算一个"基础权重"，作为所有用户的先验：</p>
+        <div class="formula-block">
+          $$w_j^{\text{global}} = \frac{c_j + \alpha}{v_j + \alpha + \beta}$$
+        </div>
+        <p>$c_j$ = 全站类目 $j$ 的总点击数，$v_j$ = 全站类目 $j$ 的总曝光数。$\alpha, \beta$ 是平滑参数（类似 Beta 分布的先验），防止数据少的类目权重为 0。<br/>大白话：<strong>每个类目在全站的"受欢迎程度"</strong>。</p>
+
+        <h4>② 个性化用户权重：Dirichlet-Multinomial 模型</h4>
+        <p>对用户 $u$，假设他的类目兴趣比例 $\mathbf{w}_u$ 是一个概率向量（各类目之和=1），用 Dirichlet 分布建模：</p>
+        <div class="formula-block">
+          $$\mathbf{w}_u \sim \text{Dirichlet}(\boldsymbol{\alpha}_0), \qquad \mathbf{c}_u \sim \text{Multinomial}(\mathbf{w}_u, m_u)$$
+        </div>
+        <p>大白话翻译：</p>
+        <ul>
+          <li>$\mathbf{c}_u$ 是用户 $u$ 在各类目的点击次数（比如 Alice：[鞋50, 手表5, 上衣3, 包2]）。这个用 Multinomial（多项分布）建模——每次点击像"掷骰子"，各类目的概率不同。</li>
+          <li>$\mathbf{w}_u$ 就是那个骰子的概率向量——我们想要的东西。但它是隐变量，不能直接观测。用 Dirichlet 分布建模"<strong>这个概率向量本身的不确定性</strong>"。</li>
+          <li>Dirichlet 和 Multinomial 是<strong>共轭分布</strong>（就像 Beta 和 Binomial 是共轭的一样），所以后验均值有简洁公式：</li>
+        </ul>
+        <div class="formula-block">
+          $$\hat{\mathbf{w}}_u = \frac{\mathbf{c}_u + \boldsymbol{\alpha}_0}{\|\mathbf{c}_u + \boldsymbol{\alpha}_0\|_1}$$
+        </div>
+        <p>其中 $\boldsymbol{\alpha}_0$ 是先验参数（通常取全局类目权重对应的 $\alpha$ 值），$\|\cdot\|_1$ 是向量各分量之和。<br/><strong>大白话：</strong>用户的类目权重 = (用户自己的点击计数 + 全局先验) 的归一化。全局先验防止冷启动用户权重全是 0。</p>
+
+        <div class="callout-green">
+          <div class="callout-title">📊 两个用户的权重计算对比</div>
+          <p><strong>用户 Alice（喜欢鞋）：</strong><br/>
+          历史点击：鞋=50次，手表=5次，上衣=3次，包=2次，其他=0次<br/>
+          先验 $\boldsymbol{\alpha}_0$（每类目加 3，防止为 0）：<br/>
+          $\hat{\mathbf{w}}_{Alice} = [53, 8, 6, 5, 3] / 75 \approx [0.71, 0.11, 0.08, 0.07, 0.04]$<br/>
+          → Alice 的鞋权重 0.71，手表权重 0.11</p>
+
+          <p><strong>用户 Bob（喜欢手表）：</strong><br/>
+          历史点击：鞋=5次，手表=50次，上衣=3次，包=2次，其他=0次<br/>
+          $\hat{\mathbf{w}}_{Bob} = [8, 53, 6, 5, 3] / 75 \approx [0.11, 0.71, 0.08, 0.07, 0.04]$<br/>
+          → Bob 的手表权重 0.71，鞋权重 0.11</p>
+
+          <p><strong>代入第②层的效果差异：</strong></p>
+          <ul>
+            <li>Alice 的第 2 双鞋多样性增量：$0.71 \times 0.243 = 0.173$（鞋权重高，多选鞋仍有价值）</li>
+            <li>Bob 的第 2 双鞋多样性增量：$0.11 \times 0.243 = 0.027$（鞋权重低，再选鞋没什么价值）</li>
+            <li>Bob 的第 1 块手表多样性增量：$0.71 \times 0.693 = 0.492$（手表权重高，第 1 块手表非常有价值）</li>
+          </ul>
+          <p>→ 对 Bob 来说，选完 1 双鞋之后，下一件几乎肯定选手表。<strong>同样的算法，不同用户的推荐结果自动不同。</strong></p>
+        </div>
+
+        <h4>③ 类目兴趣扩散（把隐性兴趣挖出来）</h4>
+        <p>用户 Alice 只点过鞋和手表，从没点过跑步裤——那跑步裤权重为 0 吗？用类目共现矩阵 $M$（$M_{ij}$ = 同时点过类目 $i$ 和 $j$ 的用户比例）做扩散：</p>
+        <div class="formula-block">
+          $$\tilde{\mathbf{w}}_u = \frac{M \hat{\mathbf{w}}_u}{\|M \hat{\mathbf{w}}_u\|_1}$$
+        </div>
+        <p>大白话：把用户当前的类目权重向量，乘以类目之间的共现矩阵，再归一化。效果是<strong>"喜欢鞋的人也喜欢跑步裤"这种关联会被传导过来</strong>。</p>
+        <div class="callout-blue">
+          <div class="callout-title">🔗 类目共现矩阵的作用</div>
+          <p>从全体用户行为数据里统计：同时点过"鞋"和"跑步裤"的用户占点过"鞋"的用户的 40%。</p>
+          <p>这意味着：喜欢鞋的用户，有 40% 也喜欢跑步裤。Alice 喜欢鞋（鞋权重高），所以她对跑步裤也可能感兴趣，即使她从未点过跑步裤。</p>
+          <p>扩散后：Alice 的跑步裤权重从 0 → $0.40 \times 0.71 = 0.28$（鞋权重的 40% 传导给跑步裤）。</p>
+          <p>→ 跑步裤有机会出现在 Alice 的推荐里，帮她发现自己可能感兴趣但还没探索到的品类。</p>
+        </div>
+
+        <h3 id="apd-example">3.5 三层串联：完整流程总结</h3>
+        <p>以用户 Alice（喜欢鞋和手表）为例，从一次首页推荐请求到最终展示的完整链路：</p>
+        <div class="callout-purple">
+          <div class="callout-title">🔗 三层完整串联（Alice 的一次请求）</div>
+          <p><strong>第③层（离线/近实时计算，拿来即用）：</strong><br/>
+          系统已计算好 Alice 的类目权重 $\tilde{\mathbf{w}}_{Alice} = \{$鞋:0.71, 手表:0.11, 跑步裤:0.05, 上衣:0.08, 包:0.05$\}$（来自历史点击 + 共现扩散）。</p>
+
+          <p><strong>第①层（实时打分）：</strong><br/>
+          候选池 100 件商品，每件都有 Beta 分布参数。<br/>
+          本次请求从每件商品的 Beta 分布里采样一个值作为打分：<br/>
+          → 耐克爆款：0.051（稳定）；Gucci 白鞋（新品）：0.82（运气好，探索）；Casio 手表：0.18；跑步裤：0.15；……</p>
+
+          <p><strong>第②层（实时重排）：</strong><br/>
+          用 Alice 的权重 $\tilde{\mathbf{w}}_{Alice}$ + 第①层打分，运行次模贪心，选 10 件：<br/>
+          → 第 1 件：Gucci 白鞋（打分高 0.82 + 鞋类初始多样性增量大）<br/>
+          → 第 2 件：耐克跑鞋（打分 0.051 低，但鞋第 2 双多样性增量仍 0.243，总体还行）<br/>
+          → 第 3 件：Casio 手表（此时鞋已选 2 双，第 3 双鞋增量 0.173 低于手表首次入场 0.076，手表胜出）<br/>
+          → ……最终 10 件：鞋 5 双 + 手表 2 块 + 跑步裤 1 条 + 上衣 1 件 + 包 1 个</p>
+
+          <p><strong>对比直接按打分排序的 top-10：</strong>耐克鞋/阿迪鞋/彪马鞋/Gucci鞋/……共 8~9 双鞋，Alice 刷 5 秒就腻了。</p>
+        </div>
+
+        <h3 id="apd-analysis">3.6 分析</h3>
+        <div class="compare-grid">
+          <div class="pros">
+            <h5>✅ 优点</h5>
+            <ul>
+              <li>三组件（探索打分 + 次模多样化 + 个性化）分层解耦，各自可替换。</li>
+              <li>Dirichlet-Multinomial 共轭，更新 $O(d)$ 极快，支持实时流式更新。</li>
+              <li>次模保证贪心有理论近似比 $(1-1/e)$，效果有保障。</li>
+              <li>线上 A/B：CTR +9.82%（次模 vs 多项式随机）、+8.29%（自适应权重 vs 手动权重）、+12.58%（个性化权重 vs 全局权重）。</li>
+            </ul>
+          </div>
+          <div class="cons">
+            <h5>❌ 局限</h5>
+            <ul>
+              <li><strong>属性空间粗化：</strong>把数百万 SKU 属性映射到约 100 个互斥类目，细粒度差异消失。</li>
+              <li><strong>非端到端：</strong>相关性打分和多样化重排是两个独立阶段，联合优化没有做。</li>
+              <li><strong>次模目标 ≠ 用户满意度：</strong>类目覆盖不等于用户真实期望，损失函数与业务指标不对齐。</li>
+            </ul>
+          </div>
+        </div>
+        <div class="callout-green">
+          <div class="callout-title">🔑 相比 MMR 的核心进步</div>
+          <p>Adaptive PD 把 MMR 的"最大化单个 pair-wise 相似度差"升级为"最大化整体集合的属性覆盖（次模函数）"，并加入了个性化：不同用户、不同类目的权重不同。这是从 query-level 多样性迈向 user-level 个性化多样性的关键一步。</p>
+        </div>
+      </div>
+
+      <!-- ===== §4 CALIBRATED ===== -->
+      <div class="section" id="calibrated">
+        <div class="section-title">
+          <div class="icon" style="background:#fef3c7">🎬</div>
+          <span>4. Calibrated Recommendations (RecSys'18)</span>
+        </div>
+        <div style="margin-bottom:14px">
+          <span class="paper-badge badge-amber">Harald Steck, Netflix, 2018</span>
+          <span class="paper-badge badge-amber" style="margin-left:6px">RecSys 2018</span>
+          <span class="paper-badge badge-purple" style="margin-left:6px">电影推荐 · 分布校准</span>
+        </div>
+
+        <h3 id="calib-idea">4.1 核心思想：分布对齐</h3>
+        <p>Steck 提出了一个全新的多样性视角：<strong>推荐列表的类目分布应该与用户历史偏好分布一致</strong>。</p>
+        <div class="callout-blue">
+          <div class="callout-title">💡 经典例子</div>
+          <p>用户历史看过 70% 爱情片、30% 动作片，那么推荐列表也应该大约 70% 爱情片、30% 动作片——而不是全推爱情片（即使爱情片预测分更高）。</p>
+        </div>
+        <p>这与 MMR / Adaptive PD 的"内容多样性"不同：后者关注集合内元素之间的差异，Calibrated Rec 关注集合的<strong>统计分布</strong>与目标分布的偏差（distribution matching）。如果用户兴趣本身就是多元的，纯按分数排序会导致"赢者通吃"——高分类目占据整个列表，用户也感兴趣的低分类目被完全忽略。</p>
+
+        <h3 id="calib-formula">4.2 分布度量：KL 散度</h3>
+        <p>定义用户 $u$ 的<strong>目标分布</strong> $P(H_u)$ 和<strong>实现分布</strong> $Q(L_u)$：</p>
+        <div class="formula-block">
+          $$p(g|u) = \frac{\sum_{i \in H_u} \mathbb{1}(g \in g(i)) \cdot w_{u,i} \cdot \text{prop}(g|i)}{\sum_{i \in H_u} \mathbb{1}(g \in g(i)) \cdot w_{u,i}}$$
+        </div>
+        <ul>
+          <li>$H_u$ 是用户历史交互集合，$g(i)$ 是 item $i$ 的类目集合（一个电影可以属于多个类目）。</li>
+          <li>$w_{u,i}$ 是用户对 item $i$ 的评分（或隐式反馈权重）。</li>
+          <li>$\text{prop}(g|i) = 1/|g(i)|$ 是类目 $g$ 在 item $i$ 中的占比（均分）。</li>
+        </ul>
+        <p>实现分布 $Q(L_u)$ 计算完全类似，只是把 $H_u$ 换成推荐列表 $L_u$，$w_{u,i}$ 换成预测分 $\hat{w}_{u,i}$。</p>
+        <p>用 <strong>KL 散度</strong>度量两个分布的偏差：</p>
+        <div class="formula-block">
+          $$\text{CL}_{\text{KL}}(P_u, Q_u) = \sum_{g \in G} p(g|u) \cdot \log \frac{p(g|u)}{q(g|u)}$$
+        </div>
+        <p>KL 散度三个关键性质：① $P = Q$ 时 KL = 0（完美校准）；② 对小概率类目的偏差敏感；③ 倾向于均匀分布（防止极端集中）。</p>
+        <div class="callout-purple">
+          <div class="callout-title">🔧 平滑技巧</div>
+          <p>如果某类目在用户历史中占比很小，直接用 KL 会导致该类目一旦出现就"过度代表"。Steck 提出平滑：</p>
+          $$\tilde{q}(g|u) = (1-\alpha) \cdot q(g|u) + \alpha \cdot p(g|u)$$
+          <p>常用 $\alpha = 0.01$，让实现分布向目标分布轻微回归，避免极端稀疏。</p>
+        </div>
+
+        <h3 id="calib-tradeoff">4.3 目标函数与优化</h3>
+        <p>最终目标是在相关性和校准之间权衡：</p>
+        <div class="formula-block">
+          $$L_u^* = \arg\max_{L, |L|=N} \left[ (1-\lambda) \cdot \text{REL}(L_u) - \lambda \cdot \text{CL}_{\text{KL}}(P_u, Q(L_u)) \right]$$
+        </div>
+        <p>其中 $\text{REL}(L_u) = \sum_{i \in L_u} \hat{w}_{u,i}$，$\lambda \in [0,1]$ 控制权衡：$\lambda=0$ 为纯相关性，$\lambda=1$ 为纯校准。这是 NP-hard 的组合优化问题，用次模贪心求解，保证 $(1-1/e)$ 近似比：</p>
+        <div class="algo-step"><span class="step-num">1</span> 从 base ranker 取 top-100 候选（限制搜索空间）。</div>
+        <div class="algo-step"><span class="step-num">2</span> 初始化 $L_u = \emptyset$，循环 $N$ 次。</div>
+        <div class="algo-step"><span class="step-num">3</span> 每次选边际增益最大的 item 加入 $L_u$（边际增益 = 加入后目标函数的增量）。</div>
+
+        <h3 id="calib-example">4.4 推荐系统实例：快手短视频 Feed 重排</h3>
+        <p>场景：用户 Bob 在快手刷短视频。Bob 过去 30 天的浏览记录中，看了<strong>美食 70%、搞笑 20%、体育 10%</strong>。现在要给他生成下一屏的 10 个短视频。</p>
+
+        <h4>Step 1：目标分布 P（用户历史口味）</h4>
+        <p>直接从 Bob 最近的浏览记录统计各类目的占比：</p>
+        <div class="formula-block">
+          $$P(\text{Bob}) = \{\text{美食}: 0.70,\ \text{搞笑}: 0.20,\ \text{体育}: 0.10\}$$
+        </div>
+        <div class="callout-blue">
+          <div class="callout-title">💡 这就是"校准目标"——推荐列表也应该大约 70% 美食、20% 搞笑、10% 体育</div>
+          <p>这不是说每屏严格按比例，而是整体趋势应该对齐。如果 10 个视频全是美食，那 Bob 对搞笑和体育的兴趣就被完全忽略了。</p>
+        </div>
+
+        <h4>Step 2：精排直接 top-10 的问题（"赢者通吃"）</h4>
+        <p>精排模型（比如 DeepFM）给每个视频预测一个 CTR 分数。因为 Bob 看美食多，美食视频的 CTR 预估普遍偏高。按分数排序取 top-10：</p>
+        <div class="callout-amber">
+          <div class="callout-title">❌ 纯按分数排序的结果</div>
+          <table>
+            <thead><tr><th>位置</th><th>视频</th><th>类目</th><th>精排分</th></tr></thead>
+            <tbody>
+              <tr><td>1</td><td>红烧肉教程</td><td>美食</td><td>0.85</td></tr>
+              <tr><td>2</td><td>火锅探店</td><td>美食</td><td>0.82</td></tr>
+              <tr><td>3</td><td>糖醋排骨</td><td>美食</td><td>0.80</td></tr>
+              <tr><td>4</td><td>街边烤串</td><td>美食</td><td>0.78</td></tr>
+              <tr><td>5</td><td>蛋糕烘焙</td><td>美食</td><td>0.76</td></tr>
+              <tr><td>6</td><td>螺蛳粉测评</td><td>美食</td><td>0.75</td></tr>
+              <tr><td>7</td><td>烧烤合集</td><td>美食</td><td>0.73</td></tr>
+              <tr><td>8</td><td>凉皮教程</td><td>美食</td><td>0.72</td></tr>
+              <tr><td>9</td><td>猫咪搞笑</td><td>搞笑</td><td>0.65</td></tr>
+              <tr><td>10</td><td>足球集锦</td><td>体育</td><td>0.60</td></tr>
+            </tbody>
+          </table>
+          <p>实现分布 $Q = \{$美食:0.80, 搞笑:0.10, 体育:0.10$\}$。和目标分布 $P$ 差很远！</p>
+        </div>
+        <p>现在算 KL 散度来量化这个偏差：</p>
+        <div class="formula-block">
+          $$\text{KL}(P, Q) = 0.70 \times \log\frac{0.70}{0.80} + 0.20 \times \log\frac{0.20}{0.10} + 0.10 \times \log\frac{0.10}{0.10}$$
+        </div>
+        <ul>
+          <li><strong>美食：</strong>$0.70 \times \log(0.70/0.80) = 0.70 \times (-0.134) = -0.094$。美食在推荐里占 80%，但 Bob 的目标只有 70%，所以这部分是"过度代表"的，贡献负值。</li>
+          <li><strong>搞笑：</strong>$0.20 \times \log(0.20/0.10) = 0.20 \times 0.693 = +0.139$。搞笑在推荐里只占 10%，但 Bob 的目标有 20%，所以这部分是"不足代表"的，贡献正值。</li>
+          <li><strong>体育：</strong>$0.10 \times \log(0.10/0.10) = 0$。刚好对齐，不贡献偏差。</li>
+        </ul>
+        <p>KL 总分 = $-0.094 + 0.139 + 0 = +0.045$。值越大 = 偏差越大 = 校准越差。</p>
+        <div class="callout-purple">
+          <div class="callout-title">🔑 KL 散度的直觉</div>
+          <p>KL 散度衡量的是"推荐给你的比例"和"你期望的比例"之间的差距。每一项的公式 $p \times \log(p/q)$：</p>
+          <ul>
+            <li>如果 $q > p$（推荐过多），$\log(p/q) < 0$，这一项是<strong>负值</strong>——说明你在浪费推荐位推用户不需要那么多的类目。</li>
+            <li>如果 $q < p$（推荐不足），$\log(p/q) > 0$，这一项是<strong>正值</strong>——说明用户想要的类目没得到足够展示。</li>
+            <li>KL 越接近 0 = 推荐分布和用户期望越一致 = 校准越好。</li>
+          </ul>
+        </div>
+
+        <h4>Step 3：Calibrated 贪心重排（逐个解释每一步）</h4>
+        <p>Calibrated Rec 的目标函数：</p>
+        <div class="formula-block">
+          $$\text{目标} = (1-\lambda) \times \underbrace{\text{REL}}_{\text{相关性总和}} - \lambda \times \underbrace{\text{KL}}_{\text{分布偏差}}$$
+        </div>
+        <p>设 $\lambda = 0.5$，意思是"一半权重给相关性，一半权重给分布对齐"。贪心过程：每次从候选池里选一个加入列表 $L$，选让目标函数增长最多的那个。</p>
+
+        <div class="callout-green">
+          <div class="callout-title">🔄 逐轮详解</div>
+          <p><strong>第 1 轮：列表 $L$ 为空，$Q$ 为空。</strong></p>
+          <p>因为列表里没有任何视频，KL 项没法算（技术上用 KL = 0 初始化）。所以这一轮<strong>纯粹按相关性选</strong>，选最高分的<strong>红烧肉教程</strong>（精排分 0.85）。</p>
+
+          <p><strong>第 2 轮：$L$ = [红烧肉]，$Q$ = {美食:1.0}。</strong></p>
+          <p>现在列表里只有美食视频，分布极度偏斜。来对比两个候选：</p>
+          <table>
+            <thead><tr><th>候选</th><th>精排分</th><th>类目</th><th>加入后 REL 变化</th><th>加入后 KL 变化</th><th>总边际收益</th></tr></thead>
+            <tbody>
+              <tr><td>火锅探店</td><td>0.82</td><td>美食</td><td>+0.82</td><td>变得更偏美食（更差），KL 增大约 +0.05</td><td>$0.5 \times 0.82 - 0.5 \times 0.05 = \mathbf{0.385}$</td></tr>
+              <tr><td>猫咪搞笑</td><td>0.65</td><td>搞笑</td><td>+0.65</td><td>搞笑从 0% → 有代表（大幅改善），KL 减小约 -0.10</td><td>$0.5 \times 0.65 - 0.5 \times (-0.10) = 0.325 + 0.05 = \mathbf{0.375}$</td></tr>
+            </tbody>
+          </table>
+          <p>火锅探店虽然相关性更高（0.82 > 0.65），但让 KL 变更差了（美食过度代表更严重）。猫咪搞笑虽然相关性低一点，但让 KL 大幅改善（引入了搞笑类目）。最终火锅探店略胜（0.385 > 0.375），被选中。</p>
+          <p><strong>核心机制：</strong>KL 项相当于给"缺失类目"的候选加了一个<strong>奖励分</strong>，给"过度类目"的候选加了一个<strong>惩罚分</strong>。</p>
+
+          <p><strong>第 3~4 轮：</strong>继续选。每多选一个美食视频，美食的"过度代表"程度加剧，KL 惩罚越来越大；而搞笑和体育的视频因为能弥补分布缺陷，获得越来越大的 KL 奖励。到第 4 轮时，一个搞笑视频的 KL 奖励已经超过它比美食视频少的那点相关性分，所以<strong>猫咪搞笑</strong>被选中。</p>
+
+          <p><strong>最终 10 个视频：</strong></p>
+          <table>
+            <thead><tr><th>位置</th><th>视频</th><th>类目</th></tr></thead>
+            <tbody>
+              <tr><td>1</td><td>红烧肉教程</td><td>美食</td></tr>
+              <tr><td>2</td><td>火锅探店</td><td>美食</td></tr>
+              <tr><td>3</td><td>糖醋排骨</td><td>美食</td></tr>
+              <tr><td>4</td><td>蛋糕烘焙</td><td>美食</td></tr>
+              <tr><td>5</td><td>凉皮教程</td><td>美食</td></tr>
+              <tr><td>6</td><td>猫咪搞笑</td><td>搞笑</td></tr>
+              <tr><td>7</td><td>职场吐槽</td><td>搞笑</td></tr>
+              <tr><td>8</td><td>足球集锦</td><td>体育</td></tr>
+              <tr><td>9</td><td>街边烤串</td><td>美食</td></tr>
+              <tr><td>10</td><td>螺蛳粉测评</td><td>美食</td></tr>
+            </tbody>
+          </table>
+          <p>实现分布 $Q = \{$美食:0.60, 搞笑:0.20, 体育:0.10$\}$。和目标分布 $P=\{$美食:0.70, 搞笑:0.20, 体育:0.10$\}$ 接近多了！美食占比从 80% 降到 60%，搞笑和体育得到了应有的展示位。</p>
+          <p>注意：美食占比 60% < 70%，这是 $\lambda=0.5$ 的结果——相关性让步了一些但没完全按 70/20/10 分配。$\lambda$ 越大，分布对齐越严格；$\lambda$ 越小，相关性越优先。</p>
+        </div>
+
+        <h4>实际工程中的补充考量</h4>
+        <div class="callout-purple">
+          <div class="callout-title">🏭 工业落地要注意的点</div>
+          <ul>
+            <li><strong>类目粒度选择：</strong>Netflix 实际用的类目粒度是"大类目"（爱情、动作等约 20 个），而不是细粒度标签（否则历史数据太稀疏，KL 计算不稳定）。快手/抖音做短视频推荐时，类目层级可以是：美食/穿搭/体育/搞笑等一级类目。</li>
+            <li><strong>历史时间窗口：</strong>用最近 30~90 天的观看记录计算 $P(H_u)$，太老的兴趣分布不代表当前需求。</li>
+            <li><strong>平滑处理：</strong>若 Bob 的历史里从来没看过音乐片，$p(\text{音乐}|\text{Bob}) = 0$，则任何音乐片推荐都会让 KL = ∞。用平滑 $\alpha = 0.01$ 给各类目一个微小先验概率。</li>
+          </ul>
+        </div>
+
+        <h3 id="calib-analysis">4.5 分析</h3>
+        <div class="compare-grid">
+          <div class="pros">
+            <h5>✅ 优点</h5>
+            <ul>
+              <li><strong>个性化分布目标：</strong>每个用户的目标分布不同，自动适应用户兴趣的多元程度。</li>
+              <li><strong>理论清晰：</strong>KL 散度是信息论标准工具，性质明确，可解释性强。</li>
+              <li><strong>与 base ranker 解耦：</strong>任何排序模型都可以作为输入，校准作为后处理独立运行。</li>
+              <li>MovieLens 数据集上 $\lambda=0.5$ 时 NDCG 几乎不降，但 KL 散度大幅下降。</li>
+            </ul>
+          </div>
+          <div class="cons">
+            <h5>❌ 局限</h5>
+            <ul>
+              <li><strong>历史偏好 ≠ 未来期望：</strong>用户过去看了 70% 爱情片，不代表未来还想要 70%——兴趣会漂移。</li>
+              <li><strong>冷启动无解：</strong>新用户没有历史，无法构建目标分布 $P(H_u)$。</li>
+              <li><strong>类目粒度敏感：</strong>"爱情片"包含各种风格，细粒度差异无法捕捉。</li>
+              <li><strong>非端到端：</strong>校准和相关性打分分离，联合优化没有做。</li>
+            </ul>
+          </div>
+        </div>
+        <div class="callout-amber">
+          <div class="callout-title">🔑 深远影响</div>
+          <p>Calibrated Rec 开创了"分布校准"研究方向，2025 年综述论文（arXiv:2507.02643）统计了 53 篇相关工作，其中 88% 采用 Steck 的框架。后续改进包括：其他散度度量（JS 散度、Earth Mover's Distance）、个性化 $\lambda$、多目标校准、端到端学习等。</p>
+        </div>
+      </div>
+
+      <!-- ===== §5 DPP ===== -->
+      <div class="section" id="dpp">
+        <div class="section-title">
+          <div class="icon" style="background:#ede9fe">🧮</div>
+          <span>5. Fast Greedy DPP (NeurIPS'18)</span>
+        </div>
+        <div style="margin-bottom:14px">
+          <span class="paper-badge badge-purple">Chen, Zhang, Zhou, JD.com, 2018</span>
+          <span class="paper-badge badge-purple" style="margin-left:6px">NeurIPS 2018</span>
+          <span class="paper-badge badge-green" style="margin-left:6px">商品推荐 · 集合选择</span>
+        </div>
+
+        <h3 id="dpp-problem">5.1 问题背景</h3>
+        <p>MMR 的 pair-wise 相似度减法只考虑"最像已选中哪篇"，没有捕捉集合整体的多样性结构。两篇文章各自和已选集合相似度都很低，但它们彼此相似——这种情况 MMR 处理不了。</p>
+        <p><strong>行列式点过程（Determinantal Point Process, DPP）</strong>用矩阵的行列式来度量集合的"体积"——行列式越大，意味着集合中的向量越"张成"高维空间，即集合越多样。这是从代数几何角度对多样性的精确刻画。</p>
+
+        <h3 id="dpp-math">5.2 DPP 数学基础</h3>
+        <p>给定 $n$ 个 item，每个 item 用向量 $\phi_i \in \mathbb{R}^d$ 表示（embedding），定义核矩阵（Kernel Matrix）$L \in \mathbb{R}^{n \times n}$：</p>
+        <div class="formula-block">
+          $$L_{ij} = \alpha \cdot r_i \cdot r_j \cdot \phi_i^T \phi_j$$
+        </div>
+        <p>其中 $r_i$ 是 item $i$ 的相关性分数（标量），$\phi_i^T \phi_j$ 是归一化后的 item 间余弦相似度，$\alpha$ 是权衡参数。</p>
+        <p>DPP 定义子集 $Y \subseteq \{1,...,n\}$ 的概率为：</p>
+        <div class="formula-block">
+          $$P(Y) \propto \det(L_Y)$$
+        </div>
+        <p>其中 $L_Y$ 是 $L$ 在 $Y$ 对应行列上的子矩阵。</p>
+        <div class="callout-purple">
+          <div class="callout-title">🔢 行列式与多样性的关系</div>
+          <p>从线性代数角度：$\det(L_Y)$ 等于以 $\{r_i \phi_i\}_{i \in Y}$ 为边的平行多面体的体积平方。向量越正交（多样性越好），体积越大；越相近（冗余越高），体积越接近 0。</p>
+          <p>因此 $\det(L_Y)$ 大的集合 $Y$ 同时满足：① 单个 item 相关性 $r_i$ 高；② item 之间不相似（多样）。这正是我们想要的。</p>
+        </div>
+
+        <h3 id="dpp-map">5.3 MAP 推断</h3>
+        <p><strong>MAP 推断</strong>是找最大概率子集，即最大化 $\det(L_Y)$（等价于最大化 $\log \det(L_Y)$）。这是 NP-hard 问题，用贪心近似：</p>
+        <div class="formula-block">
+          $$i^* = \arg\max_{i \notin Y} \log \det(L_{Y \cup \{i\}})$$
+        </div>
+        <p>利用行列式的 Schur 补公式，加入一个新 item $i$ 后行列式的增量为：</p>
+        <div class="formula-block">
+          $$\frac{\det(L_{Y \cup \{i\}})}{\det(L_Y)} = L_{ii} - \mathbf{L}_{iY} L_Y^{-1} \mathbf{L}_{Yi}$$
+        </div>
+        <p>直觉：这个增量等于 item $i$ 在已选集合 $Y$ 的向量空间中的"剩余分量"的长度平方。如果 $i$ 与 $Y$ 中的 item 高度相似（冗余），增量趋近于 0；如果 $i$ 与 $Y$ 正交（多样），增量接近 $L_{ii} = r_i^2$。</p>
+
+        <h3 id="dpp-fast">5.4 快速 Cholesky 增量算法</h3>
+        <p>暴力计算每次更新 $\det(L_{Y \cup \{i\}})$ 需要 $O(n^3)$，总复杂度 $O(n^3 k)$，工业场景不可接受。Chen et al. 用 Cholesky 分解实现 $O(Mk^2)$ 的快速增量更新（$M$ 为候选集大小，$k$ 为目标选取数量）。</p>
+        <p>核心思路：维护一个 Cholesky 分解 $L_Y = C_Y C_Y^T$，当加入新 item $i$ 时：</p>
+        <div class="algo-step"><span class="step-num">1</span> 计算 $e_i = \phi_i - C_Y^{-T} C_Y^{-1} L_{Yi}$（$i$ 在已选集合正交补上的投影）。</div>
+        <div class="algo-step"><span class="step-num">2</span> 增量行列式 = $\|e_i\|^2$（$e_i$ 的模长平方）。</div>
+        <div class="algo-step"><span class="step-num">3</span> 选出使 $\|e_i\|^2$ 最大的 $i^*$，将其加入 $Y$，更新 Cholesky 分解（追加一列，$O(k)$ 操作）。</div>
+        <p>每轮复杂度 $O(Mk)$，总复杂度 $O(Mk^2)$，比暴力快 $O(n^2/k)$ 倍，实际工业场景 $n \gg k$ 时提速明显。</p>
+
+        <h3 id="dpp-window">5.5 滑动窗口流式 DPP</h3>
+        <p>工业推荐系统通常是实时流式服务，商品集合每次请求不同。论文提出<strong>滑动窗口 DPP</strong>：</p>
+        <ul>
+          <li>维护一个大小为 $W$ 的历史窗口，窗口内保存已展示 item 的 embedding。</li>
+          <li>新请求来时，先用 DPP MAP 推断在当前候选集中选出多样子集；同时考虑窗口内已展示 item 的冗余度（避免跨次请求重复）。</li>
+          <li>窗口更新：滑出旧 item，滑入新 item，Cholesky 分解做降秩更新（$O(k^2)$）。</li>
+        </ul>
+        <p>这使得系统可以在毫秒级完成 DPP 重排，支持工业级实时服务。</p>
+
+        <h3 id="dpp-example">5.6 推荐系统实例：快手/京东商品详情页"猜你喜欢"</h3>
+
+        <div class="callout-amber">
+          <div class="callout-title">🤔 先说为什么 MMR 选不好这个场景</div>
+          <p>用户在看索尼耳机详情页。候选池里有：</p>
+          <ul>
+            <li>索尼 WH-1000XM5（A）——用户正在看这款</li>
+            <li>AirPods Pro（B）——和索尼耳机很像（都是降噪耳机）</li>
+            <li>Bose QC45（C）——也和索尼耳机很像（头戴降噪）</li>
+            <li>3.5mm 音频线（D）——和耳机不同类（配件）</li>
+          </ul>
+          <p>MMR 第 1 轮选 A。第 2 轮看 B 和 C：B 和 A 的相似度 0.80，C 和 A 的相似度 0.75，MMR 选相似度更低的 C。</p>
+          <p><strong>问题：</strong>B 和 C 之间也高度相似（0.88）！MMR 只看"和已选 item 的最大相似度"，不感知"B 和 C 之间也很像"。如果 C 选了，B 再选就没意义了——但 MMR 不知道这件事，可能第 3 轮又把 B 选进来。结果{A, B, C}三款全是降噪耳机，品类高度重复。</p>
+          <p>DPP 解决的正是这个问题：<strong>它看的是整个集合的"体积"，而不是逐对比较。</strong></p>
+        </div>
+
+        <h4>DPP 的核心原理：行列式 = 集合的"体积"</h4>
+        <div class="callout-purple">
+          <div class="callout-title">🔑 用最直观的类比理解行列式</div>
+          <p>把每个商品的 embedding 想象成一个<strong>向量箭头</strong>，从原点出发指向某个方向。</p>
+          <p>如果两个商品的箭头<strong>方向几乎相同</strong>（相似度高），那它们画出来的面积很小——就像两根几乎重叠的箭头，撑不出什么空间。</p>
+          <p>如果两个商品的箭头<strong>方向差异很大</strong>（几乎垂直），那它们画出来的面积很大——像两根互相垂直的箭头，撑出一个大矩形。</p>
+          <p>如果有三个商品，行列式就是它们<strong>撑出的三维体积</strong>。方向越分散，体积越大。</p>
+          <p><strong>DPP 的目标就是找到 k 个商品，使得它们的箭头撑出的体积最大。</strong>体积大 = 方向分散 = 商品之间差异大 = 多样性好。</p>
+          <p>具体到我们的例子：</p>
+          <ul>
+            <li>三款降噪耳机 A、B、C 的箭头方向几乎相同 → {A,B,C} 的"体积"极小（箭头重叠，撑不出什么空间）</li>
+            <li>A（耳机）+ D（音频线）的箭头方向差异大 → {A,D} 的"体积"大（箭头接近垂直，撑出大面积）</li>
+            <li>所以 DPP 更倾向于选 {A, D}，而不是 {A, B} 或 {A, C}</li>
+          </ul>
+        </div>
+
+        <h4>核矩阵 L：把"相关性"和"相似度"融合在一起</h4>
+        <p>核矩阵 $L$ 的每个元素同时考虑了两个因素：</p>
+        <div class="formula-block">
+          $$L_{ij} = r_i \cdot r_j \cdot \phi_i^T \phi_j$$
+        </div>
+        <p>大白话翻译：</p>
+        <ul>
+          <li>$r_i \cdot r_j$：两个商品的相关性分数乘积。<strong>如果两个商品本身质量高（分数高），它们之间的连接就更强</strong>——这是"鼓励选高质量商品"的部分。</li>
+          <li>$\phi_i^T \phi_j$：两个商品的 embedding 余弦相似度。<strong>如果两个商品方向相同（相似），连接也更强</strong>——但行列式的数学性质会自动惩罚这种强连接（让体积缩小），所以相似商品不会被同时选中。</li>
+        </ul>
+        <p>DPP 的精妙之处：<strong>核矩阵把相关性和相似度融合在一起，但行列式会自动惩罚相似度过高的组合</strong>——它们会让行列式变小（体积缩小），从而不会被选。</p>
+
+        <div class="callout-green">
+          <div class="callout-title">📐 用数字看核矩阵（简化为 2 维 embedding）</div>
+          <table>
+            <thead><tr><th>item</th><th>描述</th><th>精排分 $r_i$</th><th>embedding（2D示意）</th><th>"方向"直觉</th></tr></thead>
+            <tbody>
+              <tr><td>A</td><td>索尼 WH-1000XM5</td><td>0.90</td><td>[0.95, 0.10]</td><td>≈水平方向（耳机降噪）</td></tr>
+              <tr><td>B</td><td>AirPods Pro</td><td>0.85</td><td>[0.90, 0.20]</td><td>≈水平方向（耳机降噪）</td></tr>
+              <tr><td>C</td><td>Bose QC45</td><td>0.82</td><td>[0.93, 0.15]</td><td>≈水平方向（耳机降噪）</td></tr>
+              <tr><td>D</td><td>3.5mm 音频线</td><td>0.60</td><td>[0.20, 0.85]</td><td>≈竖直方向（配件）</td></tr>
+              <tr><td>E</td><td>耳机收纳包</td><td>0.55</td><td>[0.10, 0.90]</td><td>≈竖直方向（配件）</td></tr>
+            </tbody>
+          </table>
+          <p>核矩阵关键值：</p>
+          <ul>
+            <li>$L_{AA} = 0.90 \times 0.90 \times 1.0 = 0.81$（自相关，越大 = 商品本身质量越高）</li>
+            <li>$L_{AB} = 0.90 \times 0.85 \times 0.95 = 0.73$（A-B 方向几乎相同，连接很强）</li>
+            <li>$L_{AD} = 0.90 \times 0.60 \times 0.20 = 0.11$（A-D 方向接近垂直，连接很弱）</li>
+          </ul>
+          <p><strong>关键观察：</strong>A-B 之间的核值远大于 A-D（0.73 >> 0.11）。乍看好像应该优先选 B，但行列式恰恰相反——A 和 B 方向太相似，加入 B 只会让行列式变小（体积被压缩）。加入 D 反而会让行列式变大（体积被撑开）。</p>
+        </div>
+
+        <h4>贪心 MAP 推断：每轮选"撑开体积最多的商品"</h4>
+        <div class="callout-blue">
+          <div class="callout-title">🔄 用"投影"类比理解残差</div>
+          <p>想象已选集合 {A} 占了一个"水平方向"。现在看 B：</p>
+          <ul>
+            <li>B 的箭头几乎和 A 重叠 → B 在 A 方向上的投影占 95%，<strong>残差</strong>（没有被 A 覆盖的部分）只剩 5% → 加入 B 对体积的贡献很小</li>
+          </ul>
+          <p>再看 D：</p>
+          <ul>
+            <li>D 的箭头几乎垂直于 A → D 在 A 方向上的投影只占 20%，<strong>残差</strong>高达 80% → 加入 D 对体积的贡献很大</li>
+          </ul>
+          <p><strong>每轮选择残差最大的商品 = 选择对当前集合"撑开体积"贡献最大的商品。</strong></p>
+        </div>
+
+        <div class="callout-green">
+          <div class="callout-title">🔄 前 3 轮贪心过程</div>
+          <p><strong>第 1 蛤：</strong>集合为空，残差 = 自相关 $L_{ii}$。A 的 $L_{AA}=0.81$ 最大 → 选 A（索尼耳机）。</p>
+
+          <p><strong>第 2 蛤：</strong>A 占了"水平方向"。计算各候选的残差：</p>
+          <ul>
+            <li>B（AirPods）：95% 的分量和 A 重叠 → 残差 ≈ $0.72 - 0.73^2/0.81 \approx \mathbf{0.06}$（几乎没贡献）</li>
+            <li>C（Bose）：类似，残差 ≈ <strong>0.05</strong></li>
+            <li>D（音频线）：只有 20% 的分量和 A 重叠 → 残差 ≈ $0.36 - 0.01 = \mathbf{0.35}$（贡献巨大！）</li>
+            <li>E（收纳包）：残差 ≈ <strong>0.28</strong></li>
+          </ul>
+          <p>选 D（音频线，残差 0.35 最大）。现在集合 = {A, D}，占据了水平+竖直两个方向。</p>
+
+          <p><strong>第 3 蛤：</strong>A 和 D 已经撑出了一个大面积。新候选的残差要减去它在 A 和 D<strong>两个方向上的投影</strong>：</p>
+          <ul>
+            <li>B：B 在水平方向（A）投影 95%，竖直方向（D）投影 20% → 残差只剩 5% × 80% ≈ <strong>0.04</strong>（几乎没用了）</li>
+            <li>E：E 在水平方向（A）投影 10%，竖直方向（D）投影 85% → 残差 ≈ <strong>0.15</strong></li>
+            <li>F（清洁工具）：残差 ≈ <strong>0.12</strong></li>
+          </ul>
+          <p>选 E（收纳包，残差 0.15）。继续循环...</p>
+
+          <p><strong>最终 6 件：</strong>{A(索尼耳机), D(音频线), E(收纳包), B(AirPods), F(清洁工具), 某蓝牙发射器}。降噪耳机只选了 2 款，配件覆盖了 3 种不同品类。而不是纯按分数排序的{A, B, C, 同类4, 同类5, 同类6}。</p>
+        </div>
+
+        <div class="callout-purple">
+          <div class="callout-title">🏭 工业实际使用细节</div>
+          <ul>
+            <li><strong>embedding 来源：</strong>用多模态商品 embedding（图文联合模型），或者 ID-based 协同过滤 embedding。embedding 质量决定 DPP 效果——如果 embedding 不能准确区分"耳机 vs 音频线"，DPP 的行列式度量就会失效。</li>
+            <li><strong>核矩阵的 $\alpha$：</strong>$L_{ij} = \alpha \cdot r_i \cdot r_j \cdot \phi_i^T \phi_j$。$\alpha$ 越小，越偏向多样性；越大，越偏向相关性。</li>
+            <li><strong>候选集截断：</strong>DPP 复杂度 $O(Mk^2)$，$M$ 建议不超过 100~200。先用精排分截断候选再做 DPP。</li>
+          </ul>
+        </div>
+
+        <h3 id="dpp-analysis">5.7 分析</h3>
+        <div class="compare-grid">
+          <div class="pros">
+            <h5>✅ 优点</h5>
+            <ul>
+              <li><strong>全局多样性建模：</strong>行列式捕捉集合整体的"体积"，不像 MMR 只看 pair-wise 最大相似度。</li>
+              <li><strong>相关性与多样性统一：</strong>$L_{ij} = r_i r_j \phi_i^T \phi_j$ 把相关性和相似度融合在同一核矩阵中。</li>
+              <li><strong>快速算法：</strong>Cholesky 增量更新实现 $O(Mk^2)$，工业可用。</li>
+              <li>JD.com 平台 A/B 实验：多样性指标显著提升，CTR 持平或微升。</li>
+            </ul>
+          </div>
+          <div class="cons">
+            <h5>❌ 局限</h5>
+            <ul>
+              <li><strong>核矩阵设计敏感：</strong>embedding 的质量直接影响 DPP 效果，如果 embedding 不能准确刻画语义，行列式度量失效。</li>
+              <li><strong>非个性化（基础版）：</strong>论文基础版不区分用户，所有用户同一核矩阵；需要额外设计才能做个性化。</li>
+              <li><strong>非端到端：</strong>相关性打分和 DPP 重排是两个独立阶段。</li>
+              <li><strong>$\alpha$ 调参：</strong>控制相关性/多样性权衡的 $\alpha$ 同样需要手动调节。</li>
+            </ul>
+          </div>
+        </div>
+        <div class="callout-green">
+          <div class="callout-title">🔑 相比 MMR 的核心进步</div>
+          <p>DPP 用行列式替代了 MMR 的 max-similarity，从代数几何角度精确刻画"集合体积"，能捕捉集合内所有 item 之间的交叉相互作用，而不只是 pair-wise 最大相似度。代价是计算复杂度更高（但 Cholesky 增量算法解决了这个问题）。</p>
+        </div>
+      </div>
+
+      <!-- ===== §6 RL4CTE ===== -->
+      <div class="section" id="rl4cte">
+        <div class="section-title">
+          <div class="icon" style="background:#ffe4e6">🤖</div>
+          <span>6. RL4CTE — CTR is not Enough (KDD'20)</span>
+        </div>
+        <div style="margin-bottom:14px">
+          <span class="paper-badge badge-rose">Liu &amp; Liu, 2020</span>
+          <span class="paper-badge badge-rose" style="margin-left:6px">KDD 2020 · arXiv:2308.14056</span>
+          <span class="paper-badge badge-blue" style="margin-left:6px">Feed 流推荐 · 强化学习</span>
+        </div>
+
+        <h3 id="rl4cte-problem">6.1 问题背景：CTR 提升但总点击数下降</h3>
+        <p>作者在优化 Feed 流推荐时发现了一个<strong>反直觉的现象</strong>：把基础模型从 DeepFM 升级为 DeepFMV2 后，CTR 提升了（从 0.0403 提到 0.0428），但用户每次 session 的总点击数反而下降，同时浏览深度（用户滚动到第几条就离开）也缩短了。</p>
+        <div class="callout-amber">
+          <div class="callout-title">⚠️ 为什么会发生这种矛盾？</div>
+          <p>高 CTR 的内容往往是高度针对用户当前"显性兴趣"的内容——但这类内容往往单调（比如一直推跑鞋，因为用户刚买了跑鞋，对跑鞋的 CTR 最高）。用户很快感到无聊，提前离开了 session。CTR 是即时指标，而"用户愿意继续看"是长期指标，两者可能不一致。</p>
+        </div>
+        <p>这说明：<strong>推荐系统应该优化 session 内的累计总点击数，而不是单条的 CTR</strong>。这自然引出了强化学习——因为这是一个序列决策问题，当前推什么会影响用户是否继续浏览，进而影响后续能不能再次推荐。</p>
+
+        <h3 id="rl4cte-cte">6.2 CTE 优化目标</h3>
+        <p>定义两个核心概念：</p>
+        <ul>
+          <li><strong>CTR$(u, t, i_t, \mathcal{H}_t)$：</strong>用户 $u$ 在位置 $t$ 看到 item $i_t$ 且浏览历史为 $\mathcal{H}_t$ 的条件点击概率。</li>
+          <li><strong>PBR$(u, t, i_t, \mathcal{H}_t)$（Position Bounce Rate）：</strong>用户在位置 $t$ 离开（bounce）的条件概率。</li>
+        </ul>
+        <p>Session 内总点击数的期望（Click-Through Expectation, <strong>CTE</strong>）：</p>
+        <div class="formula-block">
+          $$\text{CTE}(i_1, \ldots, i_T) = \sum_{t=1}^{T} \text{CTR}_t \cdot \prod_{k=1}^{t-1}(1 - \text{PBR}_k)$$
+        </div>
+        <p>逐项理解：</p>
+        <ul>
+          <li>$\text{CTR}_t$ 是用户在位置 $t$ 点击的概率（前提是他还没离开）。</li>
+          <li>$\prod_{k=1}^{t-1}(1 - \text{PBR}_k)$ 是用户能浏览到位置 $t$ 的概率（前 $t-1$ 个位置都没有 bounce）。</li>
+          <li>两者相乘 = 用户在位置 $t$ 实际贡献一个点击的期望。</li>
+          <li>对所有位置求和 = session 内总点击期望 CTE。</li>
+        </ul>
+        <div class="callout-blue">
+          <div class="callout-title">📌 CTE vs 纯 CTR 优化的区别</div>
+          <p>纯 CTR 优化只看 $\text{CTR}_t$，完全忽视了 $\prod(1 - \text{PBR}_k)$。如果推一个高 CTR 但用户看完就想走的内容，PBR 高，后续的潜在点击全部丢失。CTE 把这个损失显式建模出来，因此优化 CTE 会自然倾向于推"用户点击了还愿意继续看"的内容，而这类内容往往比较<strong>多样</strong>，不会让用户产生疲惫感。</p>
+        </div>
+
+        <h3 id="rl4cte-mdp">6.3 MDP 建模</h3>
+        <p>将推荐过程建模为 MDP $\mathcal{M} = \langle S, A, P, R, \gamma \rangle$：</p>
+        <ul>
+          <li><strong>状态 $s_t$：</strong>包含用户画像 $u$、候选集 $\mathcal{I}$、已推荐历史 $\mathcal{H}_{t-1}$、当前位置是否 bounce $B(t, i_t)$。</li>
+          <li><strong>动作 $a_t$：</strong>从候选集中选下一个要推的 item。</li>
+          <li><strong>奖励 $R(s_t, a_t)$：</strong>用户是否点击了 item $a_t$（即 $C(t+1, a_t) \in \{0,1\}$）。</li>
+          <li><strong>状态转移：</strong>由 PBR 决定——以概率 $\text{PBR}_{t+1}$ 进入终止状态（用户离开），以概率 $1 - \text{PBR}_{t+1}$ 继续。</li>
+          <li><strong>累计折扣奖励：</strong>$G_t = \sum_{t=0}^{T-1} C(t+1, a_t)$（$\gamma = 1$）等于 CTE。</li>
+        </ul>
+        <p>与已有 DRL 推荐工作的关键区别：<strong>状态转移由 bounce（离开行为）驱动</strong>，而不是用户的点击/评分反馈。这样状态转移在 session 结束时才触发，避免了对每条推荐实时等待用户反馈的需求——这在工业环境的延迟反馈场景下更现实。</p>
+
+        <h3 id="rl4cte-model">6.4 模型架构与训练</h3>
+        <h4>策略网络</h4>
+        <p>策略 $\pi_\theta(a|s)$ 由三层网络组成：</p>
+        <ul>
+          <li><strong>融合层（Fusion Layer）：</strong>用 FM + MLP 生成每个 item $i$ 与用户 $u$ 的交互 embedding $e_i = \text{MLP}(\text{FM}(\hat{u}, \hat{i}))$。</li>
+          <li><strong>编码层（Encoding Layer）：</strong>用 RNN（GRU cell）对候选集内所有 item embedding 序列编码，得到包含上下文的隐状态 $h_i^t$——这使得推荐策略能感知"前面已经推了什么"。</li>
+          <li><strong>预测层：</strong>对 $h_i^t$ 做 softmax 得到 action 分布 $\pi_\theta(a|s)$，从中采样选出下一个 item。</li>
+        </ul>
+
+        <h4>仿真环境</h4>
+        <p>直接在线训练 RL 代价高昂，因此用离线日志训练一个<strong>仿真环境（Simulation Environment, SE）</strong>，用于预测给定状态下的 CTR 和 PBR。SE 使用 Transformer 编码器（比策略网络的 RNN 更强，离线训练不受限于在线延迟）。策略网络通过与 SE 交互来训练，而不是直接与真实用户交互。</p>
+
+        <h4>REINFORCE 训练</h4>
+        <p>用 REINFORCE 策略梯度算法：</p>
+        <div class="formula-block">
+          $$\nabla J(\theta) = G'_t \nabla \log \pi(a_t | s_t; \theta)$$
+        </div>
+        <p>其中 $G'_t$ 是带基线的累计奖励，用于减少方差。论文对比了两种基线：</p>
+        <ul>
+          <li><strong>Whitening：</strong>用 episode 内的均值和标准差对 return 做归一化，$G'_t = (G_t - \hat{G}) / \sigma_G$。</li>
+          <li><strong>Sampled Baseline（推荐）：</strong>对同一状态采样 $N$ 条轨迹，用其余 $N-1$ 条的平均 return 作为基线，$G'_{j,t} = G_{j,t} - \frac{1}{N-1}\sum_{b \neq j} G_{b,t}$。</li>
+        </ul>
+        <p>Sampled Baseline 在实验中表现更好，因为它用"同一状态下的多条轨迹"来估计基线，比全局归一化更精确。</p>
+
+        <h3 id="rl4cte-example">6.5 推荐系统实例：快手 Feed 流——MDP 建模与训练全流程</h3>
+
+        <h4>第一步：把推荐问题建模为 MDP</h4>
+        <div class="callout-blue">
+          <div class="callout-title">📋 MDP 五元素（State / Action / Reward / Policy / 优化目标）</div>
+          <p>用户 Chris 打开快手刷 Feed，系统每次推一条视频，整个过程建模为：</p>
+          <table>
+            <thead><tr><th>MDP 元素</th><th>推荐中的对应</th><th>具体表示</th></tr></thead>
+            <tbody>
+              <tr><td><strong>State $s_t$</strong></td><td>当前时刻的"上下文"</td><td>用户 embedding $u$ + GRU 隐状态 $h_t$<br/>$h_t = \text{GRU}(h_{t-1}, e_{i_{t-1}})$，编码已推历史序列</td></tr>
+              <tr><td><strong>Action $a_t$</strong></td><td>从候选池选一条视频</td><td>在精排后约 200 条候选中选 item $i_t$</td></tr>
+              <tr><td><strong>Transition</strong></td><td>用户看完后的反应</td><td>① 点击（CTR）；② 划走；③ 退出 Feed（PBR = bounce）</td></tr>
+              <tr><td><strong>Reward $r_t$</strong></td><td>这一步的即时收益</td><td>$= \hat{\text{ctr}}_t \times \prod_{j=1}^{t-1}(1 - \hat{\text{pbr}}_j)$</td></tr>
+              <tr><td><strong>Policy $\pi_\theta$</strong></td><td>排序策略网络</td><td>给定 $s_t$ 和候选 embedding，输出动作概率分布，据此选下一条</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4>第二步：CTE 目标——为什么不直接优化 CTR？</h4>
+        <p>系统最大化的不是每条视频的点击率，而是<strong>整个 session 的总点击数</strong>：</p>
+        <div class="formula-block">
+          $$\text{CTE} = \sum_{t=1}^{T} \hat{\text{ctr}}_t \times \prod_{j=1}^{t-1}(1 - \hat{\text{pbr}}_j)$$
+        </div>
+        <p>大白话拆解：</p>
+        <ul>
+          <li>$\hat{\text{ctr}}_t$：第 $t$ 条被点击的概率（来自 SE 预测）</li>
+          <li>$\prod_{j=1}^{t-1}(1 - \hat{\text{pbr}}_j)$：用户一直留着看到第 $t$ 条的概率（每一步都没退出）</li>
+          <li>两者相乘 = 用户<strong>实际能看到并点击</strong>第 $t$ 条的期望值</li>
+          <li>对所有位置求和 = session 总点击期望，这就是 CTE</li>
+        </ul>
+        <div class="callout-amber">
+          <div class="callout-title">⚠️ 为什么纯 CTR 优化让总点击数反而下降？</div>
+          <p>假设一直推搞笑视频，每条 CTR = 0.40，但连续看 5 条后用户无聊，第 6 条的 PBR（退出概率）升到 0.35。</p>
+          <p>反而如果在第 3 条插一条萌宠视频（CTR=0.28，PBR=0.03），用户退出概率大幅降低，后续视频还有机会被看到和点击，总点击数反而更多。</p>
+          <p>CTE 把 CTR 和 PBR 都纳入一个统一指标，能捕捉这种 trade-off。</p>
+        </div>
+
+        <h4>第三步：完整 session 数值演示</h4>
+        <p>Chris 这次 Feed，对比纯 CTR 策略（方案 A）和 RL4CTE 策略（方案 B）推了 5 条视频：</p>
+        <table>
+          <thead><tr><th>位置 $t$</th><th>方案 A（纯 CTR）</th><th>CTR</th><th>PBR</th><th>方案 B（RL4CTE）</th><th>CTR</th><th>PBR</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>搞笑视频 #1</td><td>0.42</td><td>0.05</td><td>搞笑视频 #1</td><td>0.42</td><td>0.05</td></tr>
+            <tr><td>2</td><td>搞笑视频 #2</td><td>0.40</td><td>0.10</td><td>萌宠视频 #1</td><td>0.28</td><td>0.03</td></tr>
+            <tr><td>3</td><td>搞笑视频 #3</td><td>0.38</td><td>0.18</td><td>搞笑视频 #2</td><td>0.40</td><td>0.05</td></tr>
+            <tr><td>4</td><td>搞笑视频 #4</td><td>0.35</td><td>0.28</td><td>美食视频 #1</td><td>0.22</td><td>0.03</td></tr>
+            <tr><td>5</td><td>搞笑视频 #5</td><td>0.33</td><td>0.35</td><td>搞笑视频 #3</td><td>0.40</td><td>0.06</td></tr>
+          </tbody>
+        </table>
+        <p>注意：方案 A 的 PBR 随搞笑视频越叠越多不断上升；方案 B 通过穿插萌宠/美食让 PBR 保持低位。</p>
+
+        <div class="callout-green">
+          <div class="callout-title">📐 CTE 逐项计算（方案 A）</div>
+          <p>用公式 $r_t = \hat{\text{ctr}}_t \times \prod_{j<t}(1-\hat{\text{pbr}}_j)$ 逐步展开：</p>
+          <p>$t=1$：还没 bounce 过，到达概率=1。$r_1 = 0.42 \times 1.0 = \mathbf{0.420}$</p>
+          <p>$t=2$：看完第 1 条，$(1-0.05)=0.95$ 的概率还在。$r_2 = 0.40 \times 0.95 = \mathbf{0.380}$</p>
+          <p>$t=3$：还在概率 = $0.95 \times (1-0.10) = 0.855$。$r_3 = 0.38 \times 0.855 = \mathbf{0.325}$</p>
+          <p>$t=4$：还在概率 = $0.855 \times (1-0.18) = 0.701$。$r_4 = 0.35 \times 0.701 = \mathbf{0.245}$</p>
+          <p>$t=5$：还在概率 = $0.701 \times (1-0.28) = 0.505$。$r_5 = 0.33 \times 0.505 = \mathbf{0.167}$</p>
+          <p><strong>CTE_A = 0.420 + 0.380 + 0.325 + 0.245 + 0.167 = 1.537</strong></p>
+        </div>
+
+        <div class="callout-purple">
+          <div class="callout-title">📐 CTE 逐项计算（方案 B）</div>
+          <p>$t=1$：$r_1 = 0.42 \times 1.0 = \mathbf{0.420}$</p>
+          <p>$t=2$：还在概率 0.95。$r_2 = 0.28 \times 0.95 = \mathbf{0.266}$（萌宠 CTR 低，这步收益低）</p>
+          <p>$t=3$：还在概率 = $0.95 \times (1-0.03) = 0.922$（PBR 只有 0.03，用户几乎没走！）<br/>
+          $r_3 = 0.40 \times 0.922 = \mathbf{0.369}$（搞笑回来，CTR 高，用户还在）</p>
+          <p>$t=4$：还在概率 = $0.922 \times (1-0.05) = 0.876$。$r_4 = 0.22 \times 0.876 = \mathbf{0.193}$（美食 CTR 低）</p>
+          <p>$t=5$：还在概率 = $0.876 \times (1-0.03) = 0.850$（还是很高！）<br/>
+          $r_5 = 0.40 \times 0.850 = \mathbf{0.340}$（搞笑，CTR 高，用户还在 85%）</p>
+          <p><strong>CTE_B = 0.420 + 0.266 + 0.369 + 0.193 + 0.340 = 1.588</strong></p>
+        </div>
+
+        <div class="callout-amber">
+          <div class="callout-title">💡 关键对比：为什么 B 赢了</div>
+          <p>CTE_B（1.588）> CTE_A（1.537），方案 B 高出约 3%。</p>
+          <p>方案 B 在 $t=2, 4$ 用了 CTR 更低的萌宠/美食视频，那两步收益确实低（0.266 < 0.380，0.193 < 0.245）。</p>
+          <p>但 PBR 的持续低位让用户一直留着。到了 $t=5$：</p>
+          <ul>
+            <li>方案 B：用户还有 <strong>85%</strong> 在看，$r_5 = 0.40 \times 0.850 = 0.340$</li>
+            <li>方案 A：用户只剩 <strong>50.5%</strong> 在看，$r_5 = 0.33 \times 0.505 = 0.167$</li>
+          </ul>
+          <p><strong>核心逻辑：牺牲短期 CTR，换取用户留存，长期总点击更多。</strong></p>
+        </div>
+
+        <h4>第四步：策略网络三层结构——模型长什么样？（论文 Section 4.1）</h4>
+
+        <div class="callout-amber">
+          <div class="callout-title">⚠️ 核心澄清：一次推荐请求，服务端完成 k 次自回归选择，再一次性返回整个 list</div>
+          <p>推荐系统返回的是整屏 list，<strong>不是一条一条交互</strong>。但这个 list 是怎么生成的？策略网络在服务端内部迭代 k 步，每步从候选集 $\mathcal{I}$（N 个 item）里选出 1 个放到当前位置，选完 k 个位置后，整个 list 返回给用户。</p>
+          <p>关键：状态通过 <strong>RNN hidden state 在步骤间传递</strong>，下一步知道上一步选了什么，从而感知 list 里已有的内容，自动做出有多样性的选择。</p>
+        </div>
+
+        <div class="callout-blue">
+          <div class="callout-title">🧠 策略网络三层结构（Fusion → Encoding → Prediction）</div>
+
+          <p><strong>① Fusion Layer：为候选集里每个 item 生成用户相关的 embedding</strong></p>
+          <p>候选集 $\mathcal{I}$ 有 $N$ 个 item，对每个 item $i \in \mathcal{I}$：</p>
+          <div class="formula-block">$$e_i = \text{MLP}(\text{FM}(\hat{u}, \hat{i})), \quad E = \{e_1, e_2, \ldots, e_N\}$$</div>
+          <p>FM 提取用户特征 $\hat{u}$ 和 item 特征 $\hat{i}$ 的交叉特征（$x_{u1}x_{i1}, x_{u1}x_{i2}, \ldots$），MLP 再压缩为高维 embedding $e_i$。结果是候选集矩阵 $E$，每列是一个 item 的 embedding，<strong>已经融合了用户个性化信息</strong>。</p>
+
+          <p><strong>② Encoding Layer：RNN 对整个候选集 E 做序列编码，传入上一步的历史</strong></p>
+          <p>这是最核心的一层。RNN（GRU）把 $E$ 里的 <strong>N 个 embedding 依次全部输入</strong>：</p>
+          <div class="formula-block">$$h_i^t = \text{RNN}(e_i,\ h_{i-1}^t), \quad O_H^t = \{h_1^t, h_2^t, \ldots, h_N^t\}$$</div>
+          <p>其中初始隐状态的传递方式是：</p>
+          <div class="formula-block">$$h_0^t = h_N^{t-1}, \quad h_0^1 = \mathbf{0}$$</div>
+          <p><strong>大白话：</strong>第 $t$ 步选第 $t$ 个位置时，用上一步（第 $t-1$ 步）选完后 RNN 最终的隐状态 $h_N^{t-1}$ 作为初始输入。这就是"历史感知"的来源——RNN 在编码当前候选时，带着"我上一步选了谁"的记忆。</p>
+          <p>输出 $O_H^t = \{h_1^t, \ldots, h_N^t\}$ 是对所有候选 item 的"上下文感知 embedding"，包含了"在这个推荐上下文里，每个候选有多适合作为当前位置的选择"的信息。</p>
+
+          <p><strong>③ Prediction Layer：对 $O_H^t$ 做 softmax，选出当前位置的 item</strong></p>
+          <div class="formula-block">$$\pi_\theta(a | s) = \frac{\exp(W_s h_i^t)}{\sum_{h_{i'}^t \in O_H^t} \exp(W_s h_{i'}^t)}$$</div>
+          <p>训练时：按概率分布采样（保证探索）；推理时：argmax 选分最高的。</p>
+
+          <div style="background:#f1f5f9;border-radius:8px;padding:12px;margin-top:12px;font-family:monospace;font-size:0.85em">
+            <strong>一次请求的完整数据流（生成 k 个位置的 list）：</strong><br/><br/>
+            初始：$h_0^1 = \mathbf{0}$<br/><br/>
+            <strong>步骤 t=1（选位置1）：</strong><br/>
+            $\quad$ 对所有 N 个候选 item 依次过 RNN：$h_i^1 = \text{RNN}(e_i, h_{i-1}^1)$，得到 $O_H^1$<br/>
+            $\quad$ softmax($O_H^1$) → 选出 item $a_1$（位置1的内容）<br/>
+            $\quad$ 保存 $h_N^1$（本步 RNN 最终隐状态）<br/><br/>
+            <strong>步骤 t=2（选位置2）：</strong><br/>
+            $\quad$ 初始隐状态 $h_0^2 = h_N^1$（传入上一步的记忆：选了 $a_1$）<br/>
+            $\quad$ 对所有 N 个候选依次过 RNN：$h_i^2 = \text{RNN}(e_i, h_{i-1}^2)$，得到 $O_H^2$<br/>
+            $\quad$ softmax($O_H^2$) → 选出 item $a_2$（位置2）<br/><br/>
+            …重复 k 次…<br/><br/>
+            <strong>最终：</strong>list = [$a_1, a_2, \ldots, a_k$] → 一次性返回给用户
+          </div>
+
+          <p style="margin-top:12px"><strong>多样性从哪里来：</strong>假设位置1、2选了搞笑视频，$h_N^2$ 里编码了这个信息。步骤3时以 $h_N^2$ 为初始输入对所有候选过 RNN，此时搞笑候选的 $h_i^3$ 得分经过训练会较低（这种组合 CTE 低，梯度把分压低了），而萌宠/美食候选的得分更高。多样性是从奖励信号里学出来的，不是规则。</p>
+        </div>
+
+        <h4>第五步：仿真环境 SE——替代真实用户反馈的"环境模型"</h4>
+        <p>这是 on-policy REINFORCE，必须和环境实时交互：策略选一个 action，环境立刻给 reward，再选下一个。但真实用户的 click/bounce 需要时间才回传，而且 on-policy 探索时会推出很差的内容伤害用户体验。SE 解决这个问题：</p>
+
+        <div class="callout-amber">
+          <div class="callout-title">⚠️ SE 是 reward model 吗？</div>
+          <p>SE 不直接输出 reward，而是输出用户行为的预测值（CTR 和 PBR），reward 需要再从这两个值计算出来。所以 SE 更准确地说是"环境模型"（Environment Model）：模拟用户对当前推荐的反应，而不是直接打分。但功能上等价于 reward model——所有 reward 信号都来自 SE。</p>
+        </div>
+
+        <div class="callout-purple">
+          <div class="callout-title">📊 SE 的结构与输入输出（论文 Section 4.2）</div>
+          <table>
+            <thead><tr><th></th><th>策略网络（被训练）</th><th>仿真环境 SE（提供 reward 信号）</th></tr></thead>
+            <tbody>
+              <tr><td><strong>结构</strong></td><td>Fusion(FM+MLP) + GRU + Softmax，轻量</td><td>Fusion(FM+MLP) + <strong>Transformer</strong>（更强，离线可以用）</td></tr>
+              <tr><td><strong>输入</strong></td><td>用户 $\hat{u}$ + 整个候选集 $\mathcal{I}$（N 个 item）</td><td>用户 $\hat{u}$ + 已推序列 $H_t$（含位置信息）+ 当前 item</td></tr>
+              <tr><td><strong>输出</strong></td><td>候选集上的概率分布，采样/argmax 得动作</td><td>预测 $\widehat{\text{CTR}}_t$ 和 $\widehat{\text{PBR}}_t$（两个 [0,1] 标量）</td></tr>
+              <tr><td><strong>训练</strong></td><td>REINFORCE 每 batch 更新</td><td>离线日志预训练（click/bounce 二分类），之后<strong>固定不变</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4>SE 输出 CTR/PBR → 怎么变成 reward？</h4>
+        <p>SE 对每一步输出两个值后，分三个层级计算：</p>
+        <table>
+          <thead><tr><th>层级</th><th>符号</th><th>含义与公式</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>即时 reward</strong></td>
+              <td>$r_t$</td>
+              <td>位置 $t$ 对 CTE 的贡献 = 这步被点击的概率 × 用户还没走的概率<br/>$$r_t = \widehat{\text{CTR}}_t \times \prod_{j=1}^{t-1}(1 - \widehat{\text{PBR}}_j)$$</td>
+            </tr>
+            <tr>
+              <td><strong>累积回报</strong></td>
+              <td>$G_t^j$</td>
+              <td>从位置 $t$ 到结束的所有即时 reward 之和（不是整个 session，也不是单步）<br/>$$G_t^j = \sum_{k=t}^{T} r_k = r_t + r_{t+1} + \cdots + r_T$$</td>
+            </tr>
+            <tr>
+              <td><strong>整个 session</strong></td>
+              <td>$G_0^j$</td>
+              <td>$G_0^j = \sum_{k=1}^{T} r_k$ = 整条 list 的 CTE，$G_t^j$ 是它从位置 $t$ 开始的后缀</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>REINFORCE 更新时对<strong>每个位置 $t$ 单独算一次梯度</strong>，用 $G_t^j$ 而不是 $G_0^j$：位置 $t$ 的选择只影响 $t$ 之后的结果，用 $G_t^j$ 排除了 $t$ 之前无关的 reward，方差更小。</p>
+
+        <h4>第六步：多轨迹采样与 Sampled Baseline——这是关键设计</h4>
+        <p>对<strong>同一个用户</strong>（同一候选集 $\mathcal{I}$），策略网络不只生成 1 条 list，而是<strong>采样 N 条不同的 list</strong>（每次策略按概率随机采样，得到不同的序列）。这 N 条轨迹共享同一个用户上下文，用于计算 Sampled Baseline：</p>
+
+        <div class="formula-block">
+          $$G_t^{j\prime} = G_t^j - \frac{1}{N-1}\sum_{b \neq j} G_t^b$$
+        </div>
+        <p>大白话：第 $j$ 条轨迹第 $t$ 步的"相对收益" = 它的回报 − 其他 $N-1$ 条轨迹在同一步的平均回报。</p>
+
+        <div class="callout-blue">
+          <div class="callout-title">💡 为什么要采样多条而不是 1 条？与 GRPO 的关系</div>
+          <p>baseline 的目的是减少梯度方差。Sampled Baseline 的关键优势：同一用户同一候选集下，N 条轨迹面对的是<strong>完全相同的状态</strong>，对比更公平（不受用户偏好波动影响）。比 Whitening（跨 batch 均值标准化）更稳定。</p>
+          <p><strong>这和 GRPO（Group Relative Policy Optimization）思想完全一致：</strong>GRPO 对同一个 prompt 采样 G 个 response，用组内均值作 baseline；RL4CTE 对同一个用户候选集采样 N 条轨迹，用组内均值作 baseline。本质都是"组内相对打分"。</p>
+        </div>
+
+        <div class="callout-green">
+          <div class="callout-title">🔄 具体数值例子：对用户 Chris 采样 4 条轨迹</div>
+          <p>候选集固定（都是 Chris 的候选），策略随机采样 4 条 list：</p>
+          <table>
+            <thead><tr><th>轨迹</th><th>位置2选了</th><th>$G_2^j$（位置2之后的 CTE）</th></tr></thead>
+            <tbody>
+              <tr><td>j=1</td><td>萌宠视频</td><td>$0.26 + 0.35 + 0.19 + 0.28 = \mathbf{1.08}$</td></tr>
+              <tr><td>j=2</td><td>游戏视频</td><td>$0.20 + 0.33 + 0.22 + 0.30 = \mathbf{1.05}$</td></tr>
+              <tr><td>j=3</td><td>萌宠视频</td><td>$0.27 + 0.36 + 0.18 + 0.31 = \mathbf{1.12}$</td></tr>
+              <tr><td>j=4</td><td>搞笑视频（同质）</td><td>$0.38 + 0.30 + 0.18 + 0.08 = \mathbf{0.94}$（用户疲劳）</td></tr>
+            </tbody>
+          </table>
+          <p>对位置 $t=2$，各轨迹的 Sampled Baseline 和相对收益：</p>
+          <ul>
+            <li>轨迹 4 的 baseline = $(1.08 + 1.05 + 1.12)/3 = 1.083$，$G_2^{4\prime} = 0.94 - 1.083 = \mathbf{-0.143}$（负）→ <strong>降低</strong>"位置2再推搞笑"的概率</li>
+            <li>轨迹 3 的 baseline = $(1.08 + 1.05 + 0.94)/3 = 1.023$，$G_2^{3\prime} = 1.12 - 1.023 = \mathbf{+0.097}$（正）→ <strong>增大</strong>"位置2推萌宠"的概率</li>
+          </ul>
+          <p>经过大量这样的 batch，策略学会：<strong>在刚推了搞笑之后（$h_N^1$ 带着这个信息），把萌宠/游戏等多样化内容的分数打高，把同类搞笑的分数打低。</strong>多样性从 reward 信号里自发习得。</p>
+        </div>
+
+        <h4>完整训练循环（Algorithm 1 逐行解读）</h4>
+        <div style="background:#f1f5f9;border-radius:8px;padding:14px;font-family:monospace;font-size:0.84em;line-height:1.8">
+          <strong>阶段一：预训练 SE（固定后不再更新）</strong><br/>
+          &nbsp;&nbsp;从离线日志采样 $(u, H_{t-1}, i_t, \text{click\_label}, \text{bounce\_label})$<br/>
+          &nbsp;&nbsp;用 BCE loss（点击+bounce 二分类）训练 SE，收敛后固定参数<br/><br/>
+          <strong>阶段二：On-policy 训练策略网络</strong><br/>
+          &nbsp;&nbsp;repeat:<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;从数据集采样一批用户 $B = \{(u, \mathcal{I}, \emptyset)\}$<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;for 每个用户 $b$ in $B$:<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<strong>repeat 直到 M 有 N 条轨迹</strong>（对同一用户采样 N 条 list）:<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for t = 1 to k:<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;策略 $\pi_\theta$ 采样 $a_t$（随机探索）<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SE 给出 $\widehat{\text{CTR}}_t, \widehat{\text{PBR}}_t$，计算 $r_t$<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;存入 replay buffer M<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;计算每步累积回报 $G_t^j$，计算 Sampled Baseline $G_t^{j\prime}$<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;更新：$\theta \leftarrow \theta + \alpha \cdot G_t^{j\prime} \cdot \nabla \log \pi_\theta(a_t | s_t)$<br/>
+          &nbsp;&nbsp;until 收敛
+        </div>
+
+        <h3 id="rl4cte-analysis">6.6 分析</h3>
+        <div class="compare-grid">
+          <div class="pros">
+            <h5>✅ 优点</h5>
+            <ul>
+              <li><strong>长期优化：</strong>直接优化 session 总点击数，而不是单步 CTR，与业务目标一致。</li>
+              <li><strong>多样性的隐式涌现：</strong>系统自动学到"适当多样的推荐能让用户多看几屏"，不需要显式加多样性约束。</li>
+              <li><strong>端到端：</strong>排序策略和多样性目标在同一个网络中联合优化，而非后处理重排。</li>
+              <li>线上 A/B（对比 WGCAR α=0.6）：AC +6.22%、AD +4.92%；KL@5/KL@10 更低（多样性更好）。</li>
+            </ul>
+          </div>
+          <div class="cons">
+            <h5>❌ 局限</h5>
+            <ul>
+              <li><strong>训练复杂：</strong>需要离线仿真环境 SE，SE 本身的质量上限决定了策略的质量上限；如果 SE 不准，会引入 bias。</li>
+              <li><strong>On-policy 高方差：</strong>REINFORCE 方差大，Sampled Baseline 有所缓解但训练不稳定性仍存在。</li>
+              <li><strong>延迟反馈仍是挑战：</strong>用户 bounce 只在 session 末尾观测，稀疏奖励问题依然存在。</li>
+              <li><strong>候选集规模受限：</strong>策略网络需要处理整个候选集 $\mathcal{I}$，线上 RT 敏感，需要工程优化（论文将复杂度从 $O(k^2n)$ 降到 $O(kn)$）。</li>
+            </ul>
+          </div>
+        </div>
+        <div class="callout-purple">
+          <div class="callout-title">🔑 与前四篇的本质区别</div>
+          <p>前四篇（MMR / APD / Calibrated Rec / DPP）都是在已有打分的基础上做<strong>后处理重排</strong>：先有相关性分数，再最大化多样性目标。RL4CTE 则是<strong>端到端地学习排序策略</strong>，把"用户是否继续浏览"这个长期信号直接用于训练。多样性不再是约束条件，而是 RL 策略为了最大化累计奖励自发习得的行为。</p>
+        </div>
+      </div>
+
+      <!-- ===== §7 COMPARISON ===== -->
+      <div class="section" id="comparison">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4">📊</div>
+          <span>7. 五方法横向对比</span>
+        </div>
+
+        <h3>7.1 设计空间全面对比</h3>
+        <table>
+          <thead>
+            <tr><th>维度</th><th>MMR</th><th>Adaptive PD</th><th>Calibrated Rec</th><th>Fast DPP</th><th>RL4CTE</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>多样性度量</strong></td><td>max pair-wise 相似度</td><td>次模属性覆盖</td><td>KL 散度</td><td>行列式体积</td><td>无显式度量（隐式）</td></tr>
+            <tr><td><strong>优化目标</strong></td><td>Rel - (1-λ)·冗余</td><td>次模函数最大化</td><td>Rel - λ·KL</td><td>log det(L)</td><td>CTE（session 总点击）</td></tr>
+            <tr><td><strong>时间视野</strong></td><td>单步（贪心）</td><td>单步（贪心）</td><td>单步（贪心）</td><td>单步（贪心）</td><td>多步（session 级 RL）</td></tr>
+            <tr><td><strong>个性化</strong></td><td>❌</td><td>✅ 类目权重</td><td>✅ 历史分布</td><td>⚠️（可扩展）</td><td>✅ 用户 embedding</td></tr>
+            <tr><td><strong>是否端到端</strong></td><td>❌</td><td>❌</td><td>❌</td><td>❌</td><td>✅</td></tr>
+            <tr><td><strong>训练数据</strong></td><td>无需训练</td><td>无需训练</td><td>无需训练</td><td>无需训练</td><td>需大量离线日志</td></tr>
+            <tr><td><strong>在线延迟</strong></td><td>极低</td><td>低</td><td>低</td><td>低（Cholesky加速）</td><td>中（RNN 推断需工程优化）</td></tr>
+            <tr><td><strong>可解释性</strong></td><td>高</td><td>高</td><td>高</td><td>中</td><td>低</td></tr>
+          </tbody>
+        </table>
+
+        <h3>7.2 方法适用场景对比</h3>
+        <div class="compare-grid three">
+          <div class="compare-card">
+            <h5 style="color:var(--accent)">🔍 搜索/IR 场景</h5>
+            <p><strong>首选：MMR</strong><br/>候选集由搜索引擎产出，相关性已有良好评分，只需在此基础上减少冗余。MMR 简单直接，$\lambda$ 调参快速，部署成本最低。</p>
+          </div>
+          <div class="compare-card">
+            <h5 style="color:var(--green)">🛒 电商浏览/发现</h5>
+            <p><strong>首选：Adaptive PD 或 DPP</strong><br/>需要品类覆盖（APD 更直接）或向量空间多样性（DPP 更精确）。如果有足够的用户行为数据，APD 的个性化权重效果好。</p>
+          </div>
+          <div class="compare-card">
+            <h5 style="color:var(--amber)">📺 Feed 流/长 session</h5>
+            <p><strong>首选：RL4CTE</strong><br/>当 session 足够长、多步决策的序列效果显著时，RL 端到端优化更有优势。同时考虑 Calibrated Rec 作为后处理保证分布合理性。</p>
+          </div>
+        </div>
+
+        <h3>7.3 算法复杂度对比</h3>
+        <table>
+          <thead>
+            <tr><th>方法</th><th>离线训练</th><th>在线推断（候选 $n$，输出 $k$）</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>MMR</td><td>无</td><td>$O(kn)$</td></tr>
+            <tr><td>Adaptive PD</td><td>$O(d)$ 权重更新</td><td>$O(dkn)$（CELF 加速后更快）</td></tr>
+            <tr><td>Calibrated Rec</td><td>无</td><td>$O(|G|kn)$（$|G|$ 为类目数）</td></tr>
+            <tr><td>Fast DPP</td><td>无</td><td>$O(nk + Mk^2)$</td></tr>
+            <tr><td>RL4CTE</td><td>$O(\text{大量离线日志})$</td><td>$O(kn)$（工程优化后）</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ===== §8 SUMMARY ===== -->
+      <div class="section" id="summary">
+        <div class="section-title">
+          <div class="icon" style="background:#faf5ff">✨</div>
+          <span>8. 总结与展望</span>
+        </div>
+
+        <h3>8.1 核心脉络回顾</h3>
+        <p>这五篇工作勾勒出多样性重排领域 20 年来的演进主线：</p>
+        <div class="timeline">
+          <div class="timeline-item">
+            <div class="timeline-year">第一阶段：定义问题</div>
+            <strong>MMR</strong> 正式定义"多样性重排"任务框架：在相关性和多样性之间做 λ 加权，用贪心算法求近似解。这个框架本身比算法效果更重要。
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-year">第二阶段：精细化多样性度量</div>
+            <strong>Adaptive PD（次模）和 DPP（行列式）</strong>：从不同角度改进了"如何度量多样性"。次模用属性覆盖率，行列式用集合体积，都比 MMR 的 pair-wise 最大相似度更全局、更精确。
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-year">第三阶段：分布约束视角</div>
+            <strong>Calibrated Rec</strong>：从信息论角度引入分布对齐，提出多样性不只是"元素之间差异大"，还应该"反映用户兴趣的真实分布"。开创了以 KL 散度为工具的后处理校准范式。
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-year">第四阶段：端到端长期优化</div>
+            <strong>RL4CTE</strong>：打破"相关性打分 + 多样性后处理"的两阶段范式，用 RL 直接优化 session 级长期目标，多样性成为策略自发习得的隐式属性而非显式约束。
+          </div>
+        </div>
+
+        <h3>8.2 未解决的关键问题</h3>
+        <div class="callout-red">
+          <div class="callout-title">🚧 仍然开放的挑战</div>
+          <ul>
+            <li><strong>多样性 vs 相关性 vs 公平性的三方博弈：</strong>除了用户的多样性需求，还有 item 提供方（商家/内容创作者）的公平性需求——热门内容不能一直霸榜。如何在三者之间找到最优均衡？</li>
+            <li><strong>多样性的评估指标问题：</strong>CC@K（品类覆盖率）和 KL@K（分布距离）是代理指标，并不直接对应用户满意度。如何设计真正衡量"用户是否因为多样性而更满意"的指标？</li>
+            <li><strong>长期兴趣演化：</strong>Calibrated Rec 假设历史分布代表用户偏好，但用户兴趣会随时间变化。如何动态调整目标分布？</li>
+            <li><strong>RL 的 off-policy 数据利用：</strong>RL4CTE 用 on-policy REINFORCE，样本效率低。如何利用大量历史 off-policy 数据？（这是电商 RL 推荐的通用难题）</li>
+            <li><strong>大模型时代的多样性重排：</strong>LLM 作为 Ranker 时，如何在 beam search 或采样层面注入多样性约束？这与传统重排方法框架完全不同。</li>
+          </ul>
+        </div>
+
+        <h3>8.3 工程实践建议</h3>
+        <div class="callout-green">
+          <div class="callout-title">💡 如何选择和组合这些方法？</div>
+          <ol>
+            <li><strong>先上线 Calibrated Rec：</strong>实现成本最低（后处理），可解释性强，能快速验证分布校准对业务的价值。$\lambda=0.5$ 作为起点。</li>
+            <li><strong>用 DPP 替换或增强多样性度量：</strong>如果有商品 embedding，DPP 能捕捉更细粒度的语义多样性；Cholesky 增量更新支持工业级延迟。</li>
+            <li><strong>在长 session 场景引入 RL：</strong>当用户浏览深度是关键指标时，RL4CTE 类的方法能带来额外增益；但需要足够的训练数据和工程投入。</li>
+            <li><strong>多样性永远是 tradeoff：</strong>多样性过强会伤害头部相关性，业务上需要 A/B 实验确认整体指标（GMV/DAU/留存）的变化，而不只是 CTR 或多样性指标。</li>
+          </ol>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+</body>
+</html>
