@@ -181,8 +181,8 @@
     <h1>学习笔记 &amp; 论文解读</h1>
     <p>推荐 · 搜索 · LLM · NLP · 工业落地</p>
     <div class="stats">
-      <div class="stat-pill">论文 <strong>20</strong> 篇</div>
-      <div class="stat-pill">学习笔记 <strong>13</strong> 篇</div>
+      <div class="stat-pill">论文 <strong>23</strong> 篇</div>
+      <div class="stat-pill">学习笔记 <strong>15</strong> 篇</div>
       <div class="stat-pill">Semantic ID <strong>12</strong></div>
       <div class="stat-pill">生成式推荐 <strong>9</strong></div>
       <div class="stat-pill">排序 Scaling <strong>6</strong></div>
@@ -193,15 +193,15 @@
   <div class="tabs-wrap">
     <div class="tabs">
       <button class="tab-btn active" onclick="switchTab('all',this)">
-        全部 <span class="tab-count">29</span>
+        全部 <span class="tab-count">35</span>
       </button>
       <button class="tab-btn" onclick="switchTab('notes',this)">
         <span class="tab-dot" style="background:#0891b2"></span>
-        📝 学习笔记 <span class="tab-count">14</span>
+        📝 学习笔记 <span class="tab-count">15</span>
       </button>
       <button class="tab-btn" onclick="switchTab('sid',this)">
         <span class="tab-dot" style="background:#c2410c"></span>
-        Semantic ID &amp; 表征 <span class="tab-count">12</span>
+        Semantic ID &amp; 表征 <span class="tab-count">14</span>
       </button>
       <button class="tab-btn" onclick="switchTab('gen',this)">
         <span class="tab-dot" style="background:#1d4ed8"></span>
@@ -237,6 +237,67 @@
   <!-- 全部 -->
   <div id="panel-all" class="panel visible">
     <div class="paper-list">
+
+      <!-- SID-Coord 2026 快手 SIGIR -->
+      <a class="paper-card" href="papers/sid-coord.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2026</span>
+            <span class="tag tv">SIGIR 2026</span>
+            <span class="tag tc-sid">SID × 排序 · 快手搜索</span>
+            <span class="tag tc-indus">长播率 +0.664%</span>
+          </div>
+          <div class="card-title">SID-Coord：协调语义 ID 与哈希 ID 的短视频搜索排序</div>
+          <div class="card-subtitle">多分辨率 SID 融合 + 流行度感知门控 + 兴趣对齐 · 快手搜索 · 端到端可训练</div>
+          <div class="card-summary">快手提出的轻量级 SID 框架，将语义 ID 作为可训练的结构化标识符而非静态特征。三大创新：(I) 多分辨率融合捕获粗细粒度语义；(II) 目标感知门控自适应平衡 HID 记忆与 SID 泛化；(III) 兴趣对齐建模用户历史相似性。4.5B 训练样本在线 A/B：搜索长播率 +0.664%，播放时长 +0.369%，延迟增加仅 +0.005%。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- SID Explainer 完全手册 -->
+      <a class="paper-card" href="papers/sid-explainer.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#ede9fe;color:#5b21b6;">📖 深度讲解</span>
+            <span class="tag tc-sid">Semantic ID 基础</span>
+            <span class="tag" style="background:#f0fdf4;color:#166534;">RQ-VAE · 协同信号 · 工程实践</span>
+          </div>
+          <div class="card-title">Semantic ID 完全手册：生产 · 训练 · 协同信号注入</div>
+          <div class="card-subtitle">从头讲清楚 SID 的生产过程、训练机制，以及如何注入协同过滤信号 · 含完整数学推导与工程细节</div>
+          <div class="card-summary">系统性讲解 Semantic ID 全链路：RQ-VAE 量化原理（EMA Codebook 更新、Codebook Collapse 及 EMA/随机重置修复）、Residual 量化层级设计、SID 如何用于生成式推荐训练（Next-Token Prediction Loss）、协同信号注入方案（CF Debias / 对比对齐）、工业落地关键参数选型。是阅读 TIGER/OneRec/DAS 等论文的必备背景知识。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- Agentic Infra 笔记 -->
+      <a class="paper-card" href="topics/notes-agentic-infra.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#e0f7fa;color:#006064;">📝 学习笔记</span>
+            <span class="tag ty">2025 技术前沿</span>
+            <span class="tag" style="background:#fef3c7;color:#92400e;">Forge · ROLL · Seer · slime</span>
+          </div>
+          <div class="card-title">Agentic RL 时代的 Infra 重构：以 Forge、ROLL、Seer、slime 为例</div>
+          <div class="card-subtitle">Meta / 阿里 / Moonshot / 清华 · 权重同步 · 训推分离 · 异步流水线 · 长尾 Rollout</div>
+          <div class="card-summary">从「单机跑 PPO」到「千卡异步 Agent 训练」的工程演进。剖析四支团队在 Agentic RL Infra 上的核心设计：Forge（Meta）的 Actor-Rollout 异步解耦；ROLL（阿里）的统一编程接口与权重同步无缝切换；Seer（Moonshot）的流式 Rollout 与 KV Cache 迁移；slime（清华）的参数服务器 + 异步采样。四大核心问题（权重同步、训推分离、长尾 Rollout、异步流水线）的工程解法对比。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- 多样性重排笔记 -->
+      <a class="paper-card" href="topics/notes-diversity-rerank.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#e0f7fa;color:#006064;">📝 学习笔记</span>
+            <span class="tag ty">2025 技术前沿</span>
+            <span class="tag" style="background:#f0fdf4;color:#065f46;">MMR · APD · DPP · RL4CTE</span>
+          </div>
+          <div class="card-title">多样性 &amp; 端到端重排方法脉络：MMR → APD → Calibrated → DPP → RL4CTE</div>
+          <div class="card-subtitle">推荐系统多样性重排五大方法 · 每篇均含推荐链路定位 + 逐步数值实例 · 含 MDP 建模与 REINFORCE 训练全流程</div>
+          <div class="card-summary">系统梳理推荐系统多样性重排五大方法：MMR（贪心相关性-冗余权衡）、APD（Thompson Sampling + 次模重排 + 个性化类目权重）、Calibrated Recommendations（KL 散度对齐历史兴趣分布）、Fast DPP（行列式体积 · Cholesky 贪心）、RL4CTE（CTE 长期优化 · MDP · REINFORCE + Sampled Baseline · SE 仿真环境）。每篇均有完整推荐系统实例与逐步数值计算，深入解析 RL4CTE 的 on-policy 训练机制、多轨迹采样与 GRPO 的类比。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
 
       <!-- RoleGen 2025 快手+北航 -->
       <a class="paper-card" href="rolegen.html">
@@ -877,6 +938,37 @@
         <div class="card-arrow">→</div>
       </a>
 
+      <!-- SID-Coord 2026 -->
+      <a class="paper-card" href="papers/sid-coord.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2026</span>
+            <span class="tag tv">SIGIR 2026</span>
+            <span class="tag tc-sid">SID × 排序 · 快手搜索</span>
+            <span class="tag tc-indus">长播率 +0.664%</span>
+          </div>
+          <div class="card-title">SID-Coord：协调语义 ID 与哈希 ID 的短视频搜索排序</div>
+          <div class="card-subtitle">快手搜索 · 多分辨率 SID + 流行度感知门控 + 兴趣对齐</div>
+          <div class="card-summary">轻量级 SID 框架，三大创新：多分辨率融合、目标感知门控（自适应平衡 HID 记忆与 SID 泛化）、兴趣对齐。在线 A/B：长播率 +0.664%，播放时长 +0.369%，延迟 +0.005%。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- SID Explainer -->
+      <a class="paper-card" href="papers/sid-explainer.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#ede9fe;color:#5b21b6;">📖 深度讲解</span>
+            <span class="tag tc-sid">Semantic ID 基础</span>
+            <span class="tag" style="background:#f0fdf4;color:#166534;">RQ-VAE · 协同信号</span>
+          </div>
+          <div class="card-title">Semantic ID 完全手册：生产 · 训练 · 协同信号注入</div>
+          <div class="card-subtitle">从头讲清楚 SID 的生产、训练机制与协同过滤信号注入</div>
+          <div class="card-summary">RQ-VAE 量化原理（EMA Codebook 更新、Collapse 修复）、Residual 量化层级设计、Next-Token Prediction 训练、协同信号注入方案（CF Debias / 对比对齐）、工业落地参数选型。阅读 TIGER/OneRec/DAS 等论文的必备背景知识。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
     </div>
   </div>
 
@@ -1241,21 +1333,6 @@
     </div>
     <div class="paper-list">
 
-      <!-- SID-Coord 论文解读 -->
-      <a class="paper-card" href="papers/sid-coord.html">
-        <div>
-          <div class="card-meta">
-            <span class="tag" style="background:#fff7ed;color:#c2410c;">📄 SIGIR 2026</span>
-            <span class="tag tc-sid">Semantic ID × 排序</span>
-            <span class="tag tc-indus">快手搜索 · 长播率 +0.664%</span>
-          </div>
-          <div class="card-title">SID-Coord：协调语义ID与哈希ID的短视频搜索排序</div>
-          <div class="card-subtitle">多分辨率SID融合 + 流行度感知门控 + 兴趣对齐 · 端到端可训练</div>
-          <div class="card-summary">快手提出的轻量级SID框架，将语义ID作为可训练的结构化标识符，而非静态特征。三大创新：(I) 多分辨率融合捕获粗细粒度语义；(II) 目标感知门控自适应平衡HID记忆与SID泛化；(III) 兴趣对齐建模用户历史相似性。4.5B训练样本的在线A/B：搜索长播率+0.664%，播放时长+0.369%，延迟增加仅+0.005%。</div>
-        </div>
-        <div class="card-arrow">→</div>
-      </a>
-
       <!-- Diffusion Model 笔记 -->
       <a class="paper-card" href="topics/notes-diffusion.html">
         <div>
@@ -1387,6 +1464,36 @@
           <div class="card-title">Agentic 能力从哪里来？拆解基座大模型的训练过程</div>
           <div class="card-subtitle">以 GLM-5 为主线，系统梳理 Pre-Training → SFT → 多阶段 RL → On-Policy Cross-Stage 蒸馏完整链路</div>
           <div class="card-summary">完整还原现代基座大模型训练流水线：预训练数据配比与 Mid-Training；SFT 三种 thinking 模式；Reasoning RL + Agentic RL（SWE/Search/Terminal）+ General RL；On-Policy Cross-Stage Distillation 防止灾难性遗忘；Agentic 数据合成六步流水线；训推不一致（IcePop）与异步框架 off-policy 解决方案；Kimi K2.5 Agent Swarm 延迟降低 4.5×。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- Agentic Infra 笔记 -->
+      <a class="paper-card" href="topics/notes-agentic-infra.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#e0f7fa;color:#006064;">📝 学习笔记</span>
+            <span class="tag ty">2025 技术前沿</span>
+            <span class="tag" style="background:#fef3c7;color:#92400e;">Forge · ROLL · Seer · slime</span>
+          </div>
+          <div class="card-title">Agentic RL 时代的 Infra 重构：以 Forge、ROLL、Seer、slime 为例</div>
+          <div class="card-subtitle">Meta / 阿里 / Moonshot / 清华 · 权重同步 · 训推分离 · 异步流水线 · 长尾 Rollout</div>
+          <div class="card-summary">从「单机跑 PPO」到「千卡异步 Agent 训练」的工程演进。剖析四支团队核心设计：Forge 的 Actor-Rollout 异步解耦；ROLL 的统一编程接口；Seer 的流式 Rollout + KV Cache 迁移；slime 的参数服务器 + 异步采样。权重同步、训推分离、长尾 Rollout、异步流水线四大核心问题的工程解法对比。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- 多样性重排笔记 -->
+      <a class="paper-card" href="topics/notes-diversity-rerank.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#e0f7fa;color:#006064;">📝 学习笔记</span>
+            <span class="tag ty">推荐系统</span>
+            <span class="tag" style="background:#f0fdf4;color:#065f46;">MMR · APD · DPP · RL4CTE</span>
+          </div>
+          <div class="card-title">多样性 &amp; 端到端重排方法脉络：MMR → APD → Calibrated → DPP → RL4CTE</div>
+          <div class="card-subtitle">推荐系统五大多样性重排方法 · 逐步数值实例 · MDP 建模与 REINFORCE 训练全流程</div>
+          <div class="card-summary">系统梳理推荐系统多样性重排五大方法（MMR / APD / Calibrated / DPP / RL4CTE），每篇均含推荐链路定位与逐步数值实例。深入解析 RL4CTE 的 on-policy 训练：CTE 目标 · SE 仿真环境 · 策略网络三层结构 · 多轨迹采样 Sampled Baseline（与 GRPO 类比）· REINFORCE 梯度更新。</div>
         </div>
         <div class="card-arrow">→</div>
       </a>
