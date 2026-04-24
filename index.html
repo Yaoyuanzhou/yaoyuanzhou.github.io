@@ -86,6 +86,37 @@
     .cat-header h2 { font-size: 16px; font-weight: 700; }
     .cat-header .cat-desc { color: var(--muted); font-size: 13px; }
 
+    /* ── Search box ─────────────────────── */
+    .search-wrap {
+      margin: 20px 0 0;
+      position: relative;
+    }
+    .search-input {
+      width: 100%;
+      padding: 12px 44px 12px 18px;
+      border: 1.5px solid var(--line);
+      border-radius: 14px;
+      font-size: 15px;
+      color: var(--text);
+      background: var(--card);
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      font-family: inherit;
+    }
+    .search-input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+    }
+    .search-icon {
+      position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+      color: var(--muted); font-size: 18px; pointer-events: none;
+    }
+    .search-count {
+      font-size: 12px; color: var(--muted); margin-top: 8px;
+      min-height: 18px;
+    }
+    .paper-card[hidden] { display: none !important; }
+
     /* ── Paper card ───────────────────── */
     .paper-list { display: flex; flex-direction: column; gap: 12px; }
     .paper-card {
@@ -182,7 +213,7 @@
     <p>推荐 · 搜索 · LLM · NLP · 工业落地</p>
     <div class="stats">
       <div class="stat-pill">论文 <strong>23</strong> 篇</div>
-      <div class="stat-pill">学习笔记 <strong>15</strong> 篇</div>
+      <div class="stat-pill">学习笔记 <strong>16</strong> 篇</div>
       <div class="stat-pill">Semantic ID <strong>12</strong></div>
       <div class="stat-pill">生成式推荐 <strong>9</strong></div>
       <div class="stat-pill">排序 Scaling <strong>6</strong></div>
@@ -193,11 +224,11 @@
   <div class="tabs-wrap">
     <div class="tabs">
       <button class="tab-btn active" onclick="switchTab('all',this)">
-        全部 <span class="tab-count">35</span>
+        全部 <span class="tab-count">39</span>
       </button>
       <button class="tab-btn" onclick="switchTab('notes',this)">
         <span class="tab-dot" style="background:#0891b2"></span>
-        📝 学习笔记 <span class="tab-count">15</span>
+        📝 学习笔记 <span class="tab-count">16</span>
       </button>
       <button class="tab-btn" onclick="switchTab('sid',this)">
         <span class="tab-dot" style="background:#c2410c"></span>
@@ -205,11 +236,11 @@
       </button>
       <button class="tab-btn" onclick="switchTab('gen',this)">
         <span class="tab-dot" style="background:#1d4ed8"></span>
-        生成式推荐与检索 <span class="tab-count">9</span>
+        生成式推荐与检索 <span class="tab-count">11</span>
       </button>
       <button class="tab-btn" onclick="switchTab('rank',this)">
         <span class="tab-dot" style="background:#065f46"></span>
-        排序模型 Scaling <span class="tab-count">6</span>
+        排序模型 Scaling <span class="tab-count">8</span>
       </button>
       <button class="tab-btn" onclick="switchTab('seq',this)">
         <span class="tab-dot" style="background:#7e22ce"></span>
@@ -229,10 +260,17 @@
       </button>
       <button class="tab-btn" onclick="switchTab('infra',this)">
         <span class="tab-dot" style="background:#475569"></span>
-        系统与工程 <span class="tab-count">2</span>
+        系统与工程 <span class="tab-count">1</span>
       </button>
     </div>
   </div>
+
+  <!-- Search -->
+  <div class="search-wrap">
+    <input class="search-input" id="search-input" type="text" placeholder="搜索论文或笔记... (标题 / 关键词 / 机构)" oninput="handleSearch(this.value)" />
+    <span class="search-icon">🔍</span>
+  </div>
+  <div class="search-count" id="search-count"></div>
 
   <!-- 全部 -->
   <div id="panel-all" class="panel visible">
@@ -592,22 +630,6 @@
         <div class="card-arrow">→</div>
       </a>
 
-      <!-- LIGER 2024.11 -->
-      <a class="paper-card" href="papers/liger.html">
-        <div>
-          <div class="card-meta">
-            <span class="tag ty">2024.11</span>
-            <span class="tag tv">arXiv 2411.18814</span>
-            <span class="tag tc-gen">混合召回</span>
-            <span class="tag tc-sid">Semantic ID</span>
-          </div>
-          <div class="card-title">LIGER：融合生成式与稠密检索的序列推荐</div>
-          <div class="card-subtitle">Unifying Generative and Dense Retrieval for Sequential Recommendation · Liu Yang, Fabian Paischer et al. · Meta AI</div>
-          <div class="card-summary">系统比较生成式召回（TIGER）与稠密召回在学术 benchmark 上的性能差距，发现生成式召回冷启动为零。提出 LIGER 混合方案：用 SID 做候选生成，再补入冷启动 item，以 dense embedding 重排，同时训练 next-token 预测和余弦相似度 loss，兼顾效率与冷启动表现。</div>
-        </div>
-        <div class="card-arrow">→</div>
-      </a>
-
       <!-- SemID 2023/2024 -->
       <a class="paper-card" href="papers/semid.html">
         <div>
@@ -651,7 +673,7 @@
           </div>
           <div class="card-title">Harness Engineering：让 AI Agent 不再犯同一个错误</div>
           <div class="card-subtitle">Mitchell Hashimoto 命名 · OpenAI / Anthropic / Martin Fowler 相继跟进 · 2026 年 2 月爆火</div>
-          <div class="card-summary">核心思想：每次发现 Agent 犯错，就工程化一个解决方案让它永远不再犯。两种形式：AGENTS.md 错误记录文件 + 专用验证脚本工具。深度解析 Anthropic 三 Agent 架构（Planner + Generator + Evaluator），Sprint 合同机制，Playwright MCP 实时点击验证，以及与 Context Engineering 的关系。附效果对比：单 Agent $9/20 分钟（功能损坏）vs 三 Agent $200/6 小时（16 特性完整可玩）。</div>
+          <div class="card-summary">核心思想：每次发现 Agent 犯错，就工程化一个解决方案让它永远不再犯。两种形式：AGENTS.md 错误记录文件 + 专用验证脚本工具。深度解析 Anthropic 三 Agent 架构（Planner + Generator + Evaluator），Sprint 合同机制，Playwright MCP 实时点击验证，以及与 Context Engineering 的关系。</div>
         </div>
         <div class="card-arrow">→</div>
       </a>
@@ -742,6 +764,126 @@
           <div class="card-title">LLM 推理优化：KV Cache · vLLM · TurboQuant · Flash Attention</div>
           <div class="card-subtitle">让大模型跑得更快、占更少内存的四项核心技术，每个都有具体数字 + 局限性分析</div>
           <div class="card-summary">持续更新的推理优化笔记。KV Cache：为什么缓存 K/V 而不是 Q，MQA/GQA 如何压缩显存；vLLM/PagedAttention：分页虚拟内存消灭碎片，利用率 20%→90%+；TurboQuant：随机旋转 + 向量量化把 K/V 压到 2/4 bit；FlashAttention v1/v2/v3：Tiling + Online Softmax，HBM IO 从 O(N²) 降到 O(N)，训练推理均可用。四项技术可同时叠加。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- LIGER 2024.11 -->
+      <a class="paper-card" href="papers/liger.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2024.11</span>
+            <span class="tag tv">arXiv 2411.18814</span>
+            <span class="tag tc-gen">生成式 + 稠密混合</span>
+          </div>
+          <div class="card-title">LIGER：融合生成式与稠密检索的序列推荐</div>
+          <div class="card-subtitle">Unifying Generative and Dense Retrieval for Sequential Recommendation · Meta AI</div>
+          <div class="card-summary">分析 TIGER（生成式）与 Dense Retrieval 的性能差距和冷启动问题，提出 LIGER 混合方案：共用 SID 输入，Decoder 预测 SID，Encoder 输出 dense embedding；推理时生成式召回 K 个候选 + 补入冷启动 item，用 dense embedding 重排。四数据集取得生成式/稠密最优折中。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- UniMixer 2026 -->
+      <a class="paper-card" href="papers/unimixer.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2026</span>
+            <span class="tag tv">arXiv 2604.00590 · 快手</span>
+            <span class="tag tc-rank">排序 Scaling · 统一架构</span>
+          </div>
+          <div class="card-title">UniMixer：统一 Attention / TokenMixer / FM 三大 Scaling 架构</div>
+          <div class="card-subtitle">UniMixer: A Unified Architecture for Scaling Laws in Recommendation Systems · Kuaishou Technology</div>
+          <div class="card-summary">通过 TokenMixer 等价参数化将推荐系统三大 Scaling 范式统一到一个理论框架；UniMixer-Lite 参数效率最优，Scaling 指数（0.1419）高于 RankMixer（0.1160）；SiameseNorm 解决深度退化，快手广告在线 CAD +15%。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- Diffusion Model 笔记 -->
+      <a class="paper-card" href="topics/notes-diffusion.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#fdf4ff;color:#7c3aed;">🎨 视觉生成</span>
+            <span class="tag ty">2025 技术前沿</span>
+            <span class="tag" style="background:#f0fdf4;color:#166534;">完全新手向</span>
+          </div>
+          <div class="card-title">视觉 Diffusion Model：从零开始完全图解</div>
+          <div class="card-subtitle">DDPM · Stable Diffusion · U-Net · Cross-Attention · CFG · Latent Diffusion</div>
+          <div class="card-summary">完全新手向Diffusion模型解读：前向扩散 → 逆向去噪 → U-Net → Cross-Attention → Latent Diffusion → CFG → DDPM/Stable Diffusion/DALL-E 2 演进史。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- Tokenizer -->
+      <a class="paper-card" href="topics/notes-tokenizer.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#e0f7fa;color:#006064;">📝 学习笔记</span>
+            <span class="tag ty">LLM 基础</span>
+            <span class="tag tc-nlp">Tokenizer</span>
+          </div>
+          <div class="card-title">LLM Tokenizer 方法总结：BPE / WordPiece / Unigram / SentencePiece</div>
+          <div class="card-subtitle">从字符到 Token 的完整演化路径，含每种方法的算法细节、对比与工业应用</div>
+          <div class="card-summary">覆盖 BPE（GPT 系列）、WordPiece（BERT）、Unigram LM（T5/XLNet）、SentencePiece（统一框架）、Byte-level BPE（GPT-2/LLaMA）、tiktoken 等主流方案。每种方法都有具体示例演示词表构建过程，并附 vocab size 选择、多语言处理、OOV 等工程实践经验。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- RL in LLM -->
+      <a class="paper-card" href="topics/notes-rl.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#e0f7fa;color:#006064;">📝 学习笔记</span>
+            <span class="tag ty">LLM 基础</span>
+            <span class="tag tc-llm">强化学习</span>
+          </div>
+          <div class="card-title">LLM 中的强化学习方法：RLHF / PPO / DPO / GRPO / RLAIF 全面解析</div>
+          <div class="card-subtitle">从 InstructGPT 到 DeepSeek-R1，覆盖 LLM 对齐训练的所有主流 RL 范式</div>
+          <div class="card-summary">从 MDP 基础讲起，详解 RLHF 三阶段，PPO 裁剪目标与 KL 惩罚，再到无需参考模型的 DPO/IPO，以及 GRPO（用于 CoT 推理的群体相对策略优化），全程结合真实例子，每个算法都有直觉理解 + 公式 + 例子三合一。附完整 PyTorch 代码示例。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- 大厂大模型部门 -->
+      <a class="paper-card" href="topics/notes-llm-teams.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#e0f7fa;color:#006064;">📝 学习笔记</span>
+            <span class="tag ty">行业认知</span>
+            <span class="tag tc-llm">大模型团队</span>
+          </div>
+          <div class="card-title">大厂大模型部门：组织结构与技术栈全解析</div>
+          <div class="card-subtitle">预训练 / 后训练 / 推理效率 / 评估 / 多模态 / 应用 Agent，每个组在做什么</div>
+          <div class="card-summary">详细拆解工业级大模型团队的六大职能组：预训练组（Megatron/FlashAttention/Scaling Laws）、后训练对齐组（SFT/RLHF/DPO/GRPO/Red Teaming）、推理效率组（vLLM/量化/投机解码）、评估组、多模态组、应用 Agent 组。每组配有技术栈、日常工作案例和 KPI，并附 LLM × 推荐系统融合趋势分析。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- 大模型训练流水线 -->
+      <a class="paper-card" href="topics/notes-llm-pipeline.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#e0f7fa;color:#006064;">📝 学习笔记</span>
+            <span class="tag ty">LLM 基础</span>
+            <span class="tag tc-llm">训练流水线</span>
+          </div>
+          <div class="card-title">大模型完整训练流水线：预训练 → SFT → RLHF 深度解析</div>
+          <div class="card-subtitle">一篇讲清楚「大模型从随机初始化到会聊天的 AI」的完整教程</div>
+          <div class="card-summary">专门深挖 SFT 和 RLHF 的本质。SFT：监督微调的损失函数只计算回答部分，质量远比数量重要；RLHF：奖励模型从偏好排序中训练，PPO 四个模型同时运行，KL 惩罚防止 Reward Hacking。附 DPO/GRPO 与 PPO 的对比，以及 RLHF 训练崩溃的常见原因和调参建议。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- LLM 数学原理 -->
+      <a class="paper-card" href="topics/notes-math.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#faf5ff;color:#5b21b6;">📐 数学原理</span>
+            <span class="tag ty">LLM 基础</span>
+            <span class="tag tc-llm">数学工具</span>
+          </div>
+          <div class="card-title">LLM 背后的数学原理：Sigmoid · MLE · KL 散度 · 交叉熵 · Softmax</div>
+          <div class="card-subtitle">理解 LLM 训练中反复出现的数学工具，每个都有完整推导 + 直觉</div>
+          <div class="card-summary">持续更新的数学笔记。覆盖：Sigmoid 等价变形、Bradley-Terry 损失梯度分析、MLE 直觉与 NLL 损失推导、KL 散度编码代价解释与 RLHF 中的作用、交叉熵=信息熵+KL 三者统一视角、Softmax 温度系数与 top-k/top-p 采样策略。</div>
         </div>
         <div class="card-arrow">→</div>
       </a>
@@ -998,6 +1140,38 @@
         <div class="card-arrow">→</div>
       </a>
 
+      <!-- OneSearch 2025 快手 -->
+      <a class="paper-card" href="papers/onesearch.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">arXiv 2509.03236</span>
+            <span class="tag tc-gen">端到端生成式搜索</span>
+            <span class="tag tc-indus">快手 CTR +1.67%</span>
+          </div>
+          <div class="card-title">OneSearch：第一个工业部署的电商搜索端到端生成式框架</div>
+          <div class="card-subtitle">OneSearch: A Unified End-to-End Generative Framework for E-commerce Search · 快手电商搜索团队</div>
+          <div class="card-summary">RQ-OPQ 混合量化 + 三视图用户行为序列注入 + 三阶段 SFT + 自适应奖励 DPO，将 MCA 召回-精排统一为单一 BART encoder-decoder。快手商城 A/B：商品 CTR +1.67%、订单量 +3.22%、OPEX -75.40%。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- TaoSR1 2025 Alibaba -->
+      <a class="paper-card" href="papers/taosr1.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">arXiv 2508.12365</span>
+            <span class="tag tc-gen">LLM + RL · 电商搜索</span>
+            <span class="tag tc-indus">KDD 2026 · 淘宝</span>
+          </div>
+          <div class="card-title">TaoSR1：电商搜索相关性的 Thinking 模型</div>
+          <div class="card-subtitle">TaoSR1: The Thinking Model for E-commerce Relevance Search · Taobao &amp; Tmall Group, Alibaba</div>
+          <div class="card-summary">三阶段优化：RAG-CoT SFT → Pass@N DPO → 难度感知 GRPO。CumPT 单参数分层部署消除超参敏感性。淘宝 A/B：Macro F1 +4.9pt，平替 Query GSB +34.43%，IPV +2.43%。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
       <!-- GRID 2025.07 -->
       <a class="paper-card" href="papers/grid.html">
         <div>
@@ -1132,6 +1306,21 @@
       <span class="cat-desc">大参数排序模型的 Scaling Law、MoE、稀疏 embedding 替代方案</span>
     </div>
     <div class="paper-list">
+
+      <!-- DIET 2026 -->
+      <a class="paper-card" href="papers/diet.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2026</span>
+            <span class="tag tv">arXiv 2603.24958</span>
+            <span class="tag tc-rank">流式数据集蒸馏 · 快手+中科大</span>
+          </div>
+          <div class="card-title">DIET：用 1-2% 数据复现全量训练效果，推荐系统模型迭代成本降低 60×</div>
+          <div class="card-subtitle">DIET: Learning to Distill Dataset Continually for Recommender Systems · 中科大 + 快手 · arXiv 2026.03</div>
+          <div class="card-summary">将「数据集蒸馏」引入持续学习推荐场景，维护紧凑合成记忆集（仅 1-2% 数据量）。EL2N 选决策边界样本 + 影响力引导双向寻址 + bi-level 优化。跨架构泛化（DCN→WuKong/RankMixer）均有效，迭代成本降低最多 60×。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
 
       <!-- UniMixer 2026 -->
       <a class="paper-card" href="papers/unimixer.html">
@@ -1291,21 +1480,6 @@
       <span class="cat-desc">训练系统、serving 优化、异构计算、在线学习等工程实践</span>
     </div>
     <div class="paper-list">
-      <!-- AI Agent 关键技术 -->
-      <a class="paper-card" href="topics/notes-agent.html">
-        <div>
-          <div class="card-meta">
-            <span class="tag" style="background:#ecfdf5;color:#065f46;">🤖 AI 系统</span>
-            <span class="tag ty">Agent 技术</span>
-            <span class="tag" style="background:#ede9fe;color:#5b21b6;">规划/记忆/工具</span>
-          </div>
-          <div class="card-title">AI Agent 关键技术全景：规划 / 记忆 / 工具 / 反思 / 多 Agent</div>
-          <div class="card-subtitle">从「LLM 作为大脑」到自主完成复杂任务 · ReAct · RAG · MCP · Multi-Agent 协作 · 2025 现状</div>
-          <div class="card-summary">全面梳理 AI Agent 核心技术栈：规划（CoT/ToT/ReAct/Prompt Chaining）；记忆（短期 Context Window、长期 RAG 向量数据库、结构化存储）；工具调用（Function Calling/MCP/Computer Use）；反思机制（Reflexion/Evaluator-Optimizer）；多 Agent 协作（Orchestrator-Workers/Routing/Parallelization）；以及 2025 年新技术 MCP 协议和 Computer Use 能力详解。</div>
-        </div>
-        <div class="card-arrow">→</div>
-      </a>
-
       <a class="paper-card" href="topics/gpu-hardware-basics.html">
         <div>
           <div class="card-meta">
@@ -1344,6 +1518,21 @@
           <div class="card-title">视觉 Diffusion Model：从零开始完全图解</div>
           <div class="card-subtitle">DDPM · Stable Diffusion · U-Net · Cross-Attention · CFG · Latent Diffusion · 每个概念都有类比 + 具体例子</div>
           <div class="card-summary">完全新手向Diffusion模型解读：前向扩散（故意加噪声）→ 逆向去噪（训练AI洗图）→ U-Net架构 → 时间步编码 → Cross-Attention条件注入 → Latent Diffusion算力优化 → Classifier-Free Guidance → 经典模型演进（DDPM / Stable Diffusion / DALL-E 2）→ 应用场景（文生图 / Inpainting）→ 与GAN/VAE对比。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+
+      <!-- Harness Engineering -->
+      <a class="paper-card" href="topics/notes-harness-engineering.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#fef3c7;color:#92400e;">🔧 Agent 工程</span>
+            <span class="tag ty">2026 新概念</span>
+            <span class="tag" style="background:#d1fae5;color:#065f46;">Generator-Evaluator</span>
+          </div>
+          <div class="card-title">Harness Engineering：让 AI Agent 不再犯同一个错误</div>
+          <div class="card-subtitle">Mitchell Hashimoto 命名 · OpenAI / Anthropic / Martin Fowler 相继跟进 · 2026 年 2 月爆火</div>
+          <div class="card-summary">核心思想：每次发现 Agent 犯错，就工程化一个解决方案让它永远不再犯。两种形式：AGENTS.md 错误记录文件 + 专用验证脚本工具。深度解析 Anthropic 三 Agent 架构（Planner + Generator + Evaluator），Sprint 合同机制，以及与 Context Engineering 的关系。</div>
         </div>
         <div class="card-arrow">→</div>
       </a>
@@ -1569,6 +1758,36 @@
     btn.classList.add('active');
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('visible'));
     document.getElementById('panel-' + id).classList.add('visible');
+    // Clear search when switching tabs
+    const si = document.getElementById('search-input');
+    if (si.value) { si.value = ''; handleSearch(''); }
+  }
+
+  function handleSearch(q) {
+    q = q.trim().toLowerCase();
+    const countEl = document.getElementById('search-count');
+    if (!q) {
+      document.querySelectorAll('.paper-card').forEach(c => c.removeAttribute('hidden'));
+      countEl.textContent = '';
+      return;
+    }
+    // Show all panel
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector('.tab-btn').classList.add('active');
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('visible'));
+    document.getElementById('panel-all').classList.add('visible');
+
+    let visible = 0;
+    document.querySelectorAll('#panel-all .paper-card').forEach(card => {
+      const text = card.textContent.toLowerCase();
+      if (text.includes(q)) {
+        card.removeAttribute('hidden');
+        visible++;
+      } else {
+        card.setAttribute('hidden', '');
+      }
+    });
+    countEl.textContent = `找到 ${visible} 条结果`;
   }
 </script>
 </body>
