@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OneRanker 论文解读</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false }
+          ],
+          throwOnError: false
+        });
+      }
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #2563eb; --primary-soft: #eff6ff;
+      --accent: #7c3aed; --accent-soft: rgba(124,58,237,0.06);
+      --shadow: 0 10px 30px rgba(15,23,42,0.08); --radius: 18px; --max: 1300px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: linear-gradient(180deg,#f8fbff 0%,var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      line-height: 1.8;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .page { max-width: var(--max); margin: 0 auto; padding: 32px 20px 80px; }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    .back-link:hover { color: var(--primary); text-decoration: none; }
+    .hero {
+      background: radial-gradient(circle at top right,rgba(37,99,235,0.14),transparent 30%),
+                  radial-gradient(circle at left bottom,rgba(124,58,237,0.10),transparent 24%), var(--card);
+      border: 1px solid rgba(37,99,235,0.08); border-radius: 24px;
+      box-shadow: var(--shadow); padding: 34px 34px 28px; margin-bottom: 22px;
+    }
+    .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--primary-soft); color: var(--primary); font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+    h1 { font-size: 34px; line-height: 1.25; letter-spacing: -0.02em; margin-bottom: 10px; }
+    .subtitle { color: var(--muted); font-size: 16px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-top: 24px; }
+    .meta-card { background: #fbfdff; border: 1px solid #e7eefb; border-radius: 16px; padding: 14px 16px; }
+    .meta-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .meta-value { font-size: 14px; font-weight: 600; word-break: break-word; }
+    .layout { display: grid; grid-template-columns: 260px minmax(0,1fr); gap: 22px; align-items: start; }
+    .toc { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; }
+    .toc h2 { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+    .toc-list { list-style: none; }
+    .toc-list li { margin: 7px 0; }
+    .toc-list a { font-size: 13.5px; color: var(--muted); }
+    .toc-list a:hover { color: var(--primary); text-decoration: none; }
+    .toc-list a.active { color:var(--primary); background:#eff6ff; font-weight:600; border-left:3px solid var(--primary); padding-left:5px; }
+    .toc-sub { padding-left: 14px; margin-top: 4px; }
+    .toc-sub li { margin: 4px 0; }
+    .toc-sub a { font-size: 12.5px; }
+    .content { display: flex; flex-direction: column; gap: 20px; }
+    .section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 28px 30px; }
+    .section-title { font-size: 22px; font-weight: 800; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 2px solid #f0f4ff; display: flex; align-items: center; gap: 10px; }
+    .section-title .icon { width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+    h3 { font-size: 18px; font-weight: 700; margin: 26px 0 12px; color: #111827; }
+    h4 { font-size: 15px; font-weight: 700; margin: 20px 0 10px; color: #1d4ed8; }
+    p { margin-bottom: 12px; }
+    p:last-child { margin-bottom: 0; }
+    ul, ol { padding-left: 22px; }
+    li { margin-bottom: 8px; }
+    .callout { border-radius: 14px; padding: 14px 18px; margin: 16px 0; font-size: 14.5px; }
+    .callout-blue { background: linear-gradient(180deg,rgba(37,99,235,0.08),rgba(37,99,235,0.04)); border: 1px solid rgba(37,99,235,0.16); }
+    .callout-blue strong { color: #1d4ed8; }
+    .callout-amber { background: #fffbeb; border: 1px solid #fde68a; }
+    .callout-amber strong { color: #92400e; }
+    .callout-green { background: #f0fdf4; border: 1px solid #86efac; }
+    .callout-green strong { color: #166534; }
+    .callout-purple { background: var(--accent-soft); border: 1px solid rgba(124,58,237,0.18); }
+    .callout-purple strong { color: #6d28d9; }
+    .note { background: #f8faff; border: 1px dashed #cbd5e1; border-radius: 12px; padding: 12px 16px; color: #475467; font-size: 13.5px; margin: 12px 0; }
+    .example-box { background: #f0fdf4; border: 1px solid #86efac; border-radius: 14px; padding: 16px 20px; margin: 16px 0; }
+    .example-box .ex-title { font-size: 12px; font-weight: 700; color: #166534; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+    .example-box p { margin-bottom: 8px; font-size: 14px; color: #166534; }
+    .example-box p:last-child { margin-bottom: 0; }
+    blockquote { margin: 16px 0; padding: 14px 18px; border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 0 12px 12px 0; color: #3f3f46; font-size: 14.5px; }
+    .paper-info { background: #fafbff; border-left: 4px solid var(--primary); border-radius: 12px; padding: 14px 16px; margin: 16px 0; color: #334155; font-size: 14px; }
+    .paper-info p { margin: 5px 0; }
+    figure { margin: 22px 0; background: #fbfdff; border: 1px solid #e8edf5; border-radius: 16px; padding: 14px; }
+    figure img { width: 100%; display: block; border-radius: 12px; background: #fff; }
+    figcaption { margin-top: 10px; font-size: 13.5px; color: var(--muted); line-height: 1.6; }
+    .fig-placeholder { padding: 36px 24px; text-align: center; background: #f8faff; border-radius: 12px; color: #94a3b8; font-size: 14px; border: 2px dashed #e2e8f0; line-height: 1.9; }
+    .formula-block { background: #fafbff; border: 1px solid #e8edf5; border-radius: 14px; padding: 16px 20px; margin: 14px 0; overflow-x: auto; }
+    .formula-vars { background: #f0f7ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 12px 16px; margin: 6px 0 16px; font-size: 13.5px; color: #374151; }
+    .formula-vars .var-title { font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+    .formula-vars ul { margin: 0; padding-left: 18px; }
+    .formula-vars li { margin: 5px 0; }
+    .katex-display { overflow-x: auto; overflow-y: hidden; padding: 6px 0; }
+    .table-wrap { overflow-x: auto; margin: 16px 0; }
+    table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 12px; font-size: 13.5px; }
+    thead th { background: #f3f6fb; color: #334155; font-weight: 700; border-bottom: 2px solid var(--line); text-align: left; padding: 12px 14px; }
+    td { padding: 11px 14px; border-bottom: 1px solid #eef2f7; vertical-align: top; }
+    tbody tr:nth-child(even) { background: #fafcff; }
+    tbody tr.highlight { background: #eff6ff !important; font-weight: 700; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; }
+    .badge-green { background: #dcfce7; color: #166534; }
+    .badge-blue { background: #dbeafe; color: #1e40af; }
+    .badge-gray { background: #f3f4f6; color: #374151; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+    .mini-card { border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; background: #fff; }
+    .mini-card h4 { margin-top: 0; font-size: 14px; }
+    .step-list { display: flex; flex-direction: column; gap: 14px; margin: 16px 0; }
+    .step { display: flex; gap: 14px; background: #fafbff; border: 1px solid #e8edf5; border-radius: 14px; padding: 14px 16px; }
+    .step-num { width: 28px; height: 28px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; flex-shrink: 0; margin-top: 2px; }
+    .step-body { flex: 1; }
+    .step-body strong { display: block; margin-bottom: 4px; font-size: 14.5px; color: #111; }
+    .step-body p { font-size: 13.5px; color: #374151; margin: 0; }
+    .flow-diagram { background: #f8faff; border: 1px solid #dbeafe; border-radius: 16px; padding: 24px; margin: 20px 0; overflow-x: auto; }
+    .flow-row { display: flex; align-items: center; gap: 0; flex-wrap: nowrap; justify-content: center; min-width: max-content; }
+    .flow-box { background: #fff; border: 1.5px solid #93c5fd; border-radius: 12px; padding: 10px 16px; text-align: center; font-size: 13px; min-width: 110px; }
+    .flow-box .fb-title { font-weight: 700; color: #1e40af; margin-bottom: 3px; }
+    .flow-box .fb-desc { font-size: 11.5px; color: var(--muted); }
+    .flow-box.stage1 { border-color: #a78bfa; background: #f5f3ff; }
+    .flow-box.stage1 .fb-title { color: #6d28d9; }
+    .flow-box.stage2 { border-color: #6ee7b7; background: #f0fdf4; }
+    .flow-box.stage2 .fb-title { color: #065f46; }
+    .flow-box.stage3 { border-color: #fca5a5; background: #fff1f2; }
+    .flow-box.stage3 .fb-title { color: #991b1b; }
+    .flow-box.out { border-color: #fbbf24; background: #fffbeb; }
+    .flow-box.out .fb-title { color: #92400e; }
+    .flow-arrow { font-size: 20px; color: #93c5fd; padding: 0 8px; flex-shrink: 0; }
+    .footer { margin-top: 18px; color: var(--muted); font-size: 13px; text-align: center; }
+    @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } .toc { position: static; } .meta-grid, .two-col { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 640px) { .page { padding: 18px 12px 56px; } .hero, .section { padding: 20px 18px; } h1 { font-size: 26px; } .meta-grid, .two-col { grid-template-columns: 1fr; } th, td { padding: 10px; } }
+  </style>
+</head>
+<body>
+<div class="page">
+  <a class="back-link" href="../index.html">← 返回论文列表</a>
+
+  <header class="hero">
+    <div class="eyebrow">📄 论文解读 · 生成式推荐 × 排序统一</div>
+    <h1>OneRanker：用一个模型统一生成与排序的广告推荐新范式</h1>
+    <div class="subtitle">Unified Generation and Ranking with One Model in Industrial Advertising Recommendation</div>
+    <div class="meta-grid">
+      <div class="meta-card">
+        <div class="meta-label">机构</div>
+        <div class="meta-value">Tencent WeiXin</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">时间</div>
+        <div class="meta-value">2026 年 3 月 (v3)</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">arXiv</div>
+        <div class="meta-value"><a href="https://arxiv.org/abs/2603.02999" target="_blank">2603.02999</a></div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">核心成果</div>
+        <div class="meta-value">GMV-Normal +1.34%，微信频道全量上线</div>
+      </div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- TOC -->
+    <aside class="toc">
+      <h2>📋 目录</h2>
+      <ul class="toc-list">
+        <li><a href="#background">1. 背景与动机</a></li>
+        <li><a href="#method">2. 方法详解</a>
+          <ul class="toc-sub">
+            <li><a href="#overall">2.1 整体架构（先看这里）</a></li>
+            <li><a href="#step1">2.2 Step 1：生成召回（HSTU + MTP）</a></li>
+            <li><a href="#step2">2.3 Step 2：增强用户表示</a></li>
+            <li><a href="#step3">2.4 Step 3：统一排序</a></li>
+            <li><a href="#loss">2.5 损失函数</a></li>
+          </ul>
+        </li>
+        <li><a href="#experiments">3. 实验结果</a></li>
+        <li><a href="#ablation">4. 消融研究</a></li>
+        <li><a href="#analysis">5. DC Loss 分析</a></li>
+        <li><a href="#insight">6. 总结与启发</a></li>
+      </ul>
+    </aside>
+
+    <!-- Main content -->
+    <main class="content">
+
+      <!-- 背景 -->
+      <section class="section" id="background">
+        <div class="section-title">
+          <div class="icon" style="background:#eff6ff;">🎯</div>
+          背景与动机
+        </div>
+
+        <p>广告推荐系统正在从传统级联架构（召回→粗排→精排）向端到端生成式范式转变。GPR（Tencent）、OneRec（Kuaishou）等工作表明，基于语义 ID 的自回归生成方式可以直接优化最终目标，同时实现高计算效率。</p>
+
+        <p>然而，当生成式方法深入渗透到广告系统的排序阶段时，三个核心挑战浮现：</p>
+
+        <div class="callout callout-amber">
+          <strong>⚠️ 三大核心挑战</strong>
+          <ul style="margin-top:10px;">
+            <li style="margin-bottom:14px;">
+              <strong>Challenge 1 — 兴趣目标 vs 广告价值目标的矛盾</strong><br>
+              生成模型的训练目标是"预测用户接下来会点哪个商品"（行为驱动），但广告系统真正关心的是 <strong>eCPM</strong>（广告主出价 × 预估点击率 × 预估转化率）。用户喜欢的商品，广告主出价可能很低；eCPM 极高的商品，用户未必感兴趣。两个目标天然冲突——训练时两种 loss 梯度互相拉扯，谁都没优化好。<br>
+              <em>现有方案的两难</em>：<br>
+              &nbsp;&nbsp;① <strong>单阶段融合</strong>（一个模型同时学兴趣 + 价值）→ 两个目标抢梯度，两者都只能学到妥协的结果<br>
+              &nbsp;&nbsp;② <strong>阶段解耦</strong>（生成只管兴趣召回，排序只管价值打分）→ 生成阶段完全不知道价值，可能直接把高 eCPM 商品过滤掉，精排再好也无济于事
+            </li>
+            <li style="margin-bottom:14px;">
+              <strong>Challenge 2 — 生成过程对候选商品"视而不见"</strong><br>
+              自回归生成的流程是：读完用户历史行为序列 → 得到一个固定的用户向量 → 用这个向量去查商品表。<br>
+              问题是：<strong>这个用户向量在整个生成过程中是静态的</strong>，它不感知当前要考虑的候选商品是什么。打个比方：推荐员只在最开始了解了用户一次，然后闭眼报商品，无法根据"这个商品是运动鞋，用户历史上买过篮球"来动态调整打分。
+            </li>
+            <li>
+              <strong>Challenge 3 — 生成模型和精排模型是两个独立系统，互相不理解对方</strong><br>
+              传统流程：生成模型召回 Top-K 候选 → 精排模型对这 K 个候选重新打分。三个具体问题：<br>
+              &nbsp;&nbsp;① <strong>表示不一致</strong>：生成和精排用不同 embedding 空间，精排不知道生成为什么选了这些候选<br>
+              &nbsp;&nbsp;② <strong>重复计算</strong>：用户向量在生成阶段算了一遍，精排又从头算一遍<br>
+              &nbsp;&nbsp;③ <strong>误差无法纠正</strong>：生成阶段如果召回了一个低价值商品，精排无法意识到这是"生成的误判"，更无法追溯原因进行修正
+            </li>
+          </ul>
+        </div>
+
+        <div class="callout callout-blue">
+          <strong>💡 OneRanker 的核心答案</strong>：不是在生成后接一个独立排序模块，而是通过 Key/Value 透传机制，将生成（Step 1）、多任务目标感知增强（Step 2）、统一排序（Step 3）三步深度耦合，形成"价值引导生成→粗细协同感知→双侧一致性保证"的完整闭环。
+        </div>
+      </section>
+
+      <!-- 方法整体 -->
+      <section class="section" id="method">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">🔧</div>
+          方法详解
+        </div>
+
+        <h3 id="overall">2.1 整体架构：先把骨架搞清楚</h3>
+
+        <p>OneRanker 本质上是一个<strong>用同一个模型完成召回 + 排序</strong>的端到端框架。它的输入是用户历史行为序列，最终输出是一个按 eCPM 对齐的广告商品排序列表。整个过程分三步，三步之间通过 Key/Value 透传机制串联：</p>
+
+        <div class="callout callout-blue" style="margin:20px 0;">
+          <strong>📌 三步分别做什么——一句话版本</strong><br><br>
+          <strong>Step 1（生成召回）</strong>：标准的生成式召回，就像 TIGER/GPR 那样，用 Decoder-only 自回归生成 Top-K 候选商品 SID。<em>这一步解决"从几千万商品里找到可能相关的候选"。</em><br><br>
+          <strong>Step 2（增强用户表示）</strong>：不直接用于召回，而是对 Step 1 产出的用户表示做二次精化——同时解决"兴趣 vs 价值冲突"和"用户向量不感知候选商品"两个问题，输出更好的用户-商品匹配向量。<em>这一步是 OneRanker 的核心创新，后面详细展开。</em><br><br>
+          <strong>Step 3（统一排序）</strong>：拿 Step 2 增强后的用户表示，对 Step 1 召回的 Top-K 候选做细粒度重排序，输出最终广告排名。<em>这一步解决"召回出来的候选怎么按 eCPM 精准排序"。</em>
+        </div>
+
+        <p>三步共享同一套模型参数，通过 KV 透传让每一步都能看到前一步的内部状态——这就是"深度耦合"的含义，也是和传统"生成+独立精排"两个模型串联的根本区别。</p>
+
+        <div class="flow-diagram">
+          <div class="flow-row">
+            <div class="flow-box stage1">
+              <div class="fb-title">Step 1：生成召回</div>
+              <div class="fb-desc">输入：用户行为序列<br/>输出：Top-K 候选 SID<br/>+ 用户多兴趣表示（KV）</div>
+            </div>
+            <div class="flow-arrow">→ KV →</div>
+            <div class="flow-box stage2">
+              <div class="fb-title">Step 2：增强表示</div>
+              <div class="fb-desc">输入：Step 1 的 KV<br/>输出：精化的用户-商品向量<br/>（兴趣+价值双通道）</div>
+            </div>
+            <div class="flow-arrow">→ KV →</div>
+            <div class="flow-box stage3">
+              <div class="fb-title">Step 3：统一排序</div>
+              <div class="fb-desc">输入：Step 2 的 KV + Top-K 候选<br/>输出：最终 eCPM 排序列表</div>
+            </div>
+          </div>
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2603.02999v3/x2.png" alt="Figure 2: OneRanker 整体框架"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+                 <b>Figure 2：OneRanker 整体框架</b><br><br>
+                 三步架构：Step 1（HSTU Decoder-only MTP 多兴趣路径生成）→ Step 2（价值感知多任务解耦 + Fake Item Tokens 粗粒度目标感知增强）→ Step 3（R-Decoder 细粒度目标感知 + KV 透传输入侧一致性）<br><br>
+                 三步之间通过 Key/Value 透传机制深度耦合，形成端到端协同优化闭环。
+               </div>`" />
+          <figcaption><strong>Figure 2（论文原图）：</strong>OneRanker 整体框架。注意图中三步之间的 KV 连线——这是和传统"生成模型 + 独立精排模型"的本质区别：三步共享内部状态，Step 3 排序时完全知道 Step 1/2 的决策依据，而不是面对一个黑盒的召回结果。</figcaption>
+        </figure>
+
+        <figure>
+          <img src="https://arxiv.org/html/2603.02999v3/x1.png" alt="Figure 1: 现有方法与 OneRanker 对比"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+                 <b>Figure 1：现有方法 vs OneRanker 对比图</b><br><br>
+                 左侧：现有方法要么单阶段融合（优化张力）要么阶段解耦（信息损失），都存在生成与排序的架构割裂。<br><br>
+                 右侧：OneRanker 实现生成与排序的架构级深度集成，通过 KV 透传消除三重脱节。
+               </div>`" />
+          <figcaption><strong>Figure 1（论文原图）：</strong>现有方法 vs OneRanker 的对比。左侧展示了两种现有方案各自的缺陷：<br>① 「单阶段融合」把兴趣目标和价值目标塞进同一个模型同时优化 → 两个 loss 梯度互相拉扯，谁都没优化好；<br>② 「阶段解耦」让生成只管兴趣召回、排序只管价值打分 → 生成阶段不感知价值目标，高价值商品可能在召回阶段就被丢弃，后面排序再好也没用。<br>右侧 OneRanker：通过任务 Token 解耦（在同一模型内让不同 Token 各自负责兴趣/价值），同时用 KV 透传让生成和排序共享内部状态，从而绕开上面两种方案的困境。</figcaption>
+        </figure>
+
+        <h3 id="step1">2.2 Step 1：生成召回（基于 HSTU + MTP）</h3>
+
+        <p>Step 1 是整个框架的基础，本质上就是一个标准的<strong>生成式召回模型</strong>，直接沿用了 GPR（Generative Pre-Training for Recommendation，腾讯此前工作）的架构，论文本身没有对 Step 1 做修改，属于"已有基座"。</p>
+
+        <p><strong>输入</strong>：用户历史行为序列（点击/转化过的商品 SID 序列）</p>
+
+        <p><strong>做什么</strong>：用一个 <strong>Decoder-only 自回归模型（HSTU 架构）</strong>，根据用户历史序列预测用户接下来最可能交互的商品。</p>
+
+        <p>这里的商品不是一个单一 ID，而是经过 RQ-VAE 量化后的<strong>多层 SID 序列</strong>（比如 [level1=23, level2=7, level3=41] 表示一个商品）。所以"预测一个商品"= 逐层自回归预测这条 ID 序列。</p>
+
+        <p><strong>Multi-Token Prediction（MTP）</strong> 指的是：在单次前向传播中，<strong>并行展开 $m$ 条独立的自回归路径</strong>，每条路径各自从 SID 第 1 层开始，独立逐层预测出一个完整商品的 SID：</p>
+        <ul>
+          <li>路径 1（兴趣视角 1）：独立预测 [level1=23, level2=7, level3=41] → 商品 A</li>
+          <li>路径 2（兴趣视角 2）：独立预测 [level1=8, level2=15, level3=3] → 商品 B</li>
+          <li>…共 $m$ 条路径，各自产出一个候选，合并得到候选集</li>
+        </ul>
+        <p>每条路径的打分方式：SID 是 RQ-VAE 多层量化码（如 [level1=23, level2=7, level3=41] 对应一个商品），自回归预测是<strong>逐层预测当前层 codebook 里的哪个量化中心</strong>——在每一层，用户向量 $e_{\text{user}}^{(j)}$ 和该层 codebook 的所有 entry 向量逐一算点积，再 softmax 选出编号。三层预测完，拼出完整 SID = 定位到一个商品。论文中的 $s_{j,i} = e_{\text{user}}^{(j)} \cdot e_{\text{item}}^{(i)}$ 里的 $e_{\text{item}}^{(i)}$ 指的是<strong>当前层 codebook 的第 $i$ 个量化中心向量</strong>，词表 $\mathcal{V}$ 是该层 codebook 大小（通常几百到几千），而非全量商品数量。</p>
+
+        <p><strong>路径间的差异从哪里来？</strong>——来自训练时不同的 GT 标签。$\mathbf{t}_{i1}$ 在训练时对应的 GT 是用户下一个<strong>点击</strong>的商品 SID，$\mathbf{t}_{i2}$ 对应的 GT 是用户下一个<strong>购买</strong>的商品 SID。不同的梯度信号把各路径的 Query embedding 拉向不同的语义方向，自然形成差异化的兴趣视角——这与 Beam Search"运行时选择分叉"的机制完全不同，差异在训练完成后就固定在 Token embedding 里了。</p>
+
+        <p><strong>输出两样东西</strong>：</p>
+        <ul>
+          <li><strong>Top-K 候选商品 SID 列表</strong>：MTP 多路预测头各自对全量商品词表打分，合并后取 Top-K，这就是后续要排序的候选集</li>
+          <li><strong>用户序列隐层表示（Key/Value cache）</strong>：HSTU Decoder 在处理用户行为序列时产生的中间层表示，会被<strong>透传给 Step 2 和 Step 3 作为 Key/Value</strong>，让后两步不需要重新编码用户历史</li>
+        </ul>
+
+        <p style="color:#6b7280;font-size:13.5px;">⚠️ 注意：Step 1 本身的 MTP 预测头只感知"用户兴趣"（用行为数据训练），不感知 eCPM 等价值目标——这正是 Step 2 要解决的问题。</p>
+
+        <h3 id="step2">2.3 Step 2 详解：如何同时解决兴趣/价值冲突和目标无感知</h3>
+
+        <p>Step 2 的定位是：<strong>在 Step 1 的生成基础上，用一个异质注意力解码器对用户表示做二次精化，输出同时包含兴趣信息和价值信息的增强用户向量</strong>，供 Step 1 的 MTP 召回打分和 Step 3 的排序使用。它解决了两个问题：</p>
+        <ul>
+          <li><strong>问题 A（兴趣 vs 价值冲突）</strong>：用"任务 Token 解耦"——让不同 Token 各自独立负责兴趣目标和价值目标，互不干扰</li>
+          <li><strong>问题 B（目标无感知）</strong>：用"Fake Item Token"——在生成过程中注入候选商品的语义分布信息，让用户向量感知到"当前要召回的是哪类商品"</li>
+        </ul>
+        <p>下面依次展开这两个机制。</p>
+
+        <h4>2.3.1 价值感知多任务解耦：任务 Token + 因果掩码</h4>
+
+        <div class="callout callout-blue" style="margin-bottom:16px;">
+          <strong>📌 先搞清楚输入输出：这个机制是为召回服务的，但不是"兴趣和价值各走一路召回"</strong><br><br>
+          <strong>输入</strong>：Step 1 产出的用户多兴趣序列表示（作为 Key/Value）+ 可学习的任务 Token 序列（作为 Query）<br><br>
+          <strong>输出（两种用途）</strong>：<br>
+          &nbsp;&nbsp;① <strong>兴趣 Token 的输出</strong> → 接 MTP 预测头，对全量商品词表做 softmax，产生"用户接下来会点哪个商品"的概率分布 → <strong>这才是真正用于召回的路径</strong>，多个兴趣 Token 就是多路召回<br>
+          &nbsp;&nbsp;② <strong>价值 Token 的输出</strong> → 接预测头拟合 eCPM → <strong>不产生独立的召回候选</strong>，而是作为训练信号（loss 项），让底层共享用户表示在优化兴趣目标的同时也感受到价值目标的拉力<br><br>
+          所以：召回靠兴趣 Token 做，价值 Token 的作用是"在训练时影响底层表示的质量"，不是独立产生一路候选。
+        </div>
+
+        <p>具体做法：引入可学习的任务 Token 序列 $\mathbf{T} = [\mathbf{t}_{i1}, \mathbf{t}_{i2}, \ldots, \mathbf{t}_{im}, \mathbf{t}_v]$，随机初始化后端到端优化。这组 Token 以 Step 1 的用户序列表示为 Key/Value，通过 Cross-Attention 聚合用户兴趣，然后各自走独立输出头：</p>
+
+        <ul>
+          <li><strong>兴趣任务 Token</strong> $\mathbf{t}_{i1}, \ldots, \mathbf{t}_{im}$：$m$ 个 Token 对应 $m$ 路召回，<strong>每个 Token 训练时对应不同的行为标签作为 GT</strong>（如 $\mathbf{t}_{i1}$ 的 GT 是用户下一个点击商品的 SID，$\mathbf{t}_{i2}$ 的 GT 是用户下一个购买商品的 SID），不同的梯度信号把各 Token 的 Query embedding 拉向不同语义方向，从而形成差异化的召回路径。多路召回结果合并取 Top-K 得到候选集</li>
+          <li><strong>价值感知 Token</strong> $\mathbf{t}_v$：接独立预测头，拟合 eCPM 等业务价值标签，仅用于计算 loss，<strong>不直接产生召回候选</strong>。它的作用是：在训练期间通过因果掩码"感染"前面兴趣 Token 的底层表示，让整个用户向量学会价值感知</li>
+        </ul>
+
+        <p>关键在于<strong>因果掩码</strong>：任务 Token 之间按"点击→转化→价值"的先验顺序单向可见。$\mathbf{t}_v$ 在 Self-Attention 中能看到所有兴趣 Token 的表示，但兴趣 Token <strong>看不到</strong> $\mathbf{t}_v$——也就是说，价值目标的梯度通过 $\mathbf{t}_v$ 反向传播时，会更新共享的底层用户 KV 表示，但不会直接污染兴趣 Token 的输出。两套目标梯度在输出头层面完全隔离。</p>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：为什么需要多任务解耦，解耦后有什么不同</div>
+          <p><strong>场景</strong>：微信视频号广告，候选商品有两个——</p>
+          <p>商品 A：运动鞋，用户历史行为显示对运动非常感兴趣（<strong>兴趣高</strong>），但广告主出价低（<strong>eCPM = 20</strong>）</p>
+          <p>商品 B：保险产品，用户从未主动搜索过（<strong>兴趣低</strong>），但广告主出价极高（<strong>eCPM = 200</strong>）</p>
+          <p><strong>❌ 不解耦（兴趣和价值混在同一个 loss + 同一个输出头里）</strong>：模型既要学"运动鞋对这个用户更匹配"，又要学"保险 eCPM 更高"，两种梯度互相抵消，最终召回路径既不够准确（兴趣被 eCPM 目标拉偏），也没充分学好价值（eCPM 被兴趣目标稀释）。</p>
+          <p><strong>✅ 解耦后</strong>：兴趣 Token $\mathbf{t}_{i}$ 专注优化"点击/转化预测"，运动鞋在这路召回中排名高；价值 Token $\mathbf{t}_v$ 专注优化"eCPM 拟合"，它的梯度更新的是底层共享用户表示，让整个模型逐渐学会"在生成表示时也要考虑价值"。两个输出头梯度不互扰，底层表示同时被两个目标形塑——兴趣路召回准，价值信号也被编码进了用户向量，为后续排序 Step 3 提供更好的基础表示。</p>
+        </div>
+
+        <h4>2.3.2 Fake Item Token：粗粒度目标感知</h4>
+
+        <p>Fake Item Tokens $\mathbf{F} = [\mathbf{f}_1, \ldots, \mathbf{f}_k]$ 是通过 K-means 聚类整个 item 空间得到的 $k$ 个聚类中心向量，代表 item 语义空间中的核心锚点。</p>
+
+        <p>Query 序列 $\mathbf{Q} = [\mathbf{T}; \mathbf{F}]$ 将任务 Token 和 Fake Item Token 拼接，以 Step 1 的输出作为 Key/Value 进行 Cross-Attention，使模型在生成过程中能够动态感知 item 语义分布，实现粗粒度隐式目标感知。</p>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：Fake Item Token 如何实现目标感知</div>
+          <p>假设商品空间通过 K-means（k=32）聚类，形成 32 个语义中心，分别代表"运动装备"、"家居用品"、"美妆护肤"等类目。</p>
+          <p><strong>传统生成（目标无感知）</strong>：用户表示在整个生成过程中固定不变，对"运动鞋"和"口红"候选 item 使用完全相同的用户向量打分，无法区分用户对不同类目的偏好强度。</p>
+          <p><strong>OneRanker（Fake Item Token）</strong>：32 个 Fake Item Token（聚类中心）和任务 Token 一起参与 Cross-Attention。"运动装备"中心向量会与用户的运动行为序列产生更高的 attention 权重，使得兴趣任务 Token 在运动品类上的表示更强，生成阶段就会倾向召回运动类商品而不是美妆类——即使两者的传统 eCPM 相近。</p>
+        </div>
+
+        <h4>2.3.3 异质注意力解码器（Heterogeneous Attention Decoder）</h4>
+
+        <p>在标准 Transformer Decoder 的基础上做了两个关键改进：</p>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>改进 1：Cross-Attention 优先化</h4>
+            <p>传统解码器先 Self-Attention 后 Cross-Attention；本架构<strong>反转顺序</strong>：先 Cross-Attention 从 Step 1 聚合用户多兴趣表示，再 Self-Attention 精炼 Query 内部的任务协同。</p>
+            <p style="font-size:13px;color:#6b7280;">认知逻辑：先理解用户意图，再精炼任务表示。</p>
+          </div>
+          <div class="mini-card">
+            <h4>改进 2：异质掩码策略</h4>
+            <p>任务 Token 之间：<strong>因果掩码</strong>（时序建模）</p>
+            <p>任务 Token ↔ Fake Item Token：<strong>双向可见</strong>（目标感知交互）</p>
+            <p>Fake Item Token 之间：<strong>互不可见</strong>（避免聚类中心间干扰）</p>
+          </div>
+        </div>
+
+        <h4>2.3.4 双通道表示构造</h4>
+
+        <p>异质注意力解码器的输出经过 MTP 模块，通过双通道融合机制构造精化的多兴趣表示：</p>
+
+        <div class="formula-block">
+          $$\mathbf{s}^{(i)}_{\text{target}} = \sum_{j=1}^{k} \mathbf{s}^{(i)}_j \in \mathbb{R}^k$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$k$：Fake Item Token 的数量（实验中 $k = 32$）</li>
+            <li>$\mathbf{s}^{(i)}_j$：第 $i$ 个任务 Token 与第 $j$ 个 Fake Item Token 拼接后经 MLP 映射得到的 $k$ 维偏好分向量</li>
+            <li>$\mathbf{s}^{(i)}_{\text{target}}$：第 $i$ 个 MTP head 的 Target Aware 通道向量，综合了所有 Fake Item Token 的感知结果</li>
+          </ul>
+        </div>
+
+        <p>每个 MTP head $i$ 的最终用户表示为：</p>
+
+        <div class="formula-block">
+          $$\mathbf{e}^{(i)}_{\text{user}} = \text{Concat}(\mathbf{e}^{(i)}_{\text{task}},\ \mathbf{s}^{(i)}_{\text{target}}) \in \mathbb{R}^{d_{\text{task}}+k}$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\mathbf{e}^{(i)}_{\text{task}} \in \mathbb{R}^{d_{\text{task}}}$：第 $i$ 个任务 Token 的语义向量（Task Semantic Channel）</li>
+            <li>$\mathbf{s}^{(i)}_{\text{target}} \in \mathbb{R}^k$：Target Aware Channel，来自 $k$ 个 Fake Item Token 的聚合感知分</li>
+            <li>$d_{\text{task}} + k$：最终用户向量维度，兼顾语义匹配和目标感知</li>
+          </ul>
+        </div>
+
+        <p>在 item 侧，计算商品与全部 $k$ 个聚类中心的余弦相似度，构建增强的 item 表示：</p>
+
+        <div class="formula-block">
+          $$\mathbf{e}^{\text{enhanced}}_{\text{item}} = \text{Concat}(\mathbf{e}_{\text{item}},\ [c_1, c_2, \ldots, c_k]) \in \mathbb{R}^{d_{\text{item}}+k}$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\mathbf{e}_{\text{item}}$：原始 item 语义向量</li>
+            <li>$c_l$：item 与第 $l$ 个聚类中心的余弦相似度分数</li>
+          </ul>
+        </div>
+
+        <p>内积打分自然融合了语义匹配与目标感知匹配：</p>
+
+        <div class="formula-block">
+          $$\text{score}(\text{user}, \text{item}) = \mathbf{e}^{(i)}_{\text{user}} \cdot \mathbf{e}^{\text{enhanced}}_{\text{item}} = \mathbf{e}^{(i)}_{\text{task}} \cdot \mathbf{e}_{\text{item}} + \sum_{l=1}^{k} s^{(i)}_l \cdot c_l$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>第一项 $\mathbf{e}^{(i)}_{\text{task}} \cdot \mathbf{e}_{\text{item}}$：传统语义匹配分数</li>
+            <li>第二项 $\sum_{l=1}^{k} s^{(i)}_l \cdot c_l$：用户对各类目的偏好分（$s^{(i)}_l$）与 item 属于各类目的相似度（$c_l$）的内积，即 target-aware 匹配分数</li>
+          </ul>
+        </div>
+
+        <h3 id="step3">2.4 Step 3：统一排序（Unified Ranking）</h3>
+
+        <h4>2.4.1 细粒度目标感知</h4>
+
+        <p>Step 3 引入专用排序解码器（R-Decoder Block），将排序内化为生成流水线的自然延伸。</p>
+
+        <p><strong>输入设计</strong>：Query 由（1）排序任务 Token $\mathbf{T}_r \in \mathbb{R}^{d_{\text{task}}}$ 和（2）$n$ 个候选 item Token $\mathbf{I} = [\mathbf{i}_1, \ldots, \mathbf{i}_n]$（来自 MTP 生成结果）组成；Key/Value 融合了 Step 1 的原始多兴趣表示和 Step 2 的精化表示。</p>
+
+        <p><strong>掩码策略</strong>：候选 item Token 之间互不可见（对角掩码），所有候选 item 可访问排序任务 Token。</p>
+
+        <p><strong>输出</strong>：每个候选 item Token 位置的输出向量经轻量级 MLP 映射为标量分数 $\mathbf{S} = [s_1, \ldots, s_n]$，直接用于最终排序。R-Decoder 仅使用单层，且结构与 Step 2 的异质注意力解码器相同（Cross-Attention 优先化）。</p>
+
+        <h4>2.4.2 输入侧一致性</h4>
+
+        <p>Step 3 的排序解码器直接复用 Step 1 和 Step 2 的输出作为 Key/Value：</p>
+        <ul>
+          <li><strong>Step 1 → Step 3</strong>：传递用户的基础兴趣分布（广度覆盖）</li>
+          <li><strong>Step 2 → Step 3</strong>：传递生成过程的隐性决策依据，使排序器能够完全理解生成逻辑</li>
+        </ul>
+
+        <p>这缓解了传统"外挂排序"中的表示碎片化问题——排序器可以感知生成过程的内部状态，而不是面对"黑盒"生成结果。</p>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：KV 透传如何解决三重脱节</div>
+          <p><strong>传统"生成-再排序"架构</strong>：生成模型用自己的 embedding 空间产出候选，然后交给一个独立的排序模型（用另一套 embedding 初始化）重新打分。两个模型完全异质，排序模型完全不知道为什么生成模型选了这些候选而不是其他候选。</p>
+          <p><strong>OneRanker（KV 透传）</strong>：假设 Step 1 生成了 [运动鞋 A, 运动鞋 B, 口红 C] 三个候选。Step 2 在生成这些候选时，其内部状态（KV cache）记录了「用户运动兴趣很强，但当前活动期可能需要互补品」这样的决策依据。Step 3 的 R-Decoder 直接读取这份 KV cache，在对三个候选打分时，其实是在「读懂了生成逻辑」的基础上做精化打分，而非从头开始评估。这消除了生成→排序的信息断层。</p>
+        </div>
+
+        <h3 id="loss">2.5 损失函数体系</h3>
+
+        <p>总损失函数为三部分的加权组合：</p>
+
+        <div class="formula-block">
+          $$\mathcal{L}_{\text{total}} = \alpha \cdot \mathcal{L}_{\text{MTP}} + \beta \cdot \mathcal{L}_{\text{rank}} + \gamma \cdot \mathcal{L}_{\text{DC}}$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\alpha, \beta, \gamma$：各损失的平衡系数（超参数）</li>
+            <li>$\mathcal{L}_{\text{MTP}}$：生成损失，负对数似然</li>
+            <li>$\mathcal{L}_{\text{rank}}$：排序损失，BPR Pairwise 损失</li>
+            <li>$\mathcal{L}_{\text{DC}}$：分布一致性约束损失（核心创新）</li>
+          </ul>
+        </div>
+
+        <h4>生成损失 $\mathcal{L}_{\text{MTP}}$</h4>
+
+        <div class="formula-block">
+          $$\mathcal{L}_{\text{MTP}} = -\sum_{j=1}^{m} \sum_{l=1}^{L} \log P(\mathbf{e}^{\text{gt}}_{\text{item}} \mid \mathbf{e}^{(j)}_{\text{user}})$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$m$：MTP head 数量（对应兴趣 + 价值任务 Token 总数）</li>
+            <li>$L$：SID 序列长度（每个 item 的语义 ID 有多少个 token）</li>
+            <li>$\mathbf{e}^{\text{gt}}_{\text{item}}$：ground truth item 的 embedding</li>
+            <li>$\mathbf{e}^{(j)}_{\text{user}}$：第 $j$ 个 MTP head 的用户表示</li>
+          </ul>
+        </div>
+
+        <p>价值感知 head 采用价值加权采样策略，将生成分布向高价值 item 偏移。</p>
+
+        <h4>排序损失 $\mathcal{L}_{\text{rank}}$（BPR Pairwise Loss）</h4>
+
+        <div class="formula-block">
+          $$\mathcal{L}_{\text{rank}} = -\mathbb{E}_{(i,j) \sim \mathcal{D}} \left[ \mathbf{1}(y_i > y_j) \cdot \log \sigma(s_i - s_j) \right]$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$(i, j)$：来自数据集 $\mathcal{D}$ 的候选 item 对</li>
+            <li>$y_i, y_j$：真实业务价值标签（eCPM）</li>
+            <li>$s_i, s_j$：R-Decoder 为候选 item 输出的标量分数</li>
+            <li>$\sigma(\cdot)$：Sigmoid 函数</li>
+          </ul>
+        </div>
+
+        <h4>分布一致性损失 $\mathcal{L}_{\text{DC}}$（核心创新）</h4>
+
+        <p>将排序器视为教师模型，最小化生成分布与排序偏好分布之间的 KL 散度，推导得到有监督代理损失：</p>
+
+        <div class="formula-block">
+          $$\mathcal{L}_{\text{DC}} = -\mathbb{E}_{i \sim \mathcal{C}} \left[ p^{\text{target}}_i \cdot \log \pi_\theta(i \mid \mathbf{u}) \right]$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\mathcal{C}$：候选 item 集合（MTP 生成结果）</li>
+            <li>$p^{\text{target}}_i = \text{softmax}(s_i / \tau)$：以排序分数归一化得到的目标概率分布，$\tau$ 为温度参数</li>
+            <li>$\pi_\theta(i \mid \mathbf{u})$：生成模型对候选 item $i$ 的生成概率</li>
+            <li>$\mathbf{u}$：用户表示</li>
+          </ul>
+        </div>
+
+        <div class="callout callout-purple">
+          <strong>$\mathcal{L}_{\text{DC}}$ 的关键作用</strong>：与 $\mathcal{L}_{\text{rank}}$ 的局部 Pairwise 优化不同，$\mathcal{L}_{\text{DC}}$ 在候选集级别约束全局分布一致性，建立了从排序到生成的反向梯度通路。这使得排序器的偏好（高 eCPM item 获得高 $p^{\text{target}}_i$）能够直接指导生成模型调整其输出概率分布，从而在生成阶段就减少低价值 item 的召回概率。
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：DC Loss 如何打通生成和排序的反向梯度</div>
+          <p>假设 MTP 生成了候选集 $\mathcal{C} = \{$运动鞋 A (eCPM=100), 运动鞋 B (eCPM=50), 低价白牌鞋 C (eCPM=5)$\}$</p>
+          <p>R-Decoder 打分后，$s_A=0.9, s_B=0.7, s_C=0.1$，经 softmax 得 $p^{\text{target}} \approx [0.56, 0.37, 0.07]$</p>
+          <p>DC Loss 要求生成模型 $\pi_\theta$ 输出的概率尽量接近 $[0.56, 0.37, 0.07]$。若当前生成模型对 C 的生成概率是 0.30（过高），则 DC Loss 会产生较大梯度，推动模型降低 C 的生成概率。</p>
+          <p>这样即使下一次推理生成阶段不做排序，生成模型本身就已经学会了「更倾向于生成高 eCPM 的 item」。这就是从排序到生成的知识蒸馏，实现全局分布对齐。</p>
+        </div>
+      </section>
+
+      <!-- 实验 -->
+      <section class="section" id="experiments">
+        <div class="section-title">
+          <div class="icon" style="background:#fef3c7;">📊</div>
+          实验结果
+        </div>
+
+        <h3>3.1 离线实验（RQ1）</h3>
+
+        <p>实验遵循 GPR 的实验设置，使用腾讯内部大规模真实数据集，涵盖广告和有机内容场景下的多样化用户交互。</p>
+
+        <p><strong>Baselines</strong>：HSTU（Meta，万亿参数生成推荐架构）、GPR（腾讯，MTP 版本端到端生成推荐框架）</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>模型</th>
+                <th>HR@1</th>
+                <th>HR@3</th>
+                <th>HR@5</th>
+                <th>HR@10</th>
+                <th>NDCG@5</th>
+                <th>NDCG@10</th>
+                <th>NDCG@15</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>HSTU</td>
+                <td>0.1741</td>
+                <td>0.3508</td>
+                <td>0.4648</td>
+                <td>0.6604</td>
+                <td>0.6763</td>
+                <td>0.7025</td>
+                <td>0.7396</td>
+              </tr>
+              <tr>
+                <td>GPR</td>
+                <td>0.1824</td>
+                <td>0.3703</td>
+                <td>0.4935</td>
+                <td>0.6957</td>
+                <td>0.6818</td>
+                <td>0.7070</td>
+                <td>0.7445</td>
+              </tr>
+              <tr class="highlight">
+                <td><strong>OneRanker</strong></td>
+                <td><strong>0.2639</strong></td>
+                <td><strong>0.4959</strong></td>
+                <td><strong>0.6213</strong></td>
+                <td><strong>0.7945</strong></td>
+                <td><strong>0.7904</strong></td>
+                <td><strong>0.7970</strong></td>
+                <td><strong>0.8206</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-green">
+          <strong>核心数字</strong>：OneRanker 的 HR@1 达到 0.2639，相比 GPR 的相对提升 <strong>+44.7%</strong>；NDCG@15 从 0.7445 提升到 0.8206，提升 +10.2%。
+        </div>
+
+        <h3>3.2 在线 A/B 实验（RQ5）</h3>
+
+        <p>在腾讯微信频道（数亿活跃用户，千万级动态广告池）的生产广告系统上进行分阶段灰度测试：</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>流量阶段</th>
+                <th>GMV 提升</th>
+                <th>GMV-Normal 提升</th>
+                <th>Costs 提升</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>5% 灰度</td>
+                <td>+0.407%</td>
+                <td><strong>+1.343%</strong> ✅</td>
+                <td>+0.719%</td>
+              </tr>
+              <tr>
+                <td>20% 灰度</td>
+                <td>+0.780%</td>
+                <td>+0.645%</td>
+                <td>+1.146%</td>
+              </tr>
+              <tr>
+                <td>80% 灰度</td>
+                <td>+0.084%</td>
+                <td>+0.350%</td>
+                <td>+0.449%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>OneRanker 最终全量上线（100% 流量）成为微信频道广告推荐系统的生产主干模型，综合 GMV-Normal 指标提升 <strong>+1.34%</strong>，Costs 提升 +0.72%。</p>
+      </section>
+
+      <!-- 消融 -->
+      <section class="section" id="ablation">
+        <div class="section-title">
+          <div class="icon" style="background:#f5f3ff;">🔬</div>
+          消融研究
+        </div>
+
+        <h3>4.1 关键结构组件消融（RQ2）</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>消融变体</th>
+                <th>HR@1</th>
+                <th>HR@5</th>
+                <th>NDCG@5</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="highlight">
+                <td>OneRanker（完整）</td>
+                <td>0.2639</td>
+                <td>0.6213</td>
+                <td>0.7904</td>
+                <td>完整三步架构</td>
+              </tr>
+              <tr>
+                <td>w/o DC Loss</td>
+                <td>0.2629</td>
+                <td>0.6173</td>
+                <td>0.7865</td>
+                <td>去掉分布一致性损失</td>
+              </tr>
+              <tr>
+                <td>w/o S2 token injection</td>
+                <td>0.2610</td>
+                <td>0.6161</td>
+                <td>0.7858</td>
+                <td>Step 3 不复用 Step 2 KV</td>
+              </tr>
+              <tr>
+                <td>with S3 ranker only</td>
+                <td>0.2601</td>
+                <td>0.6157</td>
+                <td>0.7849</td>
+                <td>Step 3 仅复用 Step 1 KV</td>
+              </tr>
+              <tr>
+                <td>OneRanker S2</td>
+                <td>0.2214</td>
+                <td>0.5448</td>
+                <td>0.7440</td>
+                <td>仅 Step 1+2，无 Step 3 排序</td>
+              </tr>
+              <tr>
+                <td>w/o Target</td>
+                <td>0.2080</td>
+                <td>0.5203</td>
+                <td>0.7285</td>
+                <td>去掉 Fake Item Token</td>
+              </tr>
+              <tr>
+                <td>w/o Target &amp; MDA</td>
+                <td>0.2035</td>
+                <td>0.5066</td>
+                <td>0.7275</td>
+                <td>去掉目标感知 + 多任务解耦</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>关键发现：</p>
+        <ul>
+          <li><strong>Step 3（统一排序）贡献最大</strong>：从 OneRanker S2（HR@5=0.5448）到完整 OneRanker（HR@5=0.6213），提升 +14%</li>
+          <li><strong>Fake Item Token 不可或缺</strong>：去掉后 HR@5 下降 -4.5%，NDCG@5 下降 -2.1%</li>
+          <li><strong>DC Loss 提供额外增益</strong>：去掉后 HR@5 下降 -0.6%</li>
+          <li><strong>KV 透传的输入侧一致性关键</strong>：Step 2 → Step 3 的 KV 注入比仅 Step 1 KV 还多贡献 +0.14% HR@5</li>
+        </ul>
+
+        <h3>4.2 Step 2 专项设计消融（RQ3）</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>消融变体</th>
+                <th>HR@1</th>
+                <th>HR@3</th>
+                <th>HR@5</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="highlight">
+                <td>OneRanker S2（基线）</td>
+                <td>0.2214</td>
+                <td>0.4257</td>
+                <td>0.5448</td>
+              </tr>
+              <tr>
+                <td>w/o CA-Pri（去掉 Cross-Attention 优先化）</td>
+                <td>0.2117</td>
+                <td>0.4100</td>
+                <td>0.5277</td>
+              </tr>
+              <tr>
+                <td>w/o H-Mask（去掉异质掩码）</td>
+                <td>0.2149</td>
+                <td>0.4151</td>
+                <td>0.5335</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>Cross-Attention 优先化（-3.1% HR@1）和异质掩码策略（-2.9% HR@1）都是必要设计，缺一不可。</p>
+      </section>
+
+      <!-- DC Loss 分析 -->
+      <section class="section" id="analysis">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">📈</div>
+          DC Loss 一致性分析（RQ4）
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2603.02999v3/x3.png" alt="Figure 3a: Absolute Rank Difference"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+                 <b>Figure 3(a)：绝对排名差异箱线图</b><br><br>
+                 加入 DC Loss 后，IQR（四分位距，箱体高度）显著压缩，说明 Step 2 生成结果和 Step 3 排序结果之间的排名偏差更小、更一致。
+               </div>`" />
+          <figcaption><strong>Figure 3(a)（论文原图）：</strong>有/无 DC Loss 时，生成排序与精排排序的绝对排名差异箱线图。DC Loss 显著压缩 IQR，提升决策一致性。</figcaption>
+        </figure>
+
+        <figure>
+          <img src="https://arxiv.org/html/2603.02999v3/x4.png" alt="Figure 3b: Top-K Item Overlap Ratio"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+                 <b>Figure 3(b)：Top-K 物品重叠率曲线</b><br><br>
+                 加入 DC Loss 后，Top-K 重叠率曲线在所有 K 值处均更高，特别是 K=1 时起点更高，说明最重要的推荐位上生成和排序的一致性更强。
+               </div>`" />
+          <figcaption><strong>Figure 3(b)（论文原图）：</strong>有/无 DC Loss 时在 30 个候选 item 上的 Top-K 物品重叠率曲线。优化后曲线在所有 K 值处均保持领先，验证了 DC Loss 对全局分布一致性的约束效果。</figcaption>
+        </figure>
+
+        <p>DC Loss 的效果验证：</p>
+        <ul>
+          <li>排名差异 IQR 压缩：说明单次排名方差减小，决策更稳定</li>
+          <li>Top-K 重叠率持续领先：在 K=1 处起点更高，且全程不低于对照组，说明全局分布级别的一致性得到保证</li>
+        </ul>
+
+        <div class="callout callout-blue">
+          <strong>理论意义</strong>：$\mathcal{L}_{\text{rank}}$ 是 Pairwise 局部优化，只保证相邻 item 对的相对顺序；$\mathcal{L}_{\text{DC}}$ 是分布级全局约束，通过 KL 散度最小化将排序器的「全局偏好分布」蒸馏到生成器，从根本上解决了两个模块分布不一致的问题。两者互补，不能相互替代。
+        </div>
+      </section>
+
+      <!-- 总结 -->
+      <section class="section" id="insight">
+        <div class="section-title">
+          <div class="icon" style="background:#fef3c7;">💡</div>
+          总结与个人理解
+        </div>
+
+        <h3>核心贡献梳理</h3>
+
+        <div class="step-list">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <strong>价值感知多任务解耦</strong>
+              <p>首次在生成式推荐框架内，通过任务 Token 序列 + 因果掩码，将兴趣覆盖（CTR/CVR）和价值优化（eCPM）解耦到独立子空间。消除了单任务融合的梯度冲突，也避免了阶段解耦的信息损失。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <strong>由粗到细的协同目标感知</strong>
+              <p>Step 2 用 Fake Item Token（K-means 聚类中心）实现粗粒度类目级别的目标感知；Step 3 用 R-Decoder 对实际候选 item 进行细粒度 cross-attention 打分。粗细两级感知相互配合，生成阶段就开始考虑候选 item 的语义分布，排序阶段进一步精化。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <strong>输入-输出双侧一致性保证</strong>
+              <p>输入侧：KV 透传机制让 Step 3 复用 Step 1+2 的内部状态，解决表示碎片化。输出侧：DC Loss 通过 KL 散度将排序器的全局偏好分布反向蒸馏到生成器，解决优化目标不对齐。双侧一致性共同建立了生成与排序的端到端协同优化通道。</p>
+            </div>
+          </div>
+        </div>
+
+        <h3>亮点</h3>
+
+        <div class="callout callout-green">
+          <strong>✅ 工程实用性强</strong>：三步架构在单次前向传播中完成，生成和排序共享参数，无需额外存储独立排序模型。KV cache 复用不增加额外的存储开销，适合工业部署。
+        </div>
+
+        <div class="callout callout-blue">
+          <strong>✅ DC Loss 设计优雅</strong>：将排序→生成的知识传递抽象为 KL 散度最小化，并推导为软标签交叉熵形式。这本质上是把排序器当 teacher，生成器当 student 的知识蒸馏，但蒸馏目标是候选集上的全局概率分布而非单个 item 的硬标签，避免了正负样本稀疏的问题。
+        </div>
+
+        <h3>不足与思考</h3>
+
+        <ul>
+          <li><strong>K-means 聚类的动态性</strong>：Fake Item Token 的聚类中心是静态预计算的，无法随 item 空间的实时变化更新。在 item 高频更新的广告场景中，这可能引入一定的滞后性。</li>
+          <li><strong>三步深度耦合带来训练复杂性</strong>：Step 2 需要来自 Step 1 的 KV，Step 3 需要来自 Step 1+2 的 KV，且三步共享反向梯度。梯度流向复杂，对调参和稳定性有更高要求。</li>
+          <li><strong>R-Decoder 的延迟开销</strong>：Step 3 虽然只用单层 R-Decoder，但在推理时需要对 $n$ 个候选 item 进行 cross-attention，实际延迟影响未在论文中详细分析。</li>
+        </ul>
+
+        <div class="paper-info">
+          <p>📄 <strong>论文</strong>：<a href="https://arxiv.org/abs/2603.02999" target="_blank">OneRanker: Unified Generation and Ranking with One Model in Industrial Advertising Recommendation</a></p>
+          <p>👥 <strong>作者</strong>：Dekai Sun, Yiming Liu, Jiafan Zhou, Xun Liu, Chenchen Yu, Yi Li, Jun Zhang, Huan Yu, Jie Jiang</p>
+          <p>🏢 <strong>机构</strong>：腾讯微信频道广告系统团队</p>
+          <p>📅 <strong>发布时间</strong>：2026 年 3 月（arXiv 2603.02999 v3）</p>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <footer class="footer">
+    <a href="../index.html">← 返回论文列表</a>
+  </footer>
+</div>
+
+<script>
+(function(){
+  // TOC 滚动高亮：使用 IntersectionObserver 监听所有带 id 的 section/h3
+  var tocLinks = document.querySelectorAll('.toc-list a[href^="#"], .toc-sub a[href^="#"]');
+  if (!tocLinks.length) return;
+
+  // 建立 id -> tocLink 映射
+  var linkMap = {};
+  tocLinks.forEach(function(a){
+    var id = a.getAttribute('href').slice(1);
+    if (id) linkMap[id] = a;
+  });
+
+  var targets = Object.keys(linkMap).map(function(id){
+    return document.getElementById(id);
+  }).filter(Boolean);
+
+  if (!targets.length) return;
+
+  var activeId = null;
+
+  function setActive(id){
+    if (id === activeId) return;
+    activeId = id;
+    tocLinks.forEach(function(a){ a.classList.remove('active'); });
+    if (id && linkMap[id]){
+      linkMap[id].classList.add('active');
+      // 让目录自动滚动到对应项可见
+      var toc = document.querySelector('.toc');
+      if (toc){
+        var li = linkMap[id];
+        var tocTop = toc.getBoundingClientRect().top;
+        var liTop  = li.getBoundingClientRect().top;
+        var offset = liTop - tocTop - toc.clientHeight / 2;
+        toc.scrollBy({ top: offset, behavior: 'smooth' });
+      }
+    }
+  }
+
+  // rootMargin: 上边距 -10%（稍微进入视口就算），下边距 -60%（只有顶部 40% 区域触发）
+  var observer = new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      if (entry.isIntersecting){
+        setActive(entry.target.id);
+      }
+    });
+  }, { rootMargin: '-10% 0px -60% 0px', threshold: 0 });
+
+  targets.forEach(function(el){ observer.observe(el); });
+})();
+</script>
+</body>
+</html>

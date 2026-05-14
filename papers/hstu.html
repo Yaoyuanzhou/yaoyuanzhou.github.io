@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HSTU：万亿参数序列转换器的生成式推荐</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      renderMathInElement(document.body, {
+        delimiters: [
+          { left: "$$", right: "$$", display: true },
+          { left: "$", right: "$", display: false }
+        ]
+      });
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #2563eb; --primary-soft: #eff6ff;
+      --accent: #7c3aed; --accent-soft: rgba(124,58,237,0.06);
+      --shadow: 0 10px 30px rgba(15,23,42,0.08); --radius: 18px; --max: 1300px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: linear-gradient(180deg,#f8fbff 0%,var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      line-height: 1.7;
+      font-size: 15px;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .back-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 10px 20px; font-size: 13px; font-weight: 600;
+      color: var(--primary); background: var(--primary-soft);
+      border-radius: 999px; margin: 20px 24px;
+      transition: background .2s;
+    }
+    .back-link:hover { background: #dbeafe; text-decoration: none; }
+
+    /* ── Hero ───────────────────────────────────── */
+    .hero {
+      max-width: var(--max); margin: 0 auto 32px; padding: 48px 32px 40px;
+      background: radial-gradient(ellipse 80% 60% at 50% 0%, #dbeafe55, transparent);
+      border-radius: var(--radius);
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 12px; font-weight: 700; letter-spacing: .08em;
+      color: var(--primary); text-transform: uppercase;
+      background: var(--primary-soft); padding: 4px 12px; border-radius: 999px;
+      margin-bottom: 16px;
+    }
+    .hero h1 {
+      font-size: clamp(22px, 3vw, 30px); font-weight: 800; line-height: 1.25;
+      color: #0f172a; margin-bottom: 10px;
+    }
+    .hero .subtitle {
+      font-size: 14px; color: var(--muted); margin-bottom: 24px;
+      font-style: italic; line-height: 1.6;
+    }
+    .meta-grid {
+      display: grid; grid-template-columns: repeat(auto-fit,minmax(160px,1fr));
+      gap: 12px;
+    }
+    .meta-item {
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: 12px; padding: 12px 16px;
+    }
+    .meta-label { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; margin-bottom: 4px; }
+    .meta-value { font-size: 13px; font-weight: 600; color: var(--text); }
+
+    /* ── Layout ────────────────────────────────── */
+    .layout {
+      max-width: var(--max); margin: 0 auto;
+      display: grid; grid-template-columns: 260px minmax(0,1fr);
+      gap: 28px; padding: 0 24px 60px; align-items: start;
+    }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      aside.toc { display: none; }
+    }
+
+    /* ── TOC ────────────────────────────────────── */
+    aside.toc {
+      position: sticky; top: 24px;
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: var(--radius); padding: 20px 16px;
+      box-shadow: var(--shadow); font-size: 13px;
+    }
+    .toc-title { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+    .toc-list { list-style: none; }
+    .toc-list > li { margin-bottom: 8px; }
+    .toc-list > li > a { font-weight: 600; color: var(--text); }
+    .toc-list > li > a:hover, .toc-sub li a:hover { color: var(--primary); }
+    .toc-sub { list-style: none; padding-left: 12px; margin-top: 4px; }
+    .toc-sub li { margin-bottom: 4px; }
+    .toc-sub li a { color: var(--muted); font-size: 12px; }
+
+    /* ── Section ────────────────────────────────── */
+    .section {
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: var(--radius); padding: 28px 32px 32px;
+      box-shadow: var(--shadow); margin-bottom: 24px;
+    }
+    .section-title {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 19px; font-weight: 800; margin-bottom: 20px; color: #0f172a;
+    }
+    .section-title .icon {
+      width: 6px; height: 24px; border-radius: 3px; flex-shrink: 0;
+      background: var(--primary);
+    }
+    .section h3 { font-size: 15px; font-weight: 700; margin: 20px 0 10px; color: #1e3a8a; }
+    .section h4 { font-size: 14px; font-weight: 700; margin: 16px 0 8px; color: #374151; }
+    .section p { margin-bottom: 12px; }
+    .section ul, .section ol { padding-left: 20px; margin-bottom: 12px; }
+    .section li { margin-bottom: 5px; }
+
+    /* ── Callouts ───────────────────────────────── */
+    .callout-blue  { background:#eff6ff; border-left:3px solid #2563eb; padding:12px 16px; border-radius:8px; margin:14px 0; font-size:13.5px; }
+    .callout-amber { background:#fffbeb; border-left:3px solid #f59e0b; padding:12px 16px; border-radius:8px; margin:14px 0; font-size:13.5px; }
+    .callout-green { background:#f0fdf4; border-left:3px solid #22c55e; padding:12px 16px; border-radius:8px; margin:14px 0; font-size:13.5px; }
+    .callout-purple{ background:var(--accent-soft); border-left:3px solid var(--accent); padding:12px 16px; border-radius:8px; margin:14px 0; font-size:13.5px; }
+
+    /* ── Example boxes ──────────────────────────── */
+    .example-box { background: #f0fdf4; border: 1px solid #86efac; border-radius: 12px; padding: 16px 20px; margin: 16px 0; }
+    .ex-title { font-size: 13px; font-weight: 700; color: #16a34a; margin-bottom: 10px; }
+    .example-box p, .example-box li { font-size: 13.5px; line-height: 1.8; }
+
+    /* ── Step list ──────────────────────────────── */
+    .step-list { display: flex; flex-direction: column; gap: 14px; margin: 14px 0; }
+    .step { display: flex; gap: 14px; align-items: flex-start; }
+    .step-num { min-width: 28px; height: 28px; border-radius: 50%; background: var(--primary); color: #fff; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .step-body { font-size: 13.5px; line-height: 1.7; }
+
+    /* ── Formula ────────────────────────────────── */
+    .formula-block { background: #f8fafc; border: 1px solid var(--line); border-radius: 10px; padding: 14px 20px; margin: 14px 0; overflow-x: auto; }
+    .formula-vars { background: #f1f5f9; border-radius: 8px; padding: 12px 16px; margin-top: -6px; margin-bottom: 14px; font-size: 13px; }
+    .var-title { font-weight: 700; color: #374151; margin-bottom: 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+    .formula-vars ul { padding-left: 16px; }
+    .formula-vars li { margin-bottom: 4px; line-height: 1.6; }
+
+    /* ── Flow diagram ───────────────────────────── */
+    .flow-diagram { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 14px 0; }
+    .flow-box { background: var(--primary-soft); border: 1px solid #bfdbfe; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600; color: #1d4ed8; }
+    .flow-arrow { color: var(--muted); font-size: 18px; }
+
+    /* ── Table ──────────────────────────────────── */
+    .table-wrap { overflow-x: auto; margin: 14px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th { background: #f8fafc; padding: 10px 12px; text-align: left; font-weight: 700; border-bottom: 2px solid var(--line); color: #374151; }
+    tbody td { padding: 9px 12px; border-bottom: 1px solid var(--line); }
+    tbody tr:hover { background: #f9fafb; }
+    tbody td strong { color: var(--primary); }
+
+    /* ── Figures ────────────────────────────────── */
+    figure { margin: 20px 0; text-align: center; }
+    figure img { max-width: 100%; border-radius: 10px; border: 1px solid var(--line); }
+    .fig-placeholder { background: #f1f5f9; border: 2px dashed #cbd5e1; border-radius: 10px; padding: 32px 20px; color: var(--muted); font-size: 13px; line-height: 1.8; }
+    figcaption { font-size: 13px; color: var(--muted); margin-top: 8px; line-height: 1.6; }
+
+    /* ── Note ───────────────────────────────────── */
+    .note { border: 1px dashed var(--line); border-radius: 10px; padding: 14px 18px; font-size: 13px; color: #374151; margin: 14px 0; background: #fafafa; }
+
+    /* ── Two-col ────────────────────────────────── */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0; }
+    @media (max-width: 640px) { .two-col { grid-template-columns: 1fr; } }
+    .mini-card { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; font-size: 13px; }
+    .mini-card strong { display: block; font-size: 13px; margin-bottom: 6px; color: #1e3a8a; }
+
+    /* ── Paper info ─────────────────────────────── */
+    .paper-info { background: var(--primary-soft); border: 1px solid #bfdbfe; border-radius: 12px; padding: 14px 18px; font-size: 13px; margin: 14px 0; }
+
+    /* ── Footer ─────────────────────────────────── */
+    footer { text-align: center; padding: 32px; color: var(--muted); font-size: 13px; }
+    footer a { color: var(--primary); }
+
+    /* ── Tag ─────────────────────────────────────── */
+    .tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; margin: 2px; }
+    .tag-blue { background: #dbeafe; color: #1d4ed8; }
+    .tag-green { background: #dcfce7; color: #15803d; }
+    .tag-amber { background: #fef3c7; color: #92400e; }
+    .tag-purple { background: #ede9fe; color: #6d28d9; }
+  </style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← 返回论文列表</a>
+
+<!-- ── Hero ─────────────────────────────────────── -->
+<div class="hero">
+  <div class="eyebrow">生成式推荐 · ICML 2024 · Meta AI</div>
+  <h1>HSTU：万亿参数序列转换器，用户行为胜过文本</h1>
+  <p class="subtitle">Actions Speak Louder than Words: Trillion-Parameter Sequential Transducers for Generative Recommendations</p>
+  <div class="meta-grid">
+    <div class="meta-item">
+      <div class="meta-label">作者</div>
+      <div class="meta-value">Jiaqi Zhai, Lucy Liao et al. · Meta AI</div>
+    </div>
+    <div class="meta-item">
+      <div class="meta-label">发表</div>
+      <div class="meta-value">ICML 2024 · arXiv 2402.17152</div>
+    </div>
+    <div class="meta-item">
+      <div class="meta-label">核心贡献</div>
+      <div class="meta-value">GR 范式 + HSTU 架构 + M-FALCON 推理</div>
+    </div>
+    <div class="meta-item">
+      <div class="meta-label">工业效果</div>
+      <div class="meta-value">A/B +12.4%，模型复杂度提升 285×</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Layout ────────────────────────────────────── -->
+<div class="layout">
+
+  <!-- TOC -->
+  <aside class="toc">
+    <div class="toc-title">目录</div>
+    <ul class="toc-list">
+      <li><a href="#background">§1 背景与动机</a>
+        <ul class="toc-sub">
+          <li><a href="#dlrm-limits">DLRM 的瓶颈</a></li>
+          <li><a href="#gr-insight">GR 核心洞察</a></li>
+        </ul>
+      </li>
+      <li><a href="#method">§2 方法详解</a>
+        <ul class="toc-sub">
+          <li><a href="#unify-feature">2.1 统一特征空间</a></li>
+          <li><a href="#what-is-gr">GR 是什么？</a></li>
+          <li><a href="#sequential-task">2.2 排序与召回的序列换能</a></li>
+          <li><a href="#generative-train">2.3 生成式训练</a></li>
+          <li><a href="#hstu">2.4 HSTU 架构</a></li>
+          <li><a href="#stochastic-length">2.5 Stochastic Length</a></li>
+          <li><a href="#m-falcon">2.6 M-FALCON 推理</a></li>
+        </ul>
+      </li>
+      <li><a href="#experiments">§3 实验结果</a>
+        <ul class="toc-sub">
+          <li><a href="#public-bench">3.1 公开数据集</a></li>
+          <li><a href="#industrial">3.2 工业场景</a></li>
+          <li><a href="#scaling-law">3.3 Scaling Law</a></li>
+        </ul>
+      </li>
+      <li><a href="#insight">§4 理解与启发</a></li>
+      <li><a href="#qa">§5 深度问答</a>
+        <ul class="toc-sub">
+          <li><a href="#qa-sample-org">Q1 样本粒度</a></li>
+          <li><a href="#qa-emit-timing">Q2 样本 emit 时机</a></li>
+          <li><a href="#qa-large-vocab">Q3 大 vocab 训练</a></li>
+          <li><a href="#qa-task-targets">Q4 各任务预测目标</a></li>
+          <li><a href="#qa-replace-funnel">Q5 是否替代推荐漏斗</a></li>
+          <li><a href="#qa-complexity">Q6 复杂度推导</a></li>
+          <li><a href="#qa-target-aware-detail">Q7 target-aware 与 causal attention</a></li>
+          <li><a href="#qa-mfalcon-detail">Q8 M-FALCON 的 mask 并行</a></li>
+        </ul>
+      </li>
+    </ul>
+  </aside>
+
+  <!-- Main -->
+  <main class="content">
+
+    <!-- §1 背景与动机 -->
+    <section class="section" id="background">
+      <div class="section-title">
+        <div class="icon" style="background:#6366f1"></div>
+        §1 背景与动机
+      </div>
+
+      <h3 id="dlrm-limits">DLRM 的根本瓶颈</h3>
+      <p>工业推荐系统长期由 <strong>DLRM（深度学习推荐模型）</strong> 主导，其核心特征：</p>
+      <ul>
+        <li><strong>异构特征</strong>：上千个数值特征（CTR、比例等）+ 类别特征（商品 ID、创作者 ID 等），特征空间高基数（十亿级 vocabulary）</li>
+        <li><strong>手工特征工程</strong>：特征大量依赖人工设计，维护成本极高</li>
+        <li><strong>扩展瓶颈</strong>：DLRM 在增大计算量时质量不再提升（Zhao et al., 2023），无法享受 scaling law 红利</li>
+        <li><strong>训练效率</strong>：传统 impression-level 训练中，attention 的复杂度为 $O(N^3 d + N^2 d^2)$，代价极高</li>
+      </ul>
+
+      <div class="callout-amber">
+        <strong>核心矛盾：</strong>DLRMs 训练数据量庞大（每天数百亿用户行为），但计算规模上去之后质量不再提升，而 LLM 靠 Scaling Law 持续改进——推荐能否复刻这条路？
+      </div>
+
+      <h3 id="gr-insight">GR 的核心洞察</h3>
+      <p>论文的核心主张是：<strong>用户行为是一种新的模态（modality）</strong>，可以类比语言进行生成式建模：</p>
+
+      <div class="two-col">
+        <div class="mini-card">
+          <strong>传统 DLRM 视角</strong>
+          异构特征 → 各种 embedding → Feature Interaction 网络 → 预测
+        </div>
+        <div class="mini-card">
+          <strong>GR（生成式推荐）视角</strong>
+          所有特征序列化为统一时间序列 → 序列转换器（HSTU）→ 自回归生成目标
+        </div>
+      </div>
+
+      <p>关键洞察三条：</p>
+      <ol>
+        <li>召回和排序都可以被重新表述为<strong>序列转换任务（Sequential Transduction Task）</strong></li>
+        <li>序列化的特征空间允许以<strong>生成式方式训练</strong>，摊销 encoder 成本，减少数量级的计算量</li>
+        <li>生成式训练使模型质量随计算量呈<strong>幂律增长（Scaling Law）</strong>，DLRMs 则饱和</li>
+      </ol>
+
+      <figure>
+        <img src="https://arxiv.org/html/2402.17152v3/x1.png" alt="Figure 1: 深度学习模型训练计算量的历史演进"
+             onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'><b>Figure 1：计算量历史演进</b><br><br>纵轴为训练 PetaFLOP/s-days，横轴为年份。DLRM（蓝色）与 GR（橙色）的计算量变化对比。GR 模型计算量持续增长，最终达到 GPT-3/LLaMA-2 规模。</div>`" />
+        <figcaption><strong>Figure 1（论文原图）：</strong>深度学习模型训练计算量年演进。DLRM 与本文 GR 的计算规模对比，GR 已达到 LLM 量级。</figcaption>
+      </figure>
+    </section>
+
+    <!-- §2 方法详解 -->
+    <section class="section" id="method">
+      <div class="section-title">
+        <div class="icon" style="background:#2563eb"></div>
+        §2 方法详解
+      </div>
+
+      <h3 id="unify-feature">2.1 统一特征空间：把异构特征序列化</h3>
+
+      <p>工业 DLRM 的特征体系极其庞大——一个典型的大规模推荐系统往往依赖<strong>数万个人工设计的特征</strong>，可分为两大类：类别/稀疏特征（Categorical / Sparse）和数值/稠密特征（Numerical / Dense）。GR 的核心目标是把这两类特征统一整合为一条时间序列，彻底消除手工特征工程。</p>
+
+      <h4>① 类别特征（Categorical / Sparse）：序列化步骤拆解</h4>
+
+      <p>类别特征的典型例子包括：用户点赞的视频、关注的创作者（分类别，如户外/美食）、用户语言、加入的社区、发起请求的城市……这些都是高基数的 ID 类特征。GR 通过以下三步将其序列化：</p>
+
+      <div class="step-list">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <strong>确定主时间序列（Main Time Series）</strong><br>
+            选取<strong>最长的时间序列</strong>作为主干，通常是"用户直接交互过的 item 序列"——即把用户历史上看过、点赞、分享的所有内容按时间排成一列，记作：
+            $$(\Phi_0, a_0, \Phi_1, a_1, \ldots, \Phi_{n_c-1}, a_{n_c-1})$$
+            其中 $\Phi_i$ 是系统推送给用户的第 $i$ 个内容（视频、帖子等），$a_i$ 是用户对它的行为（点赞 / 跳过 / 完整观看+分享 等）。
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <strong>压缩"变化缓慢"的辅助时间序列</strong><br>
+            其余类别特征（如关注的创作者列表、加入的社区、所在城市）都是<strong>随时间缓慢变化</strong>的序列。如果原样拼接，序列长度会爆炸。GR 的处理方式是：<br>
+            <strong>对每段连续相同值，只保留该段的最早一条（Keep the earliest entry per consecutive segment）</strong>，再把压缩后的结果按时间戳插入主时间序列中对应的位置。<br><br>
+            由于这些特征变化极慢，压缩后每个特征增加的 token 数极少，<strong>对总序列长度的影响可忽略不计</strong>。
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <strong>合并为统一时间序列</strong><br>
+            把主时间序列与所有压缩后的辅助序列，按时间戳排序，合并成一条统一序列——这就是 GR 模型的输入。论文 Figure 2 中用 $\Phi_i$ 统一表示合并后的主时间序列第 $i$ 个 token，$\Psi_k(t_j)$ 表示在时刻 $t_j$ emit 的第 $k$ 个训练样本。
+          </div>
+        </div>
+      </div>
+
+      <div class="example-box">
+        <div class="ex-title">💡 举例：类别特征序列化完整过程</div>
+        <p><strong>场景：</strong>用户 Alice 在 Meta 短视频平台的 30 天历史记录（简化版）</p>
+
+        <p><strong>DLRM 视角的原始特征集（每次请求都要准备这些）：</strong></p>
+        <div class="table-wrap" style="margin:8px 0">
+          <table>
+            <thead><tr><th>特征类型</th><th>内容示例</th><th>基数</th></tr></thead>
+            <tbody>
+              <tr><td>用户交互视频序列</td><td>[v_0012, v_0089, v_3301, v_2204, v_0077, ...]（过去 30 天 1200 个）</td><td>10亿级</td></tr>
+              <tr><td>关注的创作者（美食类）</td><td>[creator_A, creator_B, creator_C]（2 周前关注，之后未变）</td><td>1亿级</td></tr>
+              <tr><td>关注的创作者（户外类）</td><td>[creator_X]（1 个月前关注，之后未变）</td><td>同上</td></tr>
+              <tr><td>加入的社区</td><td>[community_hiking, community_cooking]（1 个月前加入，未变）</td><td>千万级</td></tr>
+              <tr><td>用户语言</td><td>en-US（从未变化）</td><td>千级</td></tr>
+              <tr><td>城市</td><td>Seattle（偶尔变化）</td><td>百万级</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p><strong>GR 序列化后的统一时间序列（按时间戳排列）：</strong></p>
+        <pre style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;font-size:12.5px;line-height:1.9;overflow-x:auto;">
+t=30天前  → [community_hiking]   ← 加入社区（辅助特征，只保留段首）
+t=30天前  → [creator_X]          ← 关注户外创作者（辅助特征，段首）
+t=28天前  → [v_0001 → 点赞]      ← 主序列
+t=28天前  → [community_cooking]  ← 加入美食社区（段首）
+t=25天前  → [v_0002 → 跳过]      ← 主序列
+t=20天前  → [creator_A]          ← 关注美食创作者 A（段首）
+t=18天前  → [creator_B]          ← 关注美食创作者 B（段首）
+t=15天前  → [v_0089 → 完整观看+分享] ← 主序列
+...（后续 1200 个视频 token）...
+t=今天    → [v_3301 → 点赞]      ← 最近的交互</pre>
+
+        <p><strong>效果对比：</strong></p>
+        <ul>
+          <li>DLRM：需要对每个 <code>(user, item)</code> impression 构造包含数万个特征的样本，且"关注的创作者"等需要用 attention pooling 或 MLP 处理，逻辑分散在多个子模块</li>
+          <li>GR：所有信息合并为<strong>一条约 1200+ token 的时间序列</strong>，输入统一，模型用 HSTU 一次性处理</li>
+        </ul>
+      </div>
+
+      <h4>② 数值特征（Numerical / Dense）：为什么可以"删掉"？</h4>
+
+      <p>数值特征的典型例子：过去 7 天对"户外"话题视频的 CTR（点击率）、过去 24 小时的视频完成率、用户历史平均观看时长比例……这类特征有两个问题导致序列化代价极高：</p>
+
+      <ul>
+        <li><strong>变化频率极高</strong>：每次用户与一个 item 交互，相关计数器都会更新。例如 CTR 在每次 impression 后都会变化，完全随时间序列化意味着每个 token 都要附带几十个随时变化的数值，存储和计算成本爆炸。</li>
+        <li><strong>衍生性强</strong>：CTR 本质上是"用户对某类话题视频的点击次数 / 曝光次数"的聚合。而这个分子、分母都可以从原始的交互序列中推算出来——如果模型表达能力足够强，它完全可以从序列中<em>自己推算出</em> CTR。</li>
+      </ul>
+
+      <div class="callout-blue">
+        <strong>论文的关键论证：</strong>数值特征（如 CTR）= 对类别特征（如 item 话题、位置）的统计聚合。而这些类别特征已经在序列中了。因此，给定一个<strong>足够长的序列</strong>和一个<strong>足够有表现力的 target-aware 模型</strong>，模型可以隐式地从序列中恢复出数值特征所表达的信息，从而<strong>安全地移除数值特征，且质量不下降</strong>。
+      </div>
+
+      <div class="example-box">
+        <div class="ex-title">💡 举例：为什么模型能从序列中隐式"推算" CTR</div>
+        <p><strong>数值特征：</strong>Alice 过去 30 天对"户外"话题视频的 CTR = 0.42（比全体用户均值 0.08 高很多）</p>
+        <p><strong>这个数值背后对应的是什么？</strong>Alice 过去 30 天的序列中：</p>
+        <ul>
+          <li>共出现了 50 个户外话题视频，其中 21 个 <code>a_i = 点赞/完整观看</code>，29 个 <code>a_i = 跳过</code></li>
+          <li>CTR = 21/50 = 0.42</li>
+        </ul>
+        <p><strong>模型如何隐式得到这个信息？</strong>HSTU 在对候选"户外视频 $\Phi_{new}$"打分时，会对序列中所有历史 token 做 attention。它"看到"了 21 个正面行为 + 29 个跳过，这些信息通过 pointwise aggregated attention 积累到候选 token 对应的表示中。模型不需要 0.42 这个数字，它看到的原始交互比这个数字更细粒度、更信息丰富。</p>
+        <p><strong>前提条件：</strong>序列要足够长（包含足够多的历史）+ 模型要 target-aware（即目标 item 的话题标签需要在序列中可见，以便 attention 能区分"户外"和"美食"视频）。这也是为什么 GR 强调 target-aware 排序公式的原因。</p>
+      </div>
+
+      <div class="callout-amber">
+        <strong>实验验证（Section 4.3）：</strong>论文对比了三个变体：<br>
+        ① GR（完整版，只用交互序列，无数值特征）<br>
+        ② GR (interactions only)（仅考虑用户交互的 item，不含 action 类型等）<br>
+        ③ GR (content-based)（只用内容特征，不用行为序列）<br>
+        结果显示"GR (interactions only)"比完整 GR 差 2.6% NE，"GR (content-based)"则与 DLRM 有显著差距。这验证了两点：行为动作（action 类型）很重要；内容特征（文本语义）远不如行为序列。
+      </div>
+
+      <h4>③ 统一序列的完整形式：符号约定</h4>
+
+      <p>整合后，GR 的输入序列可以写成：</p>
+      <div class="formula-block">
+        $$x = (\underbrace{\Phi_0, a_0}_{\text{item+action}}, \underbrace{\Phi_1, a_1}_{\text{item+action}}, \ldots, \underbrace{\Phi_{n_c-1}, a_{n_c-1}}_{\text{item+action}}, \underbrace{E, F, G, H, \ldots}_{\text{压缩后的辅助类别特征}})$$
+      </div>
+      <div class="formula-vars">
+        <div class="var-title">符号说明（对应论文 Figure 2 和 Table 1）</div>
+        <ul>
+          <li>$\Phi_i \in \mathbb{X}_c$：系统推送给用户的第 $i$ 个内容（item），$\mathbb{X}_c$ 是 item 空间（非稳态，每分钟新增内容）</li>
+          <li>$a_i \in \mathbb{X}$：用户对 $\Phi_i$ 的行为（点赞 / 跳过 / 完整观看 / 分享等），每种行为是独立 token</li>
+          <li>$n_c$：用户历史交互过的内容总数</li>
+          <li>$E, F, G, H$：论文 Figure 2 中标注的辅助类别特征（创作者 ID、社区 ID、语言、城市等），压缩后按时间插入</li>
+          <li>整条序列统一用 $\Phi_i$ 标记合并结果，$\Psi_k(t_j)$ 表示时刻 $t_j$ emit 的第 $k$ 个训练样本</li>
+        </ul>
+      </div>
+
+      <figure>
+        <img src="https://arxiv.org/html/2402.17152v3/x2.png" alt="Figure 2: DLRM vs GR 特征与训练流程对比"
+             onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'><b>Figure 2：DLRM vs GR 特征对比</b><br><br>左侧为 DLRM：多路类别特征（E,F,G,H）+ 数值特征 → embedding 层 → Feature Interaction（FM/DCN/Transformer 等）→ MoE 变换 → 多任务预测。右侧为 GR：所有特征（item+action+辅助类别特征）按时间合并为单条序列 → HSTU 换能器 → 每个时间步 emit 一个训练样本 Ψk(tj)。关键差异：GR 左侧无数值特征输入框；底部 encoder 只有一个 HSTU 模块替代 DLRM 中三个复杂子系统。</div>`" />
+        <figcaption><strong>Figure 2（论文原图）：</strong>DLRM（左）vs GR（右）的特征与训练流程对比。<em>E, F, G, H</em> 是论文标注的辅助类别特征，$\Phi_i$ 是合并后主时间序列的第 $i$ 个 token，$\Psi_k(t_j)$ 是时刻 $t_j$ emit 的训练样本。GR 将异构特征统一为单一序列，完全移除数值特征，训练时每步 emit 一个样本（生成式训练）。</figcaption>
+      </figure>
+
+      <h4>④ 近似保证：GR ≈ DLRM 当序列无限长</h4>
+
+      <p>论文给出了一个关键理论声明：<strong>GR 的统一序列特征空间是 DLRM 完整特征空间的近似，且近似质量随序列长度趋近无穷而收敛</strong>（原文："the new approach approximating the full DLRM feature space as sequence length tends to infinity"）。</p>
+      <p>直觉理解：越长的序列包含越完整的用户历史，模型就越能从行为序列中推算出那些数值聚合特征（CTR、比例等）。这为 GR "删掉数值特征" 提供了理论依据，也解释了为什么 Scaling Law 中<strong>序列长度比参数量更重要</strong>——它直接决定了 GR 与完整 DLRM 特征空间的近似精度。</p>
+
+      <div class="note">
+        <strong>⚠️ 实践注意：</strong>工业部署时序列不可能无限长，Meta 实验中最长测试序列为 8192 个 token。对于极长尾用户（历史超过阈值），需配合 Stochastic Length（§2.5）进行采样处理，以控制计算成本。
+      </div>
+
+      <!-- GR 术语说明框 -->
+      <div class="callout-purple" id="what-is-gr">
+        <strong>📌 GR 是什么？</strong><br>
+        <strong>GR = Generative Recommenders（生成式推荐系统）</strong>，是本论文提出的新范式的名字。<br><br>
+        传统推荐系统叫 <strong>DLRM（Deep Learning Recommendation Model）</strong>——用大量人工设计特征 + 各种神经网络做 CTR/CVR 预测。<br><br>
+        GR 的核心思想是：<strong>把推荐问题从"特征预测"重新表述为"序列生成"</strong>——像语言模型生成下一个 token 一样，让模型生成用户下一个感兴趣的 item 或预测用户的下一个行为。GR 的 encoder 就是本文设计的 HSTU 架构，所以 "GR" 和 "HSTU" 经常一起出现：HSTU 是架构，GR 是用 HSTU 实现的推荐系统范式。
+      </div>
+
+      <h3 id="sequential-task">2.2 排序与召回重新表述为序列换能任务</h3>
+
+      <p>GR 的关键技术动作是：把推荐系统最核心的两个任务——<strong>排序（Ranking）</strong>和<strong>召回（Retrieval）</strong>，统一成一种叫做<strong>序列换能（Sequential Transduction）</strong>的形式，然后用 HSTU encoder 一次性解决。</p>
+
+      <h4>① 什么是"序列换能"</h4>
+
+      <p>"换能（Transduction）"来自 NLP 领域，指的是<strong>输入序列 → 输出序列</strong>的映射，和语言翻译（seq2seq）或语音识别本质一样。在推荐场景里，定义如下：</p>
+
+      <div class="formula-block">
+        $$\text{输入：} x_0, x_1, \ldots, x_{n-1} \quad\xrightarrow{\text{HSTU}}\quad \text{输出：} y_0, y_1, \ldots, y_{n-1}$$
+      </div>
+      <div class="formula-vars">
+        <div class="var-title">符号说明</div>
+        <ul>
+          <li>$x_i \in \mathbb{X}$：输入序列的第 $i$ 个 token（可以是 item $\Phi_i$、行为 $a_i$、辅助类别特征等）</li>
+          <li>$t_i$：第 $i$ 个 token 被观测到的时间戳，序列按时间升序排列</li>
+          <li>$y_i \in \mathbb{X} \cup \{\emptyset\}$：输出序列的第 $i$ 个 token；$y_i = \emptyset$ 表示该位置没有监督信号（不需要预测）</li>
+          <li>$\mathbb{X}_c \subseteq \mathbb{X}$：item 子空间（视频、帖子等），$\mathbb{X}$ 还包括 action token 等</li>
+          <li>$n_c$：用户历史交互 item 总数</li>
+        </ul>
+      </div>
+
+      <p>这个框架的精妙之处在于：输入和输出是<strong>等长的</strong>——每个输入 token 对应一个输出 slot，不需要的位置填 $\emptyset$。这使得排序和召回可以在<strong>同一个 causal（因果/自回归）encoder 框架</strong>下表达，无需 decoder。</p>
+
+      <h4>② 召回任务（Retrieval）</h4>
+
+      <p>召回的目标：给定用户历史，找出用户下一个最可能感兴趣的 item。</p>
+
+      <p>标准召回被建模为：学习分布 $p(\Phi_{i+1} \mid u_i)$，其中 $u_i$ 是用户在第 $i$ 步的表示，目标是找到 $\arg\max_{\Phi \in \mathbb{X}_c} p(\Phi \mid u_i)$。</p>
+
+      <p>在序列换能框架下，召回的输入和输出定义为：</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>位置 $i$</th><th>输入 $x_i$</th><th>输出 $y_i$</th><th>含义</th></tr></thead>
+          <tbody>
+            <tr><td>$0$</td><td>$(\Phi_0, a_0)$</td><td>$\Phi_1$（下一个正样本 item）</td><td>看过 $\Phi_0$ 并做了行为 $a_0$ 后，预测下一个 item</td></tr>
+            <tr><td>$1$</td><td>$(\Phi_1, a_1)$</td><td>$\Phi_2$</td><td>类似</td></tr>
+            <tr><td>$i$</td><td>$(\Phi_i, a_i)$</td><td>$\Phi_{i+1}$</td><td>类似</td></tr>
+            <tr><td>辅助特征位置</td><td>城市/语言等</td><td>$\emptyset$</td><td>不需要预测，跳过</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout-amber">
+        <strong>与语言模型的区别（两点重要差异）：</strong><br>
+        1. <strong>监督信号不一定是下一个 token：</strong>用户可能对推给他的 $\Phi_{i+1}$ 反应是<strong>负面的</strong>（跳过），此时 $y_i$ 不用 $\Phi_{i+1}$，而要用能反映"真正感兴趣"的正样本（如该时间窗口内主动搜索的 item）。<br>
+        2. <strong>辅助特征位置输出为 $\emptyset$：</strong>当 $x_{i+1}$ 是城市、语言这类非 engagement 特征时，$y_i$ 设为 $\emptyset$，该位置不参与损失计算。
+      </div>
+
+      <div class="example-box">
+        <div class="ex-title">💡 举例：召回任务的序列换能</div>
+        <p><strong>用户序列（简化版 5 步）：</strong></p>
+        <pre style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px;font-size:12.5px;line-height:1.9;overflow-x:auto;">
+位置0: x0 = (Φ_篮球视频, a=完整观看)  →  y0 = Φ_足球视频（下一个正样本）
+位置1: x1 = (Φ_足球视频, a=点赞)      →  y1 = Φ_羽毛球视频
+位置2: x2 = 城市=Seattle               →  y2 = ∅（不预测）
+位置3: x3 = (Φ_羽毛球视频, a=跳过)    →  y3 = Φ_网球视频
+位置4: x4 = (Φ_网球视频, a=分享)      →  y4 = Φ_?（推理时：预测下一个）</pre>
+        <p>训练时：位置0/1/3/4 各 emit 一个训练样本（正负样本对），位置2 跳过。<strong>一次 forward pass，4 个训练样本同时得到监督</strong>，这就是"生成式训练"的效率来源（§2.3 详述）。</p>
+      </div>
+
+      <h4>③ 排序任务（Ranking）—— target-aware 的关键设计</h4>
+
+      <p>排序比召回难得多，工业上的核心挑战是：<strong>target-aware</strong>。</p>
+
+      <p>什么叫 target-aware？简单说，给用户推荐候选视频 $\Phi_D$ 时，打分必须考虑"用户历史<strong>与 $\Phi_D$ 的交互</strong>"，而不是一个与目标无关的通用用户表示。</p>
+
+      <p>DLRM 是怎么处理的？DIN（Zhou et al., 2018）等经典方法：先算一个用户表示 $u$（对历史 pooling），再和候选 $\Phi_D$ embedding 做 attention/MLP。历史与目标的"交叉"发生在最后几层，时机很晚，信息利用不充分。</p>
+
+      <p>GR 排序的做法：<strong>直接把候选 $\Phi_{i+1}$ 插入输入序列</strong>，让它作为序列的一部分参与 self-attention，历史的每个 token 从一开始就能"看到"目标并与之交互。形式化为：</p>
+
+      <div class="formula-block">
+        $$p(a_{i+1} \mid \Phi_0, a_0, \Phi_1, a_1, \ldots, \Phi_i, a_i, \underbrace{\Phi_{i+1}}_{\text{候选 item 插入序列}})$$
+      </div>
+
+      <p>序列换能的输入输出定义为：</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>位置 $i$</th><th>输入 $x_i$</th><th>输出 $y_i$</th><th>含义</th></tr></thead>
+          <tbody>
+            <tr><td>$0$（item）</td><td>$\Phi_0$</td><td>$a_0$（用户行为）</td><td>预测用户对 $\Phi_0$ 的行为（CTR/CVR 等）</td></tr>
+            <tr><td>$1$（action）</td><td>$a_0$</td><td>$\emptyset$</td><td>action token 不预测</td></tr>
+            <tr><td>$2$（item）</td><td>$\Phi_1$</td><td>$a_1$</td><td>类似位置0</td></tr>
+            <tr><td>$2k$（item）</td><td>$\Phi_k$</td><td>$a_k$</td><td>…</td></tr>
+            <tr><td>$2k+1$（action）</td><td>$a_k$</td><td>$\emptyset$</td><td>…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>注意：输入序列是<strong>item 与 action 交错排列</strong>的（$\Phi_0, a_0, \Phi_1, a_1, \ldots$），候选 $\Phi_{i+1}$ 作为序列末尾的 item token 插入。输出只在 item 位置有监督（预测对应 action），action 位置输出 $\emptyset$。</p>
+
+      <p>排序预测结果不直接就是 $a_{i+1}$ 的 embedding；实践中会在 $\Phi_{i+1}$ 位置的 HSTU 输出上接一个<strong>小 MLP</strong>，将输出变换为多任务预测（点赞率 / 完成率 / 分享率 等）。</p>
+
+      <div class="callout-blue">
+        <strong>target-aware 插入为什么有效？</strong><br>
+        causal self-attention 中，$\Phi_{i+1}$（候选）被插入序列后，历史所有 token $\Phi_0, a_0, \ldots, \Phi_i, a_i$ 都能在 attention 时"看到"候选。等价于：<strong>用候选作为 query，对所有历史 token 做 cross-attention</strong>，而且这个交互在每一层都发生（多层 HSTU），比 DIN 那种"最后一层交叉"深得多。<br><br>
+        更重要的是：一次 forward pass 可以对 $n_c$ 个历史位置同时 emit 训练样本（M-FALCON 在推理时利用了同样的思路并行处理多个候选）。
+      </div>
+
+      <div class="example-box">
+        <div class="ex-title">💡 举例：排序 target-aware 完整流程</div>
+        <p><strong>场景：</strong>用户历史 [篮球→完整观看, 足球→点赞, 羽毛球→跳过]，候选 item = 网球视频。</p>
+        <p><strong>GR 排序输入序列（交错 + 候选插入末尾）：</strong></p>
+        <pre style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px;font-size:12.5px;line-height:1.9;overflow-x:auto;">
+x = [Φ_篮球, a=完整观看, Φ_足球, a=点赞, Φ_羽毛球, a=跳过, Φ_网球(候选)]
+                                                                 ↑
+                                                         候选插入这里，参与 attention</pre>
+        <p><strong>HSTU causal attention mask（上三角因果掩码）：</strong></p>
+        <pre style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px;font-size:12.5px;line-height:1.9;overflow-x:auto;">
+Φ_篮球    → 只能看自己
+a=完整观看 → 能看 Φ_篮球 + 自己
+Φ_足球    → 能看 Φ_篮球, a=完整观看, 自己
+...
+Φ_网球    → 能看所有历史 token（篮球/足球/羽毛球及对应 action）</pre>
+        <p><strong>输出（只关心 item 位置）：</strong></p>
+        <ul>
+          <li>$y_0 = $ 预测用户对篮球视频的行为（训练用，label = 完整观看）</li>
+          <li>$y_2 = $ 预测用户对足球视频的行为（label = 点赞）</li>
+          <li>$y_4 = $ 预测用户对羽毛球视频的行为（label = 跳过）</li>
+          <li>$y_6 = $ <strong>预测用户对网球视频的行为</strong>（推理目标，无 label）→ 接小 MLP 得到点赞率/完成率/等</li>
+        </ul>
+        <p><strong>对比 DLRM（DIN）：</strong>DLRM 只有 $y_6$ 这一个预测，历史与候选的交互在最后的 attention/MLP 层才发生。GR 一次 forward pass 得到 4 个位置的预测，且候选从第一层 HSTU 起就与历史充分交互。</p>
+      </div>
+
+      <h4>④ 统一视角：一张表对比两个任务</h4>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>维度</th><th>召回（Retrieval）</th><th>排序（Ranking）</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>目标</strong></td><td>预测下一个正样本 item $\Phi_{i+1}$</td><td>预测用户对候选 item 的行为 $a_{i+1}$</td></tr>
+            <tr><td><strong>输入序列结构</strong></td><td>$(\Phi_0, a_0), (\Phi_1, a_1), \ldots$（pair 为一个 token）</td><td>$\Phi_0, a_0, \Phi_1, a_1, \ldots, \Phi_{n_c}$（item 与 action 交错，候选插末尾）</td></tr>
+            <tr><td><strong>输出 $y_i$ 的含义</strong></td><td>$\Phi_{i+1}$（下一个 item 的 ID）</td><td>$a_i$（对第 $i$ 个 item 的行为类型）</td></tr>
+            <tr><td><strong>类比 NLP 任务</strong></td><td>语言模型下一个 token 预测</td><td>序列标注（每个 item 位置打一个标签）</td></tr>
+            <tr><td><strong>target-aware？</strong></td><td>否（不需要，目标就是预测下一个）</td><td>是（候选必须插入序列参与 attention）</td></tr>
+            <tr><td><strong>推理时</strong></td><td>Beam Search / MIPS 检索最高分 item</td><td>M-FALCON 并行对多个候选打分</td></tr>
+            <tr><td><strong>训练时每次 emit 几个样本</strong></td><td>$n_c$ 个（每个 item 位置各一个）</td><td>$n_c$ 个（每个 item 位置各一个）</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="generative-train">2.3 生成式训练：降低 $O(N)$ 复杂度</h3>
+      <p>传统 impression-level 训练：每个用户每次 impression 单独构造训练样本，总复杂度为 $O(N^3 d + N^2 d^2)$（$N = \max_i n_i$）。</p>
+      <p>生成式训练的做法是：<strong>在一次 forward pass 内，沿序列每个位置 emit 一个训练样本</strong>，encoder 成本被所有 targets 摊销。以 $s_u(n_i) = 1/n_i$ 的频率对第 $i$ 个用户采样，总训练成本变为：</p>
+
+      <div class="formula-block">
+        $$\sum_i s_u(n_i) \cdot n_i(n_i^2 d + n_i d^2) = O(N^2 d + N d^2)$$
+      </div>
+      <div class="formula-vars">
+        <div class="var-title">符号说明</div>
+        <ul>
+          <li>$n_i$：第 $i$ 个用户的序列长度</li>
+          <li>$s_u(n_i) = 1/n_i$：对用户的采样率（序列越长，采样越稀疏）</li>
+          <li>$N = \max_i n_i$：最长序列长度</li>
+          <li>$d$：embedding 维度</li>
+          <li>复杂度从 $O(N^3)$ 降至 $O(N^2)$，节省了一个 $O(N)$ 因子</li>
+        </ul>
+      </div>
+
+      <p>工业实现上，通常在用户一次 session 结束时批量 emit 当次 session 的所有训练样本（$\hat{s}_u(n_i) \propto 1/n_i$）。</p>
+
+      <h3 id="hstu">2.4 HSTU 架构：专为推荐设计的序列转换器</h3>
+      <p><strong>HSTU（Hierarchical Sequential Transduction Unit）</strong> 是本文的核心架构创新，每层包含三个子层：</p>
+
+      <h4>子层 1：Pointwise Projection（逐位投影）</h4>
+      <div class="formula-block">
+        $$U(X), V(X), Q(X), K(X) = \text{Split}(\varphi_1(f_1(X))) \tag{1}$$
+      </div>
+      <div class="formula-vars">
+        <div class="var-title">符号说明</div>
+        <ul>
+          <li>$X$：层输入（序列 token 矩阵）</li>
+          <li>$f_1(X) = W_1 X + b_1$：单线性层（节省计算）</li>
+          <li>$\varphi_1$：SiLU 激活</li>
+          <li>Split：把投影结果分成 $U$（门控权重）、$V$（值）、$Q$（查询）、$K$（键）四部分</li>
+          <li>所有投影融合为单个 fused kernel，避免中间结果反复读写显存</li>
+        </ul>
+      </div>
+
+      <h4>子层 2：Spatial Aggregation（空间聚合，逐位归一化 Attention）</h4>
+      <div class="formula-block">
+        $$A(X) V(X) = \varphi_2\!\left(Q(X)K(X)^T + r_{ab}^{p,t}\right) V(X) \tag{2}$$
+      </div>
+      <div class="formula-vars">
+        <div class="var-title">符号说明</div>
+        <ul>
+          <li>$Q(X)K(X)^T$：注意力权重矩阵（不做 softmax 归一化）</li>
+          <li>$r_{ab}^{p,t}$：相对注意力偏置（Relative Attention Bias），同时融合位置信息（$p$）和时间信息（$t$）</li>
+          <li>$\varphi_2$：SiLU（逐位激活，不做序列级 softmax）</li>
+          <li><strong>关键差异</strong>：传统 Transformer 用 softmax 对整个序列归一化（非稳态 vocabulary 下不稳定）；HSTU 用逐位聚合（pointwise aggregated attention），更适合推荐系统的非稳态分布</li>
+        </ul>
+      </div>
+
+      <h4>子层 3：Pointwise Transformation（逐位变换）</h4>
+      <div class="formula-block">
+        $$Y(X) = f_2(\text{Norm}(A(X)V(X)) \odot U(X)) \tag{3}$$
+      </div>
+      <div class="formula-vars">
+        <div class="var-title">符号说明</div>
+        <ul>
+          <li>$\text{Norm}$：Layer Norm（对 pooled features 稳定训练不可缺少）</li>
+          <li>$\odot U(X)$：门控操作，$U$ 由 SiLU 激活，等价于 SwiGLU 变体；同时模拟 MoE 的 conditional computation</li>
+          <li>$f_2$：单线性层输出变换</li>
+          <li>整层激活内存仅 $14d$（bfloat16），Transformer 同等条件需 $33d$，HSTU 可构建 $>2\times$ 更深网络</li>
+        </ul>
+      </div>
+
+      <figure>
+        <img src="https://arxiv.org/html/2402.17152v3/x3.png" alt="Figure 3: DLRM vs GR 模型组件对比"
+             onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'><b>Figure 3：DLRM vs GR 模型组件对比</b><br><br>左侧 DLRM：Embedding → Bottom NN → Feature Interaction（FM/DCN/Transformer/DHEN 等） → Top NN（MMoE/PLE）。右侧 HSTU：统一序列化特征 → 多层 HSTU block（每层含 Pointwise Projection + Spatial Aggregation + Pointwise Transformation），用单一模块替代 DLRM 的三大组件。</div>`" />
+        <figcaption><strong>Figure 3（论文原图）：</strong>DLRM（左）vs HSTU/GR（右）核心组件对比。HSTU 单模块替代了特征提取、特征交互、表示变换三个复杂子系统。</figcaption>
+      </figure>
+
+      <div class="callout-blue">
+        <strong>HSTU 为什么不用 Softmax Attention？</strong><br>
+        推荐场景中，历史中与目标相关的 token 数量本身就是用户偏好强度的信号（相关 token 越多 → 兴趣越强）。Softmax 归一化后这个绝对计数信息会被消除。此外，推荐 vocabulary 是非稳态的（新内容不断加入），softmax 对非稳态分布不鲁棒。逐位聚合注意力保留了这两个特性。
+      </div>
+
+      <div class="example-box">
+        <div class="ex-title">💡 举例：HSTU 一层的数据流</div>
+        <p><strong>输入：</strong>用户序列 $X \in \mathbb{R}^{n \times d}$，$n=2048$，$d=512$</p>
+        <ol>
+          <li><strong>Projection：</strong>$f_1(X)$ 一次线性变换，输出 $4d$ 维，split 为 $Q,K,V,U$（各 $d$ 维），用 fused kernel 完成</li>
+          <li><strong>Aggregation：</strong>计算 $\varphi_2(QK^T + r_{ab}^{p,t}) V$，逐位聚合（不 softmax），加入时间/位置偏置</li>
+          <li><strong>Transformation：</strong>$\text{Norm}(\cdot) \odot U$（门控）→ $f_2$（线性输出），层内 LN + dropout + MLP 全部 fused</li>
+        </ol>
+        <p><strong>与 Transformer 对比（同等 $d=512$）：</strong></p>
+        <ul>
+          <li>激活内存：HSTU $14d = 7168$ vs Transformer $33d = 16896$（节省 57%）</li>
+          <li>线性层数：HSTU 2 个（$f_1, f_2$）vs Transformer 6 个（QKV投影 + O投影 + FFN两层）</li>
+        </ul>
+      </div>
+
+      <h3 id="stochastic-length">2.5 Stochastic Length (SL)：算法性稀疏化降序列长度</h3>
+      <p>用户序列长度分布极度不均，长尾用户序列极长，直接计算 attention 代价极高。SL 对超过阈值的序列做随机下采样：</p>
+
+      <div class="formula-block">
+        $$\text{SL 选择策略}:\begin{cases}
+        (x_i)_{i=0}^{n_c} & \text{if } n_c \leq N_c^{\alpha/2} \\
+        (x_{i_k})_{k=0}^{N_c^{\alpha/2}} & \text{w.p. } 1-N_c^\alpha/n_c^2 \\
+        (x_i)_{i=0}^{n_c} & \text{w.p. } N_c^\alpha/n_c^2
+        \end{cases} \tag{4}$$
+      </div>
+      <div class="formula-vars">
+        <div class="var-title">符号说明</div>
+        <ul>
+          <li>$N_c = \max_j n_{c,j}$：最长序列长度</li>
+          <li>$\alpha \in (1, 2]$：控制稀疏化程度的超参数，$\alpha=2$ 等价于不稀疏化</li>
+          <li>以 $1 - N_c^\alpha/n_c^2$ 的概率对长序列做长度为 $N_c^{\alpha/2}$ 的下采样</li>
+          <li>attention 相关复杂度降至 $O(N_c^\alpha d)$</li>
+        </ul>
+      </div>
+
+      <p>实验（Table 3）显示，$\alpha=1.6$、序列长度 4096 时，稀疏率达 80.5%，主要指标 NE 退化不超过 0.2%。SL 相比现有的 length extrapolation 方法效果更好。</p>
+
+      <h3 id="m-falcon">2.6 M-FALCON：成本摊销的大规模推理算法</h3>
+      <p>排序阶段需要对数万个候选 item 逐一打分，每次调用 encoder 的成本极高。M-FALCON（Microbatched-Fast Attention Leveraging Cacheable OperatioNs）通过修改 attention mask 和 $r_{ab}^{p,t}$ 偏置，使 $b_m$ 个候选在同一次 forward pass 内并行处理：</p>
+
+      <div class="callout-green">
+        <strong>M-FALCON 原理：</strong>把 $m$ 个候选分成 $\lceil m/b_m \rceil$ 个 microbatch，每个 microbatch 内 $b_m$ 个候选共享 encoder 的 KV 缓存。Cross-attention 计算从 $O(b_m n^2 d)$ 降至 $O((n + b_m)^2 d) \approx O(n^2 d)$（$b_m \ll n$），实现对 $m$ 个候选的线性扩展成本。
+      </div>
+
+      <div class="example-box">
+        <div class="ex-title">💡 举例：M-FALCON 如何服务 16384 个候选</div>
+        <p><strong>传统方式：</strong>对 16384 个候选逐一过 encoder，每次都重新计算历史序列的 attention，QPS 极低，延迟极高。</p>
+        <p><strong>M-FALCON 方式：</strong></p>
+        <ol>
+          <li>历史序列过一次 HSTU，encoder KV 缓存</li>
+          <li>设 $b_m = 64$，把 16384 个候选分成 $16384/64 = 256$ 个 microbatch</li>
+          <li>每个 microbatch：64 个候选与缓存的 KV 做 cross-attention，修改 mask 使互相不干扰</li>
+          <li>总成本：encoder 算 1 次 + 256 次轻量 cross-attention</li>
+        </ol>
+        <p><strong>结果：</strong>在相同推理预算下，模型复杂度提升 <strong>285×</strong>，QPS 提升 1.50x～2.99x。</p>
+      </div>
+    </section>
+
+    <!-- §3 实验结果 -->
+    <section class="section" id="experiments">
+      <div class="section-title">
+        <div class="icon" style="background:#16a34a"></div>
+        §3 实验结果
+      </div>
+
+      <h3 id="public-bench">3.1 公开数据集：MovieLens & Amazon Reviews</h3>
+      <p>对比方法：SASRec（2023 版）。数据集：ML-1M、ML-20M、Amazon Books。HSTU-large 是 4× 层数 + 2× 头数的大版本。</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>数据集</th><th>方法</th><th>HR@10</th><th>NDCG@10</th><th>NDCG@200</th></tr>
+          </thead>
+          <tbody>
+            <tr><td rowspan="3">ML-1M</td><td>SASRec (2023)</td><td>0.2853</td><td>0.1603</td><td>0.2498</td></tr>
+            <tr><td>HSTU</td><td>0.3097 (+8.6%)</td><td>0.1720 (+7.3%)</td><td>0.2606 (+4.3%)</td></tr>
+            <tr><td><strong>HSTU-large</strong></td><td><strong>0.3294 (+15.5%)</strong></td><td><strong>0.1893 (+18.1%)</strong></td><td><strong>0.2771 (+10.9%)</strong></td></tr>
+            <tr><td rowspan="3">ML-20M</td><td>SASRec (2023)</td><td>0.2906</td><td>0.1621</td><td>0.2521</td></tr>
+            <tr><td>HSTU</td><td>0.3252 (+11.9%)</td><td>0.1878 (+15.9%)</td><td>0.2774 (+10.0%)</td></tr>
+            <tr><td><strong>HSTU-large</strong></td><td><strong>0.3567 (+22.8%)</strong></td><td><strong>0.2106 (+30.0%)</strong></td><td><strong>0.2971 (+17.9%)</strong></td></tr>
+            <tr><td rowspan="3">Books</td><td>SASRec (2023)</td><td>0.0292</td><td>0.0156</td><td>0.0350</td></tr>
+            <tr><td>HSTU</td><td>0.0404 (+38.4%)</td><td>0.0219 (+40.6%)</td><td>0.0450 (+28.6%)</td></tr>
+            <tr><td><strong>HSTU-large</strong></td><td><strong>0.0469 (+60.6%)</strong></td><td><strong>0.0257 (+65.8%)</strong></td><td><strong>0.0508 (+45.1%)</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>HSTU-large 在 Books 数据集的 NDCG@10 提升高达 <strong>+65.8%</strong>，长尾 item 下的优势更明显（受益于更长序列建模）。</p>
+
+      <h3 id="industrial">3.2 工业场景：GR vs DLRM 在大规模流式设置</h3>
+      <p>在百亿级训练样本、工业 streaming 设置下，GR 在召回和排序任务上均超越 DLRM 基线：</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>任务</th><th>方法</th><th>离线指标</th><th>在线 E-Task</th><th>在线 C-Task</th></tr></thead>
+          <tbody>
+            <tr><td rowspan="2">召回</td><td>DLRM</td><td>HR@100=29.0%, HR@500=55.5%</td><td>+0%</td><td>+0%</td></tr>
+            <tr><td><strong>GR（新增来源）</strong></td><td>HR@100=36.9%, HR@500=62.4%</td><td><strong>+6.2%</strong></td><td><strong>+5.0%</strong></td></tr>
+            <tr><td rowspan="2">排序</td><td>DLRM</td><td>E-NE=0.4982, C-NE=0.7842</td><td>+0%</td><td>+0%</td></tr>
+            <tr><td><strong>GR</strong></td><td>E-NE=0.4845, C-NE=0.7645</td><td><strong>+12.4%</strong></td><td><strong>+4.4%</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>消融实验验证：仅使用 interactions 的 GR 显著好于仅使用 content features 的 GR，确认了<strong>用户行为（actions）才是核心信号</strong>（论文题目"Actions Speak Louder than Words"的出处）。</p>
+
+      <figure>
+        <img src="https://arxiv.org/html/2402.17152v3/x7.png" alt="Figure 6: GR vs DLRM 推理吞吐量对比"
+             onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'><b>Figure 6：推理吞吐量对比</b><br><br>横轴为 M-FALCON 并行候选数（32~1024），纵轴为 QPS。GR（285× FLOPs）通过 M-FALCON 达到与 DLRM 相当甚至更高的 QPS。</div>`" />
+        <figcaption><strong>Figure 6（论文原图）：</strong>推理吞吐量对比（排序场景）。GR 模型复杂度 285× 但通过 M-FALCON 算法实现 1.50x～2.99x 更高 QPS。</figcaption>
+      </figure>
+
+      <h3 id="scaling-law">3.3 Scaling Law：推荐系统的 ChatGPT 时刻</h3>
+      <p>最具影响力的结论：GR 的模型质量随训练计算量呈<strong>幂律增长</strong>，跨越三个数量级，直至 GPT-3/LLaMA-2 量级，且没有出现饱和：</p>
+
+      <div class="formula-block">
+        $$L = a + b \cdot \ln C$$
+      </div>
+      <div class="formula-vars">
+        <div class="var-title">符号说明</div>
+        <ul>
+          <li>$L$：评估指标（HR@100 或 NE）</li>
+          <li>$C$：训练 PetaFLOPs/day</li>
+          <li>$a, b$：拟合常数</li>
+          <li>HR@100: $L = 0.15 + 0.0195 \ln C$；NE: $L = 0.549 - 0.0053 \ln C$</li>
+          <li>DLRM 在约 200B 参数时质量饱和，GR 持续增长至 <strong>1.5 万亿参数</strong></li>
+        </ul>
+      </div>
+
+      <figure>
+        <img src="https://arxiv.org/html/2402.17152v3/x8.png" alt="Figure 7 (top): 召回 HR@100 Scaling Law"
+             onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'><b>Figure 7（top）：召回 Scaling Law</b><br><br>横轴为 Training PetaFLOPs/day，纵轴为 HR@100。DLRM 在 10000 PetaFLOPs 后趋于平稳，GR 持续对数线性增长。</div>`" />
+        <figcaption><strong>Figure 7 top（论文原图）：</strong>召回 HR@100 随计算量的 Scaling 曲线。GR 呈对数线性增长（幂律），DLRM 明显饱和。</figcaption>
+      </figure>
+
+      <div class="callout-blue">
+        <strong>重要发现：</strong>与语言模型不同，推荐系统的 Scaling 对序列长度的敏感程度远高于参数量。必须同时扩展序列长度和其他参数，单纯增大模型宽度/深度而不增加序列长度，效果有限。
+      </div>
+    </section>
+
+    <!-- §4 理解与启发 -->
+    <section class="section" id="insight">
+      <div class="section-title">
+        <div class="icon" style="background:#7c3aed"></div>
+        §4 理解与启发
+      </div>
+
+      <h3>核心亮点</h3>
+      <ul>
+        <li><strong>统一范式</strong>：用序列转换统一了推荐系统的召回和排序，消除了多阶段系统的割裂优化，一套框架搞定两个任务</li>
+        <li><strong>Pointwise Attention 的直觉</strong>：不用 softmax，而是逐位聚合，保留了"相关 token 数量 = 兴趣强度"这个重要信号，且对非稳态 vocabulary 更鲁棒</li>
+        <li><strong>M-FALCON 的工程价值</strong>：解决了"大模型 + 大规模候选集"的推理效率矛盾，使 285× 更复杂的模型能以 <em>更低</em> 的推理成本上线，是非常有价值的工程贡献</li>
+        <li><strong>Actions &gt; Words</strong>：内容特征（GR content-based）大幅逊色于行为特征（GR interactions），验证了"行为胜于语言描述"的核心主张，与直觉一致</li>
+        <li><strong>Scaling Law</strong>：推荐系统首次被证明遵循幂律 scaling，且序列长度比参数量更关键，为未来模型发展提供明确方向</li>
+      </ul>
+
+      <h3>局限与思考</h3>
+      <ul>
+        <li><strong>无语义理解</strong>：GR 的特征完全来自行为序列，缺乏 item 的内容语义（文本、多模态）。对冷启动 item（没有交互数据）效果有限，而 OneRec 通过 RQ-VAE 语义 ID 弥补了这一点</li>
+        <li><strong>实现复杂度</strong>：Raggified attention、Fused kernel、M-FALCON 等工程优化依赖大量底层 CUDA 实现，复现门槛极高（Meta 规模专属技术）</li>
+        <li><strong>序列长度的矛盾</strong>：scaling 需要极长序列，但训练/推理成本随序列长度快速增长，SL 只是缓解而非根本解决</li>
+        <li><strong>排序任务的 target-aware</strong>：需要把候选 item 插入序列，每个候选都要一次完整 forward pass（M-FALCON 解决了这个问题），但设计上仍有约束</li>
+      </ul>
+
+      <h3>对后续工作的启发</h3>
+      <div class="callout-purple">
+        <strong>HSTU 与 OneRec 的关系：</strong>OneRec（快手）直接引用了 HSTU，在其基础上增加了 RQ-VAE 语义 ID（解决 item 语义问题）、Session-wise 生成（一次输出一批）和 DPO 偏好对齐。HSTU 是"高效序列建模架构"，OneRec 是"端到端生成式推荐系统"，二者解决的问题层次不同，互为补充。
+      </div>
+
+      <div class="paper-info">
+        <strong>论文链接：</strong><a href="https://arxiv.org/abs/2402.17152" target="_blank">arXiv 2402.17152</a> ·
+        <strong>代码：</strong><a href="https://github.com/facebookresearch/generative-recommenders" target="_blank">facebookresearch/generative-recommenders</a>
+      </div>
+    </section>
+
+    <!-- §5 深度问答 -->
+    <section class="section" id="qa">
+      <div class="section-title">
+        <div class="icon" style="background:#0ea5e9"></div>
+        §5 深度问答
+      </div>
+      <p style="color:#64748b;margin-bottom:24px">以下问答均对照论文原文逐条核实，引用原句标注于各条末尾。</p>
+
+      <!-- Q1 -->
+      <div id="qa-sample-org" style="margin-bottom:36px">
+        <h3 style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+          <span style="background:#0ea5e9;color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">Q1</span>
+          训练样本是按 user 粒度还是 impression 粒度组织的？
+        </h3>
+        <p><strong>按 user 粒度组织。</strong></p>
+        <p>传统 DLRM 是 <strong>impression-level 训练</strong>：每个曝光单独作为一条样本，forward 一次只处理一个 impression，每个 impression 都要完整跑一遍序列编码，总复杂度 $O(N^3 d + N^2 d^2)$。</p>
+        <p>HSTU 采用 <strong>generative training</strong>：把整个用户历史序列 $x_0, x_1, \ldots, x_{n-1}$ 做一次 forward，序列上每个位置都 emit 一个 training signal，encoder 成本被均摊到多个目标上，复杂度降低 $O(N)$ 因子，变为 $O(N^2 d + N d^2)$。</p>
+        <div class="callout-blue" style="background:#eff6ff;border-left:4px solid #3b82f6;padding:10px 14px;border-radius:0 6px 6px 0;font-size:14px;margin-top:10px">
+          <strong>论文原句（§2.3）：</strong>"encoder costs are amortized across multiple targets... reducing the computational complexity by an O(N) factor."
+        </div>
+      </div>
+
+      <!-- Q2 -->
+      <div id="qa-emit-timing" style="margin-bottom:36px">
+        <h3 style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+          <span style="background:#0ea5e9;color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">Q2</span>
+          工业流式训练中，样本具体什么时候 emit？
+        </h3>
+        <p>在工业实现中，<strong>在一次用户 request 或 session 结束时 emit 训练样本</strong>。</p>
+        <p>例如：用户今天刷了 10 个 item，这 10 个 item 连同历史序列构成输入，等这次 request 结束后，把整条序列打包 emit 出训练样本（对应序列上多个位置的监督信号）。这样采样率 $\hat{s_u}(n_i) \propto 1/n_i$，序列越长的用户采样频率越低，实现了对用户级的归一化。</p>
+        <div class="callout-blue" style="background:#eff6ff;border-left:4px solid #3b82f6;padding:10px 14px;border-radius:0 6px 6px 0;font-size:14px;margin-top:10px">
+          <strong>论文原句（§2.3）：</strong>"One way to implement this sampling in industrial-scale systems is to <em>emit training examples at the end of a user's request or session</em>, resulting in $\hat{s_u}(n_i) \propto 1/n_i$."
+        </div>
+      </div>
+
+      <!-- Q3 -->
+      <div id="qa-large-vocab" style="margin-bottom:36px">
+        <h3 style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+          <span style="background:#0ea5e9;color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">Q3</span>
+          item vocab 有十亿级，训练 retrieval 时怎么处理 softmax？
+        </h3>
+        <p>论文<strong>没有使用全量 softmax</strong>，而是采用<strong>负采样</strong>方式训练 retrieval。论文给出了两处线索：</p>
+        <ul>
+          <li><strong>训练目标</strong>：类似语言建模的 next-token prediction，评估指标为 <strong>log perplexity</strong>（§4.1.2）</li>
+          <li><strong>负样本数量</strong>："We additionally <em>adjust the number of negatives</em> for retrieval."（§4.3.1），说明 negatives 数量是可调超参数</li>
+        </ul>
+        <div class="callout-yellow" style="background:#fffbeb;border-left:4px solid #f59e0b;padding:10px 14px;border-radius:0 6px 6px 0;font-size:14px;margin-top:10px">
+          <strong>⚠️ 注意：</strong>论文主体<strong>未明确写出具体 loss 形式</strong>（是 sampled softmax、InfoNCE 还是其他），只能确认"类语言建模目标 + 负采样"，具体实现细节未公开。
+        </div>
+      </div>
+
+      <!-- Q4 -->
+      <div id="qa-task-targets" style="margin-bottom:36px">
+        <h3 style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+          <span style="background:#0ea5e9;color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">Q4</span>
+          Retrieval 和 Ranking 各自预测什么？
+        </h3>
+        <table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:8px">
+          <thead>
+            <tr style="background:#f1f5f9">
+              <th style="padding:10px 14px;text-align:left;border:1px solid #e2e8f0">任务</th>
+              <th style="padding:10px 14px;text-align:left;border:1px solid #e2e8f0">预测目标</th>
+              <th style="padding:10px 14px;text-align:left;border:1px solid #e2e8f0">输入序列</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding:10px 14px;border:1px solid #e2e8f0"><strong>Retrieval</strong></td>
+              <td style="padding:10px 14px;border:1px solid #e2e8f0">$p(\Phi_{i+1} \mid u_i)$，找下一个最优 item</td>
+              <td style="padding:10px 14px;border:1px solid #e2e8f0">$\Phi_0, a_0, \Phi_1, a_1, \ldots, \Phi_i, a_i$（不含候选）</td>
+            </tr>
+            <tr style="background:#f8fafc">
+              <td style="padding:10px 14px;border:1px solid #e2e8f0"><strong>Ranking</strong></td>
+              <td style="padding:10px 14px;border:1px solid #e2e8f0">$p(a_{i+1} \mid \Phi_0, a_0, \ldots, \Phi_{i+1})$，预测用户对候选的 action</td>
+              <td style="padding:10px 14px;border:1px solid #e2e8f0">历史 + <strong>候选 item $\Phi_{i+1}$ 插入序列末尾</strong></td>
+            </tr>
+          </tbody>
+        </table>
+        <p style="margin-top:12px">Ranking 在 $\Phi_{i+1}$ 位置的输出上接一个小 MLP，做<strong>多任务预测</strong>（同时预测点赞、完播、分享等多种 action）。</p>
+        <div class="callout-yellow" style="background:#fffbeb;border-left:4px solid #f59e0b;padding:10px 14px;border-radius:0 6px 6px 0;font-size:14px;margin-top:10px">
+          <strong>⚠️ Retrieval 的监督目标不一定是 $\Phi_{i+1}$</strong>——用户对 $\Phi_{i+1}$ 可能是负反馈（skip/不喜欢），所以监督标签需根据用户行为质量来设计。<br>
+          <strong>论文原句（§2.2）：</strong>"the supervision for $x_i$, $y_i$, is not necessarily $\Phi_{i+1}$, as users could respond negatively to $\Phi_{i+1}$."
+        </div>
+        <div class="callout-blue" style="background:#eff6ff;border-left:4px solid #3b82f6;padding:10px 14px;border-radius:0 6px 6px 0;font-size:14px;margin-top:10px">
+          <strong>Ranking 论文原句（§2.2）：</strong>"We apply a small neural network to transform outputs at $\Phi_{i+1}$ into <em>multi-task predictions</em> in practice."
+        </div>
+      </div>
+
+      <!-- Q5 -->
+      <div id="qa-replace-funnel" style="margin-bottom:36px">
+        <h3 style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+          <span style="background:#0ea5e9;color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">Q5</span>
+          GR 是否替代了整个召回 + 排序漏斗？
+        </h3>
+        <p>并非替代整个多阶段漏斗，需要区分两种部署方式：</p>
+        <table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:8px">
+          <thead>
+            <tr style="background:#f1f5f9">
+              <th style="padding:10px 14px;text-align:left;border:1px solid #e2e8f0">阶段</th>
+              <th style="padding:10px 14px;text-align:left;border:1px solid #e2e8f0">部署方式</th>
+              <th style="padding:10px 14px;text-align:left;border:1px solid #e2e8f0">说明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding:10px 14px;border:1px solid #e2e8f0"><strong>召回</strong></td>
+              <td style="padding:10px 14px;border:1px solid #e2e8f0">add source <em>或</em> replace source</td>
+              <td style="padding:10px 14px;border:1px solid #e2e8f0">可新增为一路召回源，或替换原主 DLRM 召回源（多路召回中的一路）</td>
+            </tr>
+            <tr style="background:#f8fafc">
+              <td style="padding:10px 14px;border:1px solid #e2e8f0"><strong>排序</strong></td>
+              <td style="padding:10px 14px;border:1px solid #e2e8f0">直接替换 DLRM ranker</td>
+              <td style="padding:10px 14px;border:1px solid #e2e8f0">对比 production DLRM，GR ranker 直接替代</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="callout-blue" style="background:#eff6ff;border-left:4px solid #3b82f6;padding:10px 14px;border-radius:0 6px 6px 0;font-size:14px;margin-top:10px">
+          <strong>论文原句（§4.3）：</strong>"we report both the online result for adding GR ('add source') and replacing existing main DLRM source ('replace source')."
+        </div>
+      </div>
+
+      <!-- Q6 -->
+      <div id="qa-complexity" style="margin-bottom:12px">
+        <h3 style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+          <span style="background:#0ea5e9;color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">Q6</span>
+          为什么 impression-level 训练复杂度是 $O(N^3 d + N^2 d^2)$？
+        </h3>
+        <p>对于用户 $i$，序列长度 $n_i$，训练时对序列上每个 impression $j$（$j = 1, 2, \ldots, n_i$）单独 forward，处理长度为 $j$ 的前缀序列：</p>
+        <ul>
+          <li>self-attention：$O(j^2 d)$</li>
+          <li>MLP 层（$d_{ff} = O(d)$）：$O(j \cdot d_{ff} \cdot d) = O(j d^2)$</li>
+        </ul>
+        <p>对用户 $i$ 求和：</p>
+        <p style="text-align:center;font-size:15px;margin:12px 0">$\displaystyle\sum_{j=1}^{n_i}(j^2 d + j d^2) = O(n_i^3 d + n_i^2 d^2)$</p>
+        <p>取所有用户最大序列长度 $N = \max_i n_i$，总复杂度：</p>
+        <p style="text-align:center;font-size:15px;margin:12px 0">$O(N^3 d + N^2 d^2)$</p>
+        <div class="callout-blue" style="background:#eff6ff;border-left:4px solid #3b82f6;padding:10px 14px;border-radius:0 6px 6px 0;font-size:14px;margin-top:10px">
+          <strong>论文原句（§2.3）：</strong>"the total computational requirement... scales as $\sum_i n_i(n_i^2 d + n_i d_{ff} d)$... the overall time complexity reduces to $O(N^3 d + N^2 d^2)$."
+        </div>
+      </div>
+
+      <!-- Q7 -->
+      <div id="qa-target-aware-detail" style="margin-bottom:36px">
+        <h3 style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+          <span style="background:#0ea5e9;color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">Q7</span>
+          Target-aware 就是把候选 item 插到序列末尾做 causal self-attention？前面的历史 token 还参与 attention 吗？
+        </h3>
+        <p><strong>对，target-aware 就是这个构造技巧。前面的历史 token 同样参与完整的 causal self-attention，不是只更新最后一个 token。</strong></p>
+        <p>整个 forward 流程：</p>
+        <pre style="background:#1e293b;color:#e2e8f0;padding:14px 16px;border-radius:8px;font-size:13px;overflow-x:auto;line-height:1.7">输入：[Φ₀, a₀, Φ₁, a₁, ..., Φᵢ, aᵢ,  🎯Φᵢ₊₁(候选)]
+         ↓ 所有 token 都参与 HSTU 每一层 causal self-attention ↓
+输出：[ h₀,  h₁,  h₂,  h₃, ...,  hᵢ,      hᵢ₊₁    ]
+                                              ↑
+                                  只取这个位置接 MLP 算 action 概率</pre>
+        <p>历史 token 的输出 $h_0 \ldots h_i$ 是中间计算结果（用于后续层 attention 的 K/V），但 <strong>ranking 任务只在 $\Phi_{i+1}$ 位置算 loss</strong>，其他位置的输出不参与 loss 计算。</p>
+        <div class="callout-blue" style="background:#eff6ff;border-left:4px solid #3b82f6;padding:10px 14px;border-radius:0 6px 6px 0;font-size:14px;margin-top:10px">
+          <strong>causal mask 下的可见性：</strong><br>
+          • 历史 token $\Phi_j$（$j &lt; i+1$）：<strong>看不到候选</strong>（候选在右边被 mask）<br>
+          • 候选 token $\Phi_{i+1}$：<strong>可以 attend 到左边所有历史</strong>（序列最后一个，没有右侧 token）<br><br>
+          因此 $h_{i+1}$ 是整合了全部历史信息后的融合表示，而历史 token 的计算不受候选影响（保证因果性）。
+        </div>
+        <p style="margin-top:12px">笔记里"target-aware 前提是目标 item 的话题标签需要在序列中可见"的意思是：候选 $\Phi_{i+1}$ 的 item embedding（含话题标签）在序列里，当它做 attention 时，能从历史中检索出与自己话题相关的记录（比如候选是户外视频，历史中户外相关 token 的 attention 权重会更高）。这是 target-aware 的核心机制。</p>
+      </div>
+
+      <!-- Q8 -->
+      <div id="qa-mfalcon-detail" style="margin-bottom:12px">
+        <h3 style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+          <span style="background:#0ea5e9;color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">Q8</span>
+          M-FALCON 就是把所有候选拼在后面，用 mask 让候选只看历史、互相隔离，这样共用历史的 QKV？
+        </h3>
+        <p><strong>理解完全正确。</strong> M-FALCON 把 $b_m$ 个候选同时展开，通过 attention mask 设计让每个候选只能 attend 到历史 + 自己，候选之间互不可见，历史部分的 K/V 只计算一次被所有候选共用。</p>
+        <p>Attention mask 示意（n 个历史 token + $b_m$ 个候选）：</p>
+        <pre style="background:#1e293b;color:#e2e8f0;padding:14px 16px;border-radius:8px;font-size:13px;overflow-x:auto;line-height:1.7">         Φ₀  a₀  ···  Φᵢ  aᵢ  │ C₁  C₂  C₃
+  Φ₀  [  ✓   ✗   ✗   ✗   ✗  │  ✗   ✗   ✗  ]
+  aᵢ  [  ✓   ✓  ···  ✓   ✗  │  ✗   ✗   ✗  ]  ← 历史 token 看不到候选
+  ────────────────────────────┼──────────────
+  C₁  [  ✓   ✓  ···  ✓   ✓  │  ✓   ✗   ✗  ]  ← 看历史 + 只看自己
+  C₂  [  ✓   ✓  ···  ✓   ✓  │  ✗   ✓   ✗  ]  ← 看历史 + 只看自己
+  C₃  [  ✓   ✓  ···  ✓   ✓  │  ✗   ✗   ✓  ]  ← 看历史 + 只看自己</pre>
+        <p>复杂度变化：</p>
+        <ul>
+          <li>朴素做法（每个候选单独 forward）：$O(b_m \cdot n^2 d)$</li>
+          <li>M-FALCON（$b_m$ 个候选共享历史 KV）：$O((n + b_m)^2 d) \approx O(n^2 d)$（$b_m \ll n$ 时）</li>
+        </ul>
+        <div class="callout-blue" style="background:#eff6ff;border-left:4px solid #3b82f6;padding:10px 14px;border-radius:0 6px 6px 0;font-size:14px;margin-top:10px">
+          <strong>额外优化：</strong>还可以跨 forward pass 做 encoder-level KV caching（历史序列的 KV 不同候选间共享），或跨 request 缓存同一用户的 KV，进一步摊销 tail latency。论文 §3.4 中介绍了详细细节。
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+</div>
+
+<footer>
+  <a href="../index.html">← 返回论文列表</a>
+  <p style="margin-top:8px">paper-notes · HSTU · arXiv 2402.17152</p>
+</footer>
+
+</body>
+</html>

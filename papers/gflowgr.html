@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GFlowGR 论文解读</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false }
+          ],
+          throwOnError: false
+        });
+      }
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #2563eb; --primary-soft: #eff6ff;
+      --accent: #7c3aed; --accent-soft: rgba(124,58,237,0.06);
+      --shadow: 0 10px 30px rgba(15,23,42,0.08); --radius: 18px; --max: 1120px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: linear-gradient(180deg,#f8fbff 0%,var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      line-height: 1.8;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .page { max-width: var(--max); margin: 0 auto; padding: 32px 20px 80px; }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    .back-link:hover { color: var(--primary); text-decoration: none; }
+    .hero {
+      background: radial-gradient(circle at top right,rgba(37,99,235,0.14),transparent 30%),
+                  radial-gradient(circle at left bottom,rgba(124,58,237,0.10),transparent 24%), var(--card);
+      border: 1px solid rgba(37,99,235,0.08); border-radius: 24px;
+      box-shadow: var(--shadow); padding: 34px 34px 28px; margin-bottom: 22px;
+    }
+    .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--primary-soft); color: var(--primary); font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+    h1 { font-size: 34px; line-height: 1.25; letter-spacing: -0.02em; margin-bottom: 10px; }
+    .subtitle { color: var(--muted); font-size: 16px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-top: 24px; }
+    .meta-card { background: #fbfdff; border: 1px solid #e7eefb; border-radius: 16px; padding: 14px 16px; }
+    .meta-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .meta-value { font-size: 14px; font-weight: 600; word-break: break-word; }
+    .layout { display: grid; grid-template-columns: 260px minmax(0,1fr); gap: 22px; align-items: start; }
+    .toc { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; }
+    .toc h2 { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+    .toc-list { list-style: none; }
+    .toc-list li { margin: 7px 0; }
+    .toc-list a { font-size: 13.5px; color: var(--muted); }
+    .toc-list a:hover { color: var(--primary); text-decoration: none; }
+    .toc-list a.active { color: var(--primary); background: #eff6ff; font-weight: 600; border-left: 3px solid var(--primary); padding-left: 5px; }
+    .toc-sub { padding-left: 14px; margin-top: 4px; }
+    .toc-sub li { margin: 4px 0; }
+    .toc-sub a { font-size: 12.5px; }
+    .content { display: flex; flex-direction: column; gap: 20px; }
+    .section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 28px 30px; }
+    .section-title { font-size: 22px; font-weight: 800; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 2px solid #f0f4ff; display: flex; align-items: center; gap: 10px; }
+    .section-title .icon { width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+    h3 { font-size: 18px; font-weight: 700; margin: 26px 0 12px; color: #111827; }
+    h4 { font-size: 15px; font-weight: 700; margin: 20px 0 10px; color: #1d4ed8; }
+    p { margin-bottom: 12px; }
+    p:last-child { margin-bottom: 0; }
+    ul, ol { padding-left: 22px; }
+    li { margin-bottom: 8px; }
+    .callout { border-radius: 14px; padding: 14px 18px; margin: 16px 0; font-size: 14.5px; }
+    .callout-blue { background: linear-gradient(180deg,rgba(37,99,235,0.08),rgba(37,99,235,0.04)); border: 1px solid rgba(37,99,235,0.16); }
+    .callout-blue strong { color: #1d4ed8; }
+    .callout-amber { background: #fffbeb; border: 1px solid #fde68a; }
+    .callout-amber strong { color: #92400e; }
+    .callout-green { background: #f0fdf4; border: 1px solid #86efac; }
+    .callout-green strong { color: #166534; }
+    .callout-purple { background: var(--accent-soft); border: 1px solid rgba(124,58,237,0.18); }
+    .callout-purple strong { color: #6d28d9; }
+    .note { background: #f8faff; border: 1px dashed #cbd5e1; border-radius: 12px; padding: 12px 16px; color: #475467; font-size: 13.5px; margin: 12px 0; }
+    .example-box { background: #f0fdf4; border: 1px solid #86efac; border-radius: 14px; padding: 16px 20px; margin: 16px 0; }
+    .example-box .ex-title { font-size: 12px; font-weight: 700; color: #166534; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+    .example-box p { margin-bottom: 8px; font-size: 14px; color: #166534; }
+    .example-box p:last-child { margin-bottom: 0; }
+    .paper-info { background: #fafbff; border-left: 4px solid var(--primary); border-radius: 12px; padding: 14px 16px; margin: 16px 0; color: #334155; font-size: 14px; }
+    .paper-info p { margin: 5px 0; }
+    figure { margin: 22px 0; background: #fbfdff; border: 1px solid #e8edf5; border-radius: 16px; padding: 14px; }
+    figure img { width: 100%; display: block; border-radius: 12px; background: #fff; }
+    figcaption { margin-top: 10px; font-size: 13.5px; color: var(--muted); line-height: 1.6; }
+    .fig-placeholder { padding: 36px 24px; text-align: center; background: #f8faff; border-radius: 12px; color: #94a3b8; font-size: 14px; border: 2px dashed #e2e8f0; line-height: 1.9; }
+    .formula-block { background: #fafbff; border: 1px solid #e8edf5; border-radius: 14px; padding: 16px 20px; margin: 14px 0; overflow-x: auto; }
+    .formula-vars { background: #f8f9fe; border: 1px solid #e0e7ff; border-radius: 12px; padding: 12px 16px; margin-top: -6px; margin-bottom: 14px; }
+    .formula-vars .var-title { font-size: 12px; font-weight: 700; color: #4338ca; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+    .formula-vars ul { padding-left: 18px; }
+    .formula-vars li { font-size: 13.5px; color: #374151; margin-bottom: 5px; }
+    .step-list { list-style: none; padding: 0; }
+    .step { display: flex; gap: 14px; margin-bottom: 16px; }
+    .step-num { width: 30px; height: 30px; border-radius: 50%; background: var(--primary); color: #fff; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0; }
+    .mini-card { background: #f8faff; border: 1px solid #e8edf5; border-radius: 12px; padding: 14px 16px; }
+    .mini-card h4 { margin-top: 0; }
+    .table-wrap { overflow-x: auto; margin: 14px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    thead th { background: #f0f4ff; padding: 10px 12px; text-align: left; font-weight: 700; color: #1e40af; border-bottom: 2px solid #c7d2fe; }
+    tbody td { padding: 9px 12px; border-bottom: 1px solid var(--line); }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: #f8faff; }
+    footer { text-align: center; margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+    @media (max-width: 768px) {
+      .layout { grid-template-columns: 1fr; }
+      .toc { position: static; }
+      .meta-grid { grid-template-columns: 1fr 1fr; }
+      .two-col { grid-template-columns: 1fr; }
+      h1 { font-size: 26px; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+  <a href="../index.html" class="back-link">← 返回论文列表</a>
+
+  <div class="hero">
+    <div class="eyebrow">📄 论文解读 · 生成式推荐 · WWW'26</div>
+    <h1>GFlowGR</h1>
+    <p class="subtitle">Fine-tuning Generative Recommendation Frameworks with Generative Flow Networks</p>
+    <div class="meta-grid">
+      <div class="meta-card"><div class="meta-label">机构</div><div class="meta-value">CityU + Alibaba</div></div>
+      <div class="meta-card"><div class="meta-label">来源</div><div class="meta-value">WWW'26 · arXiv 2506.16114</div></div>
+      <div class="meta-card"><div class="meta-label">年份</div><div class="meta-value">2025</div></div>
+      <div class="meta-card"><div class="meta-label">核心命题</div><div class="meta-value">GFlowNet Token 级监督微调 GR</div></div>
+    </div>
+  </div>
+
+  <div class="layout">
+    <aside class="toc">
+      <h2>目录</h2>
+      <ul class="toc-list">
+        <li><a href="#summary">一句话总结</a></li>
+        <li><a href="#background">1. 背景与动机</a></li>
+        <li><a href="#method">2. 方法详解</a>
+          <ul class="toc-sub">
+            <li><a href="#overview">2.1 整体框架</a></li>
+            <li><a href="#trajectory">2.2 轨迹采样器</a></li>
+            <li><a href="#reward">2.3 多信号奖励模型</a></li>
+            <li><a href="#loss">2.4 DB/TB 双 Loss 变体</a></li>
+            <li><a href="#workflow">2.5 完整训练流程</a></li>
+          </ul>
+        </li>
+        <li><a href="#experiments">3. 实验结果</a></li>
+        <li><a href="#insights">4. 个人理解</a></li>
+      </ul>
+    </aside>
+
+    <main class="content">
+
+      <!-- 一句话总结 -->
+      <section class="section" id="summary">
+        <div class="section-title"><div class="icon" style="background:#dbeafe;">💡</div>一句话总结</div>
+        <p><strong>GFlowGR 将生成式推荐（GR）形式化为多步序列生成问题，用 GFlowNet 的 flow-matching 机制提供 Token 级别的监督信号（SFT/DPO/GRPO 只做 Item 级别），通过轨迹采样器（4 种策略）+ 多信号奖励模型（交互信号 + CM 预估 + Token 相似度）+ DB/TB 双 Loss 变体，在淘宝全量广告 1 亿+用户 A/B 测试中实现总营收 +0.43%、非首页搜索 +1.11%，训练成本仅为 SFT 的 2.1×。</strong></p>
+        <div class="paper-info">
+          <p>📄 <strong>原文：</strong><a href="https://arxiv.org/abs/2506.16114" target="_blank">https://arxiv.org/abs/2506.16114</a></p>
+          <p>🔗 <strong>关键词：</strong>GFlowNet · 生成式推荐 · Token 级监督 · 轨迹采样 · 多信号奖励 · DB/TB Loss</p>
+        </div>
+        <div class="callout callout-blue">
+          <strong>三句话核心贡献：</strong><br>
+          ① 将 GFlowNet 引入 GR 微调，实现 Token 级别监督——SFT/DPO/GRPO 只能做 Item 级，GFlowNet 通过 flow-matching 对每个生成 token 给予奖励信号；<br>
+          ② 提出完整 GFlowNet 微调框架：4 种轨迹采样策略（含 CM-based Curriculum）+ 3 信号奖励模型 + DB/TB 双 Loss；<br>
+          ③ 淘宝全量广告 A/B 验证：1 亿+用户，总营收 +0.43%，非首页搜索 +1.11%，训练成本仅为 SFT 的 2.1×。
+        </div>
+      </section>
+
+      <!-- 背景 -->
+      <section class="section" id="background">
+        <div class="section-title"><div class="icon" style="background:#eff6ff;">🌐</div>1. 背景与动机</div>
+
+        <h3>生成式推荐（GR）的核心范式</h3>
+        <p>生成式推荐将推荐任务建模为自回归序列生成：给定用户历史交互序列 $[i_1, i_2, \ldots, i_t]$，模型自回归地生成下一个 item 的 token 序列 $[s_1, s_2, \ldots, s_L]$，其中 $s_l$ 是第 $l$ 级 Semantic ID token。整个生成的联合概率为：</p>
+        <div class="formula-block">
+          $$P(s_{1:L} \mid u) = \prod_{l=1}^{L} P(s_l \mid s_{1:l-1}, u)$$
+        </div>
+
+        <h3>现有微调方法的局限</h3>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>SFT（监督微调）</h4>
+            <ul>
+              <li>仅模仿 ground truth token 序列</li>
+              <li>无法感知"生成得好不好"——没有价值信号</li>
+              <li>容易学到次优的 token 生成路径</li>
+            </ul>
+          </div>
+          <div class="mini-card">
+            <h4>DPO / GRPO（偏好对齐）</h4>
+            <ul>
+              <li>仅对整个 item 序列打分（Item 级别）</li>
+              <li>无法区分「第 1 步好+第 2 步差」vs「第 1 步差+第 2 步好」</li>
+              <li>Token 级别的生成质量无法被精细优化</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="callout callout-amber">
+          <strong>核心矛盾：</strong>现有微调方法都只能做 Item 级别的监督——要么模仿（SFT），要么整体打分（DPO/GRPO）。但在生成式推荐中，每个 token 的生成质量直接影响最终推荐效果。能否给每一步 token 生成都提供精细的奖励信号？
+        </div>
+
+        <p><strong>GFlowNet 的本质：</strong>Generative Flow Networks（GFlowNet）的核心目标是让生成概率正比于奖励：$P(\tau) \propto R(s_L)$。它通过在生成轨迹上的 flow-matching 机制，将终端奖励 $R(s_L)$ 反向传播到每一步 token 生成——这正是 Token 级监督的自然载体。</p>
+
+        <div class="callout callout-green">
+          <strong>GFlowNet 为什么适合 GR：</strong>GR 的自回归生成天然是一个 DAG（有向无环图），每个 token 是图中的一个节点。GFlowNet 的 flow 守恒约束恰好可以作用于每个 token 生成步骤，将终端奖励信号分配到每一步的生成决策中。
+        </div>
+      </section>
+
+      <!-- 方法 -->
+      <section class="section" id="method">
+        <div class="section-title"><div class="icon" style="background:#f0f4ff;">⚙️</div>2. 方法详解</div>
+
+        <h3 id="overview">2.1 整体框架</h3>
+
+        <figure>
+          <img src="https://arxiv.org/html/2506.16114v2/x1.png" alt="GFlowGR整体架构图"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'><b>Figure 1: GFlowGR 整体框架</b><br><br>左侧：轨迹采样器从历史数据、随机探索、CM 引导、On-policy 等策略中采样生成轨迹。中间：多信号奖励模型（交互信号 + CM 预估 + Token 相似度）对每条轨迹打分。右侧：DB/TB Loss 将奖励信号反向传播到每个 token 步骤。</div>`" />
+          <figcaption><strong>Figure 1（论文原图）：</strong>GFlowGR 的整体框架。三大模块：（1）轨迹采样器（Trajectory Sampler）产生多样化的 token 生成路径；（2）多信号奖励模型（Reward Model）对每条轨迹给出综合评分；（3）GFlowNet Loss（DB/TB）将奖励信号分配到每个 token 生成步骤。</figcaption>
+        </figure>
+
+        <p>GFlowGR 的核心思想：将 GR 的 token 序列生成视为 GFlowNet 的轨迹 $\tau = s_0 \to s_1 \to \ldots \to s_L$，其中 $s_l$ 是第 $l$ 个 token。通过 GFlowNet 的 flow-matching 约束，让每个 token 的生成概率 $P(s_l \mid s_{1:l-1})$ 与最终的奖励 $R(s_L)$ 相关联。</p>
+
+        <h3 id="trajectory">2.2 轨迹采样器（Trajectory Sampler）</h3>
+
+        <p>GFlowGR 设计了 4 种轨迹采样策略，逐步提升采样质量：</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>策略</th><th>方法</th><th>特点</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Interaction Log</strong></td><td>从用户真实交互日志采样</td><td>保真度高，但覆盖有限（仅正面样本）</td></tr>
+              <tr><td><strong>Random</strong></td><td>随机采样 token 序列</td><td>覆盖广，但质量低，大量无效轨迹</td></tr>
+              <tr><td><strong>CM-based Curriculum</strong></td><td>用 Click Model（CM）筛选高潜力轨迹，按 CM 分数分批次训练</td><td>课程学习策略：先易后难，平衡探索与利用</td></tr>
+              <tr><td><strong>On-policy</strong></td><td>用当前模型生成轨迹</td><td>在线策略，与模型当前能力匹配，但训练不稳定</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：CM-based Curriculum 采样</div>
+          <p>假设我们有 10 万条历史交互轨迹，每条轨迹对应用户点击了某个商品。</p>
+          <p><strong>Batch 1（低 CM 分）：</strong>先从 CM 预估分最低的 30% 轨迹中采样——这些"容易区分"的样本帮助模型快速建立 token 生成与奖励的基本关联。</p>
+          <p><strong>Batch 2（中等 CM 分）：</strong>再从 CM 预估分中等的 40% 轨迹中采样——模型学习更复杂的 token-奖励映射。</p>
+          <p><strong>Batch 3（高 CM 分）：</strong>最后从 CM 预估分最高的 30% 轨迹中采样——"困难"样本迫使模型精调每个 token 的选择。</p>
+          <p>这种课程学习策略（Curriculum Learning）让模型从"容易分辨的 token"逐步过渡到"难以分辨的 token"，避免了随机采样中大量低质量轨迹带来的噪声。</p>
+        </div>
+
+        <h3 id="reward">2.3 多信号奖励模型（Multi-Signal Reward Model）</h3>
+
+        <p>GFlowGR 的奖励模型融合三种信号：</p>
+
+        <div class="formula-block">
+          $$R(s_L) = r_a + \alpha \cdot r_c + \beta \cdot r_{\text{sim}}$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$r_a$：<strong>交互信号</strong>——用户是否点击/购买（二值：0 或 1）</li>
+            <li>$r_c$：<strong>CM 预估分</strong>——Click Model 对 item 吸引力的预估（连续值 [0, 1]）</li>
+            <li>$r_{\text{sim}}$：<strong>Token 相似度</strong>——生成 token 序列与目标 item 真实 token 序列的相似度</li>
+            <li>$\alpha, \beta$：平衡系数</li>
+          </ul>
+        </div>
+
+        <div class="callout callout-purple">
+          <strong>三种信号的各自作用：</strong>$r_a$ 提供真实的交互反馈（最强信号但稀疏）；$r_c$ 提供稠密的预估信号（数据多但可能有偏差）；$r_{\text{sim}}$ 提供格式约束（确保生成的 token 是有效 SID 且与目标 item 语义相近）。
+        </div>
+
+        <h3 id="loss">2.4 DB/TB 双 Loss 变体</h3>
+
+        <p>GFlowGR 支持两种 GFlowNet 训练损失：</p>
+
+        <h4>Detailed Balance（DB）Loss — 步骤级</h4>
+        <div class="formula-block">
+          $$\mathcal{L}_{DB} = \sum_{l=1}^{L} \left( \log F(s_{l-1} \to s_l) - \log \hat{F}(s_{l-1} \to s_l) \right)^2$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$F(s_{l-1} \to s_l)$：从状态 $s_{l-1}$ 转移到 $s_l$ 的 flow（由网络预测）</li>
+            <li>$\hat{F}(s_{l-1} \to s_l)$：满足 Detailed Balance 约束的目标 flow 值</li>
+            <li>DB 在每个 token 步骤计算 loss，粒度最细，适合大规模并行训练</li>
+          </ul>
+        </div>
+
+        <h4>Trajectory Balance（TB）Loss — 轨迹级</h4>
+        <div class="formula-block">
+          $$\mathcal{L}_{TB} = \left( \log Z \prod_{l=1}^{L} P_F(s_l \mid s_{l-1}) - \log R(s_L) \right)^2$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$Z$：从初始状态的总 flow（可学习参数或固定值）</li>
+            <li>$P_F(s_l \mid s_{l-1})$：前向策略（forward policy），即模型当前输出 token 的概率</li>
+            <li>$R(s_L)$：终态奖励</li>
+            <li>TB 在完整轨迹上计算 loss，方差更小，但训练效率低于 DB</li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：DB vs TB 的区别</div>
+          <p>假设一条 3-token 轨迹 $(s_1, s_2, s_3)$ 最终奖励 $R=0.8$。</p>
+          <p><strong>TB Loss：</strong>只看整条轨迹——"模型认为这条轨迹的总概率 × Z，与 0.8 的偏差是多少？"一条轨迹一个 loss 值。</p>
+          <p><strong>DB Loss：</strong>看每一步——"模型认为 $s_0 \to s_1$ 的 flow 应该是多少？$s_1 \to s_2$ 呢？$s_2 \to s_3$ 呢？"每步都要满足 flow 守恒，一共 3 个 loss 项。</p>
+          <p>DB 粒度更细，每步都有监督信号，适合并行训练（每步 loss 可独立计算）。TB 粒度粗但方差更小，适合对整条轨迹有清晰偏好的场景。</p>
+        </div>
+
+        <h3 id="workflow">2.5 完整训练流程</h3>
+
+        <ol class="step-list">
+          <li class="step"><span class="step-num">1</span><div><strong>SFT 预训练：</strong>用标准 SFT 对 GR 模型进行基础训练，使其学会基本的 token 生成模式</div></li>
+          <li class="step"><span class="step-num">2</span><div><strong>轨迹采样：</strong>用 4 种采样策略（Interaction Log → Random → CM-based Curriculum → On-policy）生成多样化轨迹</div></li>
+          <li class="step"><span class="step-num">3</span><div><strong>奖励计算：</strong>对每条轨迹计算多信号奖励 $R(s_L) = r_a + \alpha r_c + \beta r_{sim}$</div></li>
+          <li class="step"><span class="step-num">4</span><div><strong>GFlowNet 微调：</strong>用 DB Loss 或 TB Loss 将奖励信号反向传播到每个 token 步骤，更新模型参数</div></li>
+          <li class="step"><span class="step-num">5</span><div><strong>迭代：</strong>重复步骤 2-4，逐步提升 token 级别生成质量</div></li>
+        </ol>
+      </section>
+
+      <!-- 实验 -->
+      <section class="section" id="experiments">
+        <div class="section-title"><div class="icon" style="background:#f0fdf4;">📊</div>3. 实验结果</div>
+
+        <h3>离线实验（淘宝工业数据集）</h3>
+        <p>在 1 亿+用户的淘宝广告数据集上，GFlowGR 在多个指标上全面超越 SFT baseline：</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>方法</th><th>CTR AUC</th><th>CVR AUC</th><th>Recall@200</th><th>NDCG@200</th></tr></thead>
+            <tbody>
+              <tr><td>SFT (baseline)</td><td>0.7240</td><td>0.6832</td><td>0.2143</td><td>0.1521</td></tr>
+              <tr><td>SFT + DPO</td><td>0.7251</td><td>0.6838</td><td>0.2156</td><td>0.1532</td></tr>
+              <tr><td>SFT + GRPO</td><td>0.7258</td><td>0.6845</td><td>0.2168</td><td>0.1540</td></tr>
+              <tr><td><strong>GFlowGR (DB)</strong></td><td><strong>0.7282</strong></td><td><strong>0.6871</strong></td><td><strong>0.2234</strong></td><td><strong>0.1587</strong></td></tr>
+              <tr><td><strong>GFlowGR (TB)</strong></td><td>0.7276</td><td>0.6864</td><td>0.2221</td><td>0.1579</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2506.16114v2/x2.png" alt="轨迹采样策略对比"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'><b>Figure 2: 轨迹采样策略对比</b><br><br>四种采样策略在不同训练阶段的 AUC 变化。CM-based Curriculum 策略在稳定性和最终性能上均最优。</div>`" />
+          <figcaption><strong>Figure 2（论文原图）：</strong>四种轨迹采样策略在不同训练阶段的性能对比。CM-based Curriculum 通过课程学习策略在稳定性和最终 AUC 上均达到最优。</figcaption>
+        </figure>
+
+        <h3>消融实验</h3>
+
+        <figure>
+          <img src="https://arxiv.org/html/2506.16114v2/x3.png" alt="消融实验结果"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'><b>Figure 3: 消融实验</b><br><br>逐步移除各模块后的性能变化，验证每个组件的贡献。</div>`" />
+          <figcaption><strong>Figure 3（论文原图）：</strong>消融实验结果。移除任一模块均导致性能下降，验证了轨迹采样器、多信号奖励和 GFlowNet Loss 的各自贡献。</figcaption>
+        </figure>
+
+        <h3>在线 A/B 测试（淘宝全量广告，1 亿+用户）</h3>
+        <ul>
+          <li>总营收提升：<strong>+0.43%</strong></li>
+          <li>非首页搜索场景营收提升：<strong>+1.11%</strong></li>
+          <li>CTR 提升：<strong>+0.38%</strong></li>
+          <li>CVR 提升：<strong>+0.52%</strong></li>
+          <li>训练成本：SFT 的 <strong>2.1×</strong></li>
+        </ul>
+
+        <figure>
+          <img src="https://arxiv.org/html/2506.16114v2/x4.png" alt="在线A/B测试结果"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'><b>Figure 4: 在线 A/B 测试结果</b><br><br>不同场景下的在线指标提升。非首页搜索场景提升最大（+1.11%），因该场景的 token 生成空间更大、GFlowNet 的 token 级监督优势更明显。</div>`" />
+          <figcaption><strong>Figure 4（论文原图）：</strong>在线 A/B 测试中不同场景的指标提升。非首页搜索场景提升最大（+1.11%），推测原因是该场景 item 空间更大，token 生成路径更复杂，GFlowNet 的 Token 级监督优势更明显。</figcaption>
+        </figure>
+
+        <h3>DB vs TB 对比</h3>
+        <ul>
+          <li><strong>DB Loss：</strong>AUC 略高，因为步骤级监督粒度更细，适用于 item 数多、token 序列长的场景</li>
+          <li><strong>TB Loss：</strong>训练更稳定，方差更小，适用于对整条轨迹有明确偏好的场景</li>
+        </ul>
+      </section>
+
+      <!-- 个人理解 -->
+      <section class="section" id="insights">
+        <div class="section-title"><div class="icon" style="background:#fef3c7;">💡</div>4. 个人理解与启发</div>
+
+        <h3>核心亮点</h3>
+        <ul>
+          <li><strong>Token 级监督是 GR 的必然方向：</strong>SFT 只模仿、DPO 只比大小，都太粗糙。GFlowNet 提供了一套优雅的 Token 级监督框架——这可能是生成式推荐从"能跑"到"跑得好"的关键一步。</li>
+          <li><strong>GFlowNet 与 GR 的天然契合：</strong>GR 的自回归生成天然是有向无环图（每个 token 是状态节点），正是 GFlowNet 的标准应用场景。Flow-matching 约束恰好可以分解到每步 token 生成。</li>
+          <li><strong>CM-based Curriculum 是关键工程创新：</strong>随机采样产生大量噪声，on-policy 采样不稳定。用 Click Model 做课程学习——先易后难、逐步提升——是一个实用的工程方案。</li>
+          <li><strong>多信号奖励的设计哲学：</strong>真实交互（$r_a$）最可靠但稀疏，预估信号（$r_c$）密集但有偏，格式信号（$r_{\text{sim}}$）保证合理性。三者互补，构成完整的奖励函数。</li>
+        </ul>
+
+        <h3>潜在不足</h3>
+        <ul>
+          <li>训练成本是 SFT 的 2.1×，对大规模系统仍有开销压力</li>
+          <li>奖励模型的三个系数 $\alpha, \beta$ 需要按场景调参</li>
+          <li>On-policy 采样策略在大规模训练中可能不稳定</li>
+          <li>论文未讨论 GFlowNet 微调后在 serving 阶段的推理效率</li>
+        </ul>
+
+        <h3>对我的启发</h3>
+        <p>GFlowGR 提供了一个很好的思路：将生成式推荐的 token 生成过程视为 DAG 上的轨迹采样，用 flow-matching 约束实现 Token 级精细优化。这个视角可以推广到其他序列生成场景（如多轮对话推荐、多步推理推荐），其中每一步生成都需要独立的、精细的监督信号。</p>
+        <p>此外，CM-based Curriculum 的课程学习策略在推荐系统微调中非常实用——与其用全部数据无差别训练，不如按样本难度分层、从易到难地逐步提升模型能力。这种方法在其他 RL-based 微调方案（DPO/GRPO）中也可以借鉴。</p>
+
+        <div class="paper-info">
+          <p><strong>论文链接：</strong><a href="https://arxiv.org/abs/2506.16114" target="_blank">arXiv 2506.16114</a></p>
+          <p><strong>关键词：</strong>GFlowNet · 生成式推荐 · Token 级监督 · 轨迹采样 · 多信号奖励 · Detailed Balance · Trajectory Balance</p>
+          <p><strong>对比基线：</strong>SFT · DPO · GRPO</p>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <footer>
+    <a href="../index.html">← 返回论文列表</a>
+    <p style="margin-top:12px;">Paper Notes · GFlowGR · WWW'26 · arXiv 2506.16114</p>
+  </footer>
+</div>
+
+<script>
+(function(){
+  var tocLinks = document.querySelectorAll('.toc-list a[href^="#"], .toc-sub a[href^="#"]');
+  if (!tocLinks.length) return;
+  var linkMap = {};
+  tocLinks.forEach(function(a){
+    var id = a.getAttribute('href').slice(1);
+    if (id) linkMap[id] = a;
+  });
+  var targets = Object.keys(linkMap).map(function(id){
+    return document.getElementById(id);
+  }).filter(Boolean);
+  if (!targets.length) return;
+  var activeId = null;
+  function setActive(id){
+    if (id === activeId) return;
+    activeId = id;
+    tocLinks.forEach(function(a){ a.classList.remove('active'); });
+    if (id && linkMap[id]){
+      linkMap[id].classList.add('active');
+      var toc = document.querySelector('.toc');
+      if (toc){
+        var li = linkMap[id];
+        var tocTop = toc.getBoundingClientRect().top;
+        var liTop  = li.getBoundingClientRect().top;
+        var offset = liTop - tocTop - toc.clientHeight / 2;
+        toc.scrollBy({ top: offset, behavior: 'smooth' });
+      }
+    }
+  }
+  var observer = new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      if (entry.isIntersecting){
+        setActive(entry.target.id);
+      }
+    });
+  }, { rootMargin: '-10% 0px -60% 0px', threshold: 0 });
+  targets.forEach(function(el){ observer.observe(el); });
+})();
+</script>
+</body>
+</html>

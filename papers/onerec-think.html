@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>OneRec-Think：生成式推荐中的显式文本推理 | 论文解读</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    renderMathInElement(document.body, {
+      delimiters: [
+        { left: "$$", right: "$$", display: true },
+        { left: "$", right: "$", display: false }
+      ]
+    });
+  });
+</script>
+<style>
+:root {
+  --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+  --line: #e5e7eb; --primary: #2563eb; --primary-soft: #eff6ff;
+  --accent: #7c3aed; --accent-soft: rgba(124,58,237,0.06);
+  --shadow: 0 10px 30px rgba(15,23,42,0.08); --radius: 18px; --max: 1300px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: linear-gradient(180deg,#f8fbff 0%,var(--bg) 240px);
+  color: var(--text);
+  font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  line-height: 1.75;
+}
+a { color: var(--primary); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.back-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 14px; color: var(--muted); padding: 16px 28px;
+}
+.back-link:hover { color: var(--primary); }
+
+.hero {
+  background: radial-gradient(ellipse at 70% 0%,rgba(37,99,235,0.08) 0%,transparent 60%),
+              radial-gradient(ellipse at 10% 80%,rgba(124,58,237,0.06) 0%,transparent 50%),
+              var(--card);
+  border-bottom: 1px solid var(--line);
+  padding: 48px 28px 40px;
+}
+.hero-inner { max-width: var(--max); margin: 0 auto; }
+.eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; }
+.hero h1 { font-size: clamp(22px,3vw,32px); font-weight: 800; line-height: 1.25; margin-bottom: 10px; }
+.subtitle { font-size: 15px; color: var(--muted); margin-bottom: 28px; }
+.meta-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; }
+@media(max-width:700px){ .meta-grid { grid-template-columns: repeat(2,1fr); } }
+.meta-card { background: var(--primary-soft); border: 1px solid rgba(37,99,235,0.12); border-radius: 12px; padding: 14px 16px; }
+.meta-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .8px; color: var(--primary); margin-bottom: 4px; }
+.meta-value { font-size: 13.5px; font-weight: 600; color: var(--text); }
+
+.layout-wrap { max-width: var(--max); margin: 0 auto; padding: 28px 28px 60px; }
+.layout { display: grid; grid-template-columns: 260px minmax(0,1fr); gap: 22px; align-items: start; }
+@media(max-width:900px){ .layout { grid-template-columns: 1fr; } }
+
+aside.toc { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; }
+.toc h2 { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+.toc-list { list-style: none; }
+.toc-list li { margin: 7px 0; }
+.toc-list a { font-size: 13.5px; color: var(--muted); }
+.toc-list a:hover { color: var(--primary); }
+.toc-sub { list-style: none; margin-left: 12px; }
+.toc-sub li { margin: 5px 0; }
+.toc-sub a { font-size: 12.5px; color: var(--muted); }
+
+main.content { display: flex; flex-direction: column; gap: 20px; }
+.section {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 28px 32px;
+}
+.section-title { display: flex; align-items: center; gap: 12px; font-size: 19px; font-weight: 800; margin-bottom: 20px; }
+.icon { width: 6px; height: 24px; border-radius: 3px; flex-shrink: 0; }
+
+.callout-blue { background: #eff6ff; border-left: 4px solid #2563eb; border-radius: 10px; padding: 14px 18px; margin: 16px 0; font-size: 14px; }
+.callout-amber { background: #fffbeb; border-left: 4px solid #f59e0b; border-radius: 10px; padding: 14px 18px; margin: 16px 0; font-size: 14px; }
+.callout-green { background: #f0fdf4; border-left: 4px solid #16a34a; border-radius: 10px; padding: 14px 18px; margin: 16px 0; font-size: 14px; }
+.callout-purple { background: #faf5ff; border-left: 4px solid #7c3aed; border-radius: 10px; padding: 14px 18px; margin: 16px 0; font-size: 14px; }
+
+.example-box { background: #f0fdf4; border: 1px solid #86efac; border-radius: 12px; padding: 16px 20px; margin: 16px 0; }
+.ex-title { font-size: 13px; font-weight: 700; color: #16a34a; margin-bottom: 10px; }
+.example-box p, .example-box li { font-size: 13.5px; line-height: 1.8; }
+
+.formula-block { background: #f8fafc; border: 1px solid var(--line); border-radius: 10px; padding: 16px 20px; margin: 14px 0; overflow-x: auto; text-align: center; }
+.formula-vars { background: #f8fafc; border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; margin-top: -8px; margin-bottom: 14px; font-size: 13px; }
+.formula-vars .var-title { font-weight: 700; color: var(--muted); margin-bottom: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .6px; }
+.formula-vars ul { padding-left: 18px; }
+.formula-vars li { margin: 4px 0; line-height: 1.7; }
+
+.step-list { list-style: none; display: flex; flex-direction: column; gap: 14px; margin: 16px 0; }
+.step { display: flex; gap: 14px; }
+.step-num { width: 28px; height: 28px; border-radius: 50%; background: var(--primary); color: #fff; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
+.step-body { flex: 1; }
+.step-body strong { display: block; margin-bottom: 4px; }
+
+.flow-diagram { display: flex; flex-direction: column; gap: 10px; margin: 16px 0; }
+.flow-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.flow-box { background: var(--primary-soft); border: 1.5px solid rgba(37,99,235,0.25); border-radius: 10px; padding: 8px 14px; font-size: 13px; font-weight: 600; color: var(--primary); }
+.flow-arrow { font-size: 18px; color: var(--muted); }
+
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 16px 0; }
+@media(max-width:600px){ .two-col { grid-template-columns: 1fr; } }
+.mini-card { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.mini-card h4 { font-size: 13.5px; font-weight: 700; margin-bottom: 8px; }
+.mini-card p, .mini-card li { font-size: 13px; line-height: 1.75; }
+
+.table-wrap { overflow-x: auto; margin: 16px 0; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+thead th { background: var(--primary-soft); color: var(--primary); font-weight: 700; padding: 10px 14px; border: 1px solid rgba(37,99,235,0.15); text-align: left; }
+tbody td { padding: 9px 14px; border: 1px solid var(--line); }
+tbody tr:nth-child(even) { background: var(--bg); }
+
+.note { background: #fffbeb; border: 1px dashed #f59e0b; border-radius: 10px; padding: 12px 16px; font-size: 13.5px; margin: 14px 0; }
+
+figure { margin: 20px 0; }
+figure img { width: 100%; border-radius: 12px; border: 1px solid var(--line); box-shadow: var(--shadow); }
+.fig-placeholder { background: var(--bg); border: 1px dashed var(--line); border-radius: 12px; padding: 28px; text-align: center; color: var(--muted); font-size: 14px; line-height: 1.8; }
+figcaption { font-size: 13px; color: var(--muted); margin-top: 10px; line-height: 1.7; }
+
+.paper-info { background: var(--primary-soft); border: 1px solid rgba(37,99,235,0.15); border-radius: 12px; padding: 14px 18px; margin: 16px 0; font-size: 13.5px; }
+.paper-info a { font-weight: 600; }
+
+blockquote { border-left: 4px solid var(--accent); padding: 10px 16px; background: var(--accent-soft); border-radius: 0 10px 10px 0; margin: 16px 0; font-style: italic; font-size: 14px; }
+
+h2 { font-size: 16px; font-weight: 700; margin: 22px 0 10px; }
+h3 { font-size: 15px; font-weight: 700; margin: 18px 0 8px; color: var(--primary); }
+h4 { font-size: 14px; font-weight: 700; margin: 14px 0 6px; }
+p { margin: 10px 0; font-size: 14.5px; }
+ul, ol { padding-left: 20px; font-size: 14px; }
+li { margin: 5px 0; }
+strong { font-weight: 700; }
+code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: "SF Mono","Fira Code",monospace; }
+
+footer { border-top: 1px solid var(--line); padding: 28px; text-align: center; font-size: 14px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← 返回论文列表</a>
+
+<div class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">Generative Recommendation · Reasoning · 2025</div>
+    <h1>OneRec-Think：生成式推荐中的显式文本推理框架</h1>
+    <p class="subtitle">ONEREC-THINK: In-Text Reasoning for Generative Recommendation</p>
+    <div class="meta-grid">
+      <div class="meta-card"><div class="meta-label">作者</div><div class="meta-value">Zhanyu Liu, Shiyao Wang et al. (快手)</div></div>
+      <div class="meta-card"><div class="meta-label">时间</div><div class="meta-value">2025.10（arXiv 2510.11639）</div></div>
+      <div class="meta-card"><div class="meta-label">机构</div><div class="meta-value">Kuaishou Inc.</div></div>
+      <div class="meta-card"><div class="meta-label">核心命题</div><div class="meta-value">把 CoT 推理引入生成式推荐，达到 SOTA 并在快手 APP 上涨停留时长 +0.159%</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="layout-wrap">
+  <div class="layout">
+    <aside class="toc">
+      <h2>目录</h2>
+      <ul class="toc-list">
+        <li><a href="#background">§1 背景与动机</a></li>
+        <li><a href="#method">§2 方法详解</a>
+          <ul class="toc-sub">
+            <li><a href="#itemic-alignment">2.1 Itemic Alignment</a></li>
+            <li><a href="#reasoning-activation">2.2 Reasoning Activation</a></li>
+            <li><a href="#reasoning-enhancement">2.3 Reasoning Enhancement</a></li>
+            <li><a href="#think-ahead">2.4 Think-Ahead 部署架构</a></li>
+            <li><a href="#deployment-role">2.5 系统定位：取代三级漏斗</a></li>
+            <li><a href="#io-format">2.6 输入 / 输出格式详解</a></li>
+          </ul>
+        </li>
+        <li><a href="#experiments">§3 实验结果</a>
+          <ul class="toc-sub">
+            <li><a href="#public-bench">3.1 公开 benchmark</a></li>
+            <li><a href="#ablation">3.2 消融实验</a></li>
+            <li><a href="#online-ab">3.3 工业 A/B 测试</a></li>
+          </ul>
+        </li>
+        <li><a href="#case-study">§4 Case Study</a></li>
+        <li><a href="#summary">§5 总结与思考</a></li>
+      </ul>
+    </aside>
+
+    <main class="content">
+
+      <!-- §1 背景与动机 -->
+      <section class="section" id="background">
+        <div class="section-title">
+          <div class="icon" style="background:var(--primary)"></div>
+          §1 背景与动机
+        </div>
+
+        <div class="paper-info">
+          论文链接：<a href="https://arxiv.org/abs/2510.11639" target="_blank">arXiv 2510.11639</a>｜代码：<a href="https://github.com/wangshy31/OneRec-Think" target="_blank">github.com/wangshy31/OneRec-Think</a>
+        </div>
+
+        <h2>推荐系统的范式演进</h2>
+        <p>传统推荐系统采用多阶段漏斗（召回→精排），但这种割裂的架构难以整体优化。以 TIGER、HSTU、<strong>OneRec</strong> 为代表的端到端生成式推荐框架通过 Seq2Seq 自回归方式直接生成 item 标识符，统一了检索与排序，展现出强大能力。</p>
+
+        <h2>问题：生成式推荐缺乏显式推理</h2>
+        <div class="callout-amber">
+          <strong>核心矛盾：</strong>现有生成式推荐模型（包括 OneRec）本质上是<strong>隐式预测器</strong>——它们能预测用户下一个会交互的 item，但无法告诉你"为什么"。这使得推荐结果缺乏可解释性，也无法像 ChatGPT 那样通过对话动态调整策略。
+        </div>
+
+        <p>与此同时，LLM 领域的 Chain-of-Thought（CoT）技术（Wei et al., 2022; DeepSeek-R1; Seed-1.5）通过"先推理、再回答"大幅提升了复杂任务的准确率。一个自然的问题是：<strong>能否把 CoT 推理引入生成式推荐？</strong></p>
+
+        <h2>为什么这件事不简单</h2>
+        <ul>
+          <li><strong>模态鸿沟</strong>：推荐系统使用离散的 Item ID（如 <code>&lt;item_a_5083&gt;&lt;item_b_2280&gt;&lt;item_c_5301&gt;</code>），而 LLM 在文本 token 空间工作，两者天然不兼容</li>
+          <li><strong>噪声行为序列</strong>：真实用户的行为序列很长且嘈杂，直接让 LLM 在噪声序列上生成 CoT 往往失败</li>
+          <li><strong>多义性奖励</strong>：推荐任务存在"多有效答案"问题——用户感兴趣的视频不止一个，传统 RL 奖励（只有命中才得分）极度稀疏</li>
+          <li><strong>工业延迟</strong>：实时推理时，让模型先生成几百个 token 的思维链、再输出推荐结果，延迟会爆炸</li>
+        </ul>
+
+        <figure>
+          <img src="https://arxiv.org/html/2510.11639v2/x1.png" alt="Figure 1: OneRec-Think 统一对话、推理和推荐框架示例"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'><b>Figure 1：统一框架示例</b><br><br>展示了三种能力：1）解释 item 内容（给定 itemic token 描述视频）；2）根据用户历史推断个性化偏好并推荐；3）对话式推荐（用户说"心情不好，推荐轻松内容"，模型理解情感并调整推荐）</div>`" />
+          <figcaption><strong>Figure 1（论文原图）：</strong>OneRec-Think 统一了对话、推理与个性化推荐三大能力。上图展示了 item 描述（给定 itemic token 解析视频内容）、推理推荐（分析观看历史生成思维链并推荐 item）、以及对话推荐（用户表达"心情不好"后模型动态调整推荐策略）三种典型场景。</figcaption>
+        </figure>
+
+        <h2>OneRec-Think 的三大贡献</h2>
+        <div class="flow-diagram">
+          <div class="flow-row">
+            <div class="flow-box">Itemic Alignment</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box">Reasoning Activation</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box">Reasoning Enhancement</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box">Think-Ahead 部署</div>
+          </div>
+        </div>
+        <p>分别解决了：模态对齐、CoT 激活（噪声序列问题）、RL 奖励稀疏问题和工业部署延迟问题。</p>
+      </section>
+
+      <!-- §2 方法详解 -->
+      <section class="section" id="method">
+        <div class="section-title">
+          <div class="icon" style="background:var(--accent)"></div>
+          §2 方法详解
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2510.11639v2/x2.png" alt="Figure 2: OneRec-Think 整体框架"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'><b>Figure 2：整体框架图</b><br><br>三阶段训练流程：Stage 1 Itemic Alignment（Token Warm-up + Multi-Task Integration）；Stage 2 Reasoning Activation（用剪枝后的 top-k 历史 bootstrap 推理，再在完整嘈杂历史上 SFT）；Stage 3 Reasoning Enhancement（多路 rollout + Rollout-Beam Reward + GRPO）</div>`" />
+          <figcaption><strong>Figure 2（论文原图）：</strong>OneRec-Think 三阶段训练框架。Stage 1 通过多任务预训练完成 item-语言对齐；Stage 2 用剪枝上下文 bootstrap 推理能力并通过 SFT 蒸馏到完整序列；Stage 3 用推荐专用奖励函数 + GRPO 强化学习精炼推理质量。</figcaption>
+        </figure>
+
+        <p>在形式化上，传统生成式推荐定义为：</p>
+        <div class="formula-block">
+          $$s^{v_{n+1}} \sim P(\cdot\,|\,s^{v_1},\ldots,s^{v_n};\theta)$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$s^{v_i}$：item $v_i$ 的 itemic token 序列（如 $\langle\text{item\_a\_5083}\rangle\langle\text{item\_b\_2280}\rangle\langle\text{item\_c\_5301}\rangle$）</li>
+            <li>$s^{v_{n+1}}$：模型预测的下一个 item 的 itemic token</li>
+            <li>$\theta$：模型参数</li>
+          </ul>
+        </div>
+
+        <p>OneRec-Think 将其改造为先推理再推荐的联合生成：</p>
+        <div class="formula-block">
+          $$\tau \sim P(\cdot\,|\,\mathcal{P}(s^{v_1},\ldots,s^{v_n});\theta)$$
+          $$s^{v_{n+1}} \sim P(\cdot\,|\,\mathcal{P}(s^{v_1},\ldots,s^{v_n}),\tau;\theta)$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\mathcal{P}(\cdot)$：把用户历史序列格式化为文本 prompt 的函数</li>
+            <li>$\tau = (r_1,\ldots,r_M)$：先生成的推理序列（思维链），$M$ 个文本 token</li>
+            <li>$s^{v_{n+1}}$：以思维链 $\tau$ 为条件生成的目标 item itemic token</li>
+            <li>整个过程是一次自回归 pass：先输出 $\langle\text{think}\rangle\ldots\langle/\text{think}\rangle$，再输出 itemic token</li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：推理 + 推荐的联合生成过程</div>
+          <p><strong>输入（用户历史）：</strong>用户 U 历史点赞：《三角洲行动》战术视频、《战地》经典场景回顾、GTA6 最新爆料、显卡对比测评……</p>
+          <p><strong>生成过程（单次自回归）：</strong></p>
+          <p><code>&lt;think&gt;</code> 用户对军事题材游戏和动作冒险类游戏有浓厚兴趣，且主动搜索过显卡对比，说明他对游戏性能优化有关注。由于用户喜欢高画质游戏（战地、GTA6），可能正在寻找能提升游戏体验的硬件支持。因此推荐显卡性能分析相关视频。<code>&lt;/think&gt;</code></p>
+          <p><code>&lt;item_begin&gt;&lt;item_a_4029&gt;&lt;item_b_4601&gt;&lt;item_c_5058&gt;&lt;item_end&gt;</code>（显卡对比分析视频）</p>
+          <p><strong>关键点：</strong>推理 $\tau$ 和 item token $s^{v_{n+1}}$ 在同一次自回归 pass 中顺序生成，思维链天然作为 item 生成的上下文。</p>
+        </div>
+
+        <!-- 2.1 Itemic Alignment -->
+        <h3 id="itemic-alignment">2.1 阶段一：Itemic Alignment（物品语义对齐）</h3>
+        <p>Itemic Token 是 item 的离散语义表示单元，类比 NLP 中的"词"。每个 item $v$ 被编码为一组 token 序列 $s^v = (s_1^v, \ldots, s_L^v)$（如 3 层分层语义 ID），通过 RQ-VAE 从多模态内容中生成。</p>
+        <p><strong>问题</strong>：base LLM 的词表里没有这些 itemic token，embedding 是随机初始化的，模型完全不懂这些 token 的语义。需要先做语义对齐。</p>
+
+        <p><strong>四个预训练任务：</strong></p>
+        <ul class="step-list">
+          <li class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <strong>Task 1: Interleaved User Persona Grounding（交错用户画像接地）</strong>
+              <p>将 itemic token 和文本 token 交错组合成训练样本。样本包含：用户静态属性（年龄、地区）、主动搜索行为（文本）、历史交互序列（itemic token）、以及 LLM 总结的用户兴趣描述（文本）。通过让模型在 itemic token 和文字上下文共现的训练样本中学习，建立"item embedding ↔ 语义概念"的连接。</p>
+            </div>
+          </li>
+          <li class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <strong>Task 2: Sequential Preference Modeling（序列偏好建模）</strong>
+              <p>核心推荐任务：给定历史 itemic token 序列，预测下一个 item 的 itemic token。这是标准的 next-token prediction 在推荐上的应用。</p>
+            </div>
+          </li>
+          <li class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <strong>Task 3: Itemic Dense Captioning（物品密集描述）</strong>
+              <p>给定一个 item 的 itemic token，要求模型生成该 item 的文字描述（标题、类目、内容摘要等）。这相当于让模型学会"将 item token 翻译成人类语言"，强迫模型建立 item token → 语义的映射。</p>
+            </div>
+          </li>
+          <li class="step">
+            <div class="step-num">4</div>
+            <div class="step-body">
+              <strong>Task 4: General Language Modeling（通用语言建模）</strong>
+              <p>继续在通用文本语料上训练，防止模型在学习推荐知识的过程中灾难性遗忘语言能力。</p>
+            </div>
+          </li>
+        </ul>
+
+        <p><strong>两阶段训练策略：</strong></p>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>Token Warm-up（Token 预热）</h4>
+            <p>冻结 base LLM 所有参数，<strong>只训练 itemic token 的 embedding</strong>。仅使用 Task 1（用户画像接地），让 itemic token embedding 通过大量文本共现场景学到初始语义。</p>
+            <p>目的：先让 embedding 有意义，再开始全量训练，避免随机 embedding 污染模型。</p>
+          </div>
+          <div class="mini-card">
+            <h4>Multi-Task Integration（多任务融合）</h4>
+            <p>解冻所有参数，四个任务联合训练。LLM 在理解 itemic token 语义的同时，学会将其融入对话和推理上下文。</p>
+            <p>按设计比例混合四个任务的数据，保证各任务都有足够的训练信号。</p>
+          </div>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：Itemic Alignment 训练样本长什么样</div>
+          <p><strong>Task 1 样本（交错画像）：</strong></p>
+          <p>文本部分："用户 ID 12345，25岁，北京，近期搜索过'篮球教学'、'NBA 集锦'"</p>
+          <p>Itemic token 部分：点赞 <code>&lt;item_a_842&gt;&lt;item_b_92&gt;&lt;item_c_7860&gt;</code>，收藏 <code>&lt;item_a_5069&gt;&lt;item_b_4601&gt;&lt;item_c_3132&gt;</code>…</p>
+          <p>总结文本："用户主要兴趣：篮球运动和相关技术视频（60%+），兼具游戏和搞笑内容"</p>
+          <p><strong>Task 3 样本（物品描述）：</strong></p>
+          <p>输入：<code>&lt;item_a_219&gt;&lt;item_b_189&gt;&lt;item_c_49&gt;&lt;item_d_227&gt;</code></p>
+          <p>输出（Ground Truth）：Title: "Manuka Honey and Manuka Oil Skin Cream"，Category: "Beauty > Skin Care > Face > Cleansers"</p>
+          <p>通过这类任务，模型学会"这组 token = 护肤品"，建立了 item embedding 的语义内容。</p>
+        </div>
+
+        <!-- 2.2 Reasoning Activation -->
+        <h3 id="reasoning-activation">2.2 阶段二：Reasoning Activation（推理激活）</h3>
+        <p><strong>核心挑战</strong>：即使完成了 Itemic Alignment，直接让模型在真实的嘈杂、超长行为序列上生成 CoT 往往失败——用户历史太长太杂乱，模型不知道应该关注哪些行为、推理逻辑怎么写。</p>
+
+        <p><strong>解决思路（两步蒸馏）：</strong></p>
+        <div class="callout-blue">
+          先在"简单版本"（剪枝后的精华历史）上生成高质量 CoT，再把这个能力蒸馏到"困难版本"（完整嘈杂历史）上。
+        </div>
+
+        <h4>第一步：用剪枝上下文 Bootstrap 推理（Bootstrapping with Pruned Contexts）</h4>
+        <p>对每个用户，选取候选 item $s^{v_{n+1}}$，用相似度函数从历史中找出最相关的 top-$k$ 条交互：</p>
+        <div class="formula-block">
+          $$g((s^{v_1},\ldots,s^{v_n}), s^{v_{n+1}}) = (s^{w_1},\ldots,s^{w_k})$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$g(\cdot,\cdot)$：相似度函数，计算历史 item 与目标 item 的相关度（如 embedding 点积）</li>
+            <li>$(s^{w_1},\ldots,s^{w_k})$：从历史中检索出的最相关的 $k$ 条 item，是"去噪后的关键历史"</li>
+            <li>这 $k$ 条历史大概率与目标 item 在主题/类目/偏好上高度相关，逻辑关系清晰</li>
+          </ul>
+        </div>
+        <p>然后用这 $k$ 条精华历史 + 目标 item，让预对齐好的模型生成推理 $\tau$：</p>
+        <div class="formula-block">
+          $$\tau \sim P(\cdot\,|\,\mathcal{P}_r((s^{w_1},\ldots,s^{w_k}), s^{v_{n+1}});\theta)$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\mathcal{P}_r(a, b)$：特殊 prompt，引导模型"解释为什么交互过序列 $a$ 的用户会点击 item $b$"</li>
+            <li>输入是剪枝后的 top-k 历史，信噪比高，模型容易生成逻辑清晰的推理</li>
+            <li>生成的 $\tau$ 作为高质量标注，为下一步提供训练信号</li>
+          </ul>
+        </div>
+
+        <h4>第二步：在完整嘈杂序列上学推理（Learning to Reason from Noisy Sequences）</h4>
+        <p>用上一步生成的 $\tau$ 作为 supervision，训练模型从完整嘈杂历史上生成推理 + item，损失函数为：</p>
+        <div class="formula-block">
+          $$\mathcal{L}_{RA} = -\biggl(\sum_{i=1}^{M}\log P(r_i\,|\,\mathcal{P}(s^{v_1},\ldots,s^{v_n}), r_1,\ldots,r_{i-1};\theta)$$
+          $$+ \sum_{j=1}^{L}\log P(s_j^{v_{n+1}}\,|\,\mathcal{P}(s^{v_1},\ldots,s^{v_n}), \tau, s_1^{v_{n+1}},\ldots,s_{j-1}^{v_{n+1}};\theta)\biggr)$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$r_i$：第 $i$ 个推理 token，$M$ 是推理序列总长度</li>
+            <li>$s_j^{v_{n+1}}$：目标 item 的第 $j$ 个 itemic token，$L$ 是 itemic token 数量（如 3 层 = 3）</li>
+            <li>第一个求和：最大化在完整嘈杂历史上生成正确推理的概率</li>
+            <li>第二个求和：最大化给定历史 + 推理后生成正确 item token 的概率</li>
+            <li>两项联合训练：推理质量和推荐准确率同步优化</li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：两步 Bootstrap 如何解决噪声问题</div>
+          <p><strong>原始嘈杂序列（长度 50+）：</strong>篮球教学 → 搞笑段子 → NBA 集锦 → 宠物猫 → 美食探店 → 篮球战术分析 → 手机评测 → 游戏高光 → 篮球球员采访 → 彩妆教程 → …（50 条）</p>
+          <p><strong>目标 item：</strong>篮球体能训练视频</p>
+          <p><strong>第一步：top-k 检索剪枝（k=5）</strong><br>检索出与目标 item 最相关的 5 条：篮球教学 → NBA 集锦 → 篮球战术分析 → 篮球球员采访 → 篮球比赛集锦</p>
+          <p><strong>生成高质量 CoT：</strong>"用户历史中篮球相关内容占绝大多数，对技术细节（战术分析）和职业球员内容都有关注，说明用户是有一定水平的篮球爱好者，会对系统性的体能训练内容感兴趣。"</p>
+          <p><strong>第二步：SFT 训练</strong><br>输入：完整 50 条嘈杂历史（含宠物猫、美食探店等噪声），目标输出：上面那段推理 + 体能训练 itemic token<br>→ 模型学会从噪声中抓住"篮球主线"，产生与干净序列相同质量的推理</p>
+        </div>
+
+        <!-- 2.3 Reasoning Enhancement -->
+        <h3 id="reasoning-enhancement">2.3 阶段三：Reasoning Enhancement（推理增强，RL 阶段）</h3>
+
+        <h4>推荐任务的 RL 困境：奖励稀疏</h4>
+        <p>对于 GRPO 这类 RL 算法，常见做法是：生成多个 rollout，完全命中 ground truth 得分，否则得 0，通过组内相对优势更新模型。但在推荐场景这会失败：</p>
+        <div class="callout-amber">
+          <strong>奖励稀疏问题</strong>：每个 item 用 $L$ 层 itemic token 表示（如 3 层各取自 8192 个 token 的 codebook），greedy decode 只有一次机会，要三层全对才能命中 ground truth。命中概率极低，导致几乎所有 rollout 奖励都是 0，组内优势全为 0，GRPO 梯度消失，训练无效。
+        </div>
+
+        <h4>解决方案：Rollout-Beam Reward（Beam 搜索候选奖励）</h4>
+        <p>不用单一 rollout 的 greedy decode，而是在每个 rollout 的推理 $\tau$ 之后，用 beam search（宽度 $K$）生成 $K$ 个候选 item，对每个候选<strong>逐层比较 itemic token</strong>，取 $K$ 个候选中得分最高的作为该 rollout 的奖励：</p>
+        <div class="formula-block">
+          $$R_{\text{Rollout-Beam}} = \max_{\hat{s}^{v_{n+1}} \in \mathcal{B}} \sum_{l=1}^{L} \mathbb{I}(\hat{s}_l^{v_{n+1}} = s_l^{v_{n+1}})$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\mathcal{B} = \{(\hat{s}_1^{(j)},\ldots,\hat{s}_L^{(j)})\}_{j=1}^{K}$：Beam Search 输出的 top-$K$ 候选 item 集合</li>
+            <li>$\sum_{l=1}^{L} \mathbb{I}(\cdot)$：对某个候选逐层比较 SID token，数对了几层，<strong>取值范围 $\{0,1,...,L\}$，是部分分而非二元命中</strong></li>
+            <li>$\max$：取 $K$ 个候选中部分分最高的那个</li>
+            <li><strong>关键效果</strong>：① beam 提供 $K$ 次机会，提高命中概率；② 部分匹配（如对了 2/3 层）也能得分，reward 分布更连续，梯度信号更丰富</li>
+          </ul>
+        </div>
+
+        <p>基于 $R_{\text{Rollout-Beam}}$ 使用 GRPO 优化：对同一个用户历史生成多个 rollout（每个 rollout 有不同的推理 $\tau$），每个 rollout 内部 beam search 后取最优部分分，以组内相对优势更新策略。</p>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：Rollout-Beam Reward 如何解决稀疏性</div>
+          <p><strong>设定：</strong>item 用 3 层 SID token 表示，ground truth 为 <code>[a_5083, b_2280, c_5301]</code>。</p>
+          <p><strong>传统做法（greedy decode，单次机会，二元奖励）：</strong></p>
+          <ul>
+            <li>Rollout-1 greedy 输出：<code>[a_5083, b_2280, c_9999]</code> → 第 3 层错 → 奖励 = 0</li>
+            <li>Rollout-2 greedy 输出：<code>[a_1111, b_4444, c_7777]</code> → 全错 → 奖励 = 0</li>
+            <li>结果：组内奖励全为 0，组内优势全为 0，GRPO 无法更新</li>
+          </ul>
+          <p><strong>Rollout-Beam Reward（K=5，逐层 SID 部分分）：</strong></p>
+          <p>同样是 Rollout-1，beam search 输出 5 个候选，逐层与 GT 比较：</p>
+          <ul>
+            <li>候选1：<code>[a_5083, b_2280, c_9999]</code> → 对了第1、2层 → 得分 = 2</li>
+            <li>候选2：<code>[a_5083, b_7777, c_3333]</code> → 只对第1层 → 得分 = 1</li>
+            <li>候选3：<code>[a_1111, b_2222, c_3333]</code> → 全错 → 得分 = 0</li>
+            <li>候选4：<code>[a_5083, b_2280, c_5301]</code> → 3层全对 → 得分 = 3 ✅</li>
+            <li>候选5：<code>[a_5083, b_4444, c_5301]</code> → 对了第1、3层 → 得分 = 2</li>
+            <li><strong>Rollout-1 奖励 = max(2,1,0,3,2) = 3</strong></li>
+          </ul>
+          <p>即使 beam 里没有完全命中的候选，部分分也能提供有效梯度：</p>
+          <ul>
+            <li>Rollout-2（推理质量差）：beam 5 个候选最优得分 = 1 → 奖励 = 1</li>
+            <li>Rollout-3（推理更差）：beam 5 个候选最优得分 = 0 → 奖励 = 0</li>
+            <li>组内优势：Rollout-1(3) &gt; Rollout-2(1) &gt; Rollout-3(0)，GRPO 能区分三种推理质量并产生有效梯度</li>
+          </ul>
+          <p><strong>核心洞察</strong>：reward 是逐层 SID 匹配的<strong>部分分</strong>，不是二元命中。beam search 既增加命中机会，又让 reward 分布更连续，从根本上解决稀疏问题。同时 beam search 本来就是推理时的解码策略，训练奖励与推理方式完全一致。</p>
+        </div>
+
+        <!-- 2.4 Think-Ahead -->
+        <h3 id="think-ahead">2.4 工业部署：Think-Ahead 架构</h3>
+        <p><strong>问题</strong>：在线推荐要求极低延迟（几十毫秒内响应）。OneRec-Think 需要先生成几百个推理 token 再输出 item，延迟无法接受。</p>
+
+        <div class="callout-blue">
+          <strong>Think-Ahead 设计思路：</strong>把"计算密集的推理"和"需要实时性的最终生成"解耦成两个阶段——推理可以离线预计算，最终 item 生成在线完成但只需极少步骤。
+        </div>
+
+        <div class="step-list">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <strong>离线阶段（Offline，不在关键路径）</strong>
+              <p>完整的 OneRec-Think 模型对每位用户生成：① 完整推理路径 $\tau$；② 前几个 itemic token（如前 2 个 level 的 token）。这些"前缀 token"代表用户的宏观意图或大类偏好（如"科技类游戏视频"），可以提前缓存。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <strong>在线阶段（Online，实时）</strong>
+              <p>用一个<strong>轻量级的实时更新 OneRec 模型</strong>（无推理模块）作为在线 decoder。输入：用户最新上下文 + 离线生成的前缀 token（约束条件）；输出：在前缀约束下快速生成完整的 item itemic token。</p>
+              <p>这样在线只需要极少步骤（仅剩余的几个 token），延迟极低；前缀约束保证最终推荐结果与离线推理的宏观意图一致。</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：Think-Ahead 如何在快手上线</div>
+          <p><strong>用户 U 每天浏览快手 App：</strong></p>
+          <p><strong>离线（每天定时运行）：</strong>OneRec-Think 分析 U 的历史行为，生成推理"用户近期关注了大量 Delta Force 游戏内容，今晚可能点击游戏版本更新视频"，并输出前 2 个 itemic token 作为意图前缀：<code>&lt;item_a_1428&gt;&lt;item_b_2625&gt;</code>（约束了大类：游戏/Delta Force）</p>
+          <p><strong>在线（用户打开 App 时）：</strong>轻量级 OneRec 模型接收前缀 <code>&lt;item_a_1428&gt;&lt;item_b_2625&gt;</code> 作为约束，结合用户<strong>最新几秒</strong>的行为（实时性），快速生成最后一个 token <code>&lt;item_c_2470&gt;</code>，组成完整 item。全程仅需 1 个 token 生成步骤，延迟极低。</p>
+          <p><strong>效果：</strong>推理的深度（离线） + 实时性（在线）两全其美</p>
+        </div>
+
+        <div class="note">
+          <strong>工业规模：</strong>快手使用 Qwen-8B 作为 backbone，词表扩充 24,576 个新 token（三层分层 itemic token，每层 8,192 个，加两个边界 token），日增量训练使用 80 张旗舰 GPU，每天处理约 20B token 保持模型时效性。
+        </div>
+
+        <h3 id="deployment-role">2.5 OneRec-Think 在推荐系统中的定位</h3>
+        <p>OneRec-Think 继承了 OneRec 的系统定位：<strong>不是独立的召回模型，而是取代传统召回→粗排→精排三级漏斗的单一端到端生成模型</strong>。</p>
+
+        <div class="callout-blue">
+          论文 Introduction 原文：<br>
+          "These unified models <em>replace the traditional multi-stage recommendation funnel</em> (involving separate retrieval and ranking stages), enabling holistic optimization towards the final objective."
+        </div>
+
+        <table style="width:100%;border-collapse:collapse;font-size:13.5px;margin:12px 0">
+          <thead>
+            <tr style="background:#eff6ff">
+              <th style="padding:8px 12px;text-align:left;border:1px solid #dbeafe">传统推荐系统</th>
+              <th style="padding:8px 12px;text-align:left;border:1px solid #dbeafe">OneRec / OneRec-Think</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding:8px 12px;border:1px solid #e5e7eb">召回（双塔/ANN）→ 粗排 → 精排，三个独立模型</td>
+              <td style="padding:8px 12px;border:1px solid #e5e7eb">单一 LLM，一次自回归直接输出最终推荐结果</td>
+            </tr>
+            <tr style="background:#f8fafc">
+              <td style="padding:8px 12px;border:1px solid #e5e7eb">各阶段目标不一致，优化目标割裂</td>
+              <td style="padding:8px 12px;border:1px solid #e5e7eb">端到端直接优化最终用户体验指标</td>
+            </tr>
+            <tr>
+              <td style="padding:8px 12px;border:1px solid #e5e7eb">无推理能力，黑盒预测</td>
+              <td style="padding:8px 12px;border:1px solid #e5e7eb">先生成可解释推理路径，再输出推荐</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p>在快手的实际部署中，OneRec-Think 通过 <strong>Think-Ahead 架构</strong>（离线推理 + 在线轻量续写）解决了单模型替代整个漏斗时的延迟问题，以 1.29% 流量实验组对比线上模型，获得 App 停留时长 +0.159% 的收益。</p>
+
+        <h3 id="io-format">2.6 输入 / 输出格式详解</h3>
+        <p>模型的输入是一个结构化 Prompt，主要由三部分组成：用户行为序列（SID token）、系统生成的用户兴趣摘要（自然语言）、任务指令。输出先生成推理文本 $\tau$，再生成目标 item 的 SID token。</p>
+
+        <div class="example-box">
+          <div class="ex-title">📥 输入示例（来自论文 Figure 1 / Figure 4 真实样例）</div>
+          <pre style="background:#f1f5f9;border-radius:8px;padding:14px 16px;font-size:12.5px;line-height:1.8;overflow-x:auto;white-space:pre-wrap">[任务指令]
+Recommend videos based on the user's viewing history.
+
+[用户行为序列（行为类型 + SID token，顺序排列）]
+Liked and favorited video &lt;item_a_1468&gt;&lt;item_b_868&gt;&lt;item_c_6436&gt;
+Liked and favorited video &lt;item_a_1468&gt;&lt;item_b_2768&gt;&lt;item_c_349&gt;
+Liked video               &lt;item_a_842&gt;&lt;item_b_92&gt;&lt;item_c_7860&gt;
+Favorited video           &lt;item_a_5069&gt;&lt;item_b_4601&gt;&lt;item_c_3132&gt;
+......
+
+[系统生成的用户兴趣摘要（自然语言，可选）]
+Primary Interests: enjoys humorous skits, film analyses
+  (over 60% of content) and lighthearted entertainment.
+  Also engages with Honor of Kings content, indicating
+  a casual gaming interest.
+Secondary Interests: Diverse explorations include pet (cat)
+  videos, traditional culture, and local food content.
+......</pre>
+          <p style="margin-top:8px;font-size:13px;color:#475569">
+            <strong>说明：</strong>历史序列的 item 用 SID token 表示（不是文字描述），但 Prompt 里附加了系统预生成的用户兴趣摘要（自然语言），让模型兼具 ID 信号与语义理解。工业版 3 层 SID，开源实验版 4 层。
+          </p>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">📤 输出示例（来自论文 Figure 4 真实输出）</div>
+          <pre style="background:#f1f5f9;border-radius:8px;padding:14px 16px;font-size:12.5px;line-height:1.8;overflow-x:auto;white-space:pre-wrap">[推理部分 τ（纯自然语言，&lt;think&gt;...&lt;/think&gt; 包裹）]
+&lt;think&gt;
+用户观看历史记录的主题是游戏和科技产品对比。
+用户点赞了《战地》系列经典场面回顾和《GTA6》最新爆料汇总，
+表明他对军事题材游戏和动作冒险类游戏有浓厚兴趣。
+同时，用户主动搜索了显卡对比视频，说明他对硬件性能的
+比较感兴趣。推理逻辑：用户对游戏和科技的兴趣延伸到了
+实际应用场景——通过显卡对比优化游戏体验。因此，推荐
+显卡性能分析相关视频。
+&lt;/think&gt;
+
+[推荐结果（SID token，&lt;|item_begin|&gt;...&lt;|item_end|&gt; 包裹）]
+&lt;|item_begin|&gt;&lt;item_a_4029&gt;&lt;item_b_4601&gt;&lt;item_c_5058&gt;&lt;|item_end|&gt;</pre>
+          <p style="margin-top:8px;font-size:13px;color:#475569">
+            <strong>说明：</strong>推理 $\tau$ 和 item SID token 在<strong>同一次自回归 pass</strong> 中顺序生成，思维链天然作为 item 生成的条件上下文。训练时两部分都在 loss 内（Stage 2）；RL 阶段（Stage 3）只对 SID token 部分计算 Rollout-Beam Reward。
+          </p>
+        </div>
+
+      <!-- §3 实验结果 -->
+      <section class="section" id="experiments">
+        <div class="section-title">
+          <div class="icon" style="background:#16a34a"></div>
+          §3 实验结果
+        </div>
+
+        <h3 id="public-bench">3.1 公开 Benchmark（Amazon Review Datasets）</h3>
+        <p>使用 Amazon Beauty、Toys、Sports 三个数据集，backbone 为 Qwen3-1.7B，词表扩充 1,024 个 itemic token（四层分层 ID，每层 256 个）。评估指标：Recall@5/10 和 NDCG@5/10，beam search 宽度 10。</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>数据集</th>
+                <th>方法</th>
+                <th>R@5</th>
+                <th>R@10</th>
+                <th>N@5</th>
+                <th>N@10</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td rowspan="8">Beauty</td><td>BERT4Rec</td><td>0.0232</td><td>0.0396</td><td>0.0146</td><td>0.0199</td></tr>
+              <tr><td>HGN</td><td>0.0319</td><td>0.0536</td><td>0.0196</td><td>0.0266</td></tr>
+              <tr><td>GRU4Rec</td><td>0.0395</td><td>0.0584</td><td>0.0265</td><td>0.0326</td></tr>
+              <tr><td>SASRec</td><td>0.0402</td><td>0.0607</td><td>0.0254</td><td>0.0320</td></tr>
+              <tr><td>TIGER</td><td>0.0405</td><td>0.0623</td><td>0.0267</td><td>0.0337</td></tr>
+              <tr><td>HSTU</td><td>0.0424</td><td>0.0652</td><td>0.0280</td><td>0.0353</td></tr>
+              <tr><td>ReaRec</td><td>0.0450</td><td>0.0704</td><td>0.0262</td><td>0.0344</td></tr>
+              <tr><td><strong>OneRec-Think</strong></td><td><strong>0.0563</strong></td><td><strong>0.0791</strong></td><td><strong>0.0398</strong></td><td><strong>0.0471</strong></td></tr>
+              <tr><td rowspan="8">Sports</td><td>BERT4Rec</td><td>0.0102</td><td>0.0175</td><td>0.0065</td><td>0.0088</td></tr>
+              <tr><td>HGN</td><td>0.0183</td><td>0.0313</td><td>0.0109</td><td>0.0150</td></tr>
+              <tr><td>GRU4Rec</td><td>0.0190</td><td>0.0312</td><td>0.0122</td><td>0.0161</td></tr>
+              <tr><td>SASRec</td><td>0.0199</td><td>0.0301</td><td>0.0106</td><td>0.0141</td></tr>
+              <tr><td>TIGER</td><td>0.0215</td><td>0.0347</td><td>0.0137</td><td>0.0179</td></tr>
+              <tr><td>HSTU</td><td>0.0268</td><td>0.0343</td><td>0.0173</td><td>0.0226</td></tr>
+              <tr><td>ReaRec</td><td>0.0214</td><td>0.0332</td><td>0.0116</td><td>0.0154</td></tr>
+              <tr><td><strong>OneRec-Think</strong></td><td><strong>0.0288</strong></td><td><strong>0.0412</strong></td><td><strong>0.0199</strong></td><td><strong>0.0239</strong></td></tr>
+              <tr><td rowspan="8">Toys</td><td>BERT4Rec</td><td>0.0215</td><td>0.0332</td><td>0.0131</td><td>0.0168</td></tr>
+              <tr><td>HGN</td><td>0.0326</td><td>0.0517</td><td>0.0192</td><td>0.0254</td></tr>
+              <tr><td>GRU4Rec</td><td>0.0330</td><td>0.0490</td><td>0.0228</td><td>0.0279</td></tr>
+              <tr><td>SASRec</td><td>0.0448</td><td>0.0626</td><td>0.0300</td><td>0.0358</td></tr>
+              <tr><td>TIGER</td><td>0.0337</td><td>0.0547</td><td>0.0209</td><td>0.0276</td></tr>
+              <tr><td>HSTU</td><td>0.0366</td><td>0.0566</td><td>0.0245</td><td>0.0309</td></tr>
+              <tr><td>ReaRec</td><td>0.0523</td><td>0.0764</td><td>0.0298</td><td>0.0376</td></tr>
+              <tr><td><strong>OneRec-Think</strong></td><td><strong>0.0579</strong></td><td><strong>0.0797</strong></td><td><strong>0.0412</strong></td><td><strong>0.0482</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>OneRec-Think 在三个数据集全部 metric 上达到 SOTA，在 Beauty N@5 上的绝对提升尤其显著（+0.0136 vs ReaRec，相对提升约 52%）。</p>
+
+        <h3 id="ablation">3.2 消融实验</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>训练配置</th>
+                <th>R@5</th>
+                <th>R@10</th>
+                <th>N@5</th>
+                <th>N@10</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Base（仅 itemic token 序列微调）</td><td>0.0460</td><td>0.0654</td><td>0.0314</td><td>0.0377</td></tr>
+              <tr><td>Base + IA（加 Itemic Alignment）</td><td>0.0532</td><td>0.0735</td><td>0.0342</td><td>0.0402</td></tr>
+              <tr><td><strong>Base + IA + R（完整 OneRec-Think）</strong></td><td><strong>0.0563</strong></td><td><strong>0.0791</strong></td><td><strong>0.0398</strong></td><td><strong>0.0471</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>两个模块缺一不可：Itemic Alignment 建立了 item 语义，为推理提供了语言基础；Reasoning 阶段在此之上带来进一步显著提升，证明显式 CoT 确实增强了推荐准确率。</p>
+
+        <h4>Itemic Alignment 子阶段消融（工业 benchmark，BertScore）</h4>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>配置</th>
+                <th>User Understanding</th>
+                <th>Short Video Understanding</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Qwen3（base）</td><td>0.6588</td><td>0.6031</td></tr>
+              <tr><td>Qwen3 + Token Warm-up（TW）</td><td>0.6492</td><td>0.6443</td></tr>
+              <tr><td>Qwen3 + TW + Multi-Task Integration（MI）</td><td><strong>0.7053</strong></td><td><strong>0.7300</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout-green">
+          有趣发现：Token Warm-up 在 User Understanding 任务上反而轻微下降（0.6588 → 0.6492）——因为这个任务以文本为主，base LLM 本来就擅长，TW 阶段改动了部分激活导致短期退步。但 Short Video Understanding（纯 itemic token 任务）上 TW 提升显著（+0.04），说明 TW 对 item token 的 embedding 初始化非常必要。MI 阶段在两个任务上都带来大幅提升，是最关键的阶段。
+        </div>
+
+        <h3 id="online-ab">3.3 工业在线 A/B 测试（快手）</h3>
+        <p>在快手短视频平台（日活用户数亿）上，使用 1.29% 流量进行为期一周的 A/B 实验，对比 OneRec-Think（Think-Ahead 架构）与当前在线模型。</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>在线指标</th>
+                <th>相对提升</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>App Stay Time（主指标，总停留时长）</strong></td><td><strong>+0.159%</strong></td></tr>
+              <tr><td>Watch Time（观看时长）</td><td>+0.169%</td></tr>
+              <tr><td>Video View（视频观看次数）</td><td>+0.150%</td></tr>
+              <tr><td>Follow（关注）</td><td>+0.431%</td></tr>
+              <tr><td>Forward（转发）</td><td>+0.758%</td></tr>
+              <tr><td>Like（点赞）</td><td>+0.019%</td></tr>
+              <tr><td>Collect（收藏）</td><td>+0.098%</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout-green">
+          <strong>工业意义重大</strong>：在推荐系统领域，0.1% 的主指标提升通常被视为显著进展，而 App Stay Time +0.159% 在亿级用户平台上意味着每天数千万分钟的额外用户停留。Follow（+0.431%）和 Forward（+0.758%）的高提升说明推理能力带来了更精准的个性化，引导了更深度的用户参与行为。
+        </div>
+      </section>
+
+      <!-- §4 Case Study -->
+      <section class="section" id="case-study">
+        <div class="section-title">
+          <div class="icon" style="background:#f59e0b"></div>
+          §4 Case Study
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2510.11639v2/x3.png" alt="Figure 3: 对话式推荐适应 — 用户说心情不好后模型调整推荐"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'><b>Figure 3：对话式推荐适应</b><br><br>用户说「心情不好，推荐轻松内容」时，模型感知情感信号，主动将推荐从游戏/军事内容切换为《冰雪奇缘》/宠物视频/自然纪录片等治愈系内容，排除暴力/恐怖元素</div>`" />
+          <figcaption><strong>Figure 3：</strong>对话式推荐适应。左图为用户历史兴趣（游戏预告片、青春期叛逆等硬核内容），右图为用户发出"心情不好"的需求后，模型推理部分分析了情感需求与历史偏好的矛盾，最终推荐治愈系内容（冰雪奇缘、宠物日常、自然纪录片）并排除暴力内容。</figcaption>
+        </figure>
+
+        <figure>
+          <img src="https://arxiv.org/html/2510.11639v2/x4.png" alt="Figure 4: 细粒度兴趣推理示例"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'><b>Figure 4：细粒度兴趣推理</b><br><br>三个例子展示模型如何从行为序列出发，生成细粒度的推理路径（如游戏机制分析、校园喜剧偏好、Cosplay 兴趣），并给出精准推荐</div>`" />
+          <figcaption><strong>Figure 4：</strong>细粒度兴趣推理。三个用户场景（Delta Force 游戏玩家 / 校园喜剧爱好者 / Cosplay 爱好者）展示了模型从行为序列→分析具体机制偏好→推理→精准推荐的完整过程。推理路径捕获了特定游戏机制、叙事模式等细粒度偏好，而非仅靠粗粒度类目匹配。</figcaption>
+        </figure>
+
+        <figure>
+          <img src="https://arxiv.org/html/2510.11639v2/x5.png" alt="Figure 5: 推理过程与推荐结果的一致性分析"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'><b>Figure 5：推理与推荐的一致性</b><br><br>在不同推理步骤位置强制 beam search，展示推理从"宽泛兴趣匹配"→"细粒度主题指定"的演化，推荐结果与每步推理内容保持语义一致</div>`" />
+          <figcaption><strong>Figure 5：</strong>推理过程与推荐结果的一致性分析。在中间推理步骤插入 beam search，可以看到：推理越完整，beam search 产生的候选越精准。推理从"用户对影视作品有兴趣"→"喜欢情感冲突题材"→"具体到《宝莲灯》系列古装剧"，推荐结果始终与当前推理进度语义一致，证明推理真正"引导"了生成，而非事后解释。</figcaption>
+        </figure>
+
+        <h2>Itemic-Textual 交错推理</h2>
+        <p>OneRec-Think 展示了一种独特的推理模式：推理链中同时出现文字 token（描述偏好/逻辑）和 itemic token（直接引用具体 item），形成"文字-item"交错的推理路径。这使推理更精准——itemic token 锚定具体内容，文字 token 进行因果逻辑推断，两者协同超越了单模态推理。</p>
+        <div class="note">
+          例如：推理"用户近期观看了 <code>&lt;s_a_3313&gt;&lt;s_b_4487&gt;</code>（某款车评视频），结合搜索记录推断有购车意图，因此推荐 <code>&lt;s_a_1966&gt;&lt;s_b_2581&gt;&lt;s_c_6305&gt;</code>（汽车优惠活动视频）" — itemic token 直接出现在推理文本里，比纯文字描述更精确。
+        </div>
+      </section>
+
+      <!-- §5 总结与思考 -->
+      <section class="section" id="summary">
+        <div class="section-title">
+          <div class="icon" style="background:var(--accent)"></div>
+          §5 总结与个人思考
+        </div>
+
+        <h2>论文核心贡献</h2>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>技术创新点</h4>
+            <ul>
+              <li>首次将 CoT 推理完整引入端到端生成式推荐</li>
+              <li>两步 Bootstrap（剪枝→蒸馏）解决嘈杂序列上的推理激活难题</li>
+              <li>Rollout-Beam Reward 解决推荐场景 RL 奖励稀疏问题</li>
+              <li>Think-Ahead 架构解决推理延迟问题，实现工业部署</li>
+            </ul>
+          </div>
+          <div class="mini-card">
+            <h4>工程价值</h4>
+            <ul>
+              <li>公开 benchmark 全面 SOTA</li>
+              <li>快手线上 A/B：Stay Time +0.159%（亿级用户）</li>
+              <li>Follow/Forward 大幅提升，体现深层个性化效果</li>
+              <li>基础设施：每日 20B token 增量训练，保持时效性</li>
+            </ul>
+          </div>
+        </div>
+
+        <h2>亮点解析</h2>
+        <div class="callout-purple">
+          <strong>训练-推理一致性（Training-Inference Consistency）：</strong>Rollout-Beam Reward 用 beam search 作为奖励计算方式，而推理时也用 beam search 解码。这种一致性是关键设计原则——训练奖励信号直接反映推理时的实际表现，避免了训练与推理脱节的问题。
+        </div>
+        <div class="callout-blue">
+          <strong>多义性感知奖励（Multi-Validity Reward）：</strong>用 beam search 的 K 个候选中取最优，隐式承认了"用户感兴趣的 item 不止一个"这个现实。这比传统"只有 ground truth 得分"的奖励更符合推荐任务的本质。
+        </div>
+        <div class="callout-green">
+          <strong>Itemic-Textual 交错推理：</strong>推理路径中直接引用 itemic token（如"用户看了 &lt;item_a_xxx&gt; 这类视频…"），而不是用文字描述 item，使推理更精准且保持了模态一致性。这是 LLM 推理在多模态场景的一次有趣探索。
+        </div>
+
+        <h2>局限与未来方向</h2>
+        <ul>
+          <li><strong>公开数据集偏弱</strong>：Amazon 数据集序列较短、item 空间较小，无法充分验证 Reasoning Activation 和 Enhancement 的全部能力。作者正在构建大规模 benchmark 以支持更全面评估。</li>
+          <li><strong>长序列用户建模</strong>：当前方案对超长行为历史仍有挑战，论文提到未来会探索用户长序列建模。</li>
+          <li><strong>更密集的 RL 奖励</strong>：当前 Rollout-Beam Reward 还是基于 item 命中的稀疏信号。作者提到将探索更细粒度的 dense reward，对推理过程本身打分。</li>
+          <li><strong>与 GRPO 的联系</strong>：本文 RL 阶段本质是 GRPO（Group Relative Policy Optimization）的推荐定制版——同一用户历史生成多个 rollout，用 Rollout-Beam Reward 替换了标准 GRPO 中的 pass@k 奖励。推荐领域的 RL 训练方法与 LLM 推理训练正在深度融合。</li>
+        </ul>
+
+        <h2>对推荐系统研究的启发</h2>
+        <blockquote>
+          "生成式推荐 + 显式推理" 这条路线的商业验证（+0.159% Stay Time），可能标志着推荐系统从"特征工程 + CTR 预估"到"LLM 全链路"范式迁移的加速。未来推荐系统可能不再是一个"黑盒打分器"，而是一个能够"理解用户、解释决策、动态对话"的智能助手。
+        </blockquote>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<footer>
+  <a href="../index.html">← 返回论文列表</a>
+  <p style="margin-top:8px">OneRec-Think · arXiv 2510.11639 · Kuaishou 2025</p>
+</footer>
+
+</body>
+</html>

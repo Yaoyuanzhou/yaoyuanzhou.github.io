@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>OneMall：快手电商端到端生成式推荐框架 | 论文解读</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    renderMathInElement(document.body, {
+      delimiters: [
+        { left: "$$", right: "$$", display: true },
+        { left: "$", right: "$", display: false }
+      ]
+    });
+  });
+</script>
+<style>
+:root {
+  --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+  --line: #e5e7eb; --primary: #2563eb; --primary-soft: #eff6ff;
+  --accent: #7c3aed; --accent-soft: rgba(124,58,237,0.06);
+  --shadow: 0 10px 30px rgba(15,23,42,0.08); --radius: 18px; --max: 1300px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: linear-gradient(180deg,#f8fbff 0%,var(--bg) 240px);
+  color: var(--text);
+  font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  line-height: 1.75;
+}
+a { color: var(--primary); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* back link */
+.back-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 14px; color: var(--muted); padding: 16px 28px;
+}
+.back-link:hover { color: var(--primary); }
+
+/* hero */
+.hero {
+  background: radial-gradient(ellipse at 70% 0%,rgba(37,99,235,0.08) 0%,transparent 60%),
+              radial-gradient(ellipse at 10% 80%,rgba(124,58,237,0.06) 0%,transparent 50%),
+              var(--card);
+  border-bottom: 1px solid var(--line);
+  padding: 48px 28px 40px;
+}
+.hero-inner { max-width: var(--max); margin: 0 auto; }
+.eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; }
+.hero h1 { font-size: clamp(22px,3vw,32px); font-weight: 800; line-height: 1.25; margin-bottom: 10px; }
+.subtitle { font-size: 15px; color: var(--muted); margin-bottom: 28px; }
+.meta-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; }
+@media(max-width:700px){ .meta-grid { grid-template-columns: repeat(2,1fr); } }
+.meta-card { background: var(--primary-soft); border: 1px solid rgba(37,99,235,0.12); border-radius: 12px; padding: 14px 16px; }
+.meta-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .8px; color: var(--primary); margin-bottom: 4px; }
+.meta-value { font-size: 13.5px; font-weight: 600; color: var(--text); }
+
+/* layout */
+.layout-wrap { max-width: var(--max); margin: 0 auto; padding: 28px 28px 60px; }
+.layout { display: grid; grid-template-columns: 260px minmax(0,1fr); gap: 22px; align-items: start; }
+@media(max-width:900px){ .layout { grid-template-columns: 1fr; } }
+
+/* toc */
+aside.toc { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; }
+.toc h2 { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+.toc-list { list-style: none; }
+.toc-list li { margin: 7px 0; }
+.toc-list a { font-size: 13.5px; color: var(--muted); }
+.toc-list a:hover { color: var(--primary); }
+.toc-sub { list-style: none; margin-left: 12px; }
+.toc-sub li { margin: 5px 0; }
+.toc-sub a { font-size: 12.5px; color: var(--muted); }
+
+/* content */
+main.content { display: flex; flex-direction: column; gap: 20px; }
+.section {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 28px 32px;
+}
+.section-title { display: flex; align-items: center; gap: 12px; font-size: 19px; font-weight: 800; margin-bottom: 20px; }
+.icon { width: 6px; height: 24px; border-radius: 3px; flex-shrink: 0; }
+
+/* callouts */
+.callout-blue { background: #eff6ff; border-left: 4px solid #2563eb; border-radius: 10px; padding: 14px 18px; margin: 16px 0; font-size: 14px; }
+.callout-amber { background: #fffbeb; border-left: 4px solid #f59e0b; border-radius: 10px; padding: 14px 18px; margin: 16px 0; font-size: 14px; }
+.callout-green { background: #f0fdf4; border-left: 4px solid #16a34a; border-radius: 10px; padding: 14px 18px; margin: 16px 0; font-size: 14px; }
+.callout-purple { background: #faf5ff; border-left: 4px solid #7c3aed; border-radius: 10px; padding: 14px 18px; margin: 16px 0; font-size: 14px; }
+
+/* example box */
+.example-box { background: #f0fdf4; border: 1px solid #86efac; border-radius: 12px; padding: 16px 20px; margin: 16px 0; }
+.ex-title { font-size: 13px; font-weight: 700; color: #16a34a; margin-bottom: 10px; }
+.example-box p, .example-box li { font-size: 13.5px; line-height: 1.8; }
+
+/* formula */
+.formula-block { background: #f8fafc; border: 1px solid var(--line); border-radius: 10px; padding: 16px 20px; margin: 14px 0; overflow-x: auto; text-align: center; }
+.formula-vars { background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 10px; padding: 12px 16px; margin: 8px 0 16px; font-size: 13px; }
+.formula-vars .var-title { font-weight: 700; color: #475569; margin-bottom: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+.formula-vars ul { padding-left: 18px; }
+.formula-vars li { margin: 4px 0; }
+
+/* step list */
+.step-list { list-style: none; display: flex; flex-direction: column; gap: 12px; margin: 14px 0; }
+.step { display: flex; align-items: flex-start; gap: 14px; }
+.step-num { width: 28px; height: 28px; border-radius: 50%; background: var(--primary); color: #fff; font-weight: 800; font-size: 13px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
+
+/* two-col */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0; }
+@media(max-width:600px){ .two-col { grid-template-columns: 1fr; } }
+.mini-card { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.mini-card h4 { font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+.mini-card p, .mini-card li { font-size: 13px; line-height: 1.75; }
+
+/* flow */
+.flow-diagram { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+.flow-box { background: var(--primary-soft); border: 1px solid rgba(37,99,235,0.2); border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600; color: var(--primary); }
+.flow-arrow { color: var(--muted); font-size: 18px; }
+
+/* table */
+.table-wrap { overflow-x: auto; margin: 14px 0; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+thead tr { background: var(--primary-soft); }
+th, td { padding: 10px 14px; text-align: left; border: 1px solid var(--line); }
+th { font-weight: 700; color: var(--primary); font-size: 12.5px; }
+tbody tr:nth-child(even) { background: #f9fafb; }
+
+/* figure */
+figure { margin: 16px 0; }
+figcaption { text-align: center; font-size: 13px; color: var(--muted); margin-top: 8px; }
+.fig-placeholder { background: #f1f5f9; border: 1px dashed #94a3b8; border-radius: 12px; padding: 32px 24px; text-align: center; color: var(--muted); font-size: 14px; }
+
+/* note */
+.note { border: 1px dashed var(--line); border-radius: 10px; padding: 12px 16px; margin: 12px 0; font-size: 13.5px; color: var(--muted); }
+
+/* paper-info */
+.paper-info { background: var(--accent-soft); border: 1px solid rgba(124,58,237,0.15); border-radius: 12px; padding: 14px 18px; margin: 14px 0; font-size: 13.5px; }
+.paper-info a { color: var(--accent); }
+
+/* footer */
+footer { text-align: center; padding: 32px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); margin-top: 24px; }
+
+p { margin: 10px 0; }
+h3 { font-size: 16px; font-weight: 700; margin: 18px 0 10px; }
+h4 { font-size: 14.5px; font-weight: 700; margin: 14px 0 8px; }
+ul, ol { padding-left: 20px; margin: 8px 0; }
+li { margin: 5px 0; }
+strong { color: #1e3a5f; }
+blockquote { border-left: 3px solid var(--accent); padding-left: 14px; color: var(--muted); font-style: italic; margin: 14px 0; }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="../index.html">← 返回论文列表</a>
+
+<div class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">🛒 生成式推荐 · 快手电商 · arXiv 2026.01</div>
+    <h1>OneMall：一套架构，多种场景<br>快手电商端到端生成式推荐框架</h1>
+    <p class="subtitle">OneMall: One Architecture, More Scenarios — End-to-End Generative Recommender Family at Kuaishou E-Commerce</p>
+    <div class="meta-grid">
+      <div class="meta-card">
+        <div class="meta-label">来源</div>
+        <div class="meta-value">arXiv 2601.21770 · 快手技术</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">时间</div>
+        <div class="meta-value">2026 年 1 月</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">核心方法</div>
+        <div class="meta-value">LLM Tokenizer + Sparse MoE + RL</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">线上效果</div>
+        <div class="meta-value">GMV +14.7% / +10.3% / +4.9%</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="layout-wrap">
+  <div class="layout">
+
+    <aside class="toc">
+      <h2>📋 目录</h2>
+      <ul class="toc-list">
+        <li><a href="#overview">1. 背景与动机</a></li>
+        <li><a href="#tokenizer">2. 电商语义 Tokenizer</a>
+          <ul class="toc-sub">
+            <li><a href="#data-filter">2.1 数据过滤</a></li>
+            <li><a href="#backbone">2.2 语义压缩骨干</a></li>
+            <li><a href="#sid-gen">2.3 SID 生成流程</a></li>
+          </ul>
+        </li>
+        <li><a href="#arch">3. Decoder-Only 模型架构</a>
+          <ul class="toc-sub">
+            <li><a href="#qformer">3.1 Query-Former 压缩</a></li>
+            <li><a href="#cross-att">3.2 Cross-Attention 融合</a></li>
+            <li><a href="#moe">3.3 Sparse MoE 生成</a></li>
+            <li><a href="#objectives">3.4 训练目标</a></li>
+          </ul>
+        </li>
+        <li><a href="#rl">4. 强化学习对齐</a>
+          <ul class="toc-sub">
+            <li><a href="#reward">4.1 奖励建模</a></li>
+            <li><a href="#dpo-grpo">4.2 DPO vs GRPO</a></li>
+          </ul>
+        </li>
+        <li><a href="#experiments">5. 实验结果</a></li>
+        <li><a href="#insights">6. 亮点与启发</a></li>
+      </ul>
+    </aside>
+
+    <main class="content">
+
+      <!-- 1. 背景与动机 -->
+      <section class="section" id="overview">
+        <div class="section-title">
+          <div class="icon" style="background:#2563eb"></div>
+          1. 背景与动机
+        </div>
+
+        <p>OneMall 是快手在 OneRec 之后针对<strong>电商场景</strong>推出的端到端生成式推荐框架。OneRec 主要面向娱乐短视频，OneMall 则要应对电商特有的三大挑战：</p>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>🎯 多品类物品</h4>
+            <p>商品卡（Product-card）、购物短视频（Short-video）、直播（Live-streaming）具有截然不同的语义特征和推荐逻辑，一套 Tokenizer 需统一表达。</p>
+          </div>
+          <div class="mini-card">
+            <h4>🪙 行为极度稀疏</h4>
+            <p>电商决策链路长（曝光→点击→购买），正向行为信号远比娱乐内容稀少，模型需要更强的信号利用能力。</p>
+          </div>
+          <div class="mini-card">
+            <h4>💰 单目标 GMV</h4>
+            <p>电商 KPI 高度集中于 GMV，对模型精度要求更高；娱乐场景可以多目标均衡，电商必须向 GMV 对齐。</p>
+          </div>
+          <div class="mini-card">
+            <h4>🤖 对标 LLM 范式</h4>
+            <p>OneMall 完整对齐 LLM 的"预训练 + 后训练"思路：NTP 预训练 + RL 后训练，让推荐系统吃到 LLM 工程红利。</p>
+          </div>
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2601.21770v2/onemall_itemcate.png"
+               alt="Figure 1: 快手电商三类物品"
+               style="width:100%;border-radius:12px;border:1px solid var(--line);"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'><b>Figure 1: 快手电商三类物品</b><br><br>商品卡（纯商业意图）、购物短视频（商业+观看体验）、直播（动态商品+互动体验）</div>`" />
+          <figcaption><strong>Figure 1（论文原图）：</strong>快手电商的三大物品类别。商品卡直接代表某款商品；短视频通常只关联一个商品卡；直播可以同时售卖多个商品卡，且商品随时变化。</figcaption>
+        </figure>
+
+        <div class="callout-blue">
+          <strong>核心贡献：</strong> OneMall 将传统判别式召回-排序两阶段 pipeline 统一为单一生成式模型，分三个关键模块：(1) 多品类语义 Tokenizer，(2) 纯 Transformer Decoder-Only 架构，(3) 以排序模型为奖励的 RL 对齐。
+        </div>
+      </section>
+
+      <!-- 2. 电商语义 Tokenizer -->
+      <section class="section" id="tokenizer">
+        <div class="section-title">
+          <div class="icon" style="background:#7c3aed"></div>
+          2. 电商语义 Tokenizer
+        </div>
+
+        <p>Tokenizer 是生成式推荐的基础——它决定了物品如何被编码成离散 token 序列（Semantic IDs）。OneMall 的 Tokenizer 必须同时满足：</p>
+        <ul>
+          <li><strong>真实语义</strong>：反映商品的实际相似关系（类目、品牌、风格相近）</li>
+          <li><strong>业务语义</strong>：反映商品的商业关联（共购、互补、替代）</li>
+          <li><strong>多品类适配</strong>：商品卡、短视频、直播各有不同的表示需求</li>
+        </ul>
+
+        <p>解决方案是<strong>用 LLM 微调</strong>作为语义压缩骨干，再通过 <strong>Res-Kmeans + FSQ</strong> 两阶段量化生成多层 Semantic IDs。</p>
+
+        <h3 id="data-filter">2.1 Item2Item 数据过滤</h3>
+        <p>OneMall 收集两类 Item2Item 对作为微调数据：</p>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>🛍️ 商业相关对</h4>
+            <p>商品卡 ID → 商品卡 ID，来自双塔召回模型的近邻空间或 Swing 统计算法。每个商品最多出现 40 次（下采样消除曝光偏差），共 7000 万样本。</p>
+          </div>
+          <div class="mini-card">
+            <h4>🎬 观看体验对</h4>
+            <p>短视频 ID → 商品卡 ID，筛选条件：用户长看（1-5 分钟）某娱乐/电商短视频后，随后点击了某商品。额外过滤掉新闻/喜剧/舞蹈等无关类目，共 1200 万样本。</p>
+          </div>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：为什么要收集"观看体验对"？</div>
+          <p>场景：某用户在看一个"运动达人穿装备打球"的短视频（长看了 3 分钟），随后点击了"某品牌跑鞋"。<br>这条 (短视频ID, 跑鞋ID) 就是一个高质量的"观看关联"正样本。<br>Tokenizer 微调后，运动类短视频和跑鞋类商品会在 embedding 空间里相互靠近，<br>使得模型在解码时能从"用户看了运动视频"这个上下文推断出"用户可能想买运动鞋"。</p>
+        </div>
+
+        <h3 id="backbone">2.2 语义压缩骨干（LLM 微调）</h3>
+
+        <figure>
+          <img src="https://arxiv.org/html/2601.21770v2/onemall_tokenize.png"
+               alt="Figure 3: LLM 微调流程与 Tokenizer"
+               style="width:100%;border-radius:12px;border:1px solid var(--line);"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'><b>Figure 3: LLM 微调流程</b><br><br>左：商品卡/短视频 Item2Item 微调过程；中：ResKmeansFSQ Tokenizer 流程；右：直播 embedding 生成（用实时在售商品 SID 作为附加特征）</div>`" />
+          <figcaption><strong>Figure 3（论文原图）：</strong>(a) 商品卡/短视频 LLM 微调流程；(b) ResKmeansFSQ Tokenizer；(c) 直播 embedding 生成（在售商品 Semantic IDs 作实时特征）</figcaption>
+        </figure>
+
+        <p>模型结构：<strong>Swin-Transformer</strong>（视觉编码）+ <strong>Qwen2.5 1.5B</strong>（文本编码），特殊 token <code>&lt;EMB&gt;</code> 的最后隐状态作为最终 embedding。冻结 ViT，微调 Projector + LLM，目标函数为 InfoNCE 对比学习。</p>
+
+        <ul>
+          <li><strong>商品卡输入</strong>：主图（224×224）+ 商品标题</li>
+          <li><strong>短视频输入</strong>：采样 6 帧图（224×224）+ 标题/OCR/ASR</li>
+          <li><strong>直播</strong>：内容动态变化，不能提前生成，用双塔模型的 item tower embedding + 当前在售商品 SID 特征</li>
+        </ul>
+
+        <h3 id="sid-gen">2.3 Semantic ID 生成流程（ResKmeans + FSQ）</h3>
+
+        <p>量化分两阶段：</p>
+        <ol class="step-list">
+          <li class="step">
+            <div class="step-num">1</div>
+            <div><strong>前两层：Res-Kmeans 残差量化</strong><br>对 embedding 做逐层 K-Means，每层学到当前最优 codebook 后，用"原 embedding - 最近 codebook 向量"得到残差，再对残差做下一层 K-Means。生成 $c_1, c_2 \in \{1,\ldots,K\}$。</div>
+          </li>
+          <li class="step">
+            <div class="step-num">2</div>
+            <div><strong>第三层：FSQ（Finite Scalar Quantization）</strong><br>用二值化 16-bit MLP 将残差 $m - C_1[c_1] - C_2[c_2]$ 量化为 4096 码。FSQ 预先固定 cluster 中心，确保分区均匀，大幅降低 SID 碰撞率（36% → 11%）。</div>
+          </li>
+        </ol>
+
+        <div class="formula-block">
+$$C_1 = \text{Kmeans}(M, K), \quad M_1 = M - \text{NearestRep}(M, C_1)$$
+$$C_2 = \text{Kmeans}(M_1, K), \quad M_2 = M_1 - \text{NearestRep}(M_1, C_2)$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$M \in \mathbb{R}^{N \times d}$：随机采样的物品 embedding 集合（数千万条）</li>
+            <li>$K$：每层 codebook 大小（通常 4096）</li>
+            <li>$C_l \in \mathbb{R}^{K \times d}$：第 $l$ 层的 codebook（聚类中心矩阵）</li>
+            <li>$\text{NearestRep}(M, C_l)$：对 $M$ 中每个向量找到 $C_l$ 中最近中心，返回对应中心向量</li>
+            <li>$M_1$：第一层残差，即"原 embedding 减去最近中心后的差值"</li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：一件商品的 SID 生成过程</div>
+          <p>假设某跑鞋商品 embedding 为 $m = [0.8, 0.3, -0.2, ...]$（128维）：<br>
+          1. 第一层 K-Means 找到最近 codebook 中心 $C_1[47]$（代表"运动鞋"大类），<br>
+             残差 $m_1 = m - C_1[47]$（剩余更细粒度的语义差异）<br>
+          2. 第二层 K-Means 对 $m_1$ 找到最近中心 $C_2[312]$（代表某品牌/价位子类），<br>
+             残差 $m_2 = m_1 - C_2[312]$<br>
+          3. FSQ 对 $m_2$ 做 4096 路编码，得 $c_3 = 1847$（精细区分同价位不同款式）<br>
+          最终该跑鞋的 SID 为 $\{47, 312, 1847\}$，三层从粗到细刻画物品语义。</p>
+        </div>
+
+        <div class="callout-amber">
+          <strong>为什么要用 FSQ 而不是三层全用 Res-Kmeans？</strong><br>
+          Kmeans 优化目标是最小化簇内距离，不考虑簇间距离，容易产生"中心坍塌"（多个中心靠得很近）。这导致不同商品被映射到同一 SID（碰撞率高达 36%，即一个 SID 对应多件商品），严重影响生成准确性。FSQ 预先固定均匀分布的中心，碰撞率降至 11%，Exclusive（每个 SID 唯一对应一件商品）比例从 86% 升至 95%。
+        </div>
+      </section>
+
+      <!-- 3. Decoder-Only 模型架构 -->
+      <section class="section" id="arch">
+        <div class="section-title">
+          <div class="icon" style="background:#059669"></div>
+          3. Decoder-Only 模型架构
+        </div>
+
+        <p>OneMall 采用 <strong>Decoder-Only</strong> 架构，通过 Cross-Attention 注入用户行为序列，通过 Causal Self-Attention + Sparse MoE 自回归生成 Semantic IDs。</p>
+
+        <figure>
+          <img src="https://arxiv.org/html/2601.21770v2/x2.png"
+               alt="Figure 4: OneMall Transformer 骨干架构"
+               style="width:100%;border-radius:12px;border:1px solid var(--line);"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'><b>Figure 4: OneMall Transformer 骨干架构</b><br><br>三路 Query-Former 分别压缩曝光序列、点击序列、购买序列；Cross-Attention 融合到解码侧；Causal Self-Attention + Sparse MoE 自回归生成 SID；附加 In-Batch 对比学习辅助目标。</div>`" />
+          <figcaption><strong>Figure 4（论文原图）：</strong>OneMall 的 Transformer 骨干。多路 Query-Former 压缩长序列 → Cross-Attention 融合用户历史 → Causal Self-Attention + Sparse MoE 生成三层 SID → In-Batch 对比辅助。</figcaption>
+        </figure>
+
+        <div class="flow-diagram">
+          <div class="flow-box">曝光/点击/购买序列（各500+条）</div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-box">Query-Former<br>各压缩为 [B, M, D]</div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-box">Cross-Attention<br>注入解码 query</div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-box">Causal Self-Att<br>+ Sparse MoE</div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-box">预测 SID1/SID2/SID3</div>
+        </div>
+
+        <h3 id="qformer">3.1 Query-Former：长序列压缩</h3>
+
+        <p>电商场景下用户行为序列极长（曝光序列可能有 1000+ 条），直接送入 Transformer 计算量爆炸。OneMall 借鉴 BLIP-2 的 Q-Former，用少量可学习 query 从长序列中提炼出紧凑表示。</p>
+
+        <div class="formula-block">
+$$F_{\text{click}} = \text{QFormer}_{\text{click}}(Q_{\text{click}}, H_{\text{click}}, H_{\text{click}}) \in \mathbb{R}^{M \times D}$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$Q_{\text{click}} \in \mathbb{R}^{M \times D}$：$M$ 个可学习 query 向量（$M=10$，表示压缩后的表示数量）</li>
+            <li>$H_{\text{click}} \in \mathbb{R}^{H \times D}$：用户点击序列的原始 embedding（$H=500$，序列长度）</li>
+            <li>$D$：embedding 维度（128）</li>
+            <li>Q-Former 内部：query 对 $H$ 做 cross-attention，输出 $M$ 个浓缩后的向量</li>
+          </ul>
+        </div>
+
+        <p>同样对购买序列（$F_{\text{buy}}$）、曝光序列（$F_{\text{exposure}}$）、物品侧特征（$F_{\text{item}}$）各做一个 Q-Former 压缩，显著降低 Cross-Attention 的计算量（GFLOPs 降低 3.7×，性能损失极小）。</p>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：Query-Former 如何压缩 500 条点击历史</div>
+          <p>输入：用户最近 500 次点击的商品 embedding 矩阵 $H \in \mathbb{R}^{500 \times 128}$<br>
+          Q-Former 有 10 个可学习 query（$Q \in \mathbb{R}^{10 \times 128}$），每个 query 通过 cross-attention 从 500 条记录中"选出"自己关注的部分。<br>
+          输出：$F_{\text{click}} \in \mathbb{R}^{10 \times 128}$，10 个 128 维向量，浓缩了 500 条历史的核心信息。<br>
+          效果：GFLOPs 从 34.4 降至 9.2（节省 73%），HR@50 仅降低 0.5pp。</p>
+        </div>
+
+        <h3 id="cross-att">3.2 Cross-Attention：历史信息注入</h3>
+
+        <p>将压缩后的多路用户历史（点击、曝光、购买）拼接，通过 $L$ 层 Cross-Attention 注入到解码侧的 SID token 序列中：</p>
+
+        <div class="formula-block">
+$$\{\hat{s}^L_0, \hat{s}^L_1, \hat{s}^L_2, \hat{s}^L_3\} = \text{CrossAtt}^L(\{s^{L-1}_0, \ldots, s^{L-1}_3\} \cdot W^L_q,\ \{F_{\text{click}},\ldots\} \cdot W^L_k,\ \{F_{\text{click}},\ldots\} \cdot W^L_v)$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$s^{L-1}_0$：第 $L-1$ 层的 BOS token 表示（解码侧初始 token）</li>
+            <li>$s^{L-1}_{1,2,3}$：第 $L-1$ 层的三个 SID token 表示（自回归预测时逐步填充）</li>
+            <li>$W^L_q, W^L_k, W^L_v \in \mathbb{R}^{D \times D}$：第 $L$ 层 Cross-Attention 的可学习参数矩阵</li>
+            <li>$\{F_{\text{click}}, F_{\text{exposure}}, F_{\text{buy}}, \ldots\}$：各路压缩后的用户历史 embedding</li>
+          </ul>
+        </div>
+
+        <h3 id="moe">3.3 Sparse MoE：扩展模型容量</h3>
+
+        <p>Cross-Attention 之后，再经过 Causal Self-Attention（保持自回归约束）+ Sparse MoE FFN（扩展参数容量，但推理时只激活部分专家）：</p>
+
+        <div class="formula-block">
+$$\{\bar{s}^L_0, \ldots, \bar{s}^L_3\} = \text{CausalSelfAtt}(\{\hat{s}^L_0, \ldots, \hat{s}^L_3\})$$
+$$\{s^L_0, \ldots, s^L_3\} = \text{SparseMoE}(\{\bar{s}^L_0, \ldots, \bar{s}^L_3\}) + \{s^{L-1}_0, \ldots, s^{L-1}_3\}$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\text{CausalSelfAtt}$：带 causal mask 的标准自注意力，确保预测 $s_k$ 时只能看到 $s_1, \ldots, s_{k-1}$</li>
+            <li>$\text{SparseMoE}$：稀疏专家混合 FFN（参考 DeepSeek-V3 的 loss-free 负载均衡）</li>
+            <li>$+ \{s^{L-1}_0, \ldots\}$：残差连接</li>
+            <li>模型规模：0.5B 总参数，激活参数 0.1B（24 个专家，每次激活 2/24）</li>
+          </ul>
+        </div>
+
+        <div class="callout-purple">
+          <strong>MoE 的作用：</strong>保持 0.1B 激活参数（推理低延迟），同时让总参数扩展到 1.3B，模型有更大的"知识容量"。实验显示，从 dense 0.1B 到 sparse 0.5B-A0.1B，HR@50 提升超过 10pp，这是 OneMall 最大的单点收益之一。
+        </div>
+
+        <h3 id="objectives">3.4 训练目标</h3>
+
+        <p>两个同时优化的目标：</p>
+
+        <div class="formula-block">
+$$\mathcal{L}_{\text{NTP}} = \text{Softmax}(\{s^L_0, s^L_1, s^L_2\}, \{s_1^\star, s_2^\star, s_3^\star\})$$
+$$\mathcal{L}_{\text{contrastive}} = \text{InBatch-Contrastive}(s^L_3, f_{\text{item}})$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\{s_1^\star, s_2^\star, s_3^\star\}$：目标物品的真实三层 SID（ground-truth token 序列）</li>
+            <li>$\mathcal{L}_{\text{NTP}}$：自回归 NTP 主目标，交叉熵损失</li>
+            <li>$s^L_3$：解码最后一层（完整 SID 路径的终态隐向量）</li>
+            <li>$f_{\text{item}}$：物品侧特征 tower 的输出 embedding（包含商品类目、价格、店铺等精细特征）</li>
+            <li>$\mathcal{L}_{\text{contrastive}}$：辅助对比学习，让模型输出的隐向量与物品特征对齐（batch 内负样本）</li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：辅助对比学习解决了什么问题</div>
+          <p>问题：SID 是粗粒度的离散 token，无法区分同一 SID 路径下的相似商品。<br>
+          例如 $\{47, 312, 1847\}$ 可能对应 20 款不同跑鞋，NTP loss 只能学到"生成这个 SID"，不能区分是哪双鞋。<br>
+          解决：让解码输出的隐向量 $s^L_3$ 通过 in-batch 对比学习与物品精细特征（价格、品牌、颜色等）对齐。<br>
+          实验：加入对比学习辅助目标后，HR@50/100/500 分别提升 +1.5%/+1.7%/+1.7%。</p>
+        </div>
+      </section>
+
+      <!-- 4. RL 强化学习对齐 -->
+      <section class="section" id="rl">
+        <div class="section-title">
+          <div class="icon" style="background:#dc2626"></div>
+          4. 强化学习对齐：连接召回与排序
+        </div>
+
+        <p>NTP 训练让模型学会分布匹配，但不等于业务 KPI 最优。OneMall 引入以<strong>排序模型为奖励信号</strong>的 RL 后训练，让召回模型直接被排序模型的 CTR/CVR/GPM 指导。</p>
+
+        <figure>
+          <img src="https://arxiv.org/html/2601.21770v2/x3.png"
+               alt="Figure 5: OneMall RL 训练流程"
+               style="width:100%;border-radius:12px;border:1px solid var(--line);"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'><b>Figure 5: OneMall RL 训练流程</b><br><br>Policy Model → 生成候选 → Ranking Model 评分 → Advantage 标准化 → DPO/GRPO 梯度更新</div>`" />
+          <figcaption><strong>Figure 5（论文原图）：</strong>OneMall 的 RL 训练流程。Reference Model 定期从 Policy Model 参数同步，用于生成候选集；在线 Ranking Model 提供 CTR/CVR 奖励；Advantage 归一化后通过 DPO 或 GRPO 更新 Policy Model。</figcaption>
+        </figure>
+
+        <h3 id="reward">4.1 奖励建模</h3>
+
+        <p>在线排序模型（可使用全量特征：用户+物品+交叉特征）作为 Reward Model，输出多个预测概率，融合为单一奖励分：</p>
+
+        <div class="formula-block">
+$$r = \alpha \times \hat{y}_{\text{ctr}} + \beta \times \hat{y}_{\text{ctcvr}} + \gamma \times \hat{y}_{\text{egpm}} + \ldots$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\hat{y}_{\text{ctr}}$：排序模型预测的点击率</li>
+            <li>$\hat{y}_{\text{ctcvr}}$：排序模型预测的点击转化率（CTCVR）</li>
+            <li>$\hat{y}_{\text{egpm}}$：预测的电商毛利润（EGPM）</li>
+            <li>$\alpha, \beta, \gamma$：手工设定的融合权重（本文 $\alpha=1.0, \beta=30.0, \gamma=1.0$，量级对齐）</li>
+            <li>Advantage 计算：$A_i = \frac{r_i - \text{mean}(r)}{\text{std}(r)}$，batch 内归一化</li>
+          </ul>
+        </div>
+
+        <h3 id="dpo-grpo">4.2 DPO 和 GRPO 两种策略</h3>
+
+        <p>OneMall 尝试了两种 RL 优化策略：</p>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>DPO（直接偏好优化）</h4>
+            <p>将候选集按 Advantage 排序，取最高分的作正样本 $o_{\text{pos}}$，从低分候选中采样（或取最低分）一个作负样本 $o_{\text{neg}}$，构成单一偏好对送入 DPO loss。</p>
+          </div>
+          <div class="mini-card">
+            <h4>GRPO（组相对策略优化）</h4>
+            <p>从 $n$ 个候选中随机采样 $m$ 个，基于 Advantage 做 clip 截断的概率比优化。</p>
+          </div>
+        </div>
+
+        <div class="formula-block">
+$$\mathcal{L}_{\text{DPO}} = -\sigma\!\left(\lambda \log\frac{\pi_\theta(o_{\text{pos}}|q)}{\pi_{\theta_{\text{ref}}}(o_{\text{pos}}|q) + \delta} - \lambda \log\frac{\pi_\theta(o_{\text{neg}}|q)}{\pi_{\theta_{\text{ref}}}(o_{\text{neg}}|q) + \delta}\right)$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">DPO 符号说明</div>
+          <ul>
+            <li>$\pi_\theta$：当前策略模型（Policy Model，正在被更新的参数）</li>
+            <li>$\pi_{\theta_{\text{ref}}}$：参考模型（定期从 Policy 同步，frozen 作为基准）</li>
+            <li>$o_{\text{pos}}$：正样本 SID 序列（Advantage 排序最高的候选）</li>
+            <li>$o_{\text{neg}}$：负样本 SID 序列（Advantage 较低的候选）</li>
+            <li>$\lambda$：偏好对比强度超参（0.1-0.5）</li>
+            <li>$\delta$：加在分母上防止参考模型概率为零导致除零，是一个小正常数</li>
+            <li>$\sigma$：sigmoid 函数，将内部对比分值映射到 $(0,1)$ 再取 $-\log$</li>
+          </ul>
+        </div>
+
+        <div class="formula-block">
+$$\mathcal{L}_{\text{GRPO}} = -\sum_{i=1}^{m} \min\!\left(\text{clip}\!\left(\frac{\pi_\theta(o_i|q)}{\pi_{\theta_{\text{ref}}}(o_i|q) + \delta},\, 1-\epsilon,\, 1+\epsilon\right) \times A_i\right)$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">GRPO 符号说明</div>
+          <ul>
+            <li>$m$：每次训练随机采样的候选数（从 $n$ 个候选里取 $m$ 个）</li>
+            <li>$\pi_\theta(o_i|q) / (\pi_{\theta_{\text{ref}}}(o_i|q) + \delta)$：当前策略相对参考策略的概率比（分母加 $\delta$ 防除零）</li>
+            <li>$\text{clip}(\cdot,\, 1-\epsilon,\, 1+\epsilon)$：将概率比截断在 $[1-\epsilon, 1+\epsilon]$ 内，防止单个样本主导更新（PPO-style 稳定训练）</li>
+            <li>$A_i$：候选 $o_i$ 的 Advantage，由 Ranking Model 打分归一化得到（$A_i = (r_i - \text{mean}(r))/\text{std}(r)$）</li>
+            <li>$\epsilon$：clip 截断超参（通常 0.1-0.2）</li>
+            <li>取 $\min$ 而非直接相乘，是为了对正负 Advantage 做非对称处理（标准 PPO 写法）</li>
+          </ul>
+        </div>
+
+        <div class="callout-amber">
+          <strong>GRPO vs DPO：</strong>实验显示 GRPO 在各指标上均优于 DPO。原因：GRPO 对 batch 内全部 768 个候选的 Advantage 做归一化，学到的是"相对质量分布"；DPO 只用最高/最低两个极端做对比，信号更稀疏。对 Top10 精准质量要求高的场景差距更明显（CTR +0.040%, CTCVR +0.012%, GPM +0.228% over DPO）。
+        </div>
+
+        <p>最终联合损失：</p>
+        <div class="formula-block">
+$$\mathcal{L} = 0.5 \cdot \mathcal{L}_{\text{RL}} + \mathcal{L}_{\text{NTP}} + \mathcal{L}_{\text{contrastive}}$$
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：RL 如何打通召回-排序壁垒</div>
+          <p>传统流程：召回模型训练时只用 InfoNCE（用户是否点击），无法感知"点击后有没有买"。<br>
+          OneMall RL：每次从训练流量中采样 2%，用当前召回模型做 Beam Search 生成 768 个候选；<br>
+          排序模型对这 768 个候选分别打出 (CTR, CVR, GPM)，融合为奖励分 $r$；<br>
+          GRPO 用奖励 Advantage 更新召回模型，直接鼓励"生成高价值商品"。<br>
+          结果：召回模型输出的 Top10 商品的 CTR/CTCVR/GPM 全部提升，打破了传统召回与排序目标不一致的壁垒。</p>
+        </div>
+      </section>
+
+      <!-- 5. 实验结果 -->
+      <section class="section" id="experiments">
+        <div class="section-title">
+          <div class="icon" style="background:#0891b2"></div>
+          5. 实验结果
+        </div>
+
+        <h3>5.1 Scaling 实验（短视频场景）</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>规模</th>
+                <th>层数</th>
+                <th>Att-Dim</th>
+                <th>Expert</th>
+                <th>Acc-SID1</th>
+                <th>Acc-SID2</th>
+                <th>Acc-SID3</th>
+                <th>HR@50</th>
+                <th>HR@100</th>
+                <th>HR@500</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>0.05B</td><td>2</td><td>1024</td><td>-</td><td>14.5%</td><td>43.9%</td><td>61.0%</td><td>32.9%</td><td>41.3%</td><td>60.5%</td></tr>
+              <tr><td>0.1B</td><td>4</td><td>1024</td><td>-</td><td>14.9%</td><td>46.2%</td><td>63.6%</td><td>34.7%</td><td>43.8%</td><td>63.2%</td></tr>
+              <tr><td>0.5B-A0.1B</td><td>4</td><td>1024</td><td>12/2</td><td>16.0%</td><td>50.6%</td><td>69.3%</td><td>44.7%</td><td>56.0%</td><td>74.2%</td></tr>
+              <tr><td><strong>1.3B-A0.1B</strong></td><td>4</td><td>1024</td><td>24/2</td><td><strong>16.2%</strong></td><td><strong>51.7%</strong></td><td><strong>71.7%</strong></td><td><strong>45.6%</strong></td><td><strong>57.3%</strong></td><td><strong>76.0%</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>关键观察：dense 0.1B → sparse 0.5B-A0.1B 是最大跃升（HR@50 +10pp），说明 MoE 扩容效果显著。1.3B 相比 0.5B 进一步提升，Scaling 趋势持续。</p>
+
+        <figure>
+          <img src="https://arxiv.org/html/2601.21770v2/x4.png"
+               alt="Figure 6: OneMall Scaling 趋势图"
+               style="width:100%;border-radius:12px;border:1px solid var(--line);"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'><b>Figure 6: OneMall Scaling 趋势</b><br><br>短视频场景下，随着模型参数从 0.05B 扩展到 1.3B，各 HR 指标持续单调提升，验证 Scaling Law 有效。</div>`" />
+          <figcaption><strong>Figure 6（论文原图）：</strong>OneMall 在短视频场景的 Scaling 趋势。参数规模从 0.05B 增长到 1.3B（激活参数保持 0.1B），召回率持续提升，验证了生成式推荐 Scaling Law。</figcaption>
+        </figure>
+
+        <h3>5.2 基线对比（三品类场景）</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>场景</th><th>方法</th><th>HR@50</th><th>HR@100</th><th>HR@500</th></tr>
+            </thead>
+            <tbody>
+              <tr><td rowspan="3">商品卡</td><td>SASRec-0.5B-A0.1B</td><td>23.2%</td><td>30.4%</td><td>45.1%</td></tr>
+              <tr><td>TIGER-0.5B-A0.1B</td><td>29.5%</td><td>37.1%</td><td>53.7%</td></tr>
+              <tr><td><strong>OneMall-0.5B-A0.1B</strong></td><td><strong>34.3%</strong></td><td><strong>40.9%</strong></td><td><strong>59.3%</strong></td></tr>
+              <tr><td rowspan="3">购物短视频</td><td>SASRec-0.5B-A0.1B</td><td>30.2%</td><td>41.9%</td><td>66.3%</td></tr>
+              <tr><td>TIGER-0.5B-A0.1B</td><td>35.1%</td><td>47.8%</td><td>72.5%</td></tr>
+              <tr><td><strong>OneMall-0.5B-A0.1B</strong></td><td><strong>44.7%</strong></td><td><strong>56.0%</strong></td><td><strong>74.2%</strong></td></tr>
+              <tr><td rowspan="3">直播</td><td>SASRec-0.5B-A0.1B</td><td>53.9%</td><td>58.8%</td><td>68.4%</td></tr>
+              <tr><td>TIGER-0.5B-A0.1B</td><td>57.3%</td><td>63.5%</td><td>73.7%</td></tr>
+              <tr><td><strong>OneMall-0.5B-A0.1B</strong></td><td><strong>65.9%</strong></td><td><strong>69.1%</strong></td><td><strong>80.5%</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>5.3 线上 A/B 实验</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>场景</th><th>曝光</th><th>点击</th><th>订单</th><th>GMV</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>商品卡</strong></td><td>+2.851%</td><td>+13.01%</td><td>+8.35%</td><td><strong>+14.71%</strong></td></tr>
+              <tr><td><strong>购物短视频</strong></td><td>+15.32%</td><td>+5.76%</td><td>+11.65%</td><td><strong>+10.33%</strong></td></tr>
+              <tr><td><strong>直播</strong></td><td>+2.78%</td><td>+2.53%</td><td>+4.47%</td><td><strong>+4.90%</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>三个场景全部正向，GMV 增益均超过 4.9%，最高达 14.71%。该系统已上线服务 4 亿日活用户。</p>
+      </section>
+
+      <!-- 6. 亮点与启发 -->
+      <section class="section" id="insights">
+        <div class="section-title">
+          <div class="icon" style="background:#f59e0b"></div>
+          6. 亮点、不足与启发
+        </div>
+
+        <h3>🌟 核心亮点</h3>
+        <ul>
+          <li><strong>多品类统一 Tokenizer</strong>：一套框架同时处理商品卡、短视频、直播三类异质物品，不同品类融入不同语义（商业/观看体验/动态），这是比 OneRec（纯娱乐短视频）更难的工程问题，做到了很好的统一。</li>
+          <li><strong>LLM 微调 Tokenizer</strong>：用 LLM（Qwen2.5 1.5B）的泛化能力解决长尾商品 embedding 质量差的问题，比纯协同过滤的 item tower 能更好覆盖冷启动物品。</li>
+          <li><strong>ResKmeans + FSQ 组合</strong>：用 FSQ 的规则均匀分区替代第三层 Kmeans，将 SID 碰撞率从 36% 降到 11%，是一个简单有效的工程 trick。</li>
+          <li><strong>Scaling Law 验证</strong>：证明电商生成式推荐同样存在 Scaling Law，MoE 是低推理成本扩容的关键路径。</li>
+          <li><strong>GRPO > DPO 的实证</strong>：在 e-commerce 推荐场景下，GRPO 的 group-level 归一化比 DPO 的 pairwise 对比提供更丰富的训练信号，值得借鉴。</li>
+        </ul>
+
+        <h3>⚠️ 值得注意的局限</h3>
+        <ul>
+          <li><strong>直播 Tokenizer 问题</strong>：直播的 SID 用双塔模型 item tower embedding，而非 LLM 微调 embedding，语义能力相对较弱；动态商品变化的处理也只用了低学习率缓解，没有根本性解决。</li>
+          <li><strong>RL 只采样 2% 流量</strong>：RL 训练样本量受限，奖励信号覆盖范围有限，可能对长尾物品的价值估计不准。</li>
+          <li><strong>手工融合权重</strong>：$\alpha=1.0, \beta=30.0, \gamma=1.0$ 是人工调参，不同业务场景需要重新调，缺乏自动化方法。</li>
+        </ul>
+
+        <h3>💡 对我们的启发</h3>
+        <div class="callout-green">
+          <ul>
+            <li><strong>用 LLM 做 Tokenizer 是正途</strong>：纯协同信号（双塔）的 SID 会放大头部偏差，LLM 文本语义更均匀，尤其对长尾商品友好。</li>
+            <li><strong>Q-Former 是降低长序列成本的实用工具</strong>：3.7× GFLOPs 节省，性能几乎无损，适合迁移到其他需要多路长序列融合的场景。</li>
+            <li><strong>排序模型作为奖励是工业 RL 的务实选择</strong>：不需要人工标注偏好对，直接复用已有排序模型，工程落地代价低。</li>
+            <li><strong>FSQ 解决 codebook collapse 是一个 trick</strong>：如果生成式推荐遇到 SID 碰撞率高的问题，用 FSQ 替换最后一层是一个成本很低的方案。</li>
+          </ul>
+        </div>
+
+        <div class="paper-info">
+          📄 论文链接：<a href="https://arxiv.org/abs/2601.21770" target="_blank">arXiv 2601.21770</a>
+          &nbsp;|&nbsp; 快手技术团队 · 2026 年 1 月
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<footer>
+  <a href="../index.html">← 返回论文列表</a>
+  &nbsp;|&nbsp; OneMall 论文解读 · 快手电商生成式推荐
+</footer>
+
+</body>
+</html>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GRID 论文解读</title>
+  <title>GRID 论文解读 — 生成式推荐与语义ID实践手册</title>
   <link rel="preconnect" href="https://cdn.jsdelivr.net" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
@@ -28,504 +28,1556 @@
       --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
       --line: #e5e7eb; --primary: #2563eb; --primary-soft: #eff6ff;
       --accent: #7c3aed; --accent-soft: rgba(124,58,237,0.06);
-      --shadow: 0 10px 30px rgba(15,23,42,0.08); --radius: 18px; --max: 1120px;
+      --shadow: 0 10px 30px rgba(15,23,42,0.08); --radius: 18px; --max: 1300px;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html { scroll-behavior: smooth; }
     body {
       background: linear-gradient(180deg,#f8fbff 0%,var(--bg) 240px);
       color: var(--text);
       font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
-      line-height: 1.8;
+      line-height: 1.7;
     }
     a { color: var(--primary); text-decoration: none; }
     a:hover { text-decoration: underline; }
-    .page { max-width: var(--max); margin: 0 auto; padding: 32px 20px 80px; }
-    .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; margin-bottom: 18px; }
-    .back-link:hover { color: var(--primary); text-decoration: none; }
-    .hero {
-      background: radial-gradient(circle at top right,rgba(37,99,235,0.14),transparent 30%),
-                  radial-gradient(circle at left bottom,rgba(124,58,237,0.10),transparent 24%), var(--card);
-      border: 1px solid rgba(37,99,235,0.08); border-radius: 24px;
-      box-shadow: var(--shadow); padding: 34px 34px 28px; margin-bottom: 22px;
+
+    /* Back link */
+    .back-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 10px 20px; margin: 24px 32px;
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: 40px; font-size: 14px; color: var(--muted);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06); transition: all .2s;
     }
-    .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--primary-soft); color: var(--primary); font-size: 13px; font-weight: 600; margin-bottom: 16px; }
-    h1 { font-size: 34px; line-height: 1.25; letter-spacing: -0.02em; margin-bottom: 10px; }
-    .subtitle { color: var(--muted); font-size: 16px; }
-    .meta-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-top: 24px; }
-    .meta-card { background: #fbfdff; border: 1px solid #e7eefb; border-radius: 16px; padding: 14px 16px; }
-    .meta-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
-    .meta-value { font-size: 14px; font-weight: 600; word-break: break-word; }
-    .layout { display: grid; grid-template-columns: 260px minmax(0,1fr); gap: 22px; align-items: start; }
-    .toc { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; }
-    .toc h2 { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
-    .toc-list { list-style: none; }
-    .toc-list li { margin: 7px 0; }
-    .toc-list a { font-size: 13.5px; color: var(--muted); }
-    .toc-list a:hover { color: var(--primary); text-decoration: none; }
-        .toc-list a.active{color:var(--primary);background:#eff6ff;font-weight:600;border-left:3px solid var(--primary);padding-left:5px;}
-.toc-sub { padding-left: 14px; margin-top: 4px; }
-    .toc-sub li { margin: 4px 0; }
-    .toc-sub a { font-size: 12.5px; }
-    .content { display: flex; flex-direction: column; gap: 20px; }
-    .section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 28px 30px; }
-    .section-title { font-size: 22px; font-weight: 800; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 2px solid #f0f4ff; display: flex; align-items: center; gap: 10px; }
-    .section-title .icon { width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
-    h3 { font-size: 18px; font-weight: 700; margin: 26px 0 12px; color: #111827; }
-    h4 { font-size: 15px; font-weight: 700; margin: 20px 0 10px; color: #1d4ed8; }
-    p { margin-bottom: 12px; }
-    p:last-child { margin-bottom: 0; }
-    ul, ol { padding-left: 22px; }
-    li { margin-bottom: 8px; }
-    .callout { border-radius: 14px; padding: 14px 18px; margin: 16px 0; font-size: 14.5px; }
-    .callout-blue { background: linear-gradient(180deg,rgba(37,99,235,0.08),rgba(37,99,235,0.04)); border: 1px solid rgba(37,99,235,0.16); }
-    .callout-blue strong { color: #1d4ed8; }
-    .callout-amber { background: #fffbeb; border: 1px solid #fde68a; }
-    .callout-amber strong { color: #92400e; }
-    .callout-green { background: #f0fdf4; border: 1px solid #86efac; }
-    .callout-green strong { color: #166534; }
-    .callout-purple { background: var(--accent-soft); border: 1px solid rgba(124,58,237,0.18); }
-    .callout-purple strong { color: #6d28d9; }
-    .example-box { background: #f0fdf4; border: 1px solid #86efac; border-radius: 14px; padding: 16px 20px; margin: 16px 0; }
-    .example-box .ex-title { font-size: 12px; font-weight: 700; color: #166534; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
-    .example-box p { margin-bottom: 8px; font-size: 14px; color: #166534; }
-    .example-box p:last-child { margin-bottom: 0; }
-    blockquote { margin: 16px 0; padding: 14px 18px; border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 0 12px 12px 0; color: #3f3f46; font-size: 14.5px; }
-    .paper-info { background: #fafbff; border-left: 4px solid var(--primary); border-radius: 12px; padding: 14px 16px; margin: 16px 0; color: #334155; font-size: 14px; }
-    .paper-info p { margin: 5px 0; }
-    figure { margin: 22px 0; background: #fbfdff; border: 1px solid #e8edf5; border-radius: 16px; padding: 14px; }
-    figure img { width: 100%; display: block; border-radius: 12px; background: #fff; }
-    figcaption { margin-top: 10px; font-size: 13.5px; color: var(--muted); line-height: 1.6; }
-    .fig-placeholder { padding: 36px 24px; text-align: center; background: #f8faff; border-radius: 12px; color: #94a3b8; font-size: 14px; border: 2px dashed #e2e8f0; line-height: 1.9; }
-    .formula-block { background: #fafbff; border: 1px solid #e8edf5; border-radius: 14px; padding: 16px 20px; margin: 14px 0; overflow-x: auto; }
-    .formula-vars { background: #f8f9fe; border: 1px solid #e0e7ff; border-radius: 12px; padding: 12px 16px; margin-top: -6px; margin-bottom: 14px; }
-    .formula-vars .var-title { font-size: 12px; font-weight: 700; color: #4338ca; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
-    .formula-vars ul { padding-left: 18px; }
-    .formula-vars li { font-size: 13.5px; color: #374151; margin-bottom: 5px; }
-    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0; }
-    .mini-card { background: #f8faff; border: 1px solid #e8edf5; border-radius: 12px; padding: 14px 16px; }
-    .mini-card h4 { margin-top: 0; }
-    .finding-card { border-radius: 14px; padding: 14px 18px; margin: 10px 0; border-left: 4px solid; }
-    .finding-surprise { background: #fff7ed; border-color: #f97316; }
-    .finding-surprise strong { color: #c2410c; }
-    .finding-confirm { background: #f0fdf4; border-color: #22c55e; }
-    .finding-confirm strong { color: #15803d; }
-    .table-wrap { overflow-x: auto; margin: 14px 0; }
+    .back-link:hover { color: var(--primary); border-color: var(--primary); text-decoration: none; box-shadow: 0 4px 16px rgba(37,99,235,0.12); }
+
+    /* Hero */
+    .hero {
+      background: radial-gradient(ellipse at 70% 0%, #dbeafe 0%, transparent 60%),
+                  radial-gradient(ellipse at 20% 80%, rgba(124,58,237,0.08) 0%, transparent 50%),
+                  var(--card);
+      border-bottom: 1px solid var(--line);
+      padding: 60px 48px 48px;
+      max-width: var(--max); margin: 0 auto;
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--primary-soft); color: var(--primary);
+      border: 1px solid #bfdbfe; border-radius: 20px;
+      padding: 4px 14px; font-size: 12px; font-weight: 600;
+      letter-spacing: .5px; text-transform: uppercase; margin-bottom: 20px;
+    }
+    .hero h1 { font-size: 2.2rem; font-weight: 800; line-height: 1.25; margin-bottom: 10px; color: #0f172a; }
+    .hero h1 .en { display: block; font-size: 1.1rem; font-weight: 500; color: var(--muted); margin-top: 6px; }
+    .subtitle { font-size: 1.05rem; color: var(--muted); margin-bottom: 28px; max-width: 700px; line-height: 1.6; }
+    .meta-grid { display: grid; grid-template-columns: repeat(4, auto); gap: 12px 32px; }
+    .meta-item { display: flex; flex-direction: column; gap: 2px; }
+    .meta-label { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+    .meta-value { font-size: 14px; color: var(--text); font-weight: 500; }
+
+    /* Layout */
+    .layout {
+      max-width: var(--max); margin: 0 auto;
+      display: grid; grid-template-columns: 260px minmax(0,1fr);
+      gap: 32px; padding: 32px 48px 80px;
+    }
+
+    /* TOC */
+    aside.toc {
+      position: sticky; top: 24px; align-self: start;
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: var(--radius); padding: 20px;
+      box-shadow: var(--shadow); max-height: calc(100vh - 48px); overflow-y: auto;
+    }
+    .toc-title { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 12px; }
+    .toc-list { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+    .toc-list a { font-size: 13px; color: var(--muted); display: block; padding: 5px 10px; border-radius: 8px; transition: all .15s; line-height: 1.4; }
+    .toc-list a:hover { background: var(--primary-soft); color: var(--primary); text-decoration: none; }
+    .toc-sub { list-style: none; margin-left: 12px; display: flex; flex-direction: column; gap: 2px; }
+    .toc-sub a { font-size: 12px; color: #94a3b8; padding: 3px 10px; }
+    .toc-sub a:hover { background: var(--primary-soft); color: var(--primary); }
+
+    /* Content */
+    main.content { min-width: 0; }
+    .section {
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: var(--radius); padding: 36px 40px;
+      box-shadow: var(--shadow); margin-bottom: 24px;
+    }
+    .section-title {
+      display: flex; align-items: center; gap: 12px;
+      font-size: 1.35rem; font-weight: 700; margin-bottom: 24px; color: #0f172a;
+    }
+    .section-title .icon {
+      width: 36px; height: 36px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; flex-shrink: 0;
+    }
+    .icon-blue { background: #dbeafe; }
+    .icon-purple { background: var(--accent-soft); }
+    .icon-green { background: #dcfce7; }
+    .icon-orange { background: #fef3c7; }
+    .icon-red { background: #fee2e2; }
+
+    h3 { font-size: 1.05rem; font-weight: 700; margin: 28px 0 12px; color: #1e293b; }
+    h4 { font-size: 0.95rem; font-weight: 600; margin: 20px 0 8px; color: #334155; }
+    p { margin-bottom: 14px; }
+
+    /* Callouts */
+    .callout-blue { background: #eff6ff; border-left: 4px solid var(--primary); border-radius: 10px; padding: 16px 20px; margin: 16px 0; }
+    .callout-amber { background: #fffbeb; border-left: 4px solid #f59e0b; border-radius: 10px; padding: 16px 20px; margin: 16px 0; }
+    .callout-green { background: #f0fdf4; border-left: 4px solid #22c55e; border-radius: 10px; padding: 16px 20px; margin: 16px 0; }
+    .callout-purple { background: #faf5ff; border-left: 4px solid var(--accent); border-radius: 10px; padding: 16px 20px; margin: 16px 0; }
+
+    /* Example box */
+    .example-box {
+      background: #f0fdf4; border: 1px solid #86efac;
+      border-radius: 12px; padding: 18px 22px; margin: 20px 0;
+    }
+    .ex-title { font-weight: 700; color: #16a34a; margin-bottom: 10px; font-size: 14px; }
+
+    /* Step list */
+    .step-list { list-style: none; display: flex; flex-direction: column; gap: 12px; margin: 16px 0; }
+    .step { display: flex; gap: 14px; align-items: flex-start; }
+    .step-num {
+      width: 28px; height: 28px; border-radius: 50%; background: var(--primary);
+      color: #fff; font-size: 13px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px;
+    }
+
+    /* Flow diagram */
+    .flow-diagram { display: flex; flex-direction: column; gap: 8px; margin: 20px 0; }
+    .flow-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .flow-box {
+      background: var(--primary-soft); border: 1.5px solid #bfdbfe;
+      border-radius: 10px; padding: 10px 18px; font-size: 14px;
+      font-weight: 600; color: var(--primary);
+    }
+    .flow-arrow { color: var(--muted); font-size: 18px; }
+
+    /* ASCII diagram blocks */
+    .ascii-wrap {
+      background: #f8fafc;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 14px;
+      padding: 22px 26px;
+      margin: 18px 0;
+      overflow-x: auto;
+    }
+    .ascii-wrap pre {
+      font-family: 'JetBrains Mono','Fira Code','Cascadia Code','SF Mono',monospace;
+      font-size: 13px;
+      line-height: 1.75;
+      color: #1e293b;
+      background: none;
+      padding: 0;
+      margin: 0;
+      white-space: pre;
+    }
+    .ascii-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      margin-bottom: 12px;
+    }
+    /* color tokens inside ASCII */
+    .ac-blue   { color: #2563eb; font-weight: 600; }
+    .ac-purple { color: #7c3aed; font-weight: 600; }
+    .ac-green  { color: #16a34a; font-weight: 600; }
+    .ac-amber  { color: #d97706; font-weight: 600; }
+    .ac-red    { color: #dc2626; font-weight: 600; }
+    .ac-gray   { color: #94a3b8; }
+    .ac-bold   { color: #0f172a; font-weight: 700; }
+
+    /* key point tags */
+    .kp-list { display: flex; flex-direction: column; gap: 10px; margin: 14px 0; }
+    .kp { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; }
+    .kp-icon { flex-shrink: 0; width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; margin-top: 1px; }
+    .kp-icon.blue   { background:#dbeafe; }
+    .kp-icon.green  { background:#dcfce7; }
+    .kp-icon.amber  { background:#fef3c7; }
+    .kp-icon.purple { background:#f3e8ff; }
+
+    /* Formula */
+    .formula-block { margin: 20px 0; }
+    .formula-vars {
+      background: #f8fafc; border: 1px solid var(--line);
+      border-radius: 10px; padding: 14px 18px; margin-top: 10px; font-size: 13px;
+    }
+    .formula-vars .var-title { font-weight: 700; color: var(--muted); margin-bottom: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .3px; }
+    .formula-vars ul { padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+
+    /* Two-col */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+    .mini-card { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+    .mini-card h4 { margin: 0 0 8px; font-size: 13px; color: var(--primary); }
+
+    /* Tables */
+    .table-wrap { overflow-x: auto; margin: 20px 0; border-radius: 12px; border: 1px solid var(--line); }
     table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-    thead th { background: #f0f4ff; padding: 10px 12px; text-align: left; font-weight: 700; color: #1e40af; border-bottom: 2px solid #c7d2fe; }
-    tbody td { padding: 9px 12px; border-bottom: 1px solid var(--line); }
+    thead { background: var(--primary-soft); }
+    thead th { padding: 10px 14px; font-weight: 700; color: var(--primary); text-align: left; border-bottom: 2px solid #bfdbfe; white-space: nowrap; }
+    tbody tr:nth-child(even) { background: #f9fafb; }
+    tbody tr:hover { background: var(--primary-soft); }
+    tbody td { padding: 9px 14px; border-bottom: 1px solid var(--line); }
     tbody tr:last-child td { border-bottom: none; }
-    tbody tr:hover { background: #f8faff; }
-    footer { text-align: center; margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
-    @media (max-width: 768px) {
-      .layout { grid-template-columns: 1fr; }
-      .toc { position: static; }
+    .best { font-weight: 700; color: #16a34a; }
+
+    /* Note */
+    .note { border: 1px dashed var(--line); border-radius: 10px; padding: 14px 18px; color: var(--muted); font-size: 13.5px; margin: 16px 0; }
+
+    /* Figure */
+    figure { margin: 24px 0; text-align: center; }
+    figure img { max-width: 100%; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); border: 1px solid var(--line); }
+    figcaption { font-size: 13px; color: var(--muted); margin-top: 10px; line-height: 1.5; }
+    .fig-placeholder { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 32px 24px; color: var(--muted); font-size: 14px; line-height: 1.7; }
+
+    /* Paper info */
+    .paper-info { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 16px 20px; margin: 16px 0; font-size: 13.5px; }
+    .paper-info p { margin-bottom: 6px; }
+    .paper-info strong { color: var(--text); }
+
+    blockquote { border-left: 4px solid var(--line); padding: 10px 18px; color: var(--muted); margin: 16px 0; font-style: italic; }
+
+    /* Footer */
+    footer { text-align: center; padding: 40px; color: var(--muted); font-size: 14px; }
+    footer a { color: var(--primary); }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; padding: 20px; }
+      aside.toc { display: none; }
+      .hero { padding: 36px 24px 28px; }
+      .hero h1 { font-size: 1.6rem; }
       .meta-grid { grid-template-columns: 1fr 1fr; }
       .two-col { grid-template-columns: 1fr; }
-      h1 { font-size: 26px; }
+      .section { padding: 24px 20px; }
     }
+
+    /* Highlight tag */
+    .tag { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+    .tag-blue { background: var(--primary-soft); color: var(--primary); }
+    .tag-green { background: #dcfce7; color: #16a34a; }
+    .tag-purple { background: var(--accent-soft); color: var(--accent); }
+    .tag-amber { background: #fef3c7; color: #92400e; }
+
+    /* Insight row */
+    .insight-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin: 16px 0; }
+    .insight-card { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+    .insight-card .verdict { font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: 20px; margin-bottom: 8px; display: inline-block; }
+    .verdict-yes { background: #dcfce7; color: #16a34a; }
+    .verdict-no { background: #fee2e2; color: #dc2626; }
+    .verdict-neutral { background: #f1f5f9; color: #475569; }
+    .insight-card h4 { margin: 0 0 6px; font-size: 13.5px; }
+    .insight-card p { font-size: 13px; color: var(--muted); margin: 0; }
   </style>
 </head>
 <body>
-<div class="page">
-  <a href="../index.html" class="back-link">← 返回论文列表</a>
 
-  <div class="hero">
-    <div class="eyebrow">📄 论文解读 · 生成式推荐 · Snap Inc. · 2025</div>
-    <h1>GRID</h1>
-    <p class="subtitle">Generative Recommendation with Semantic IDs: A Practitioner's Handbook</p>
-    <div class="meta-grid">
-      <div class="meta-card"><div class="meta-label">机构</div><div class="meta-value">Snap Inc.（Snapchat）</div></div>
-      <div class="meta-card"><div class="meta-label">来源</div><div class="meta-value">arXiv 2507.22224</div></div>
-      <div class="meta-card"><div class="meta-label">年份</div><div class="meta-value">2025</div></div>
-      <div class="meta-card"><div class="meta-label">核心命题</div><div class="meta-value">GR+SID 统一开源框架 + 被忽视设计决策系统实验</div></div>
+<a class="back-link" href="../index.html">← 返回论文列表</a>
+
+<!-- Hero -->
+<div class="hero">
+  <div class="eyebrow">📖 论文解读 · CIKM 2025</div>
+  <h1>
+    GRID：生成式推荐与语义 ID 的从业者手册
+    <span class="en">Generative Recommendation with Semantic IDs: A Practitioner's Handbook</span>
+  </h1>
+  <p class="subtitle">
+    Snap Research 开源的生成式推荐统一实验平台，系统消融 SID Tokenizer、生成模型架构等关键设计选择，揭示多个被忽视却影响显著的工程细节。
+  </p>
+  <div class="meta-grid">
+    <div class="meta-item">
+      <span class="meta-label">作者</span>
+      <span class="meta-value">Ju et al.（Snap Research）</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">发表</span>
+      <span class="meta-value">CIKM 2025</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">arXiv</span>
+      <span class="meta-value"><a href="https://arxiv.org/abs/2507.22224" target="_blank">2507.22224</a></span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">代码</span>
+      <span class="meta-value"><a href="https://github.com/snap-research/GRID" target="_blank">snap-research/GRID</a></span>
     </div>
   </div>
+</div>
 
-  <div class="layout">
-    <aside class="toc">
-      <h2>目录</h2>
-      <ul class="toc-list">
-        <li><a href="#summary">一句话总结</a></li>
-        <li><a href="#background">1. 背景与动机</a></li>
-        <li><a href="#framework">2. GRID 框架设计</a>
-          <ul class="toc-sub">
-            <li><a href="#tokenization">2.1 Tokenization 模块</a></li>
-            <li><a href="#generation">2.2 Generation 模块</a></li>
-          </ul>
-        </li>
-        <li><a href="#findings">3. 核心实验发现</a>
-          <ul class="toc-sub">
-            <li><a href="#tokenizer-algo">3.1 Tokenizer 算法选择</a></li>
-            <li><a href="#encoder-size">3.2 语言模型大小</a></li>
-            <li><a href="#arch">3.3 Encoder-Decoder vs Decoder-only</a></li>
-            <li><a href="#augment">3.4 数据增强的重要性</a></li>
-            <li><a href="#beam">3.5 Beam Search 约束</a></li>
-            <li><a href="#user-token">3.6 User Token 效果</a></li>
-          </ul>
-        </li>
-        <li><a href="#insights">4. 个人理解</a></li>
+<!-- Layout -->
+<div class="layout">
+
+  <!-- TOC -->
+  <aside class="toc">
+    <div class="toc-title">目录</div>
+    <ul class="toc-list">
+      <li><a href="#background">1. 背景与动机</a></li>
+      <li><a href="#method">2. GRID 框架详解</a></li>
+      <ul class="toc-sub">
+        <li><a href="#tokenization">2.1 Tokenization：语义 ID 生成</a></li>
+        <li><a href="#generation">2.2 Generation：下一个 Item 生成</a></li>
+        <li><a href="#pipeline">2.3 完整 Pipeline</a></li>
       </ul>
-    </aside>
+      <li><a href="#sid-tokenizer">3. SID Tokenizer 消融</a></li>
+      <ul class="toc-sub">
+        <li><a href="#algo">3.1 Tokenizer 算法对比</a></li>
+        <li><a href="#lm-size">3.2 LLM 编码器规模</a></li>
+        <li><a href="#codebook">3.3 Codebook 维度</a></li>
+      </ul>
+      <li><a href="#gen-model">4. 生成模型消融</a></li>
+      <ul class="toc-sub">
+        <li><a href="#user-token">4.1 用户 Token</a></li>
+        <li><a href="#arch">4.2 架构：Enc-Dec vs Dec-only</a></li>
+        <li><a href="#augmentation">4.3 数据增强</a></li>
+        <li><a href="#dedup">4.4 SID 去重</a></li>
+        <li><a href="#beam">4.5 Beam Search 策略</a></li>
+      </ul>
+      <li><a href="#insights">5. 核心 Insights 总结</a></li>
+      <li><a href="#ref">6. 关联工作</a></li>
+      <li><a href="#code">7. 代码解读</a></li>
+      <ul class="toc-sub">
+        <li><a href="#code-structure">7.1 项目结构</a></li>
+        <li><a href="#code-pipeline">7.2 整体 Pipeline 数据流</a></li>
+        <li><a href="#code-rq">7.3 &amp; 7.4 SID Tokenizer：前向流程与三种量化方案</a></li>
+        <li><a href="#code-tiger">7.5 TIGER 生成模型</a></li>
+        <li><a href="#code-beam">7.6 Beam Search 推理实现</a></li>
+        <li><a href="#code-data">7.7 数据处理管线</a></li>
+        <li><a href="#code-config">7.8 Hydra 配置</a></li>
+        <li><a href="#code-quant">7.9 三种量化策略对比</a></li>
+      </ul>
+    </ul>
+  </aside>
 
-    <main class="content">
+  <!-- Main Content -->
+  <main class="content">
 
-      <!-- 一句话总结 -->
-      <section class="section" id="summary">
-        <div class="section-title"><div class="icon" style="background:#dbeafe;">💡</div>一句话总结</div>
-        <p><strong>GRID 通过搭建首个统一开源可复现的 GR+SID 框架，对 tokenizer 算法（RK-Means vs RQ-VAE）、模型架构（Enc-Dec vs Dec-only）、数据增强、Beam Search 等关键设计决策进行系统性消融，揭示多个「反直觉」发现：简单的 RK-Means 不输于复杂的 RQ-VAE；User Token 实际上没有帮助；数据增强（滑动窗口）是单一最重要的设计决策；Encoder-Decoder 显著优于 Decoder-only。</strong></p>
-        <div class="paper-info">
-          <p>📄 <strong>原文：</strong><a href="https://arxiv.org/abs/2507.22224" target="_blank">https://arxiv.org/abs/2507.22224</a></p>
-          <p>🔗 <strong>开源代码：</strong><a href="https://github.com/snap-research/GRID" target="_blank">github.com/snap-research/GRID</a></p>
+    <!-- 1. 背景与动机 -->
+    <section class="section" id="background">
+      <div class="section-title"><div class="icon icon-blue">🎯</div>背景与动机</div>
+
+      <p>
+        <strong>生成式推荐（Generative Recommendation, GR）</strong>是近年来快速发展的一个推荐系统范式，其核心思路是：不再像传统方法那样从固定候选集做检索和排序，而是直接"生成"用户下一个可能交互的物品。
+      </p>
+
+      <h3>GR with Semantic IDs：为什么是它？</h3>
+      <p>
+        在所有 GR 方案中，<strong>基于语义 ID（Semantic ID, SID）的生成式推荐</strong>是当前最主流的范式，其核心动机在于弥合两种信号的鸿沟：
+      </p>
+
+      <div class="two-col">
+        <div class="mini-card">
+          <h4>🔵 语义信息（Semantic Knowledge）</h4>
+          <p>来自大型语言模型（LLM/VLM）对物品文本、图片等模态特征的理解，携带了开放世界的知识，对新品、长尾品友好。</p>
         </div>
-        <div class="callout callout-blue">
-          <strong>三句话核心贡献：</strong><br>
-          ① 首个统一开源框架：模块化设计，tokenizer/encoder/recommender 均可独立替换，支持文献主要方法的可复现实验；<br>
-          ② 系统消融揭示真相：RK-Means ≥ RQ-VAE；Encoder-Decoder 显著优于 Decoder-only；数据增强比模型大小更重要；<br>
-          ③ User Token 有害：加入 User Token 不仅没有提升，在多数配置下轻微有害——结果与直觉相悖，具有重要实践指导意义。
+        <div class="mini-card">
+          <h4>🟣 协同信号（Collaborative Signal）</h4>
+          <p>来自用户与物品的交互历史，两件物品如果常常出现在相似用户的购买序列中，它们就有较强的协同相似性。</p>
         </div>
-      </section>
+      </div>
 
-      <!-- 背景 -->
-      <section class="section" id="background">
-        <div class="section-title"><div class="icon" style="background:#eff6ff;">🌐</div>1. 背景与动机</div>
+      <p>
+        SID 的思路是：用量化方法（如 RQ-VAE）把 LLM 生成的连续 embedding 压缩成一组离散 token 序列——即 SID。这样，<strong>两件语义相似的物品会共享 SID 前缀</strong>，序列推荐模型在预测 SID 时，既能学到语义先验，也能从历史序列中捕捉协同信号。
+      </p>
 
-        <p>生成式推荐（Generative Recommendation, GR）+ 语义 ID（Semantic ID, SID）是当前推荐系统研究的热门方向。自 TIGER（NeurIPS 2023）以来，各种改进方法层出不穷（LETTER, OneRec, COBRA, ETEGRec, MTGRec...），但这个领域面临一个严重的问题：</p>
+      <h3>当前痛点</h3>
+      <div class="callout-amber">
+        <strong>⚠️ 主要挑战：</strong> 领域内大多数工作不提供开源实现，导致：
+        <ul style="margin-top:8px;padding-left:20px;">
+          <li>复现成本极高，需要深度技术积累 + 精细超参调优</li>
+          <li>GR 管道本身涉及多个互相影响的因素（如训练策略、架构选型），debug 困难</li>
+          <li>设计选择的经验教训散落各处，从业者缺乏系统性认知，浪费大量资源</li>
+        </ul>
+      </div>
 
-        <div class="callout callout-amber">
-          <strong>领域痛点：</strong>
-          <ul style="margin-top:8px;">
-            <li><strong>几乎没有开源实现：</strong>大多数论文只提供算法描述，没有代码，从头复现需要大量专业知识和调参时间。</li>
-            <li><strong>实验设置不统一：</strong>不同论文用不同数据集、不同分割方式、不同超参，结果无法直接比较。</li>
-            <li><strong>关键设计决策缺乏系统研究：</strong>用什么 tokenizer 算法、多大的语言模型、是否用数据增强……这些基础问题在文献中鲜有深入讨论，但实际对性能影响极大。</li>
-          </ul>
-        </div>
+      <h3>GRID 的贡献</h3>
+      <ul class="step-list">
+        <li class="step"><div class="step-num">1</div><div><strong>发布 GRID 开源框架：</strong>模块化实现了 GR with SID 管道中的所有核心组件（Semantic ID Tokenizer、Sequential Recommender 等），是第一个可复现现有文献结果的开源资源。</div></li>
+        <li class="step"><div class="step-num">2</div><div><strong>系统性消融实验：</strong>使用 GRID 对 GR with SID 各组件做了全面实验，揭示了多个被现有文献忽视但对性能影响显著的设计选择。</div></li>
+      </ul>
+    </section>
 
-        <p>Snap 的这篇论文（GRID = <strong>G</strong>enerative <strong>R</strong>ecommendation with semantic <strong>ID</strong>）解决上述问题，做了两件事：</p>
+    <!-- 2. GRID 框架详解 -->
+    <section class="section" id="method">
+      <div class="section-title"><div class="icon icon-purple">⚙️</div>GRID 框架详解</div>
 
-        <div class="two-col">
-          <div class="mini-card">
-            <h4>贡献 1：开源统一框架</h4>
-            <ul>
-              <li>模块化设计：tokenizer、encoder、recommender 均可独立替换</li>
-              <li>支持 RK-Means、R-VQ、RQ-VAE 三种 tokenizer</li>
-              <li>支持 encoder-decoder 和 decoder-only 两种架构</li>
-              <li>可复现文献中已报告的结果（首个此类框架）</li>
-              <li>开源地址：<a href="https://github.com/snap-research/GRID" target="_blank">snap-research/GRID</a></li>
-            </ul>
+      <p>
+        GRID 将 GR with SID 分成两个清晰解耦的阶段：<strong>先 Tokenization（分词），再 Generation（生成）</strong>，各阶段提供即插即用的组件，支持快速替换和实验。
+      </p>
+
+      <!-- 整体架构图 -->
+      <figure>
+        <img src="https://arxiv.org/html/2507.22224v1/x1.png"
+             alt="Figure 1: GRID 整体架构"
+             onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+               <b>Figure 1：GRID 整体架构</b><br><br>
+               (a) GRID 的整体架构图，将 GR with SIDs 工作流中的所有中间步骤模块化，包括两个阶段：<br>
+               · <b>Tokenization 阶段</b>：Modality Encoder → Quantization Tokenizer → SID<br>
+               · <b>Generation 阶段</b>：SID 序列 → Sequential Recommender → 候选 Item SID<br><br>
+               (b) 以 TIGER 模型为例：T5 Encoder + RQ-VAE → SID；Encoder-Decoder Transformer → Next SID 生成
+             </div>`" />
+        <figcaption><strong>Figure 1（论文原图）：</strong>GRID 的整体两阶段架构。(a) GRID 对 GR with SID 工作流的所有中间步骤进行模块化封装；(b) 以 TIGER 为例展示如何用 GRID 几行配置完成实例化。</figcaption>
+      </figure>
+
+      <p>
+        <strong>形式化问题定义：</strong> 设用户集合为 $\mathcal{U}$，物品集合为 $\mathcal{I}$，每个物品 $i \in \mathcal{I}$ 有语义特征 $\mathbf{f}_i$（文本/图像等）。用户 $u$ 的交互序列为 $\mathcal{S}_u = [i^1_u, i^2_u, \cdots, i^{L_u}_u]$。GR 的目标是：给定序列 $\mathcal{S}_u$，生成用户下一步最可能交互的物品 $i^{L_u+1}_u$。
+      </p>
+
+      <!-- 2.1 Tokenization -->
+      <h3 id="tokenization">2.1 Tokenization 阶段：语义 ID 生成</h3>
+      <p>Tokenization 阶段把物品的连续 embedding 转换为离散 SID 序列，分两步进行：</p>
+
+      <ul class="step-list">
+        <li class="step">
+          <div class="step-num">1</div>
+          <div>
+            <strong>Modality Encoder：连续 Embedding 提取</strong><br>
+            用预训练的模态编码器 $E(\cdot): \mathbf{f} \rightarrow \mathbb{R}^d$，将物品的文本/图像等特征转换为 $d$ 维 dense embedding $\mathbf{h}_i$。GRID 支持直接插入 HuggingFace 上的任意模型（如 Flan-T5-XL、CLIP 等）。
           </div>
-          <div class="mini-card">
-            <h4>贡献 2：系统实验揭示"反常识"发现</h4>
-            <ul>
-              <li>RQ-VAE 不一定比简单的 RK-Means 更好</li>
-              <li>更大的语言模型对推荐的提升微乎其微</li>
-              <li>User token 实际上没有帮助（甚至轻微有害）</li>
-              <li>Encoder-Decoder 显著优于 Decoder-only</li>
-              <li>数据增强（滑动窗口）是最重要的单一设计决策</li>
-            </ul>
+        </li>
+        <li class="step">
+          <div class="step-num">2</div>
+          <div>
+            <strong>Hierarchical Quantization Tokenizer：映射为 SID</strong><br>
+            用分层聚类 Tokenizer 把 $\mathbf{h}_i$ 映射为离散 SID 序列。GRID 支持三种算法：<span class="tag tag-blue">RK-Means</span>、<span class="tag tag-purple">R-VQ</span>、<span class="tag tag-green">RQ-VAE</span>。
           </div>
-        </div>
+        </li>
+      </ul>
 
-        <p>这篇论文的价值在于：它是一篇"系统性批判与总结"的论文，通过严格的消融实验，揭示了过去几年 GR+SID 研究中被忽视或误解的核心问题，为整个领域的健康发展提供了重要的基准参考。</p>
-      </section>
-
-      <!-- 框架设计 -->
-      <section class="section" id="framework">
-        <div class="section-title"><div class="icon" style="background:#f0f4ff;">🏗️</div>2. GRID 框架设计</div>
-
-        <figure>
-          <img src="https://arxiv.org/html/2507.22224v1/x1.png" alt="GRID 框架架构"
-               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'><b>Figure 1: GRID 框架架构</b><br><br>左图 (a)：GRID 整体架构。核心流程：Item Description → Semantic Encoder (T5/Qwen/BERT) → Text Embedding → Quantizer (K-means/RQ-VAE/RVQ) → Semantic ID → Generative Recommender (Enc-Dec 或 Dec-only) → Beam Search 推荐结果。<br>右图 (b)：用 GRID 实例化 TIGER 的示意，展示模块化替换的简洁性。</div>`" />
-          <figcaption><strong>Figure 1（论文原图）：</strong>GRID 的模块化架构。每个中间步骤（语义编码、量化、序列推荐、推理）均可独立替换，加速研究迭代。右侧展示了如何用 GRID 的现有组件快速复现 TIGER。</figcaption>
-        </figure>
-
-        <h3 id="tokenization">2.1 Tokenization 模块</h3>
-
-        <p>GRID 的 tokenization 分两步：</p>
-
-        <p><strong>Step 1 - 语义编码：</strong>用预训练语言模型将 item 的文本特征（标题、类别、描述、价格等）编码为 $d$ 维 embedding $\mathbf{h}_i$。GRID 支持任何 HuggingFace 上的模型，默认使用 Flan-T5（Large / XL / XXL）。</p>
-
-        <p><strong>Step 2 - 量化 tokenization：</strong>将连续 embedding $\mathbf{h}_i$ 量化为长度 $L$、每位值域 $\{0, ..., W-1\}$ 的离散 ID 序列：</p>
-
-        <div class="formula-block">
-          $$\text{SID}_i = \text{Tokenizer}(\mathbf{h}_i) = [\text{SID}^0_i, \text{SID}^1_i, \ldots, \text{SID}^L_i]$$
-        </div>
+      <div class="formula-block">
+        $$\text{SID}_i = \text{Tokenizer}(\mathbf{h}_i) = [\text{SID}^0_i, \text{SID}^1_i, \cdots, \text{SID}^L_i]$$
         <div class="formula-vars">
           <div class="var-title">符号说明</div>
           <ul>
-            <li>$W$：每层 codebook 大小（token 词表宽度，默认 256）</li>
-            <li>$L$：层数（默认 3，意味着每个 item 用 3 个 token 表示）</li>
-            <li>$\text{SID}^l_i$：item $i$ 第 $l$ 层的 token 编号（$0 \sim W-1$）</li>
+            <li>$\mathbf{h}_i \in \mathbb{R}^d$：物品 $i$ 的 dense embedding（由 LLM/VLM 编码器输出）</li>
+            <li>$\text{SID}^l_i \in \{0, 1, \ldots, W\}$：第 $l$ 层量化得到的离散 token ID</li>
+            <li>$W$：每层 codebook 的大小（即每层最多有多少个不同的 token）</li>
+            <li>$L$：SID 的层数（Residual 深度）</li>
           </ul>
         </div>
+      </div>
 
-        <p>GRID 支持三种量化算法：</p>
-        <ul>
-          <li><strong>RK-Means（Residual K-Means）：</strong>逐层 Mini-Batch K-Means 聚类，不需要 autoencoder，实现简单，训练快（每层 1000 steps）。</li>
-          <li><strong>R-VQ（Residual Vector Quantization）：</strong>与 RK-Means 类似，但 codebook 通过梯度优化（Adam），速度同样快。</li>
-          <li><strong>RQ-VAE：</strong>联合训练 autoencoder 和 codebook，实现最复杂，训练步数最多（15000 steps），是 TIGER 的默认方案。</li>
+      <h4>三种 Tokenizer 算法对比</h4>
+
+      <div class="two-col">
+        <div class="mini-card">
+          <h4>🔵 RK-Means（Residual Mini-Batch K-Means）</h4>
+          <p>来自 One-Rec 论文。逐层做 K-Means 聚类：第 1 层对原始 $\mathbf{h}_i$ 聚类，每个物品的 SID 第 1 位是其所属簇的 ID；随后用残差向量继续对下一层聚类。<strong>无需额外神经网络，速度快。</strong></p>
+        </div>
+        <div class="mini-card">
+          <h4>🟣 R-VQ（Residual Vector Quantization）</h4>
+          <p>每层学习一个 codebook（码本），物品 embedding 匹配最近的 codebook entry 作为该层 SID，余下残差进入下一层。与 RK-Means 类似，但 codebook 通过梯度更新学习。</p>
+        </div>
+      </div>
+      <div class="mini-card" style="margin-top:14px;">
+        <h4>🟢 RQ-VAE（Residual Quantization Variational Autoencoder）</h4>
+        <p>文献中最常用的方案（TIGER 采用）。同时训练一个 Autoencoder（编码器+解码器）和分层量化模块。优点是重建质量好，缺点是需要同时优化 AE 损失 + 量化损失，训练更复杂、更容易坍塌（Codebook Collapse）。</p>
+      </div>
+
+      <div class="example-box">
+        <div class="ex-title">💡 举例：SID 的层次结构</div>
+        <p>假设 item "运动耳机 X" 的 Flan-T5-XL embedding 经 RK-Means 量化（L=3, W=256），得到 SID = [42, 7, 191]。</p>
+        <ul style="margin:8px 0 0 18px;">
+          <li><strong>第 0 位（42）</strong>：粗粒度类别，表示该物品属于第 42 个大类簇（比如"电子产品"）</li>
+          <li><strong>第 1 位（7）</strong>：中粒度，该簇内的子类（比如"音频设备"）</li>
+          <li><strong>第 2 位（191）</strong>：细粒度，具体款型（比如"运动蓝牙耳机"）</li>
         </ul>
+        <p style="margin-top:8px;color:#16a34a;font-size:13px;">→ 类似物品的 SID 会共享前缀（e.g., 同类音频设备都以 42 开头），这正是 GR 模型能从 SID 中学到语义先验的原因。</p>
+      </div>
 
-        <h3 id="generation">2.2 Generation 模块</h3>
+      <!-- 2.2 Generation -->
+      <h3 id="generation">2.2 Generation 阶段：下一个 Item 生成</h3>
+      <p>
+        为每个物品生成 SID 后，对每个用户序列，GR 框架用序列模型来自回归地预测用户下一步最可能交互的物品的 SID。
+      </p>
 
-        <p>GRID 的生成模块接收用户历史序列的 SID，自回归预测下一个 item 的 SID：</p>
-
-        <div class="formula-block">
-          $$P(\text{SID}_{n+1} | S_u) = \prod_{l=1}^{L} P(\text{SID}^l_{n+1} | \mathbf{h}^E, \text{SID}^1_{n+1}, \ldots, \text{SID}^{l-1}_{n+1})$$
+      <div class="flow-diagram">
+        <div class="flow-row">
+          <div class="flow-box">用户历史序列</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-box">SID 序列 [SID(i₁), SID(i₂), ...]</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-box">Transformer 模型</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-box">预测 SID(i_{L+1})</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-box">Beam Search 生成 Top-K 候选</div>
         </div>
+      </div>
 
-        <p>GRID 支持两种架构，均有灵活配置（层数、注意力头数、MoE 等）：</p>
-        <ul>
-          <li><strong>Encoder-Decoder（T5 风格）：</strong>Encoder 对完整历史序列做全注意力（密集），Decoder 自回归生成 target SID。</li>
-          <li><strong>Decoder-only（GPT 风格）：</strong>历史序列和目标 token 拼接后，causal attention 预测下一个 token。</li>
+      <p>GRID 支持以下生成模型配置：</p>
+      <ul style="padding-left:22px;margin-bottom:12px;">
+        <li><strong>架构：</strong>Encoder-Decoder（T5 风格）或 Decoder-only（GPT 风格）</li>
+        <li><strong>训练目标：</strong>Next-token prediction（自回归预测 SID 的每一位）</li>
+        <li><strong>数据增强：</strong>Sliding Window（滑动窗口），将用户长序列切分为所有连续子序列</li>
+        <li><strong>推理：</strong>Beam Search（支持 KV-cache 加速），可选 Constrained（限制输出在合法 SID 集合内）或 Unconstrained（自由生成）</li>
+        <li><strong>用户 Token：</strong>可选地在序列头部加入用户 Token（TIGER 设计）</li>
+        <li><strong>SID 去重：</strong>向 SID 末尾追加消歧位解决不同物品 SID 碰撞问题</li>
+      </ul>
+
+      <div class="example-box">
+        <div class="ex-title">💡 举例：训练目标（以 Encoder-Decoder 为例）</div>
+        <p>用户历史购买序列：[运动鞋, 篮球, 护腕]，对应 SID 为 [[12,3,1], [12,3,8], [12,1,5]]。</p>
+        <p><strong>Encoder 输入：</strong> "[SID₁=12,3,1] [SID₂=12,3,8] [SID₃=12,1,5]"（拼接成 token 序列）</p>
+        <p><strong>Decoder 输出（自回归预测）：</strong> "12" → "12, 2" → "12, 2, 7"（逐位预测下一个物品的 SID）</p>
+        <p style="color:#16a34a;font-size:13px;margin-top:8px;">→ 这类似于语言模型预测下一个 token，但预测的是 SID token 序列，天然支持 Beam Search 生成多个候选。</p>
+      </div>
+
+      <!-- 2.3 Pipeline -->
+      <h3 id="pipeline">2.3 完整 Pipeline</h3>
+      <ul class="step-list">
+        <li class="step"><div class="step-num">1</div><div><strong>数据准备</strong>：整理用户交互序列 + 物品文本信息</div></li>
+        <li class="step"><div class="step-num">2</div><div><strong>LLM Embedding</strong>：用 Flan-T5 等 LLM 的最后一层隐状态（mean pooling）生成物品 embedding</div></li>
+        <li class="step"><div class="step-num">3</div><div><strong>SID 训练</strong>：在 embedding 上训练 RK-Means / R-VQ / RQ-VAE，学习分层 codebook；推理得到每个物品的 SID</div></li>
+        <li class="step"><div class="step-num">4</div><div><strong>GR 模型训练</strong>：用物品 SID 序列训练 Transformer 模型（next-token prediction + sliding window augmentation）</div></li>
+        <li class="step"><div class="step-num">5</div><div><strong>推理</strong>：给定用户历史 SID 序列，Beam Search 生成 Top-K 候选物品 SID，查表还原为物品 ID</div></li>
+      </ul>
+    </section>
+
+    <!-- 3. SID Tokenizer 消融 -->
+    <section class="section" id="sid-tokenizer">
+      <div class="section-title"><div class="icon icon-green">🔬</div>SID Tokenizer 消融实验</div>
+
+      <div class="callout-blue">
+        <strong>实验设置：</strong>在 Amazon Beauty / Sports / Toys 三个数据集（5-core 过滤）上评测，metrics 为 Recall@5/10、NDCG@5/10。Tokenizer 在 8 GPUs 上训练（每设备 batch size 2048）。生成模型固定为 8 层 Transformer（4 encoder + 4 decoder），embedding dim=128，hidden dim=1024，6 heads。所有结果取 5 次不同 seed 的平均。
+      </div>
+
+      <!-- 3.1 算法对比 -->
+      <h3 id="algo">3.1 Tokenizer 算法对比（Table 1）</h3>
+
+      <p>文献中 RQ-VAE 是事实上的默认 Tokenizer（TIGER 论文起），但其训练复杂、容易坍塌。GRID 实验显示：</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Tokenizer</th>
+              <th>Beauty R@5</th><th>R@10</th><th>N@5</th><th>N@10</th>
+              <th>Toys R@5</th><th>R@10</th><th>N@5</th><th>N@10</th>
+              <th>Sports R@5</th><th>R@10</th><th>N@5</th><th>N@10</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>RK-Means</strong></td>
+              <td class="best">0.0422</td><td class="best">0.0639</td><td>0.0277</td><td>0.0347</td>
+              <td class="best">0.0376</td><td class="best">0.0577</td><td class="best">0.0243</td><td class="best">0.0308</td>
+              <td class="best">0.0236</td><td class="best">0.0353</td><td class="best">0.0153</td><td class="best">0.0191</td>
+            </tr>
+            <tr>
+              <td><strong>R-VQ</strong></td>
+              <td>0.0422</td><td>0.0638</td><td class="best">0.0282</td><td class="best">0.0351</td>
+              <td>0.0327</td><td>0.0493</td><td>0.0209</td><td>0.0262</td>
+              <td>0.0234</td><td>0.0352</td><td>0.0151</td><td>0.0189</td>
+            </tr>
+            <tr>
+              <td><strong>RQ-VAE</strong></td>
+              <td>0.0404</td><td>0.0593</td><td>0.0268</td><td>0.0329</td>
+              <td>0.0342</td><td>0.0514</td><td>0.0224</td><td>0.0280</td>
+              <td>0.0205</td><td>0.0312</td><td>0.0132</td><td>0.0166</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout-green">
+        <strong>✅ 结论：</strong> RK-Means 在三个数据集上均表现最优或持平，而 RQ-VAE 最差——尽管 RQ-VAE 训练了 <strong>5 倍</strong>于前者的迭代次数。这说明 <strong>更简单的量化方法不仅实现更容易，性能也更好，RQ-VAE 的复杂性溢价并不合算。</strong>
+      </div>
+
+      <!-- 3.2 LLM 规模 -->
+      <h3 id="lm-size">3.2 LLM 编码器规模影响（Table 2）</h3>
+
+      <p>使用 Flan-T5 的三个规格（Large 780M → XL 3B → XXL 11B）提取 embedding：</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>LM</th>
+              <th>Beauty R@5</th><th>R@10</th><th>N@5</th><th>N@10</th>
+              <th>Toys R@5</th><th>R@10</th><th>N@5</th><th>N@10</th>
+              <th>Sports R@5</th><th>R@10</th><th>N@5</th><th>N@10</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Large (780M)</strong></td>
+              <td>0.0429</td><td>0.0639</td><td>0.0285</td><td>0.0353</td>
+              <td>0.0373</td><td>0.0565</td><td>0.0237</td><td>0.0300</td>
+              <td>0.0224</td><td>0.0347</td><td>0.0145</td><td>0.0185</td>
+            </tr>
+            <tr>
+              <td><strong>XL (3B)</strong></td>
+              <td>0.0422</td><td>0.0639</td><td>0.0277</td><td>0.0347</td>
+              <td>0.0376</td><td>0.0577</td><td>0.0243</td><td>0.0308</td>
+              <td>0.0236</td><td>0.0353</td><td>0.0153</td><td>0.0191</td>
+            </tr>
+            <tr>
+              <td><strong>XXL (11B)</strong></td>
+              <td class="best">0.0429</td><td class="best">0.0646</td><td>0.0282</td><td>0.0352</td>
+              <td class="best">0.0381</td><td class="best">0.0586</td><td class="best">0.0245</td><td class="best">0.0311</td>
+              <td class="best">0.0239</td><td class="best">0.0363</td><td class="best">0.0154</td><td class="best">0.0194</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout-amber">
+        <strong>⚠️ 惊人发现：</strong> 从 780M 增大到 11B（参数量扩大 <strong>14 倍</strong>），推荐性能几乎没有提升。这表明当前 GR with SID 管道对更大 LLM 中编码的世界知识利用率极低，是一个尚待解决的重要问题。
+      </div>
+
+      <div class="example-box">
+        <div class="ex-title">💡 举例：为何更大 LLM 不带来更好推荐？</div>
+        <p>Flan-T5-XXL 比 Large 拥有 14 倍参数，能更细致地理解物品描述（如区分"防水运动耳机"和"降噪无线耳机"）。然而 SID 量化把这个 2048 维 embedding 压缩为 [L=3, W=256] 的三个离散数字，细粒度语义可能在压缩过程中大量丢失。</p>
+        <p style="color:#92400e;font-size:13px;margin-top:6px;">→ 这是整个 GR with SID 方向的一个系统性瓶颈：如何让 SID 更好地保留 LLM 的细粒度语义，仍是开放问题。</p>
+      </div>
+
+      <!-- 3.3 Codebook 维度 -->
+      <h3 id="codebook">3.3 Codebook 维度消融（Table 3，Beauty 数据集）</h3>
+
+      <p>在 RK-Means 上系统地改变层数 $L$ 和每层宽度 $W$：</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>L × W</th><th>Recall@5</th><th>Recall@10</th><th>NDCG@5</th><th>NDCG@10</th><th>备注</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>3 × 128</td><td>0.0412</td><td>0.0617</td><td>0.0273</td><td>0.0339</td><td>宽度偏小</td></tr>
+            <tr><td><strong>3 × 256</strong></td><td class="best">0.0422</td><td class="best">0.0639</td><td class="best">0.0277</td><td class="best">0.0347</td><td>✅ 最优（默认）</td></tr>
+            <tr><td>3 × 512</td><td>0.0415</td><td>0.0631</td><td>0.0273</td><td>0.0342</td><td>宽度过大反而略降</td></tr>
+            <tr><td>2 × 256</td><td>0.0403</td><td>0.0618</td><td>0.0264</td><td>0.0333</td><td>层数不足</td></tr>
+            <tr><td>4 × 256</td><td>0.0405</td><td>0.0609</td><td>0.0265</td><td>0.0331</td><td>层数过多反而下降</td></tr>
+            <tr><td>5 × 256</td><td>0.0396</td><td>0.0596</td><td>0.0257</td><td>0.0321</td><td>层数太多明显下降</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout-amber">
+        <strong>⚠️ 惊人发现：</strong> 层数更多（4 层、5 层）携带了更多语义信息，但推荐性能反而下降。这揭示了一个核心 trade-off：<strong>SID 序列的可学习性 vs. 携带的语义信息量</strong>。更长的 SID 序列意味着生成模型需要预测更多 token，任务难度显著增加，反而抵消了语义信息带来的收益。
+      </div>
+    </section>
+
+    <!-- 4. 生成模型消融 -->
+    <section class="section" id="gen-model">
+      <div class="section-title"><div class="icon icon-orange">🧪</div>生成模型消融实验</div>
+
+      <p>
+        固定 SID Tokenizer 为 RK-Means (L=3, W=256, Flan-T5-XL)，对生成模型的 5 个设计选择进行系统消融。
+      </p>
+
+      <!-- 4.1 User Token -->
+      <h3 id="user-token">4.1 用户 Token 数量（Table 4，Beauty 数据集）</h3>
+
+      <p>TIGER 原文在每个用户序列头部加入用户 Token（通过随机 hash 映射到固定词表），以期实现个性化。GRID 系统地测试了不同词表大小：</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>User Token 词表</th><th>Recall@5</th><th>Recall@10</th><th>NDCG@5</th><th>NDCG@10</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>0（不使用）</strong></td><td class="best">0.0408</td><td class="best">0.0618</td><td class="best">0.0270</td><td class="best">0.0330</td></tr>
+            <tr><td>2,000</td><td>0.0396</td><td>0.0597</td><td>0.0264</td><td>0.0328</td></tr>
+            <tr><td>4,000</td><td>0.0401</td><td>0.0612</td><td>0.0264</td><td>0.0332</td></tr>
+            <tr><td>6,000</td><td>0.0401</td><td>0.0611</td><td>0.0264</td><td>0.0331</td></tr>
+            <tr><td>8,000</td><td>0.0405</td><td>0.0610</td><td>0.0269</td><td>0.0335</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout-amber">
+        <strong>⚠️ 惊人发现：</strong> <strong>不使用 User Token 性能最优</strong>，增大词表并不带来单调提升。这说明当前 TIGER 风格的用户 Token 设计并未实现其声称的"个性化"目标，是一个值得重新思考的设计选择。
+      </div>
+
+      <!-- 4.2 架构 -->
+      <h3 id="arch">4.2 Encoder-Decoder vs. Decoder-only（Table 5）</h3>
+
+      <p>大多数 GR with SID 论文默认使用 Encoder-Decoder（如 T5），但 Decoder-only（如 GPT）架构在 LLM 领域更为主流：</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>架构</th><th>Beauty R@5</th><th>R@10</th><th>N@5</th><th>N@10</th><th>Toys R@5</th><th>Sports R@5</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Enc-Dec</strong></td>
+              <td class="best">0.0396</td><td class="best">0.0597</td><td class="best">0.0264</td><td class="best">0.0328</td>
+              <td class="best">0.0357</td><td class="best">0.0192</td>
+            </tr>
+            <tr>
+              <td><strong>Dec-only</strong></td>
+              <td>0.0300</td><td>0.0438</td><td>0.0206</td><td>0.0251</td>
+              <td>0.0286</td><td>0.0152</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout-purple">
+        <strong>🔍 结论：</strong> Encoder-Decoder 在三个数据集上均<strong>显著优于</strong> Decoder-only（Recall@5 约差 30%）。假说：Encoder 的双向 Dense Attention 能对用户完整历史序列做更充分的上下文建模，而 Decoder-only 的因果 Mask 限制了对历史的全局感知，这对推荐任务至关重要。
+      </div>
+
+      <div class="example-box">
+        <div class="ex-title">💡 举例：为什么 Encoder-Decoder 更适合推荐？</div>
+        <p>用户历史序列 [运动耳机, 蓝牙音箱, 耳机充电盒, 护耳套]，预测下一个物品。</p>
+        <p><strong>Enc-Dec：</strong> Encoder 用双向注意力一次看完全部 4 个历史 item，捕捉"这个用户喜欢音频类配件"的全局语义；Decoder 基于这个全局表示自回归生成下一个 SID。</p>
+        <p><strong>Dec-only：</strong> 每个位置只能看到它之前的 token，"耳机充电盒"位置看不到后来的"护耳套"，全局历史建模能力较弱。</p>
+        <p style="color:#7c3aed;font-size:13px;margin-top:8px;">→ 这与 NLP 中 Decoder-only 统治地位相悖，说明推荐任务的特殊性：历史序列是已知完整输入，双向建模比因果建模更合适。</p>
+      </div>
+
+      <!-- 4.3 数据增强 -->
+      <h3 id="augmentation">4.3 数据增强：滑动窗口（Table 6）</h3>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>增强方式</th><th>Beauty R@5</th><th>R@10</th><th>N@5</th><th>N@10</th><th>Toys R@5</th><th>Sports R@5</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>滑动窗口</strong></td>
+              <td class="best">0.0396</td><td class="best">0.0597</td><td class="best">0.0264</td><td class="best">0.0328</td>
+              <td class="best">0.0357</td><td class="best">0.0192</td>
+            </tr>
+            <tr>
+              <td><strong>无增强</strong></td>
+              <td>0.0279</td><td>0.0447</td><td>0.0171</td><td>0.0226</td>
+              <td>0.0277</td><td>0.0174</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout-green">
+        <strong>✅ 结论：</strong> 滑动窗口增强是<strong>至关重要的</strong>——移除后 Recall@5 下降约 29%（Beauty）。滑动窗口把一条用户序列 $[i_1, i_2, \ldots, i_n]$ 切分为所有连续子序列 $[i_1 \to i_2], [i_1, i_2 \to i_3], \ldots$，大幅增加训练样本，提升模型的泛化能力。
+      </div>
+
+      <div class="example-box">
+        <div class="ex-title">💡 举例：滑动窗口增强数据量</div>
+        <p>一个用户有 5 条历史交互 $[A, B, C, D, E]$，<strong>不增强</strong>时只有 1 条训练样本：输入 [A,B,C,D] → 预测 E。</p>
+        <p><strong>滑动窗口增强</strong>后，变成 4 条训练样本：</p>
+        <ul style="margin:6px 0 0 18px;">
+          <li>输入 [A] → 预测 B</li>
+          <li>输入 [A,B] → 预测 C</li>
+          <li>输入 [A,B,C] → 预测 D</li>
+          <li>输入 [A,B,C,D] → 预测 E</li>
         </ul>
+        <p style="color:#16a34a;font-size:13px;margin-top:6px;">→ 数据量 4 倍增加，模型见到了用户在不同历史长度下的偏好，泛化能力显著提升。</p>
+      </div>
 
-        <p>训练使用滑动窗口数据增强（将一个长序列展开为所有连续子序列），推理使用 Beam Search（KV-Cache 加速），支持 constrained 和 free-form 两种模式。</p>
-      </section>
+      <!-- 4.4 SID 去重 -->
+      <h3 id="dedup">4.4 SID 去重策略（Table 7）</h3>
 
-      <!-- 核心实验发现 -->
-      <section class="section" id="findings">
-        <div class="section-title"><div class="icon" style="background:#fef3c7;">🔬</div>3. 核心实验发现（"反常识"洞察）</div>
+      <p>量化不可避免会产生<strong>碰撞</strong>——不同物品可能被映射到相同的 SID，导致 Beam Search 生成 SID 后无法唯一确定物品。</p>
 
-        <p>GRID 在 Amazon Beauty、Sports、Toys 三个数据集上，对 GR+SID pipeline 的各个组件进行了系统消融实验，发现了多个令人意外的结论。</p>
-
-        <h3 id="tokenizer-algo">3.1 Tokenizer 算法：RQ-VAE 并不总是最佳选择</h3>
-
-        <div class="finding-card finding-surprise">
-          <strong>惊人发现：</strong>RK-Means 在 Beauty 和 Sports 上<strong>优于</strong> RQ-VAE（R@10: 0.0639 vs 0.0593, +7.8%），即使 RQ-VAE 训练了 15000 steps（是 RK-Means 的 15 倍）。
+      <div class="two-col">
+        <div class="mini-card">
+          <h4>TIGER 去重（With De-dup）</h4>
+          <p>在 SID 末尾追加一个消歧位（基于全局 SID 分布决定），将碰撞的物品区分开。代价：序列长度+1，解码复杂度上升，且需要全局 SID 分布知识（大规模场景不实用）。</p>
         </div>
-
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Tokenizer</th><th>Beauty R@10</th><th>Toys R@10</th><th>Sports R@10</th></tr></thead>
-            <tbody>
-              <tr><td><strong>RK-Means</strong></td><td><strong>0.0639</strong></td><td><strong>0.0577</strong></td><td><strong>0.0353</strong></td></tr>
-              <tr><td>R-VQ</td><td>0.0638</td><td>0.0493</td><td>0.0352</td></tr>
-              <tr><td>RQ-VAE</td><td>0.0593</td><td>0.0514</td><td>0.0312</td></tr>
-            </tbody>
-          </table>
+        <div class="mini-card">
+          <h4>随机选择（No De-dup）</h4>
+          <p>SID 碰撞时随机选择其中一个物品。更简单，无需全局知识。</p>
         </div>
+      </div>
 
-        <div class="example-box">
-          <div class="ex-title">💡 举例：为什么 RK-Means 可以超过 RQ-VAE</div>
-          <p>RQ-VAE 的目标是重建输入 embedding（autoencoder loss），这与推荐任务的目标（预测下一个 item）有本质差异。RQ-VAE 学到的 codebook 可能"对 embedding 重建最优"但"对序列预测次优"。</p>
-          <p>RK-Means 直接做层次 K-Means 聚类：第一层把 10 万个 item 分成 256 个大类（每类 ~390 个 item），第二层对残差再分 256 个子类，第三层再细分。这种纯几何层次聚类的结果是：共享同一个三层 prefix 的 item，它们的语义 embedding 在几何上最相近。这对序列推荐模型来说是"天然的层次语义"，且 token 分布非常均匀（不存在 RQ-VAE 的沙漏问题）。</p>
-          <p>更重要的是：RK-Means 不需要训练复杂的 encoder-decoder，只需要 3 次 K-Means，每次 1000 steps，速度快 15 倍，而性能还更好——这是一个强有力的"简单胜于复杂"的案例。</p>
+      <div class="callout-blue">
+        <strong>结论：</strong> 两种策略性能相近（TIGER 去重略优），但 TIGER 策略的工程成本高，在百万级物品库下要求全局 SID 分布是不实际的。<strong>对于大规模系统，随机选择是更实用的选择。</strong>
+      </div>
+
+      <!-- 4.5 Beam Search -->
+      <h3 id="beam">4.5 Constrained vs. Unconstrained Beam Search（Table 8）</h3>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>策略</th><th>Beauty R@5</th><th>R@10</th><th>N@5</th><th>N@10</th><th>Toys R@5</th><th>Sports R@5</th><th>效率</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Constrained</strong></td>
+              <td>0.0396</td><td>0.0597</td><td>0.0264</td><td>0.0328</td>
+              <td>0.0357</td><td>0.0192</td><td>低</td>
+            </tr>
+            <tr>
+              <td><strong>Free-form (Unconstrained)</strong></td>
+              <td class="best">0.0405</td><td class="best">0.0609</td><td class="best">0.0268</td><td class="best">0.0334</td>
+              <td class="best">0.0356</td><td class="best">0.0198</td><td class="best">高</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout-green">
+        <strong>✅ 结论：</strong> Unconstrained Beam Search 在性能上与 Constrained 持平甚至略好，同时<strong>计算效率显著更高</strong>（Constrained 需要维护合法 SID 前缀树，推理时逐步过滤无效路径，overhead 较大）。这表明模型自然学到了生成合法 SID 的模式，不需要显式约束。
+      </div>
+
+      <div class="example-box">
+        <div class="ex-title">🔍 两种模式的核心区别与代码实现</div>
+        <div class="ascii-wrap" style="margin:0 0 10px;">
+          <pre>
+<span class="ac-bold">Unconstrained（Free-form）</span>：每步自由生成，生成完再查表，不存在就丢弃
+<span class="ac-bold">Constrained</span>：每步生成前先过滤，只允许能对应真实 item 的 token 参与竞争
+
+<span class="ac-bold">_check_valid_prefix 实现（代码里是暴力广播，不是 Trie）</span>
+  self.codebooks 矩阵 shape: (N_items, num_hierarchies)，常驻显存（~12MB）
+  每步对所有候选前缀做广播对比：
+    [N_items, 1, h] == [1, candidates, h]  →  [N_items, candidates, h]
+    .all(dim=2).any(dim=0)  →  [candidates]   True = 至少有一个 item 匹配
+
+  代码注释自注：TODO 应改用排序+前缀树，当前为临时方案
+  → Constrained 推理开销大的根本原因在于此</pre>
         </div>
+      </div>
+    </section>
 
-        <h3 id="encoder-size">3.2 语言模型大小：边际效益递减严重</h3>
+    <!-- 5. 核心 Insights -->
+    <section class="section" id="insights">
+      <div class="section-title"><div class="icon icon-red">💡</div>核心 Insights 总结</div>
 
-        <div class="finding-card finding-surprise">
-          <strong>惊人发现：</strong>从 Flan-T5-Large (780M) 到 Flan-T5-XXL (11B，参数量扩大 14 倍），Beauty 数据集的 R@10 只从 0.0639 提升到 0.0646——相对提升不到 1.1%，与参数量增加的巨大成本完全不匹配。
+      <p>GRID 的系统实验揭示了多个被现有文献忽视的重要发现：</p>
+
+      <div class="insight-grid">
+        <div class="insight-card">
+          <span class="verdict verdict-no">❌ 推翻</span>
+          <h4>RQ-VAE 不是最佳 Tokenizer</h4>
+          <p>文献中几乎默认使用 RQ-VAE，但更简单的 RK-Means 表现更好，且训练迭代数只有前者的 1/5。</p>
         </div>
-
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>语言模型</th><th>参数量</th><th>Beauty R@10</th><th>Toys R@10</th><th>Sports R@10</th></tr></thead>
-            <tbody>
-              <tr><td>Flan-T5-Large</td><td>780M</td><td>0.0639</td><td>0.0565</td><td>0.0347</td></tr>
-              <tr><td>Flan-T5-XL</td><td>3B</td><td>0.0639</td><td>0.0577</td><td>0.0353</td></tr>
-              <tr><td>Flan-T5-XXL</td><td>11B</td><td>0.0646</td><td>0.0586</td><td>0.0363</td></tr>
-            </tbody>
-          </table>
+        <div class="insight-card">
+          <span class="verdict verdict-no">❌ 推翻</span>
+          <h4>更大 LLM 不能显著提升推荐</h4>
+          <p>参数量增大 14 倍（780M → 11B），推荐 Recall 几乎无变化，说明现有 SID 量化流程是知识瓶颈。</p>
         </div>
-
-        <p>作者的解读：当前 GR+SID pipeline 无法充分利用更大 LLM 中的知识，"更大的语言模型"的增量世界知识通过 tokenization 传递到推荐模型时大部分丢失。这说明如何更好地将 LLM 的知识注入推荐，而不仅仅是用其生成静态 embedding，是未来重要的研究方向。</p>
-
-        <h3 id="arch">3.3 Encoder-Decoder vs Decoder-only：差距惊人</h3>
-
-        <div class="finding-card finding-confirm">
-          <strong>验证发现（且差距比预期更大）：</strong>Encoder-Decoder 在 Beauty 数据集上 R@10 为 0.0597，Decoder-only 只有 0.0438——差距高达 <strong>+36.3%</strong>！
+        <div class="insight-card">
+          <span class="verdict verdict-no">❌ 推翻</span>
+          <h4>User Token 设计未能个性化</h4>
+          <p>TIGER 风格的用户 Token 反而略微降低性能，去掉 User Token 效果最好。</p>
         </div>
-
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>架构</th><th>Beauty R@10</th><th>Toys R@10</th><th>Sports R@10</th></tr></thead>
-            <tbody>
-              <tr><td><strong>Encoder-Decoder</strong></td><td><strong>0.0597</strong></td><td><strong>0.0548</strong></td><td><strong>0.0290</strong></td></tr>
-              <tr><td>Decoder-only</td><td>0.0438</td><td>0.0399</td><td>0.0226</td></tr>
-            </tbody>
-          </table>
+        <div class="insight-card">
+          <span class="verdict verdict-no">❌ 推翻</span>
+          <h4>更多 SID 层数不等于更好性能</h4>
+          <p>L=3 是最优，L=5 时性能明显下降。序列可学习性与语义信息量的 trade-off 至关重要。</p>
         </div>
-
-        <div class="example-box">
-          <div class="ex-title">💡 举例：为什么 Encoder-Decoder 在推荐中更好</div>
-          <p>Encoder-Decoder 的本质优势：Encoder 对整个历史序列做<strong>全注意力（Dense Attention）</strong>——序列中每个 item 的表示都能直接"看到"所有其他 item，能充分捕捉长程依赖和全局偏好模式。</p>
-          <p>Decoder-only（GPT 风格）使用<strong>因果注意力（Causal Attention）</strong>——每个位置只能看到之前的 item，且训练时 target token 也混在输入序列里，使得历史上下文和预测目标不清晰分离。</p>
-          <p><strong>具体例子：</strong>用户历史是 [无线耳机, 充电宝, 手机壳, 手机支架]，预测第 5 个 item。<br>
-          Encoder 处理历史时，"手机支架"的表示可以直接注意到"充电宝"（都是数码配件），也可以注意到"手机壳"（都是手机配件），形成完整的"我的用户喜欢手机周边数码产品"的全局表示。<br>
-          Decoder-only 在处理到"手机支架"时，已经是序列末尾，它的表示只是"基于前面所有 item 的因果推断"，虽然数学上等价，但实证上效果差得多——可能与注意力稀疏分布有关，也可能与位置编码有关。</p>
+        <div class="insight-card">
+          <span class="verdict verdict-yes">✅ 确认</span>
+          <h4>Encoder-Decoder 显著优于 Decoder-only</h4>
+          <p>双向 Encoder 对用户历史的全局建模是 GR 推荐任务成功的关键，与 LLM 领域趋势相悖。</p>
         </div>
-
-        <h3 id="augment">3.4 数据增强：最重要的单一设计决策</h3>
-
-        <div class="finding-card finding-confirm">
-          <strong>重要验证：</strong>滑动窗口数据增强的影响远超 tokenizer 算法选择。Beauty 上有 vs 无数据增强：<strong>0.0597 vs 0.0447（+33.6%）</strong>！这比换一个更好的 tokenizer 的收益大得多。
+        <div class="insight-card">
+          <span class="verdict verdict-yes">✅ 确认</span>
+          <h4>数据增强（滑动窗口）至关重要</h4>
+          <p>移除滑动窗口增强后 Recall 下降约 29%，是影响性能最大的单一因素之一。</p>
         </div>
-
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>数据增强</th><th>Beauty R@10</th><th>Toys R@10</th><th>Sports R@10</th></tr></thead>
-            <tbody>
-              <tr><td><strong>滑动窗口</strong></td><td><strong>0.0597</strong></td><td><strong>0.0548</strong></td><td><strong>0.0290</strong></td></tr>
-              <tr><td>无增强</td><td>0.0447</td><td>0.0442</td><td>0.0250</td></tr>
-            </tbody>
-          </table>
+        <div class="insight-card">
+          <span class="verdict verdict-neutral">➡️ 中性</span>
+          <h4>Free-form Beam Search 效率更高</h4>
+          <p>Unconstrained 与 Constrained 性能持平，但计算成本低得多，工程实践推荐使用 Free-form。</p>
         </div>
-
-        <p>滑动窗口增强将每个用户序列 $[i_1, i_2, \ldots, i_n]$ 展开为所有子序列：$[i_1 \to i_2]$, $[i_1, i_2 \to i_3]$, ..., $[i_1, \ldots, i_{n-1} \to i_n]$。这使训练数据量增加约 $n/2$ 倍（$n$ 为平均序列长度），且每个子序列提供不同长度的上下文，有效缓解了过拟合。</p>
-
-        <h3 id="beam">3.5 Beam Search：约束 vs 自由搜索</h3>
-
-        <div class="finding-card finding-surprise">
-          <strong>惊人发现：</strong>Free-form Beam Search（不限定只能生成有效 SID）性能不比 Constrained（只生成有效 SID）差，甚至略好，但计算效率更高（无需维护前缀树）。
+        <div class="insight-card">
+          <span class="verdict verdict-neutral">➡️ 中性</span>
+          <h4>SID 去重策略影响有限</h4>
+          <p>TIGER 去重略好，但工程代价不值。随机选择对大规模场景更实用。</p>
         </div>
+      </div>
 
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Beam 策略</th><th>Beauty R@10</th><th>Toys R@10</th><th>Sports R@10</th></tr></thead>
-            <tbody>
-              <tr><td>Constrained</td><td>0.0597</td><td>0.0548</td><td>0.0290</td></tr>
-              <tr><td><strong>Free-form</strong></td><td><strong>0.0609</strong></td><td>0.0546</td><td><strong>0.0302</strong></td></tr>
-            </tbody>
-          </table>
+      <div class="callout-blue" style="margin-top:20px;">
+        <strong>整体结论：</strong> 许多被文献"默认"的设计选择（RQ-VAE Tokenizer、用户 Token、Constrained Beam Search）并非最优，而一些常被忽视的细节（数据增强、Encoder-Decoder 架构）才是真正的性能驱动力。GRID 作为开源平台，让社区能够系统地识别这些"真正重要的因素"。
+      </div>
+    </section>
+
+    <!-- 6. 关联工作 -->
+    <section class="section" id="ref">
+      <div class="section-title"><div class="icon icon-blue">📚</div>关联工作与技术背景</div>
+
+      <div class="two-col">
+        <div class="mini-card">
+          <h4>TIGER（NeurIPS 2023）</h4>
+          <p>首个将 Transformer + RQ-VAE SID 用于序列推荐的工作，引入用户 Token 和 Constrained Beam Search，是 GR with SID 领域的奠基之作。</p>
         </div>
-
-        <div class="example-box">
-          <div class="ex-title">💡 举例：Constrained vs Free-form Beam Search 的差异</div>
-          <p><strong>Constrained（前缀树约束）：</strong>维护一棵前缀树，树中只包含实际存在的 item 的 SID。Beam 搜索时每步只能选择前缀树中合法的 token。优点：保证生成结果一定是真实 item；缺点：需要预先构建前缀树（$O(|\mathcal{I}| \times L)$ 空间），且约束搜索难以并行化。</p>
-          <p><strong>Free-form（自由生成）：</strong>不限制 token 选择，让模型自由生成。可能生成"不存在的 SID"（collision），直接忽略即可。实验发现，模型自然学会了生成有效 SID（因为训练数据全是有效 SID），无效生成出现概率极低（论文提到"very rarely"）。</p>
-          <p>关键结论：Constrained Beam Search 在实际中<strong>不必要</strong>——它增加了工程复杂度，但性能没有提升。对于大规模 item set，Free-form + 忽略无效 ID 是更简单高效的方案。</p>
+        <div class="mini-card">
+          <h4>One-Rec（2025）</h4>
+          <p>提出 Residual K-Means（RK-Means）作为更简单高效的 SID Tokenizer，并结合 RL 做偏好对齐。GRID 实验证明其 Tokenizer 优于 RQ-VAE。</p>
         </div>
-
-        <h3 id="user-token">3.6 User Token：TIGER 的这个设计实际上没用</h3>
-
-        <div class="finding-card finding-surprise">
-          <strong>惊人发现：</strong>TIGER 使用 user token（通过 hash 将用户 ID 映射到有限词表，prepend 到每个用户的 SID 序列前）被认为是个性化的来源。但实验发现，<strong>不使用 user token（0）性能最好</strong>，增加 user token 反而略有下降！
+        <div class="mini-card">
+          <h4>RQ-VAE 原文（CVPR 2022）</h4>
+          <p>最初用于图像生成的自回归建模（如 RQ-Transformer），被 TIGER 引入推荐系统。</p>
         </div>
-
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>User Token 词表大小</th><th>Beauty R@10</th><th>NDCG@10</th></tr></thead>
-            <tbody>
-              <tr><td><strong>0（不使用）</strong></td><td><strong>0.0618</strong></td><td><strong>0.0330</strong></td></tr>
-              <tr><td>2,000</td><td>0.0597</td><td>0.0328</td></tr>
-              <tr><td>4,000</td><td>0.0612</td><td>0.0332</td></tr>
-              <tr><td>8,000</td><td>0.0610</td><td>0.0335</td></tr>
-            </tbody>
-          </table>
+        <div class="mini-card">
+          <h4>P5（RecSys 2022）</h4>
+          <p>将推荐视为语言处理任务的统一预训练框架，GRID 使用其预处理的 Amazon Beauty/Sports/Toys 数据集。</p>
         </div>
+      </div>
 
-        <p>作者推测：基于 hash 的 user token 是"伪个性化"——多个用户被随机映射到同一个 token，模型无法真正学到用户级别的个性化信号。更好的个性化方案（如 user embedding 或 user history encoding）是未来研究方向。</p>
+      <div class="paper-info">
+        <p><strong>论文：</strong>Generative Recommendation with Semantic IDs: A Practitioner's Handbook</p>
+        <p><strong>链接：</strong><a href="https://arxiv.org/abs/2507.22224" target="_blank">https://arxiv.org/abs/2507.22224</a></p>
+        <p><strong>代码：</strong><a href="https://github.com/snap-research/GRID" target="_blank">https://github.com/snap-research/GRID</a></p>
+        <p><strong>收录：</strong>CIKM 2025（The 34th ACM International Conference on Information and Knowledge Management）</p>
+      </div>
 
-        <h3>SID 维度实验（L × W 对性能的影响）</h3>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>$L \times W$</th><th>Beauty R@10</th><th>说明</th></tr></thead>
-            <tbody>
-              <tr><td>3 × 128</td><td>0.0617</td><td>codebook 较小，语义区分度不足</td></tr>
-              <tr><td><strong>3 × 256</strong></td><td><strong>0.0639</strong></td><td>默认配置，性能最佳</td></tr>
-              <tr><td>3 × 512</td><td>0.0631</td><td>codebook 太大，稀疏性问题</td></tr>
-              <tr><td>2 × 256</td><td>0.0618</td><td>层数少，语义粒度不足</td></tr>
-              <tr><td>4 × 256</td><td>0.0609</td><td>层数多，序列变长，学习更难</td></tr>
-              <tr><td>5 × 256</td><td>0.0596</td><td>序列过长，性能显著下降</td></tr>
-            </tbody>
-          </table>
+      <blockquote>
+        "我们发现，许多被假设为至关重要的组件——且往往计算或工程成本高昂——实际上可以用更高效的替代方案取代而不损失性能。相反，一些通常被忽视的设计选择（如 Encoder-Decoder 架构和数据增强）被证明是至关重要的。"
+        <br>— GRID 论文结论
+      </blockquote>
+    </section>
+
+    <!-- 7. 代码解读 -->
+    <section class="section" id="code">
+      <div class="section-title"><div class="icon icon-purple">💻</div>代码解读</div>
+      <p>
+        GRID 以 <strong>PyTorch Lightning + Hydra</strong> 为框架基础，实现了完整的 GR with SID 管道。本节从项目结构、核心模块到关键逻辑，用结构图的方式逐层解析——不贴原始代码，只看骨架与设计。
+      </p>
+
+      <!-- 7.1 项目结构 -->
+      <h3 id="code-structure">7.1 项目结构</h3>
+
+      <div class="callout-blue" style="margin-bottom:16px;">
+        项目采用<strong>三层分离架构</strong>：<code>configs/</code>（Hydra 声明式配置）＋ <code>src/</code>（核心实现）＋ 入口脚本，各层完全解耦，切换实验无需修改代码。
+      </div>
+
+      <div class="ascii-wrap">
+        <div class="ascii-label">项目目录结构</div>
+        <pre>
+<span class="ac-bold">GRID/</span>
+├── <span class="ac-blue">src/train.py</span>           ─── <span class="ac-gray">① 训练入口（Hydra main）</span>
+├── <span class="ac-blue">src/inference.py</span>       ─── <span class="ac-gray">② 推理入口（Hydra main）</span>
+│
+├── src/modules/                        <span class="ac-gray">顶层 LightningModule</span>
+│   ├── clustering/
+│   │   ├── <span class="ac-purple">residual_quantization.py</span>   ─── <span class="ac-gray">③ ResidualQuantization（RQ 总控）</span>
+│   │   └── <span class="ac-gray">vector_quantization.py</span>     ─── <span class="ac-gray">④ VQ 单层（RQ-VAE 用）</span>
+│   └── <span class="ac-gray">semantic_embedding_inference_module.py</span>  ─── <span class="ac-gray">⑤ LLM Embedding 推理</span>
+│
+├── src/models/modules/
+│   ├── clustering/
+│   │   └── <span class="ac-green">mini_batch_kmeans.py</span>        ─── <span class="ac-gray">⑥ MiniBatchKMeans（RK-Means 单层）</span>
+│   └── semantic_id/
+│       └── <span class="ac-amber">tiger_generation_model.py</span>  ─── <span class="ac-gray">⑦ TIGER Enc-Dec 生成推荐模型</span>
+│
+├── src/components/                     <span class="ac-gray">可插拔组件（函数级）</span>
+│   ├── <span class="ac-gray">distance_functions.py</span>              <span class="ac-gray">距离度量（欧氏等）</span>
+│   ├── <span class="ac-gray">clustering_initializers.py</span>         <span class="ac-gray">K-Means++ 初始化</span>
+│   ├── <span class="ac-purple">quantization_strategies.py</span>         ─── <span class="ac-gray">⑧ 量化策略（STE / Gumbel / Rotation）</span>
+│   ├── <span class="ac-gray">loss_functions.py</span>                  <span class="ac-gray">WeightedSquaredError 等</span>
+│   └── <span class="ac-gray">eval_metrics.py</span>                    <span class="ac-gray">Recall / NDCG</span>
+│
+├── src/data/loading/
+│   ├── components/
+│   │   ├── <span class="ac-blue">pre_processing.py</span>              ─── <span class="ac-gray">⑨ 预处理函数链</span>
+│   │   ├── <span class="ac-gray">collate_functions.py</span>           <span class="ac-gray">滑动窗口增强在此</span>
+│   │   └── <span class="ac-gray">label_function.py</span>              <span class="ac-gray">NextKTokenMasking</span>
+│   └── datamodules/
+│       └── <span class="ac-gray">sequence_datamodule.py</span>         <span class="ac-gray">LightningDataModule 封装</span>
+│
+├── src/utils/
+│   └── <span class="ac-blue">launcher_utils.py</span>                ─── <span class="ac-gray">⑩ PipelineModules 上下文管理器</span>
+│
+└── configs/experiment/                 <span class="ac-gray">Hydra 声明式配置（无代码）</span>
+    ├── sem_embeds_inference_flat.yaml   <span class="ac-gray">Step1: LLM Embedding</span>
+    ├── rkmeans_train_flat.yaml          <span class="ac-gray">Step2: RK-Means 训练</span>
+    ├── rkmeans_inference_flat.yaml      <span class="ac-gray">Step2: 生成 SID</span>
+    ├── rqvae_train_flat.yaml            <span class="ac-gray">Step2: RQ-VAE 训练</span>
+    ├── tiger_train_flat.yaml            <span class="ac-gray">Step3: GR 模型训练</span>
+    └── tiger_inference_flat.yaml        <span class="ac-gray">Step4: 推荐推理</span></pre>
+      </div>
+
+      <!-- 7.2 整体 Pipeline 数据流 -->
+      <h3 id="code-pipeline">7.2 整体 Pipeline 数据流</h3>
+
+      <div class="ascii-wrap">
+        <div class="ascii-label">四阶段端到端流程</div>
+        <pre>
+ <span class="ac-amber">╔══ Step 1  LLM Embedding 生成 ══════════════════════════════════╗</span>
+ ║                                                                ║
+ ║  items/ (TFRecord)                                            ║
+ ║      │  TFRecordIterator → 预处理函数链（4步）               ║
+ ║      ▼                                                         ║
+ ║  <span class="ac-blue">SemanticEmbeddingInferenceModule</span>                              ║
+ ║      │  frozen HuggingFace LLM → mean pooling                 ║
+ ║      ▼                                                         ║
+ ║  <span class="ac-bold">merged_predictions.pt</span>  →  { item_id : embedding[d] }         ║
+ <span class="ac-amber">╚════════════════════════════════════════════════════════════════╝</span>
+                    ▼
+ <span class="ac-green">╔══ Step 2  SID Tokenizer 训练（以 RK-Means 为例）══════════════╗</span>
+ ║                                                                ║
+ ║  <span class="ac-purple">ResidualQuantization</span>  ←  n_layers=3  train_layer_wise=True  ║
+ ║                                                                ║
+ ║  Layer 0 ──► L2-Norm(embedding)  →  <span class="ac-green">MiniBatchKMeans</span>           ║
+ ║               assign SID₀       →  residual₁ = emb - c₀      ║
+ ║  Layer 1 ──► L2-Norm(residual₁) →  <span class="ac-green">MiniBatchKMeans</span>           ║
+ ║               assign SID₁       →  residual₂ = r₁ - c₁      ║
+ ║  Layer 2 ──► L2-Norm(residual₂) →  <span class="ac-green">MiniBatchKMeans</span>           ║
+ ║               assign SID₂       →  residual₃（最终误差）     ║
+ ║                                                                ║
+ ║  输出：checkpoint  +  { item_id : [SID₀, SID₁, SID₂] }      ║
+ <span class="ac-green">╚════════════════════════════════════════════════════════════════╝</span>
+                    ▼
+ <span class="ac-blue">╔══ Step 3  GR 模型训练（TIGER Enc-Dec）══════════════════════════╗</span>
+ ║                                                                ║
+ ║  用户历史序列 [i₁, i₂, …, iₙ]  →  滑动窗口增强              ║
+ ║      → 展开为所有前缀子序列（数据量 ~N 倍）                  ║
+ ║                                                                ║
+ ║  输入 SID Token 序列（已 Offset）                             ║
+ ║  [SID₀, SID₁, SID₂, SEP, SID₀', SID₁', SID₂', SEP, …]     ║
+ ║      ▼                                                         ║
+ ║  <span class="ac-blue">T5 Encoder</span>（双向注意力）→  encoder_output                   ║
+ ║      ▼                                                         ║
+ ║  <span class="ac-blue">T5 Decoder</span>（因果）+  bos_token 起始                         ║
+ ║      │  for h in [0,1,2]:                                     ║
+ ║      │      logits[h] = decoder_mlp[h](output[:, h])          ║
+ ║      │      loss[h]   = CrossEntropy(logits[h], SID_target[h])║
+ ║      │  total_loss = Σ loss[h]                                ║
+ ║                                                                ║
+ ║  输出：GR 模型 checkpoint                                     ║
+ <span class="ac-blue">╚════════════════════════════════════════════════════════════════╝</span>
+                    ▼
+ <span class="ac-purple">╔══ Step 4  推荐推理（Beam Search）══════════════════════════════╗</span>
+ ║                                                                ║
+ ║  Encoder 只算一次  →  encoder_output（可复用）               ║
+ ║                                                                ║
+ ║  for h = 0 → num_hierarchies-1:                               ║
+ ║      Decoder（+KV Cache）→  logits[h]  (batch×top_k, W)      ║
+ ║      beam_search_one_step：                                   ║
+ ║          概率累乘  →  topK 胜出 beam                         ║
+ ║          reorder_cache(winning_idx)  ←── KV Cache 同步       ║
+ ║                                                                ║
+ ║  generated_ids: (batch, top_k, num_hierarchies)               ║
+ ║      → 查 SID→item_id 映射表  →  推荐列表                   ║
+ <span class="ac-purple">╚════════════════════════════════════════════════════════════════╝</span></pre>
+      </div>
+
+      <!-- 7.3 残差量化核心 -->
+      <h3 id="code-rq">7.3 &amp; 7.4 SID Tokenizer：前向流程与三种量化方案</h3>
+      <p>文件：<code>residual_quantization.py</code>（总控）＋ <code>mini_batch_kmeans.py</code> / <code>vector_quantization.py</code>（单层）</p>
+
+      <div class="callout-blue">
+        <code>ResidualQuantization</code> 是统一的多层量化外壳，通过 <code>quantization_layer</code> 插槽切换内层算法。三种 SID Tokenizer（<strong>RK-Means / R-VQ / RQ-VAE</strong>）共享相同的残差叠加逻辑，只有单层的 Loss 计算和梯度路径不同。
+      </div>
+
+      <!-- 共同前向流程 -->
+      <div class="ascii-wrap">
+        <div class="ascii-label">共同前向流程（三种方案均执行此逻辑）</div>
+        <pre>
+输入：item embedding   h  ∈ ℝᵈ   <span class="ac-gray">（来自冻结 LLM 的语义向量）</span>
+<span class="ac-gray">可选：encoder(h) → z_e   （RQ-VAE 先压缩到隐空间，RK-Means/R-VQ 直接用 h）</span>
+
+residual = h  <span class="ac-gray">（或 z_e）</span>
+cluster_ids = []
+quantized_sum = 0
+
+<span class="ac-bold">for</span> l = 0, 1, …, L-1:
+  │
+  ├─ <span class="ac-blue">[若 normalize_residuals=True]</span>
+  │    residual = L2_norm(residual)
+  │    <span class="ac-gray">防止残差模长随层数衰减（RK-Means 默认开启）</span>
+  │
+  ├─ q, SID_l = quantize_layer[l](residual)
+  │    <span class="ac-gray">↑ 单层量化：找最近 codebook 向量 q，记录 ID（具体见下）</span>
+  │
+  ├─ cluster_ids.append(SID_l)
+  ├─ quantized_sum += q
+  └─ residual = residual - q     <span class="ac-gray">← 关键：下一层的输入 = 当前层未被捕捉的部分</span>
+
+输出：
+  cluster_ids  (batch, L)    ← 每层 SID，拼成 item 的 Semantic ID
+  quantized_sum (batch, d)   ← 各层量化向量之和（重建向量）
+  loss                       ← 累加各层 loss（见下方各方案）</pre>
+      </div>
+
+      <div class="example-box">
+        <div class="ex-title">💡 举例：3 层残差传递（item "运动耳机"，normalize_residuals=True）</div>
+        <div class="ascii-wrap" style="margin:10px 0 0;">
+          <pre>
+h（原始 embedding，2048维）
+│
+Layer 0  L2-Norm(h)  → argmin dist → centroid c₀[<span class="ac-blue">42</span>]   SID₀=<span class="ac-blue">42</span>
+         residual₁ = h_norm - c₀[42]          ← 粗粒度类别信息留在这里
+│
+Layer 1  L2-Norm(r₁) → argmin dist → centroid c₁[<span class="ac-green">7</span>]    SID₁=<span class="ac-green">7</span>
+         residual₂ = r₁_norm - c₁[7]          ← 中粒度差异信息
+│
+Layer 2  L2-Norm(r₂) → argmin dist → centroid c₂[<span class="ac-purple">191</span>]  SID₂=<span class="ac-purple">191</span>
+
+最终 SID = [<span class="ac-blue">42</span>, <span class="ac-green">7</span>, <span class="ac-purple">191</span>]    重建 = c₀[42] + c₁[7] + c₂[191]</pre>
         </div>
+      </div>
 
-        <div class="callout callout-purple">
-          <strong>核心规律：</strong>SID 层数增加 $\Rightarrow$ token 序列更长、包含更多语义细节，但序列更难学习。存在一个 trade-off——3 层 256 是信息量与可学性的最佳平衡点，超过 4 层后性能开始下降。
+      <!-- 三种量化方案 -->
+      <h4 style="margin:28px 0 12px;color:#1e293b;">三种量化方案：单层 quantize_layer 的 Loss 与训练方式</h4>
+
+      <!-- 方案 1 RK-Means -->
+      <div class="ascii-wrap">
+        <div class="ascii-label" style="color:#16a34a;">方案 ① RK-Means（论文最优）— MiniBatchKMeans</div>
+        <pre>
+<span class="ac-bold">Centroid 初始化（训练开始前的 "预热" 阶段）</span>
+
+  centroids 初始值：zeros(n_clusters, d)    <span class="ac-gray">← 全零占位，尚未有意义</span>
+  is_initialized = False
+
+  Phase 1  Buffer 积累（前 init_buffer_size=1000 个样本）
+  ┌─────────────────────────────────────────────────────────┐
+  │  每个 mini-batch 进来 → 追加到 init_buffer              │
+  │  同时返回 dummy loss = MSE(centroids, 0)                │
+  │  → SGD 把全零 centroids 继续拉向 0，保持占位             │
+  │  → 这些 batch 的 SID 分配是假的，不影响后续训练          │
+  └─────────────────────────────────────────────────────────┘
+
+  Phase 2  一次性 K-Means++ 初始化（buffer 满后触发，仅 rank-0 执行）
+  ┌─────────────────────────────────────────────────────────┐
+  │  KMeansPlusPlusInitInitializer.forward(init_buffer)     │
+  │                                                         │
+  │  Step 0：随机选 1 个点作为 centroid[0]                  │
+  │  Step k：for k = 1 … K-1:                              │
+  │    min_dist[i] = min‖x_i - centroid[0..k-1]‖²          │
+  │    p[i] = min_dist[i] / Σ min_dist                      │
+  │    centroid[k] = sample(buffer, p)  ← 距现有中心越远越可能被选 │
+  │                                                         │
+  │  效果：初始 centroid 分散覆盖数据空间，避免随机初始化的  │
+  │       多个中心扎堆、死区中心等问题                       │
+  └─────────────────────────────────────────────────────────┘
+
+  Phase 3  "热身" step（is_initial_step=True）
+     loss = MSE(centroids_zero, init_centroids)
+     → SGD 把 centroids 从全零一步移动到 K-Means++ 结果
+     → 完成后 is_initialized=True，进入正常 mini-batch 更新
+
+<span class="ac-bold">正常训练阶段（单层前向）</span>
+  assignments = argmin‖residual - centroid[k]‖²    <span class="ac-gray">← argmin 不可微</span>
+  q = centroid[assignments]
+
+<span class="ac-bold">Loss（WeightedSquaredError）</span>
+  batch_mean[k] = mean(residual 中分配到 cluster k 的样本)
+  weight[k]     = batch_count[k] / global_count[k]    <span class="ac-gray">← 自适应权重</span>
+  L_kmeans = Σₖ  weight[k] · ‖centroid[k] - batch_mean[k]‖²
+
+  <span class="ac-gray">等价于：centroid ← centroid × (1 - w) + batch_mean × w</span>
+  <span class="ac-gray">（Sculley 2010 在线 K-Means，weight 随全局计数自动衰减）</span>
+
+<span class="ac-bold">反向 / 训练方式</span>
+  只更新 centroid（即 Embedding Table 参数），无 encoder 参数
+  梯度通过 WeightedSquaredError 直接作用于 centroids
+  ✓ train_layer_wise=True：逐层训练，等分 total_steps，第 l 段只训练第 l 层
+  ✗ encoder / decoder：均为 Identity（直接用 LLM embedding，不压缩）</pre>
+      </div>
+
+      <!-- 方案 2 R-VQ -->
+      <div class="ascii-wrap">
+        <div class="ascii-label" style="color:#2563eb;">方案 ② R-VQ（残差向量量化）— VectorQuantization，无 encoder/decoder</div>
+        <pre>
+<span class="ac-bold">整体结构</span>：同样是多层残差（与 RK-Means 一样），每层量化该层的残差，不是原始 h
+  residual₀ = h
+  for l = 0..L-1:
+      q_l = codebook_l[argmin‖residual_l - codebook_l[k]‖²]
+      loss_l = BetaQuantizationLoss(residual_l, q_l)     ← 与残差比，不是与 h 比！
+      residual_{l+1} = residual_l - q_l
+
+<span class="ac-bold">BetaQuantizationLoss（每层的 loss）</span>
+  loss_function(batch=residual_l, embeddings=q_l):
+    L_vq     = MSE(residual_l.detach(), q_l)    ← codebook 向该层残差靠拢
+    L_commit = MSE(residual_l, q_l.detach())    ← 残差向 codebook 靠拢
+    loss_l   = L_vq + β · L_commit             ← β=0.25
+
+  <span class="ac-gray">注：h 是冻结的 LLM embedding，L_commit 的梯度虽然流向 residual_l，</span>
+  <span class="ac-gray">    但由于没有 encoder，最终无可训练参数可更新，L_commit 名存实亡</span>
+
+<span class="ac-bold">与 RK-Means 的本质区别</span>
+  RK-Means：WeightedSquaredError(centroid, batch_mean, weight)
+             → centroid 做加权平均移动（在线 K-Means 等价于 SGD lr=0.5）
+  R-VQ：     BetaQuantizationLoss(residual_l, q_l)
+             → codebook 用标准 optimizer（AdamW）更新，无在线权重衰减机制
+             → 理论上等价，但优化器行为不同
+
+<span class="ac-bold">配置关键字段（rvq_train_flat.yaml）</span>
+  compute_reconstruction_loss_embeddings: <span class="ac-red">false</span>   ← STE 梯度穿透功能未激活
+  optimizer: AdamW (lr=0.001)                        ← codebook 参数走标准反向传播
+  train_layer_wise: True                             ← 逐层训练（与 RK-Means 相同）
+  ✗ encoder / decoder：均默认 Identity（无压缩）</pre>
+      </div>
+
+      <!-- 方案 3 RQ-VAE -->
+      <div class="ascii-wrap">
+        <div class="ascii-label" style="color:#7c3aed;">方案 ③ RQ-VAE（重建型 VAE）— ResidualQuantization + encoder/decoder MLP</div>
+        <pre>
+<span class="ac-bold">整体结构</span>
+  h  ──► <span class="ac-purple">encoder MLP（只跑一次）</span> ──► z_e = r₀
+                                              │
+                          ┌─────────────── 残差量化（L 层，在 z_e 空间内进行）───┐
+                          │  Layer 0: q₀ = argmin‖r₀ - codebook₀‖²             │
+                          │           r₁ = r₀ - q₀                              │
+                          │  Layer 1: q₁ = argmin‖r₁ - codebook₁‖²             │
+                          │           r₂ = r₁ - q₁   ...                        │
+                          └──────────────────────────────────────────────────────┘
+                                              │
+                          z_q = q₀ + q₁ + … + q_{L-1}   ← 各层 codebook 向量之和
+                                              │
+                          <span class="ac-purple">decoder MLP（只跑一次）</span> ──► ĥ（重建回 h 的维度）
+
+  ※ encoder 和 decoder 各只跑一次，残差 r₀→r₁→…→r_L 全程在 z_e 空间传递
+
+<span class="ac-bold">Loss（三项之和）</span>
+  L_recon  = ‖h - ĥ‖²
+             ↑ 重建 Loss，h 是原始 LLM embedding，ĥ 是 decoder(z_q) 输出
+
+  L_commit = Σₗ ‖r_l - q_l.detach()‖²
+             ↑ 每层：该层残差 r_l 向 codebook 靠拢（r_l 有梯度，q_l 冻结）
+             ↑ r_l 在 z_e 空间，不是 h 空间；encoder 只跑一次，不是每层跑
+
+  L_vq     = Σₗ ‖r_l.detach() - q_l‖²
+             ↑ 每层：codebook 向该层残差 r_l 靠拢（q_l 有梯度，r_l 冻结）
+
+  Total = λ_recon · L_recon + λ_commit · L_commit + λ_vq · L_vq
+
+<span class="ac-bold">量化策略（STE / Gumbel / Rotation，RQ-VAE 专属）</span>
+  作用：让 L_recon 的梯度能通过量化步骤（argmin 不可微）流回 encoder
+  ┌── <span class="ac-blue">STE</span>：x_out = r_l + (q_l - r_l).detach()   前向=q_l，反向梯度直通 r_l→encoder
+  ├── <span class="ac-green">Gumbel-Softmax</span>：软分配 w·codebook，完全可微，梯度自然流向 r_l→encoder
+  └── <span class="ac-amber">Rotation Trick</span>：旋转矩阵 R·r_l = q_l，梯度方差最小
+
+<span class="ac-bold">反向传播路径</span>
+  L_recon  → ĥ → decoder → z_q → [STE 等] → r₀=z_e → encoder → h（的 encoder 参数）
+  L_commit → r_l → encoder（通过多层残差链往回传）
+  L_vq     → q_l（codebook 参数本身）</pre>
+      </div>
+
+      <!-- 三种方案横向对比 -->
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>维度</th>
+              <th>RK-Means</th>
+              <th>R-VQ</th>
+              <th>RQ-VAE</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>单层量化</strong></td>
+              <td>MiniBatchKMeans（argmin）</td>
+              <td>VectorQuantization（argmin + 量化策略）</td>
+              <td>VectorQuantization（argmin + 量化策略）</td>
+            </tr>
+            <tr>
+              <td><strong>encoder</strong></td>
+              <td>Identity（直接用 h）</td>
+              <td>无（直接用冻结 h）</td>
+              <td>MLP（h → z_e，降维）</td>
+            </tr>
+            <tr>
+              <td><strong>decoder</strong></td>
+              <td>无</td>
+              <td>无</td>
+              <td>MLP（z_q → ĥ，重建）</td>
+            </tr>
+            <tr>
+              <td><strong>Loss</strong></td>
+              <td>WeightedSquaredError（centroid 移动）</td>
+              <td>BetaQuantizationLoss(r_l, q_l) = MSE(r_l.detach(), q_l) + β·MSE(r_l, q_l.detach())，逐层对残差做</td>
+              <td>L_recon + L_commit + L_vq（三项均有效）</td>
+            </tr>
+            <tr>
+              <td><strong>梯度到 codebook</strong></td>
+              <td>直接（SGD lr=0.5 on WeightedSquaredError）</td>
+              <td>autograd（AdamW，通过 L_vq）</td>
+              <td>autograd（通过 L_vq）</td>
+            </tr>
+            <tr>
+              <td><strong>梯度到 encoder</strong></td>
+              <td>无（encoder=Identity）</td>
+              <td>无（h 冻结；STE 的 compute_recon_emb=false）</td>
+              <td>STE（compute_recon_emb=true）+ L_recon</td>
+            </tr>
+            <tr>
+              <td><strong>训练策略</strong></td>
+              <td>逐层（train_layer_wise=True）</td>
+              <td>逐层（train_layer_wise=True）</td>
+              <td>各层同时（train_layer_wise=False）</td>
+            </tr>
+            <tr>
+              <td><strong>论文效果</strong></td>
+              <td>最优（简单有效）</td>
+              <td>次优</td>
+              <td>略差（重建目标与推荐目标不完全对齐）</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout-amber">
+        <strong>为什么 RK-Means 最优？</strong> 推荐任务只需要 SID 能区分不同语义的 item，不需要精确重建 embedding。RQ-VAE 引入重建 Loss 反而引入了与推荐无关的优化目标；RK-Means 的 centroid 直接在原始 embedding 空间做最近邻聚类，语义保留最完整，实现也最简单。
+      </div>
+
+      <!-- 7.5 TIGER 生成模型 -->
+      <h3 id="code-tiger">7.5 SemanticIDEncoderDecoder：TIGER 生成模型</h3>
+      <p>文件：<code>src/models/modules/semantic_id/tiger_generation_model.py</code></p>
+
+      <div class="ascii-wrap">
+        <div class="ascii-label">SemanticIDEncoderDecoder 结构图</div>
+        <pre>
+<span class="ac-amber">SemanticIDEncoderDecoder</span>  (TransformerBaseModule)
+│
+├── <span class="ac-bold">关键属性</span>
+│   ├── item_sid_embedding_table_encoder   ← 单张 Embedding Table
+│   │   大小 = num_hierarchies × codebook_size（e.g. 3×256=768）
+│   │   不同层级 SID 通过 offset 区分：
+│   │   SID₀=42 → 查[42]    SID₁=7 → 查[7+256=263]    SID₂=191 → 查[703]
+│   │
+│   ├── sep_token                          ← 可学习分隔 token（每 item 后插入）
+│   ├── user_embedding                     ← 可选 User Token（消融证明去掉更好）
+│   ├── encoder  (T5EncoderModel, 4层)     ← 双向注意力
+│   └── decoder  (T5Stack, 4层, is_decoder=True)
+│       ├── bos_token                      ← 可学习起始 token
+│       └── decoder_mlp[0..L-1]           ← 每层 hierarchy 独立线性分类头
+│
+├── <span class="ac-bold">encoder_forward_pass(history_sids)</span>
+│   │
+│   ├── Step 1  _add_repeating_offset_to_rows    ← SID offset 变换
+│   ├── Step 2  item_sid_embedding_table_encoder ← 查 Embedding Table
+│   ├── Step 3  _inject_sep_token_between_sids   ← 插入 SEP token
+│   ├── Step 4  [可选] 拼接 user_id embedding 在序列头部
+│   └── Step 5  T5 Encoder（双向 Self-Attn）     ← encoder_output
+│
+├── <span class="ac-bold">model_step (训练)</span>
+│   │
+│   ├── encoder_forward_pass → encoder_output
+│   ├── decoder_forward_pass (teacher forcing，use_cache=False)
+│   │       输入: [bos, SID₀_target, SID₁_target, SID₂_target]
+│   │       输出: decoder_output[:, :-1]（移除末位，共 L 个时间步）
+│   │
+│   └── for h in 0..L-1:
+│           logits = decoder_mlp[h](decoder_output[:, h])
+│           loss += CrossEntropy(logits, fut_ids[:, h])
+│
+└── <span class="ac-bold">generate (推理 Beam Search)</span>
+    └── 见 7.6</pre>
+      </div>
+
+      <div class="example-box">
+        <div class="ex-title">💡 Encoder 输入 Token 序列构成</div>
+        <div class="ascii-wrap" style="margin:10px 0 0;">
+          <pre>
+用户历史：[item_A, item_B, item_C]
+  ↓ 映射 SID（每 item 3 token）+ 插入 SEP
+
+Encoder 输入序列：
+┌──────┬──────┬──────┬─────┬──────┬──────┬──────┬─────┬──────┬──────┬──────┬─────┐
+│ SID₀ │ SID₁ │ SID₂ │ SEP │ SID₀ │ SID₁ │ SID₂ │ SEP │ SID₀ │ SID₁ │ SID₂ │ SEP │
+│  A层0 │  A层1│  A层2│     │  B层0 │  B层1│  B层2│     │  C层0 │  C层1│  C层2│     │
+└──────┴──────┴──────┴─────┴──────┴──────┴──────┴─────┴──────┴──────┴──────┴─────┘
+ 所有 token 均已做 offset，通过同一张 Embedding Table 查询</pre>
         </div>
-      </section>
+      </div>
 
-      <!-- 个人理解 -->
-      <section class="section" id="insights">
-        <div class="section-title"><div class="icon" style="background:#fef3c7;">💡</div>4. 个人理解与启发</div>
+      <div class="example-box">
+        <div class="ex-title">🔗 encoder_output 如何流入 Decoder？以及 fut_ids 是什么？</div>
+        <div class="ascii-wrap" style="margin:10px 0 0;">
+          <pre>
+<span class="ac-bold">── 训练时完整数据流 ──────────────────────────────────────────────────</span>
 
-        <h3>这篇论文的独特价值</h3>
-        <p>GRID 是一篇不同于其他论文的工作——它不提出新的性能领先方法，而是做<strong>"系统性调查与批判"</strong>。在一个领域快速发展、论文层出不穷的时候，这种"慢下来，搞清楚什么真正重要"的工作往往比下一个 SOTA 模型更有价值。</p>
+<span class="ac-gray">【输入数据】</span>
+history_sids : [42, 7,191,  88, 3, 44,  15,91, 6]   ← 历史 3 个 item 已展开的 SID
+fut_ids      : [33,          12,          76    ]   ← 目标 item_D 的 SID（3 层）
+               └─ SID₀=33 ─┘  └─ SID₁=12 ─┘  └─ SID₂=76 ─┘
 
-        <h3>5 个最重要的实践建议（GRID 总结）</h3>
-        <ul>
-          <li><strong>1. 先试 RK-Means，再试 RQ-VAE：</strong>RK-Means 简单高效，在多个数据集上表现不输 RQ-VAE，且无需复杂的 autoencoder 训练。</li>
-          <li><strong>2. 一定要用滑动窗口数据增强：</strong>这是收益最大的单一设计决策（+33%），完全不可省略。</li>
-          <li><strong>3. 用 Encoder-Decoder，不要 Decoder-only：</strong>Encoder 的 dense attention 对用户历史的建模能力远优于 causal attention（+36%）。</li>
-          <li><strong>4. 不要迷信更大的语言模型：</strong>从 780M 到 11B 只带来 1% 提升，把算力花在模型架构和训练策略上更值得。</li>
-          <li><strong>5. 去掉 User Token：</strong>TIGER 原始的 hash-based user token 没有实际个性化效果，移除不影响甚至略有提升。</li>
-        </ul>
+<span class="ac-bold">── encoder_forward_pass(history_sids) ───────────────────────</span>
+   history_sids ──► Embedding + SEP 插入 ──► T5 Encoder（双向 Self-Attn）
+                                                      │
+                                            encoder_output   shape (batch, enc_len, 128)
+                                                      │
+                         ┌────────────────────────────┘ cross-attention（每个 Decoder 层）
+                         ▼
+<span class="ac-bold">── decoder_forward_pass(teacher forcing) ────────────────────</span>
+   Decoder 输入（已知的 ground truth 前缀）：
+   [bos_token, SID₀_D=33, SID₁_D=12]
+        ↑ Teacher Forcing：每步喂真实标签，而非上一步预测值
 
-        <h3>对我的启发</h3>
-        <p>GRID 给我的最大启示是：<strong>在快速变化的领域中，系统性的消融实验比提出新方法更难，也更有价值。</strong>大多数人看到"RK-Means 优于 RQ-VAE"会觉得不可思议，但这恰恰是因为 RQ-VAE 有"高大上的 autoencoder"的光环，使得没有人去严格验证这个假设。GRID 通过严格控制变量的实验，剥掉了这些光环，给出了真正客观的比较。</p>
+   Decoder 内部每层：
+     Self-Attn  → 看已生成的 token（因果掩码）
+     Cross-Attn → attend 到 encoder_output（参考用户历史）
 
-        <p>这也提示了一个研究方法论问题：在评估任何新方法时，都应该先问"哪个 baseline 是真正公平的"，而不是与当前最弱的 baseline 比较。</p>
+   decoder_output[:, :-1]   共 L=3 个时间步
+     时间步 0 ──► mlp[0] ──► logits ──► 预测 SID₀_D = 33  (vs fut_ids[:, 0])
+     时间步 1 ──► mlp[1] ──► logits ──► 预测 SID₁_D = 12  (vs fut_ids[:, 1])
+     时间步 2 ──► mlp[2] ──► logits ──► 预测 SID₂_D = 76  (vs fut_ids[:, 2])
 
-        <div class="paper-info">
-          <p><strong>论文链接：</strong><a href="https://arxiv.org/abs/2507.22224" target="_blank">arXiv 2507.22224</a> · <a href="https://github.com/snap-research/GRID" target="_blank">GitHub: snap-research/GRID</a></p>
-          <p><strong>关键词：</strong>开源框架 · Semantic ID · 系统消融 · 设计决策 · GR Benchmarking</p>
-          <p><strong>数据集：</strong>Amazon Beauty, Sports, Toys（5-core filtered）</p>
-          <p><strong>主要惊人发现：</strong>RK-Means ≥ RQ-VAE；LLM 大小边际效益极低；Encoder-Decoder >> Decoder-only；无 User Token 更好；数据增强是最重要决策</p>
+   Total Loss = CE(mlp[0](out[:,0]), fut_ids[:,0])
+              + CE(mlp[1](out[:,1]), fut_ids[:,1])
+              + CE(mlp[2](out[:,2]), fut_ids[:,2])</pre>
         </div>
-      </section>
+        <p style="margin:10px 0 0;font-size:13.5px;line-height:1.8;">
+          <strong>fut_ids</strong> 来自 <code>NextKTokenMasking</code>：将输入序列最后 <code>num_hierarchies</code> 个 token（即目标 item 的完整 SID）挖出，作为 Decoder 的预测目标。每个 hierarchy 有<strong>独立分类头</strong> <code>decoder_mlp[h]</code>，因为不同层捕获的语义粒度完全不同（第 0 层粗粒度类别，第 2 层细粒度残差），共用分类头会相互干扰。
+        </p>
+      </div>
 
-    </main>
-  </div>
+      <!-- 7.6 Beam Search -->
+      <h3 id="code-beam">7.6 Beam Search 推理实现</h3>
 
-  <footer>
-    <a href="../index.html">← 返回论文列表</a>
-    <p style="margin-top:12px;">Paper Notes · Semantic ID for Generative Recommendation</p>
-  </footer>
+      <div class="ascii-wrap">
+        <div class="ascii-label">generate() 逐层 Beam Search 流程</div>
+        <pre>
+<span class="ac-bold">Encoder 前向</span>（只算一次）
+encoder_output  ←──────────────────────────────── 固定不变，复用给每个 beam
+        │
+        ▼
+<span class="ac-bold">hierarchy = 0</span>  （生成第一个 SID digit）
+  ├── Decoder([bos_token])  →  logits  shape (batch, W)
+  ├── softmax + Top-K  →  beam_ids = (batch, K, 1)
+  │   ↑ 同时重置 KV Cache（第 0 步无合法 cache）
+  │
+<span class="ac-bold">hierarchy = 1</span>  （生成第二个 SID digit）
+  ├── beam 扩展：(batch, K) → (batch×K,)  ← repeat_interleave
+  ├── encoder_output 复制 K 份
+  ├── Decoder(generated_ids[:, :1], kv_cache)  →  logits (batch×K, W)
+  ├── 概率累乘  →  batch 内共 K×W 个候选
+  ├── Top-K 选出胜者  →  winning_beam_idx
+  ├── <span class="ac-purple">kv_cache.reorder_cache(winning_beam_idx)</span>  ← 关键！保持 Cache 与 beam 同步
+  └── beam_ids = (batch, K, 2)
+        │
+<span class="ac-bold">hierarchy = 2</span>  （生成第三个 SID digit，同上）
+        │
+        ▼
+<span class="ac-bold">输出</span>  generated_ids: (batch, top_k, 3)
+       → 查 SID→item_id 映射表  →  最终推荐列表 Top-K</pre>
+      </div>
+
+      <div class="kp-list">
+        <div class="kp"><div class="kp-icon purple">🔑</div><div><strong>reorder_cache</strong>：Beam Search 中每步有些旧 beam 被淘汰，KV Cache 需按 <code>winning_beam_idx</code> 重新排列，确保后续 Decoder step 的 Q·K 计算基于正确的历史上下文</div></div>
+        <div class="kp"><div class="kp-icon blue">⚡</div><div><strong>Free-form vs Constrained</strong>：<code>should_check_prefix=False</code> 时跳过前缀合法性检查（<code>_check_valid_prefix</code>），推理更快，论文实验证明性能持平</div></div>
+        <div class="kp"><div class="kp-icon green">↺</div><div>Encoder 输出只计算一次，Decoder 每层都接收同一份 <code>encoder_output</code>（cross-attention），大幅降低计算量</div></div>
+      </div>
+
+      <!-- 7.7 数据处理 -->
+      <h3 id="code-data">7.7 数据处理管线</h3>
+
+      <div class="ascii-wrap">
+        <div class="ascii-label">预处理函数链 + 滑动窗口增强</div>
+        <pre>
+<span class="ac-bold">Step A  预处理函数链</span>（在 DataModule 的 per-row 阶段串行执行）
+
+  原始 TFRecord row
+      │
+      ├─ <span class="ac-blue">filter_features_to_consider</span>     只保留 config 指定的字段
+      ├─ convert_to_dense_numpy_array   sparse tensor → dense numpy
+      ├─ convert_fields_to_tensors      numpy → torch.Tensor（按 dtype 映射）
+      └─ <span class="ac-purple">map_sparse_id_to_semantic_id</span>    ← 关键：item_id 序列 → SID 序列
+
+          item_id = [A, B, C]
+          id_map  shape (L=3, N_items)
+          ────────────────────────────────────
+          id_map.t()[item_id]  →  (3, 3)      ← 每 item 3 个 SID digit
+          .view(-1)            →  [SID₀ₐ, SID₁ₐ, SID₂ₐ, SID₀ᵦ, SID₁ᵦ, SID₂ᵦ, …]
+          ────────────────────────────────────
+          展开为交织形式：同一 item 的 L 个 token 连续排列
+
+──────────────────────────────────────────────────
+
+<span class="ac-bold">Step B  滑动窗口增强</span>（在 collate_fn 阶段，per-batch）
+
+  函数：collate_with_sid_causal_duplicate
+  配置：max_batch_size = 512
+
+  单条序列 [i₁, i₂, i₃, i₄, i₅]
+      ↓ 生成所有"前缀→下一个 item"样本
+  ┌──────────────────┬──────────┐
+  │  输入（历史）     │  标签    │
+  ├──────────────────┼──────────┤
+  │  [i₁]           │  i₂      │
+  │  [i₁, i₂]       │  i₃      │
+  │  [i₁, i₂, i₃]   │  i₄      │
+  │  [i₁, i₂, i₃,i₄]│  i₅      │
+  └──────────────────┴──────────┘
+  数据量 ≈ 4× 增加  →  Recall@5 提升约 29%（Table 6）
+
+──────────────────────────────────────────────────
+
+<span class="ac-bold">Step C  NextKTokenMasking</span>（label 提取）
+
+  输入序列（SID 展开后）：
+  [SID₀ᵢ₁, SID₁ᵢ₁, SID₂ᵢ₁, …, SID₀ᵢₙ, SID₁ᵢₙ, SID₂ᵢₙ]
+                                  └──────── 最后 L=3 个 token ──────┘
+                                            ↑ 挖出作为 label，原位置填 masking_token=-1</pre>
+      </div>
+
+      <!-- 7.8 Hydra 配置 -->
+      <h3 id="code-config">7.8 Hydra 配置：实验切换设计</h3>
+      <p>
+        GRID 所有组件均通过 Hydra YAML 的 <code>_target_</code> 字段声明，无需修改 Python 代码即可切换 Tokenizer、优化器、评估指标等。
+      </p>
+
+      <div class="ascii-wrap">
+        <div class="ascii-label">Tokenizer 切换机制（仅改 _target_ 字段）</div>
+        <pre>
+model:
+  _target_: src.modules.clustering.residual_quantization.ResidualQuantization
+  n_layers: 3
+  normalize_residuals: true
+  train_layer_wise: true
+
+  quantization_layer:                        ← 切换此处选择 Tokenizer
+    ┌─ <span class="ac-green">RK-Means（论文最优）</span>
+    │    _target_: ...mini_batch_kmeans.MiniBatchKMeans
+    │    n_clusters: 256
+    │
+    ├─ <span class="ac-blue">R-VQ（向量量化）</span>
+    │    _target_: ...vector_quantization.VectorQuantization
+    │    quantization_strategy:
+    │        _target_: ...STEQuantization       ← 或 Gumbel / Rotation
+    │
+    └─ <span class="ac-amber">RQ-VAE（编解码器路径）</span>
+         _target_: ...VectorQuantization        ← 同上，但激活 encoder/decoder
+         另需在 ResidualQuantization 中配置：
+           encoder: MLP(d_in → d_latent)
+           decoder: MLP(d_latent → d_in)
+           reconstruction_loss_function: MSELoss</pre>
+      </div>
+
+      <!-- 7.9 量化策略对比 -->
+      <h3 id="code-quant">7.9 三种量化策略对比</h3>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>策略</th><th>梯度传播原理</th><th>使用场景</th><th>特点</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>STEQuantization</strong></td>
+              <td>前向取量化值 <code>q</code>，反向梯度直通 <code>z_e</code><br><code>x_q = z_e + (q − z_e).detach()</code></td>
+              <td>RQ-VAE encoder 训练</td>
+              <td>实现最简单，梯度近似误差较大</td>
+            </tr>
+            <tr>
+              <td><strong>GumbelSoftmaxQuantization</strong></td>
+              <td>软分配 <code>w = Gumbel_softmax(−dist/τ)</code><br>量化 embedding = <code>w @ codebook</code>（可微）</td>
+              <td>RQ-VAE（可微分路径）</td>
+              <td>温度 τ 控制软硬程度，训练更平稳</td>
+            </tr>
+            <tr>
+              <td><strong>RotationTrickQuantization</strong></td>
+              <td>等距旋转变换 <code>batch → q</code>，梯度通过旋转矩阵流回 encoder</td>
+              <td>RQ-VAE（最新方案）</td>
+              <td>梯度方差小，优于 STE，实现复杂</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout-amber">
+        <strong>注意：</strong> <strong>RK-Means</strong> 和 <strong>R-VQ</strong> 不需要上述量化策略——其 codebook 更新走 mini-batch SGD / EMA，不依赖 autograd；量化策略仅在 RQ-VAE（需要通过量化步骤反传梯度给 encoder）时才激活。
+      </div>
+    </section>
+
+  </main>
 </div>
 
-<script>
-(function(){
-  // TOC 滚动高亮：使用 IntersectionObserver 监听所有带 id 的 section/h3
-  var tocLinks = document.querySelectorAll('.toc-list a[href^="#"], .toc-sub a[href^="#"]');
-  if (!tocLinks.length) return;
+<footer>
+  <a href="../index.html">← 返回论文列表</a>
+  &nbsp;·&nbsp;
+  解读基于论文 <a href="https://arxiv.org/abs/2507.22224" target="_blank">arXiv:2507.22224</a>
+</footer>
 
-  // 建立 id -> tocLink 映射
-  var linkMap = {};
-  tocLinks.forEach(function(a){
-    var id = a.getAttribute('href').slice(1);
-    if (id) linkMap[id] = a;
-  });
-
-  var targets = Object.keys(linkMap).map(function(id){
-    return document.getElementById(id);
-  }).filter(Boolean);
-
-  if (!targets.length) return;
-
-  var activeId = null;
-
-  function setActive(id){
-    if (id === activeId) return;
-    activeId = id;
-    tocLinks.forEach(function(a){ a.classList.remove('active'); });
-    if (id && linkMap[id]){
-      linkMap[id].classList.add('active');
-      // 让目录自动滚动到对应项可见
-      var toc = document.querySelector('.toc');
-      if (toc){
-        var li = linkMap[id];
-        var tocTop = toc.getBoundingClientRect().top;
-        var liTop  = li.getBoundingClientRect().top;
-        var offset = liTop - tocTop - toc.clientHeight / 2;
-        toc.scrollBy({ top: offset, behavior: 'smooth' });
-      }
-    }
-  }
-
-  // rootMargin: 上边距 -10%（稍微进入视口就算），下边距 -60%（只有顶部 40% 区域触发）
-  var observer = new IntersectionObserver(function(entries){
-    entries.forEach(function(entry){
-      if (entry.isIntersecting){
-        setActive(entry.target.id);
-      }
-    });
-  }, { rootMargin: '-10% 0px -60% 0px', threshold: 0 });
-
-  targets.forEach(function(el){ observer.observe(el); });
-})();
-</script>
 </body>
 </html>

@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Self-Evolving Recommendation System | Paper Notes</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <style>
+    :root {
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #2563eb; --primary-soft: #eff6ff;
+      --accent: #7c3aed; --accent-soft: rgba(124,58,237,0.06);
+      --shadow: 0 10px 30px rgba(15,23,42,0.08); --radius: 18px; --max: 1300px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: linear-gradient(180deg,#f8fbff 0%,var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      line-height: 1.7;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Back link */
+    .back-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 10px 20px; margin: 24px auto 0; max-width: var(--max);
+      font-size: 0.875rem; color: var(--muted);
+      border: 1px solid var(--line); border-radius: 8px;
+      background: var(--card); transition: all .2s;
+    }
+    .back-link:hover { color: var(--primary); border-color: var(--primary); text-decoration: none; }
+    .back-wrap { max-width: var(--max); margin: 0 auto; padding: 0 24px; }
+
+    /* Hero */
+    .hero {
+      max-width: var(--max); margin: 24px auto 0; padding: 48px 40px;
+      background: radial-gradient(ellipse 80% 60% at 60% 30%, #dbeafe 0%, var(--card) 70%);
+      border-radius: var(--radius); border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+    .eyebrow {
+      display: inline-block; padding: 4px 14px; border-radius: 20px;
+      background: var(--primary-soft); color: var(--primary);
+      font-size: 0.8rem; font-weight: 600; letter-spacing: .05em; margin-bottom: 16px;
+    }
+    .hero h1 { font-size: 1.9rem; font-weight: 800; line-height: 1.3; margin-bottom: 10px; }
+    .hero .subtitle { color: var(--muted); font-size: 1rem; margin-bottom: 24px; }
+    .meta-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px; margin-top: 20px;
+    }
+    .meta-item { background: var(--bg); border-radius: 10px; padding: 12px 16px; }
+    .meta-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+    .meta-value { font-size: 0.95rem; font-weight: 600; margin-top: 4px; }
+
+    /* Layout */
+    .layout {
+      max-width: var(--max); margin: 32px auto 48px; padding: 0 24px;
+      display: grid; grid-template-columns: 260px minmax(0,1fr); gap: 28px;
+    }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      aside.toc { display: none; }
+    }
+
+    /* TOC */
+    aside.toc {
+      position: sticky; top: 24px; height: fit-content;
+      background: var(--card); border-radius: var(--radius);
+      border: 1px solid var(--line); padding: 20px;
+      box-shadow: var(--shadow);
+    }
+    .toc-title { font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .08em; color: var(--muted); margin-bottom: 12px; }
+    .toc-list { list-style: none; }
+    .toc-list li { margin-bottom: 2px; }
+    .toc-list a {
+      display: block; padding: 5px 10px; border-radius: 7px;
+      font-size: 0.85rem; color: var(--text); transition: all .15s;
+    }
+    .toc-list a:hover { background: var(--primary-soft); color: var(--primary); text-decoration: none; }
+    .toc-sub { padding-left: 14px; margin-top: 2px; }
+    .toc-sub a { font-size: 0.8rem; color: var(--muted); }
+
+    /* Section */
+    .section {
+      background: var(--card); border-radius: var(--radius);
+      border: 1px solid var(--line); padding: 36px 40px;
+      box-shadow: var(--shadow); margin-bottom: 24px;
+    }
+    .section-title {
+      display: flex; align-items: center; gap: 12px;
+      font-size: 1.3rem; font-weight: 700; margin-bottom: 24px;
+    }
+    .section-title .icon {
+      width: 36px; height: 36px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem; flex-shrink: 0;
+    }
+    h3 { font-size: 1.05rem; font-weight: 700; margin: 24px 0 12px; color: var(--text); }
+    h4 { font-size: 0.95rem; font-weight: 600; margin: 18px 0 10px; color: var(--accent); }
+    p { margin-bottom: 14px; }
+
+    /* Callout boxes */
+    .callout-blue {
+      background: #eff6ff; border-left: 4px solid var(--primary);
+      border-radius: 8px; padding: 14px 18px; margin: 16px 0;
+    }
+    .callout-amber {
+      background: #fffbeb; border-left: 4px solid #f59e0b;
+      border-radius: 8px; padding: 14px 18px; margin: 16px 0;
+    }
+    .callout-green {
+      background: #f0fdf4; border-left: 4px solid #16a34a;
+      border-radius: 8px; padding: 14px 18px; margin: 16px 0;
+    }
+    .callout-purple {
+      background: #faf5ff; border-left: 4px solid var(--accent);
+      border-radius: 8px; padding: 14px 18px; margin: 16px 0;
+    }
+    .callout-title { font-weight: 700; margin-bottom: 6px; }
+
+    /* Example box */
+    .example-box {
+      background: #f0fdf4; border: 1px solid #bbf7d0;
+      border-radius: 10px; padding: 16px 20px; margin: 16px 0;
+    }
+    .ex-title { font-weight: 700; color: #15803d; margin-bottom: 10px; }
+
+    /* Step list */
+    .step-list { list-style: none; margin: 16px 0; }
+    .step { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 14px; }
+    .step-num {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: var(--primary); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.8rem; font-weight: 700; flex-shrink: 0; margin-top: 2px;
+    }
+
+    /* Flow diagram */
+    .flow-diagram { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 16px 0; }
+    .flow-box {
+      background: var(--primary-soft); border: 1px solid #bfdbfe;
+      border-radius: 8px; padding: 8px 14px; font-size: 0.88rem; font-weight: 600; color: var(--primary);
+    }
+    .flow-arrow { color: var(--muted); font-size: 1.2rem; }
+
+    /* Formula */
+    .formula-block { background: #f8fafc; border-radius: 10px; padding: 20px; margin: 16px 0; text-align: center; }
+    .formula-vars {
+      background: #f1f5f9; border-radius: 8px; padding: 14px 18px; margin-top: 10px;
+    }
+    .formula-vars .var-title { font-weight: 700; font-size: 0.88rem; color: var(--muted); margin-bottom: 8px; }
+    .formula-vars ul { list-style: disc; padding-left: 20px; font-size: 0.88rem; }
+    .formula-vars li { margin-bottom: 4px; }
+
+    /* Two-col */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+    @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+    .mini-card {
+      background: var(--bg); border-radius: 10px; padding: 16px;
+      border: 1px solid var(--line);
+    }
+    .mini-card h4 { margin-top: 0; }
+
+    /* Table */
+    .table-wrap { overflow-x: auto; margin: 16px 0; border-radius: 10px; border: 1px solid var(--line); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    thead { background: var(--primary); color: #fff; }
+    thead th { padding: 10px 14px; text-align: left; font-weight: 600; }
+    tbody tr:nth-child(even) { background: var(--bg); }
+    tbody td { padding: 9px 14px; border-bottom: 1px solid var(--line); }
+    tbody tr:last-child td { border-bottom: none; }
+    .positive { color: #16a34a; font-weight: 700; }
+    .negative { color: #dc2626; font-weight: 700; }
+
+    /* Note */
+    .note {
+      border: 1px dashed var(--line); border-radius: 8px;
+      padding: 12px 16px; margin: 14px 0; color: var(--muted); font-size: 0.88rem;
+    }
+
+    /* Figure */
+    figure { margin: 20px 0; text-align: center; }
+    figure img {
+      max-width: 100%; border-radius: 10px;
+      border: 1px solid var(--line); box-shadow: 0 4px 16px rgba(0,0,0,0.07);
+    }
+    figcaption {
+      margin-top: 10px; font-size: 0.85rem; color: var(--muted); line-height: 1.5;
+    }
+    .fig-placeholder {
+      background: var(--bg); border: 1px dashed var(--line);
+      border-radius: 10px; padding: 32px 24px; color: var(--muted);
+      font-size: 0.9rem; text-align: center; line-height: 1.7;
+    }
+
+    /* Paper info */
+    .paper-info {
+      background: var(--accent-soft); border-radius: 10px; padding: 16px 20px; margin: 16px 0;
+      display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+    }
+    .paper-info-label { font-size: 0.78rem; color: var(--muted); margin-right: 6px; }
+
+    /* Footer */
+    footer {
+      text-align: center; padding: 32px; color: var(--muted); font-size: 0.9rem;
+      border-top: 1px solid var(--line); margin-top: 16px;
+    }
+    footer a { color: var(--primary); }
+
+    /* Tag */
+    .tag {
+      display: inline-block; padding: 3px 10px; border-radius: 6px;
+      font-size: 0.78rem; font-weight: 600; margin: 3px;
+      background: var(--primary-soft); color: var(--primary);
+    }
+    .tag-purple { background: var(--accent-soft); color: var(--accent); }
+    .tag-green { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+  </style>
+</head>
+<body>
+
+<div class="back-wrap">
+  <a class="back-link" href="../index.html">← 返回论文列表</a>
+</div>
+
+<!-- Hero -->
+<div class="hero" style="max-width:1300px;margin:16px auto 0;padding:48px 40px;">
+  <div class="eyebrow">LLM Agent · 推荐系统 · 自动化 ML</div>
+  <h1>Self-Evolving Recommendation System</h1>
+  <p class="subtitle">End-To-End Autonomous Model Optimization With LLM Agents</p>
+  <div class="meta-grid">
+    <div class="meta-item">
+      <div class="meta-label">作者</div>
+      <div class="meta-value" style="font-size:0.85rem;">Haochen Wang, Yi Wu, Daryl Chang, Li Wei, Lukasz Heldt</div>
+    </div>
+    <div class="meta-item">
+      <div class="meta-label">机构</div>
+      <div class="meta-value">Google Inc（YouTube）</div>
+    </div>
+    <div class="meta-item">
+      <div class="meta-label">发表年份</div>
+      <div class="meta-value">2026（arXiv:2602.10226）</div>
+    </div>
+    <div class="meta-item">
+      <div class="meta-label">核心命题</div>
+      <div class="meta-value" style="font-size:0.85rem;">LLM 双 Agent 双循环自动优化 YouTube 推荐模型，在生产环境实现显著指标提升</div>
+    </div>
+  </div>
+</div>
+
+<!-- Layout -->
+<div class="layout">
+
+  <!-- TOC -->
+  <aside class="toc">
+    <div class="toc-title">目录</div>
+    <ul class="toc-list">
+      <li><a href="#background">1. 背景与动机</a></li>
+      <li><a href="#method">2. 方法详解</a>
+        <ul class="toc-sub">
+          <li><a href="#overview">2.1 系统总览</a></li>
+          <li><a href="#offline-agent">2.2 Offline Agent（内循环）</a></li>
+          <li><a href="#persona">2.3 三类专业 Persona</a></li>
+          <li><a href="#online-agent">2.4 Online Agent（外循环）</a></li>
+          <li><a href="#dag">2.5 五阶段 DAG</a></li>
+        </ul>
+      </li>
+      <li><a href="#experiments">3. 实验结果</a>
+        <ul class="toc-sub">
+          <li><a href="#results-table">3.1 线上结果汇总</a></li>
+          <li><a href="#ablation">3.2 消融实验</a></li>
+          <li><a href="#velocity">3.3 实验速度</a></li>
+        </ul>
+      </li>
+      <li><a href="#lessons">4. 工程经验</a></li>
+      <li><a href="#understanding">5. 理解与评价</a></li>
+    </ul>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="content">
+
+    <!-- 0. 论文信息 -->
+    <section class="section" id="info">
+      <div class="paper-info">
+        <span><span class="paper-info-label">arXiv</span><a href="https://arxiv.org/abs/2602.10226" target="_blank">2602.10226</a></span>
+        <span><span class="paper-info-label">PDF</span><a href="https://arxiv.org/pdf/2602.10226" target="_blank">下载 PDF</a></span>
+        <span class="tag">LLM Agent</span>
+        <span class="tag">RecSys</span>
+        <span class="tag tag-purple">AutoML</span>
+        <span class="tag tag-green">YouTube Production</span>
+      </div>
+      <p>本文来自 Google / YouTube，是首个在工业规模推荐系统中将 LLM 智能体端到端部署并成功提升线上北极星指标的完整框架。核心贡献是一套"双循环自进化系统"（Self-Evolving System），由 Offline Agent（高频内循环）和 Online Agent（低频外循环）构成，LLM 扮演专业 MLE 角色，自主发现优化器、网络结构、奖励函数的改进，无需人工逐步介入。</p>
+    </section>
+
+    <!-- 1. 背景与动机 -->
+    <section class="section" id="background">
+      <div class="section-title">
+        <div class="icon" style="background:#eff6ff;">🌐</div>
+        1. 背景与动机
+      </div>
+
+      <h3>1.1 问题背景</h3>
+      <p>YouTube 等全球视频平台的推荐系统正在向强化学习（RL）范式演进：系统不再简单预测 CTR，而是作为 Agent 与用户环境交互，最大化用户长期满意度。这要求设计复杂的奖励函数（复合多种信号）和精密的模型结构。</p>
+
+      <h3>1.2 现有方法局限</h3>
+      <p>传统 AutoML 方法在数值超参数调优上表现良好（如 Bayesian Optimization 调 learning rate），但存在三大核心挑战：</p>
+      <div class="two-col">
+        <div class="mini-card">
+          <h4>C1：结构设计不可穷举</h4>
+          <p>优化器类型、激活函数、注意力机制等是离散设计选择，搜索空间几乎无限大，AutoML 缺乏推理能力来导航开放设计空间。</p>
+        </div>
+        <div class="mini-card">
+          <h4>C2：奖励工程的语义鸿沟</h4>
+          <p>奖励函数需要融合观看时长、调查问卷、留存率等异构信号，近似"用户长期满意度"，这是需要深度语义理解的推理任务，梯度方法无能为力。</p>
+        </div>
+        <div class="mini-card">
+          <h4>C3：人工迭代的扩展性瓶颈</h4>
+          <p>每次实验都需要工程师将假设翻译为代码、配置训练器、设置 A/B 测试——实验吞吐量线性依赖于工程师数量，大量配置空间从未被探索。</p>
+        </div>
+        <div class="mini-card">
+          <h4>研究空白</h4>
+          <p>将 AI Agent + 工业级推荐系统结合的工作几乎空白。现有 AutoML 只能调数值参数，现有 LLM Agent 研究缺乏真实生产部署验证。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. 方法详解 -->
+    <section class="section" id="method">
+      <div class="section-title">
+        <div class="icon" style="background:#faf5ff;">🔧</div>
+        2. 方法详解
+      </div>
+
+      <h3 id="overview">2.1 系统总览：双循环自进化架构</h3>
+      <p>整个系统的核心思路是将"发现"与"验证"两个任务解耦，形成快慢两个循环，围绕一个共享的<strong>实验日志（Experiment Journal）</strong>运转：</p>
+
+      <div class="flow-diagram">
+        <div class="flow-box">Offline Agent（内循环）<br>高频·代理指标</div>
+        <div class="flow-arrow">→ 幸存候选 →</div>
+        <div class="flow-box">Online Agent（外循环）<br>低频·北极星指标</div>
+        <div class="flow-arrow">→ 线上结果 →</div>
+        <div class="flow-box">共享实验日志<br>Experiment Journal</div>
+        <div class="flow-arrow">→ 历史反馈 →</div>
+        <div class="flow-box">Offline Agent</div>
+      </div>
+
+      <figure>
+        <img
+          src="https://arxiv.org/html/2602.10226v1/dual_loop_2.png"
+          alt="Figure 1: Self-Evolving System Architecture"
+          onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+            <b>Figure 1: 双循环自进化系统架构图</b><br><br>
+            以共享实验日志为核心，Offline Agent（内循环）通过"Think-Code-Verify"闭环高频生成候选；
+            Online Agent（外循环）通过五阶段 DAG 管理候选方案的线上验证，确保安全性后将结果回写日志。
+          </div>`"
+        />
+        <figcaption><strong>Figure 1（论文原图）：</strong>双循环自进化系统架构。内循环（Offline Agent）作为高频认知核心，外循环（Online Agent）作为安全门控，共享实验日志实现闭环反馈。</figcaption>
+      </figure>
+
+      <p>这套设计的精妙在于：内循环使用廉价的代理指标（离线损失、SQL 相关性分析）大量筛选候选，只有通过内循环筛选的高潜力候选才进入外循环进行昂贵的线上 A/B 实验。这形成了一个严格的过滤漏斗，既保证了实验吞吐量，又保证了线上流量质量。</p>
+
+      <div class="example-box">
+        <div class="ex-title">💡 举例：整体数据流</div>
+        <p>假设 Offline Agent（Optimizer Persona）在某次迭代中同时启动 50 个候选训练任务（调整学习率、动量、优化器类型等不同组合）。每个任务训练完成后，Persona 用 <code>compute_loss</code> 工具获取验证损失，排序后选出 top-3。这 3 个候选进入 Online Agent 的 PROPOSED 队列，等待依次通过编译检查 → 模型训练 → 线上 A/B 测试 → 北极星指标收集，最终结果回写到实验日志。下一轮内循环时，LLM 读取"RMSprop + 特定超参表现最好"这条历史记录，开始在这个方向上进一步探索。</p>
+      </div>
+
+      <!-- 2.2 Offline Agent -->
+      <h3 id="offline-agent">2.2 Offline Agent（内循环）</h3>
+      <p>Offline Agent 是整个框架的认知核心和快速测试引擎。它的目标是在廉价的离线代理信号上快速遍历配置空间，将大量候选筛选到少数高潜力方案。</p>
+
+      <h4>Prompt 构建</h4>
+      <p>每次调用 LLM 前，会动态构建 Prompt，包含以下几个关键部分：</p>
+      <ul class="step-list">
+        <li class="step"><span class="step-num">1</span><span><strong>Persona 设定</strong>：告知模型它是"具有卓越编程和分析能力的专家 MLE"，并根据不同任务注入专属角色（优化器专家 / 架构专家 / 奖励工程专家）。</span></li>
+        <li class="step"><span class="step-num">2</span><span><strong>主要目标</strong>：明确优化方向（最小化离线损失 or 最大化相关信号），并要求 LLM 在"探索（Exploration）、利用（Exploitation）、创新（Innovation）"三者间取得平衡，避免只做微小调整。</span></li>
+        <li class="step"><span class="step-num">3</span><span><strong>安全护栏</strong>：明确告知某些指标的回退阈值（如"Metric#3 回退不得超过 +1%"），防止奖励黑客攻击和生产漂移。</span></li>
+        <li class="step"><span class="step-num">4</span><span><strong>基线配置 + Schema</strong>：提供当前生产模型配置、训练日志 Schema。</span></li>
+        <li class="step"><span class="step-num">5</span><span><strong>实验日志</strong>：结构化历史记录，包含过去所有实验的 diff（代码变更）及其离线/线上结果，让 LLM 从历史中学习。</span></li>
+      </ul>
+
+      <!-- 2.3 三类 Persona -->
+      <h3 id="persona">2.3 三类专业 Reasoning Persona</h3>
+      <p>为避免单一 Persona 因接触过多无关 Schema 而产生"上下文腐烂"和幻觉，系统为三类不同任务实例化独立 Persona，各自携带专属工具：</p>
+
+      <div class="two-col">
+        <div class="mini-card">
+          <h4>🔬 Optimizer Persona</h4>
+          <p><strong>工具</strong>：<code>compute_loss</code></p>
+          <p><strong>职责</strong>：优化器算法选择（Adagrad / RMSprop 等）及其内部超参（学习率、动量、batch size）。</p>
+          <p><strong>评估方式</strong>：损失函数 $\mathcal{L}_{proxy}$ 不变，直接排序 $\mathcal{L}_{proxy}(\Phi_A) &lt; \mathcal{L}_{proxy}(\Phi_B)$ 即可比较候选优劣。</p>
+          <p><strong>并行化</strong>：同时启动多个异步训练任务，按验证损失排序筛选。</p>
+        </div>
+        <div class="mini-card">
+          <h4>🏗️ Architecture Persona</h4>
+          <p><strong>工具</strong>：<code>compute_loss</code></p>
+          <p><strong>职责</strong>：解析 Keras/TensorFlow 模型定义，提出神经拓扑结构突变（如引入新的 Gating 机制、层归一化、激活函数替换等）。</p>
+          <p><strong>区别于 NAS</strong>：不是从固定菜单中选择层，而是可以写全新的自定义代码，例如引入"门控路径（Gating Path）"机制。</p>
+        </div>
+      </div>
+
+      <div class="mini-card" style="margin:16px 0;">
+        <h4>🎯 Reward Persona</h4>
+        <p><strong>工具</strong>：<code>run_sql_query</code>（不能用 <code>compute_loss</code>）</p>
+        <p><strong>职责</strong>：修改排名模型的训练标签（ground-truth reward）逻辑。</p>
+        <p><strong>为什么不用 loss 排序</strong>：修改奖励后 $\mathcal{L}_{proxy}$ 的定义本身就变了——"仅点击"奖励的损失天然低于"点击+满意度"复合奖励的损失，不可比较。</p>
+        <p><strong>做法</strong>：用 SQL 对训练日志做大规模特征-标签相关性分析，找到与用户长期满意度高度相关的信号。</p>
+      </div>
+
+      <div class="example-box">
+        <div class="ex-title">💡 举例：Reward Persona 的数据驱动发现</div>
+        <p>Reward Persona 的 LLM 提出假设："用户在观看结束后是否继续浏览同频道内容"可能是长期满意度的强信号。随后它调用 <code>run_sql_query</code> 工具，对 TB 级训练日志执行：</p>
+        <p><em>SELECT corr(channel_affinity_signal, long_term_retention) FROM training_logs WHERE ...</em></p>
+        <p>如果相关性系数超过阈值（如 0.35），该信号被标记为候选奖励组件，进入后续代码实现阶段。最终系统发现了"活跃参与度信号"、"用户-频道关系"、"视频质量信号"三个组件，构成了超越人工设计基线的复合奖励函数。</p>
+      </div>
+
+      <h4>Think-Code-Verify 循环</h4>
+      <ol class="step-list">
+        <li class="step"><span class="step-num">1</span><span><strong>假设生成（Think）</strong>：LLM 先提出策略（如"当前模型对点击诱饵过拟合，应在奖励中惩罚短时观看点击"）。</span></li>
+        <li class="step"><span class="step-num">2</span><span><strong>代码实现（Code）</strong>：将假设翻译为精确的配置 diff 或代码修改。</span></li>
+        <li class="step"><span class="step-num">3</span><span><strong>LLM 精化（Verify）</strong>：生成的代码传给"linter Persona"，负责修复语法错误、验证 Schema 合规性。</span></li>
+        <li class="step"><span class="step-num">4</span><span><strong>工具调用</strong>：调用 <code>compute_loss</code> 或 <code>run_sql_query</code> 定量评估候选质量。</span></li>
+      </ol>
+
+      <div class="callout-blue">
+        <div class="callout-title">📌 关键设计：Delta-based 生成</div>
+        <p>LLM 被要求生成相对于生产文件的 <strong>diff（增量）</strong>，而非完整配置文件。实践发现，要求输出完整配置文件时，LLM 极易遗漏未改动但必要的参数，或引入语法错误（幻觉）；而只要求输出 diff 则大幅提升了代码有效性。</p>
+      </div>
+
+      <!-- 2.4 Online Agent -->
+      <h3 id="online-agent">2.4 Online Agent（外循环）</h3>
+      <p>Online Agent 是框架的安全门控和结果收集器。它负责将通过内循环筛选的候选推进到生产环境，通过 A/B 实验验证北极星指标，并将结果回写到实验日志。它对每个候选维护一个状态机，通过五阶段 DAG 确保安全。</p>
+
+      <h3 id="dag">2.5 五阶段 DAG</h3>
+
+      <div class="flow-diagram" style="flex-direction:column;align-items:flex-start;gap:6px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="flow-box" style="min-width:140px;text-align:center;">PROPOSED</div>
+          <span class="flow-arrow">→</span>
+          <span>Phase I：提案队列（接受 Agent 或人工提案，FIFO 调度）</span>
+        </div>
+        <div style="padding-left:20px;color:#888;">↓</div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="flow-box" style="min-width:140px;text-align:center;">VALIDATED</div>
+          <span class="flow-arrow">→</span>
+          <span>Phase II：静态检查（编译验证、基线阈值检查），失败立即 Fast Fail</span>
+        </div>
+        <div style="padding-left:20px;color:#888;">↓</div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="flow-box" style="min-width:140px;text-align:center;">TRAINING</div>
+          <span class="flow-arrow">→</span>
+          <span>Phase III：完整训练 + 推理服务就绪检测（权重导出、版本化）</span>
+        </div>
+        <div style="padding-left:20px;color:#888;">↓</div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="flow-box" style="min-width:140px;text-align:center;">LIVE</div>
+          <span class="flow-arrow">→</span>
+          <span>Phase IV：线上 A/B 实验（流量分配 + 安全监控，违反阈值立即中止）</span>
+        </div>
+        <div style="padding-left:20px;color:#888;">↓</div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="flow-box" style="min-width:140px;text-align:center;">COMPLETED</div>
+          <span class="flow-arrow">→</span>
+          <span>Phase V：北极星指标收集，结果回写实验日志，闭合外循环</span>
+        </div>
+      </div>
+
+      <div class="example-box">
+        <div class="ex-title">💡 举例：Optimizer 候选从内循环到外循环的完整生命周期</div>
+        <p><strong>① 内循环（Offline Agent）</strong>：LLM 提出将 Adagrad 替换为 RMSprop（特定学习率、衰减率、动量），生成配置 diff → 异步启动训练 → <code>compute_loss</code> 返回验证损失 z-score 为 -0.85（优于基线），进入外循环。</p>
+        <p><strong>② PROPOSED</strong>：配置 manifest 入队，等待调度。</p>
+        <p><strong>③ VALIDATED</strong>：Agent 检查配置语法、数据量是否充足 → 通过。</p>
+        <p><strong>④ TRAINING</strong>：完整训练（Θ(hours)），Agent 轮询推理服务器，权重上传成功后进入下一阶段。</p>
+        <p><strong>⑤ LIVE</strong>：分配 YouTube 生产流量，持续监控指标，watch time 持续正向 → 实验正常结束。</p>
+        <p><strong>⑥ COMPLETED</strong>：获取 YouTube 级 +0.06%、Surface 级 +0.12% 提升，写入日志。下一轮内循环 LLM 读取"RMSprop 路线成功"，继续沿此方向探索（如进一步调整动量）。</p>
+      </div>
+    </section>
+
+    <!-- 3. 实验结果 -->
+    <section class="section" id="experiments">
+      <div class="section-title">
+        <div class="icon" style="background:#f0fdf4;">📊</div>
+        3. 实验结果
+      </div>
+
+      <h3 id="results-table">3.1 线上 A/B 实验结果汇总</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>任务类型</th>
+              <th>Agent 发现的改进</th>
+              <th>YouTube 级指标</th>
+              <th>Surface 级指标</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Optimizer</td>
+              <td>切换为 RMSprop</td>
+              <td class="positive">+0.06%*</td>
+              <td class="positive">+0.12%*</td>
+            </tr>
+            <tr>
+              <td>Optimizer</td>
+              <td>训练效率 4× 提升</td>
+              <td>−0.01%</td>
+              <td class="positive">+0.06%</td>
+            </tr>
+            <tr>
+              <td>Optimizer</td>
+              <td>训练效率 2× 提升</td>
+              <td>+0.01%</td>
+              <td class="positive">+0.09%*</td>
+            </tr>
+            <tr>
+              <td>Architecture</td>
+              <td>门控路径（GLU）</td>
+              <td class="positive">+0.06%*</td>
+              <td class="positive">+0.14%*</td>
+            </tr>
+            <tr>
+              <td>Architecture</td>
+              <td>激活函数精化（GELU + LayerNorm）</td>
+              <td>−0.02%</td>
+              <td class="positive">+0.12%*</td>
+            </tr>
+            <tr>
+              <td>Reward</td>
+              <td>多目标奖励合成</td>
+              <td class="positive">+0.03%*</td>
+              <td class="positive">+0.13%*</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">* 表示在 95% 置信水平下统计显著。这些是北极星业务指标（如 Watch Time）的相对提升。</p>
+
+      <h4>关键发现亮点</h4>
+      <ul>
+        <li><strong>Adagrad → RMSprop</strong>：因为手动调优成本高，优化器配置长期静止不动。Agent 自主发现切换到特定超参的 RMSprop 可显著提升，且线上统计显著。</li>
+        <li><strong>GLU 门控路径</strong>：Architecture Persona 探索了从注意力机制到 MoE 的数百个方案，最终发现类似 Gated Linear Units 的乘法门控机制最优，是所有方案中线上增益最高的。</li>
+        <li><strong>GELU + LayerNorm</strong>：在 GLU 成功的基础上，Agent 进一步将 sigmoid 门替换为 GELU 激活 + 层归一化，体现了"先探索新结构，再精化胜者"的两阶段策略。</li>
+        <li><strong>多目标奖励合成</strong>：Agent 通过 SQL 数据分析发现了"活跃参与度"、"用户-频道亲密度"、"视频质量"三个新奖励组件，合成的复合奖励函数超越了人工设计基线。</li>
+        <li><strong>训练效率</strong>：Agent 还优化了系统层面的训练效率，先后实现 4× 和 2× 的训练时间压缩，总计 8× 加速，且不损失业务指标——这是人工优化通常不会花时间做的事。</li>
+      </ul>
+
+      <figure>
+        <img
+          src="https://arxiv.org/html/2602.10226v1/loss_4.png"
+          alt="Figure 2: Agent Performance under different model sizes and context strategies"
+          onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+            <b>Figure 2: 消融实验 — 不同模型大小和上下文策略下的代理损失对比</b><br><br>
+            展示归一化损失 z-score（越低越好），对比 Gemini 2.5 Pro vs Flash、
+            有无 Persona 设定、有无历史上下文等变体的表现差异。
+          </div>`"
+        />
+        <figcaption><strong>Figure 2（论文原图）：</strong>消融实验中不同 LLM 大小和上下文工程策略下的优化器归一化代理损失对比。分数（z-score）越低表示性能越好。</figcaption>
+      </figure>
+
+      <h3 id="ablation">3.2 消融实验：上下文工程的影响</h3>
+      <p>在 Optimizer 任务上进行了 6 次独立运行（每次探索 70 个配置）的消融研究：</p>
+
+      <div class="two-col">
+        <div class="mini-card">
+          <h4>opt_2p5（基线）</h4>
+          <p>Gemini 2.5 Pro + 专家 Persona + 完整历史（按 loss 排序）</p>
+          <p>→ 最优表现</p>
+        </div>
+        <div class="mini-card">
+          <h4>opt_flash</h4>
+          <p>将 Pro 换成 Gemini 2.5 Flash</p>
+          <p>→ 性能明显下降，说明算法发现任务需要大模型的"深度思考"能力</p>
+        </div>
+        <div class="mini-card">
+          <h4>opt_no_role</h4>
+          <p>移除专家 MLE Persona 设定</p>
+          <p>→ 显著变差，说明 Persona 框架对提案质量至关重要</p>
+        </div>
+        <div class="mini-card">
+          <h4>opt_no_sort / opt_top_k / opt_no_context</h4>
+          <p>提供未排序历史 / 只给 top-k 历史 / 不提供历史</p>
+          <p>→ 均不如完整排序历史，说明 <strong>完整且按质量排序</strong> 的历史是有效迭代的关键</p>
+        </div>
+      </div>
+
+      <h3 id="velocity">3.3 实验速度对比</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>指标</th><th>人工工作流</th><th>Agent 工作流</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>实验吞吐量</td>
+              <td>Θ(1)–Θ(10) 次 / 周</td>
+              <td class="positive"><strong>Θ(100) 次 / 周</strong></td>
+            </tr>
+            <tr>
+              <td>每次实验的工程成本</td>
+              <td>Θ(1)–Θ(10) 工时 / 周</td>
+              <td class="positive"><strong>0 工时 / 周</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>通过将高频离线发现与低频线上验证解耦，工程师从实验执行的关键路径上解脱出来，实验吞吐量提升约 10-100 倍，工程成本降为 0（人工只需在起始时提供研究方向、在结束时审查结果）。</p>
+    </section>
+
+    <!-- 4. 工程经验 -->
+    <section class="section" id="lessons">
+      <div class="section-title">
+        <div class="icon" style="background:#fffbeb;">💡</div>
+        4. 部署经验与教训
+      </div>
+
+      <div class="callout-amber">
+        <div class="callout-title">L1：用 Delta 而非全量配置生成</div>
+        <p>让 LLM 输出 diff（增量修改）而非完整配置文件。完整配置文件会导致 LLM 遗漏未改参数或引入语法错误（幻觉）；diff 模式大幅提升了提案有效率。</p>
+      </div>
+      <div class="callout-amber">
+        <div class="callout-title">L2：明确要求多样性探索</div>
+        <p>若不在 Prompt 中明确要求"平衡探索、利用与创新"，LLM 会强烈倾向于安全的微小调整（如连续提出 lr=0.1, 0.11, 0.12）。必须主动促使模型进行跨越式探索。</p>
+      </div>
+      <div class="callout-amber">
+        <div class="callout-title">L3：冷启动问题</div>
+        <p>实验日志为空时，Agent 倾向提出教科书式的通用改进，缺乏特定系统知识。需要经过一段"热身期"积累历史试验后，性能才会显著提升。</p>
+      </div>
+      <div class="callout-amber">
+        <div class="callout-title">L4：语义推理 vs 数值调优</div>
+        <p>在成熟系统中，最大的杠杆点来自结构和语义突变（新奖励逻辑、新架构组件），而非精调数值超参。Agent 的语义推理能力（尤其是 Reward Persona）提供了纯数值优化无法实现的创新。</p>
+      </div>
+      <div class="callout-amber">
+        <div class="callout-title">L5：跨 Surface 泛化</div>
+        <p>将相同的双 Agent 框架部署到另一个特征 Schema、训练集、模型配置完全不同的 YouTube 推荐 Surface，Agent 在最初几次迭代内成功适应，并提升了北极星指标。说明框架优化的是"发现过程"本身，而非记忆特定数据集。</p>
+      </div>
+    </section>
+
+    <!-- 5. 理解与评价 -->
+    <section class="section" id="understanding">
+      <div class="section-title">
+        <div class="icon" style="background:#faf5ff;">🔍</div>
+        5. 理解、亮点与不足
+      </div>
+
+      <h3>5.1 核心亮点</h3>
+      <div class="callout-green">
+        <div class="callout-title">✅ 工业规模真实部署，有北极星指标验证</div>
+        <p>区别于大量停留在 toy 问题或 benchmark 的 LLM+ML 研究，本文在 YouTube 真实生产流量上进行了 A/B 测试，且多个结果统计显著。这是极高的工程可信度保证。</p>
+      </div>
+      <div class="callout-green">
+        <div class="callout-title">✅ 双循环解耦设计的哲学价值</div>
+        <p>将"高频创意生成（内循环，廉价代理指标）"与"低频生产验证（外循环，昂贵北极星指标）"解耦，是非常正确的系统工程决策。两者各自优化，通过共享日志形成闭环，实现了成本和质量的最优权衡。</p>
+      </div>
+      <div class="callout-green">
+        <div class="callout-title">✅ Reward 工程的突破性视角</div>
+        <p>Reward Persona 使用 SQL 相关性分析取代 loss 评估，是极其有创意的设计——它正确地意识到不同 reward 的 loss 不可比较，转而从数据语义出发做信号发现，这是人工 reward 工程中长期依赖的核心能力。</p>
+      </div>
+      <div class="callout-green">
+        <div class="callout-title">✅ 实验速度量化</div>
+        <p>10-100× 的实验吞吐量提升、0 工时的执行成本，这些数字清晰地量化了自动化的价值，也为后续在更多团队推广提供了业务理由。</p>
+      </div>
+
+      <h3>5.2 不足与局限</h3>
+      <div class="callout-amber">
+        <div class="callout-title">⚠️ 大模型依赖</div>
+        <p>消融实验显示 Gemini 2.5 Flash 明显不如 Pro，说明系统强依赖顶级 LLM 的推理能力。对于算力受限的团队，这是重要的成本约束。</p>
+      </div>
+      <div class="callout-amber">
+        <div class="callout-title">⚠️ 冷启动问题未完全解决</div>
+        <p>空实验日志时 Agent 能力受限，论文承认了这一点但未提出系统性解法（如预热策略或外部知识注入）。</p>
+      </div>
+      <div class="callout-amber">
+        <div class="callout-title">⚠️ 评估细节不够透明</div>
+        <p>论文未详细说明"指标 Metric#3"具体是什么北极星指标，"Surface 级"和"YouTube 级"指标的定义也比较模糊，部分结果难以复现或对比。</p>
+      </div>
+      <div class="callout-amber">
+        <div class="callout-title">⚠️ 垂直定制性强</div>
+        <p>代码工具（<code>compute_loss</code>、<code>run_sql_query</code>）、Schema 格式、实验日志结构均深度绑定 YouTube 内部基础设施，通用化路径尚未讨论。</p>
+      </div>
+
+      <h3>5.3 对推荐系统研究的启发</h3>
+      <div class="callout-purple">
+        <div class="callout-title">🚀 未来工作方向</div>
+        <ul>
+          <li><strong>Agent 驱动的 Reward Engineering</strong>：SQL 相关性分析驱动奖励函数发现，是一个可以大规模复制的范式，值得在其他平台验证。</li>
+          <li><strong>双循环框架泛化</strong>：快慢双循环 + 共享历史日志的框架，可以应用于任何需要在"快速离线筛选"和"慢速线上验证"之间权衡的 ML 系统。</li>
+          <li><strong>自动化 NAS 与结构突变</strong>：Architecture Persona 可以写自定义层代码，而非从固定菜单选择，这是突破传统 NAS 限制的重要方向。</li>
+          <li><strong>MLE 角色的重新定义</strong>：系统自动执行重复性实验工作，工程师聚焦于战略护栏和高层视野——这是 AI 辅助工程的未来形态。</li>
+        </ul>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<footer>
+  <a href="../index.html">← 返回论文列表</a>
+  <span style="margin: 0 12px; color: var(--line);">|</span>
+  <span>arXiv: <a href="https://arxiv.org/abs/2602.10226" target="_blank">2602.10226</a></span>
+  <span style="margin: 0 12px; color: var(--line);">|</span>
+  <span style="color: var(--muted);">Self-Evolving Recommendation System · 2026 · Google / YouTube</span>
+</footer>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    renderMathInElement(document.body, {
+      delimiters: [
+        {left: "$$", right: "$$", display: true},
+        {left: "$", right: "$", display: false}
+      ],
+      throwOnError: false
+    });
+  });
+</script>
+</body>
+</html>

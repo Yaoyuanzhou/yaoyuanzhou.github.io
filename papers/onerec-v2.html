@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OneRec-V2 技术报告深度解读</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false }
+          ],
+          throwOnError: false
+        });
+      }
+      document.querySelectorAll('.toc-list a[href^="#"]').forEach(function(link) {
+        link.addEventListener('click', function(e) {
+          e.preventDefault();
+          var targetId = this.getAttribute('href').slice(1);
+          var target = document.getElementById(targetId);
+          if (!target) return;
+          var top = target.getBoundingClientRect().top + window.pageYOffset - 24;
+          window.scrollTo({ top: top, behavior: 'smooth' });
+        });
+      });
+      var sections = Array.from(document.querySelectorAll('section[id]'));
+      var allLinks = document.querySelectorAll('.toc-list a[href^="#"]');
+      function setActive(id) {
+        allLinks.forEach(function(l) { l.classList.remove('active'); });
+        var active = document.querySelector('.toc-list a[href="#' + id + '"]');
+        if (active) {
+          active.classList.add('active');
+          var toc = document.querySelector('.toc');
+          if (toc) {
+            var linkTop = active.offsetTop;
+            var tocH = toc.clientHeight;
+            if (linkTop < toc.scrollTop + 40 || linkTop > toc.scrollTop + tocH - 40) {
+              toc.scrollTo({ top: linkTop - tocH / 2, behavior: 'smooth' });
+            }
+          }
+        }
+      }
+      function onScroll() {
+        var scrollY = window.pageYOffset + 80;
+        var current = sections[0] ? sections[0].id : '';
+        for (var i = 0; i < sections.length; i++) {
+          if (sections[i].offsetTop <= scrollY) current = sections[i].id;
+        }
+        setActive(current);
+      }
+      window.addEventListener('scroll', onScroll, { passive: true });
+      onScroll();
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f4f6fb;
+      --card: #ffffff;
+      --text: #1a2033;
+      --muted: #64748b;
+      --line: #e2e8f0;
+      --primary: #2563eb;
+      --primary-soft: #eff6ff;
+      --accent: #7c3aed;
+      --accent-soft: rgba(124,58,237,0.07);
+      --green: #16a34a;
+      --green-soft: #f0fdf4;
+      --amber: #d97706;
+      --amber-soft: #fffbeb;
+      --red-soft: #fef2f2;
+      --shadow: 0 4px 24px rgba(15,23,42,0.07);
+      --shadow-lg: 0 10px 40px rgba(15,23,42,0.10);
+      --radius: 16px;
+      --max: 1300px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      line-height: 1.85;
+      font-size: 15px;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .hero-wrap {
+      background: linear-gradient(135deg, #0c1445 0%, #1e3a8a 50%, #312e81 100%);
+      padding: 52px 24px 40px;
+    }
+    .hero-inner { max-width: var(--max); margin: 0 auto; }
+    .back-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      color: rgba(255,255,255,0.65); font-size: 13px; margin-bottom: 22px;
+    }
+    .back-link:hover { color: #fff; text-decoration: none; }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 5px 14px; border-radius: 999px;
+      background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.9);
+      font-size: 12.5px; font-weight: 600; letter-spacing: .03em;
+      margin-bottom: 16px;
+    }
+    .hero h1 {
+      font-size: 36px; font-weight: 800; color: #fff;
+      line-height: 1.2; letter-spacing: -0.02em; margin-bottom: 12px;
+    }
+    .hero-sub { color: rgba(255,255,255,0.72); font-size: 15.5px; max-width: 820px; }
+    .hero-meta {
+      display: flex; flex-wrap: wrap; gap: 28px;
+      margin-top: 28px; padding-top: 24px;
+      border-top: 1px solid rgba(255,255,255,0.18);
+    }
+    .hero-meta-item { display: flex; flex-direction: column; gap: 3px; }
+    .hero-meta-label { color: rgba(255,255,255,0.5); font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; }
+    .hero-meta-value { color: #fff; font-size: 14px; font-weight: 600; }
+
+    .page { max-width: var(--max); margin: 0 auto; padding: 32px 20px 100px; }
+    .layout {
+      display: grid;
+      grid-template-columns: 256px minmax(0,1fr);
+      gap: 24px;
+      align-items: stretch;
+    }
+    .layout > aside { align-self: stretch; }
+
+    .toc {
+      position: sticky; top: 20px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 20px;
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+    }
+    .toc h2 { font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 14px; }
+    .toc-list { list-style: none; }
+    .toc-list li { margin: 6px 0; }
+    .toc-list > li > a { font-size: 13px; color: var(--text); font-weight: 500; }
+    .toc-list a { display: block; padding: 3px 8px; border-radius: 6px; color: var(--muted); font-size: 12.5px; transition: all .15s; }
+    .toc-list a:hover { color: var(--primary); background: var(--primary-soft); text-decoration: none; }
+    .toc-list a.active { color: var(--primary); background: var(--primary-soft); font-weight: 600; border-left: 3px solid var(--primary); padding-left: 10px; }
+    .toc-sub { padding-left: 12px; margin-top: 2px; }
+    .toc-sub li { margin: 3px 0; }
+
+    .content { display: flex; flex-direction: column; gap: 24px; }
+    section {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 32px 36px;
+    }
+    .sec-title {
+      font-size: 22px; font-weight: 800;
+      margin-bottom: 20px; padding-bottom: 14px;
+      border-bottom: 2px solid #f0f4ff;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .sec-icon {
+      width: 34px; height: 34px; border-radius: 9px;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 17px; flex-shrink: 0;
+    }
+    h3 { font-size: 17px; font-weight: 700; margin: 24px 0 10px; color: var(--text); }
+    h4 { font-size: 15px; font-weight: 700; margin: 18px 0 8px; color: var(--accent); }
+    p { margin-bottom: 12px; color: var(--text); }
+    ul, ol { padding-left: 22px; margin-bottom: 12px; }
+    li { margin-bottom: 6px; }
+
+    .callout {
+      border-radius: 12px; padding: 16px 20px;
+      margin: 16px 0; border-left: 4px solid;
+    }
+    .callout-blue { background: var(--primary-soft); border-color: var(--primary); }
+    .callout-purple { background: var(--accent-soft); border-color: var(--accent); }
+    .callout-green { background: var(--green-soft); border-color: var(--green); }
+    .callout-amber { background: var(--amber-soft); border-color: var(--amber); }
+    .callout-title { font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+    .callout-blue .callout-title { color: var(--primary); }
+    .callout-purple .callout-title { color: var(--accent); }
+    .callout-green .callout-title { color: var(--green); }
+    .callout-amber .callout-title { color: var(--amber); }
+
+    .formula-block {
+      background: #f8f9ff;
+      border: 1px solid #dde4f5;
+      border-radius: 12px;
+      padding: 18px 22px;
+      margin: 16px 0;
+      overflow-x: auto;
+    }
+    .formula-label {
+      font-size: 11.5px; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .06em;
+      margin-bottom: 8px; font-weight: 600;
+    }
+
+    pre, code {
+      font-family: "JetBrains Mono", "Fira Code", "SF Mono", Consolas, monospace;
+      font-size: 13px;
+    }
+    pre {
+      background: #0f172a; color: #e2e8f0;
+      border-radius: 12px; padding: 18px 20px;
+      overflow-x: auto; margin: 14px 0;
+      line-height: 1.65;
+    }
+    code { background: #f1f5f9; color: #3730a3; border-radius: 4px; padding: 1px 5px; }
+    pre code { background: none; color: inherit; padding: 0; }
+
+    .table-wrap { overflow-x: auto; margin: 16px 0; border-radius: 12px; border: 1px solid var(--line); }
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      background: #f8fafc; font-size: 12.5px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .04em;
+      color: var(--muted); padding: 10px 16px; text-align: left;
+      border-bottom: 1px solid var(--line);
+    }
+    td { padding: 10px 16px; border-bottom: 1px solid #f1f5f9; font-size: 13.5px; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #fafbff; }
+
+    .two-col {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0;
+    }
+    .mini-card {
+      border: 1px solid var(--line); border-radius: 12px;
+      padding: 16px 18px; background: #fcfdff;
+    }
+    .mini-card h4 { margin-top: 0; }
+
+    .arch-compare {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0;
+    }
+    .arch-box { border-radius: 14px; padding: 20px; border: 1.5px solid; }
+    .arch-box.old { background: #fef2f2; border-color: #fca5a5; }
+    .arch-box.new { background: #f0fdf4; border-color: #86efac; }
+    .arch-box-title { font-size: 13.5px; font-weight: 800; margin-bottom: 14px; }
+    .arch-box.old .arch-box-title { color: #dc2626; }
+    .arch-box.new .arch-box-title { color: var(--green); }
+    .arch-stage { display: flex; align-items: flex-start; margin-bottom: 8px; font-size: 13px; }
+    .arch-stage-dot { width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; flex-shrink: 0; margin-top: 6px; }
+
+    .metric-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 12px; margin: 16px 0;
+    }
+    .metric-card {
+      background: var(--green-soft); border: 1px solid #86efac;
+      border-radius: 12px; padding: 14px 16px; text-align: center;
+    }
+    .metric-num { font-size: 22px; font-weight: 800; color: var(--green); }
+    .metric-label { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    .tag-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+    .tag {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 10px; border-radius: 999px;
+      font-size: 12px; font-weight: 600;
+    }
+    .tag-blue { background: #dbeafe; color: #1e40af; }
+    .tag-green { background: #dcfce7; color: #166534; }
+    .tag-amber { background: #fef3c7; color: #92400e; }
+    .tag-purple { background: #ede9fe; color: #5b21b6; }
+    .tag-red { background: #fee2e2; color: #991b1b; }
+
+    .timeline { position: relative; padding-left: 24px; }
+    .timeline::before { content: ''; position: absolute; left: 7px; top: 8px; bottom: 8px; width: 2px; background: var(--line); }
+    .timeline-item { position: relative; margin-bottom: 20px; }
+    .timeline-dot {
+      position: absolute; left: -24px; top: 4px;
+      width: 14px; height: 14px; border-radius: 50%;
+      border: 2px solid #fff; box-shadow: 0 0 0 2px var(--primary);
+      background: var(--primary);
+    }
+    .timeline-title { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+    .timeline-desc { font-size: 13px; color: var(--muted); }
+
+    footer {
+      text-align: center; padding: 32px 20px;
+      color: var(--muted); font-size: 13px;
+      border-top: 1px solid var(--line);
+    }
+    footer a { color: var(--muted); }
+    footer a:hover { color: var(--primary); }
+  </style>
+</head>
+<body>
+
+<!-- Hero -->
+<div class="hero-wrap">
+  <div class="hero-inner">
+    <a class="back-link" href="../index.html">← 返回论文列表</a>
+    <div class="hero-badge">🏭 工业系统 · 快手 Kuaishou · 2025.08</div>
+    <div class="hero">
+      <h1>OneRec-V2 Technical Report</h1>
+      <p class="hero-sub">Lazy Decoder-Only 架构将计算效率提升 94%，首次在生成式推荐验证 Scaling Law（0.1B→8B），并用真实用户反馈驱动 GBPO 强化学习，替代 Reward Model 方案。</p>
+    </div>
+    <div class="hero-meta">
+      <div class="hero-meta-item">
+        <span class="hero-meta-label">机构</span>
+        <span class="hero-meta-value">Kuaishou · OneRec Team</span>
+      </div>
+      <div class="hero-meta-item">
+        <span class="hero-meta-label">arXiv</span>
+        <span class="hero-meta-value">2508.20900</span>
+      </div>
+      <div class="hero-meta-item">
+        <span class="hero-meta-label">发布时间</span>
+        <span class="hero-meta-value">2025 年 8 月</span>
+      </div>
+      <div class="hero-meta-item">
+        <span class="hero-meta-label">在线收益（快手主 Feed）</span>
+        <span class="hero-meta-value">App 停留时长 +0.467%</span>
+      </div>
+      <div class="hero-meta-item">
+        <span class="hero-meta-label">在线收益（快手极速版）</span>
+        <span class="hero-meta-value">App 停留时长 +0.741%</span>
+      </div>
+      <div class="hero-meta-item">
+        <span class="hero-meta-label">计算节省</span>
+        <span class="hero-meta-value">FLOPs 减少 94%，训练资源减少 90%</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Page Body -->
+<div class="page">
+  <div class="layout">
+    <!-- TOC -->
+    <aside>
+      <nav class="toc">
+        <h2>目 录</h2>
+        <ul class="toc-list">
+          <li><a href="#overview">1. 背景与动机</a></li>
+          <li><a href="#arch">2. Lazy Decoder-Only 架构</a>
+            <ul class="toc-sub">
+              <li><a href="#arch">2.1 设计原则</a></li>
+              <li><a href="#context-proc">2.2 Context Processor</a></li>
+              <li><a href="#lazy-block">2.3 Lazy Decoder Block</a></li>
+              <li><a href="#scaling">2.4 Scaling Law 验证</a></li>
+            </ul>
+          </li>
+          <li><a href="#rl">3. 真实用户反馈强化学习</a>
+            <ul class="toc-sub">
+              <li><a href="#rl">3.1 Duration-Aware Reward Shaping</a></li>
+              <li><a href="#gbpo">3.2 GBPO 算法</a></li>
+              <li><a href="#rm-vs-uf">3.3 Reward Model vs 用户反馈</a></li>
+            </ul>
+          </li>
+          <li><a href="#online">4. 在线 A/B 测试</a></li>
+          <li><a href="#comparison">5. V1 vs V2 对比总结</a></li>
+          <li><a href="#insight">6. 核心洞察与局限</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="content">
+
+      <!-- 1. 背景与动机 -->
+      <section id="overview">
+        <div class="sec-title">
+          <span class="sec-icon" style="background:#eff6ff;">🎯</span>
+          1. 背景与动机
+        </div>
+
+        <p>OneRec-V1 已经完成从多级漏斗到端到端生成推荐的范式转换，并在快手主 Feed 承接了 25% 的流量。但 V1 存在两个根本性瓶颈，V2 的全部工作都是围绕解决这两个问题展开的。</p>
+
+        <div class="arch-compare">
+          <div class="arch-box old">
+            <div class="arch-box-title">❌ V1 的瓶颈一：计算严重失衡</div>
+            <div class="arch-stage">
+              <div class="arch-stage-dot" style="background:#ef4444;"></div>
+              <div>Encoder-Decoder 架构：Encoder 处理用户长序列（512 个 token），Decoder 仅预测 3 个语义 token</div>
+            </div>
+            <div class="arch-stage">
+              <div class="arch-stage-dot" style="background:#ef4444;"></div>
+              <div>上下文编码占总 FLOPs 的 <strong>97.66%</strong>，真正决策的 target decoding 仅占 2.34%</div>
+            </div>
+            <div class="arch-stage">
+              <div class="arch-stage-dot" style="background:#ef4444;"></div>
+              <div>随序列长度增长，比例失衡更严重（3000 tokens 时仅 0.41%），无法有效扩展模型规模</div>
+            </div>
+          </div>
+          <div class="arch-box old">
+            <div class="arch-box-title">❌ V1 的瓶颈二：Reward Model 依赖</div>
+            <div class="arch-stage">
+              <div class="arch-stage-dot" style="background:#ef4444;"></div>
+              <div>在线 roll-out 仅覆盖 1% 用户（算力限制），采样效率低</div>
+            </div>
+            <div class="arch-stage">
+              <div class="arch-stage-dot" style="background:#ef4444;"></div>
+              <div>Proxy Reward 存在 reward hacking 风险：模型学到 reward model 的偏差而非真实用户偏好</div>
+            </div>
+            <div class="arch-stage">
+              <div class="arch-stage-dot" style="background:#ef4444;"></div>
+              <div>V1 部署规模有限，缺乏足够的自身生成样本做 on-policy 训练</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="arch-compare">
+          <div class="arch-box new">
+            <div class="arch-box-title">✅ V2 的解法一：Lazy Decoder-Only 架构</div>
+            <div class="arch-stage">
+              <div class="arch-stage-dot" style="background:#22c55e;"></div>
+              <div>彻底去掉 Encoder，用户 Context 仅通过 Cross-Attention 注入，不参与 Loss 计算</div>
+            </div>
+            <div class="arch-stage">
+              <div class="arch-stage-dot" style="background:#22c55e;"></div>
+              <div>Target Decoding 占 ≈100% FLOPs，计算预算全部用于生成决策</div>
+            </div>
+            <div class="arch-stage">
+              <div class="arch-stage-dot" style="background:#22c55e;"></div>
+              <div>同等算力预算下可扩展到 8B 参数，验证 Scaling Law</div>
+            </div>
+          </div>
+          <div class="arch-box new">
+            <div class="arch-box-title">✅ V2 的解法二：真实用户反馈 RL</div>
+            <div class="arch-stage">
+              <div class="arch-stage-dot" style="background:#22c55e;"></div>
+              <div>用户观看时长作为直接 Reward，规避 reward hacking</div>
+            </div>
+            <div class="arch-stage">
+              <div class="arch-stage-dot" style="background:#22c55e;"></div>
+              <div>Duration-Aware Reward Shaping 校正视频时长偏差</div>
+            </div>
+            <div class="arch-stage">
+              <div class="arch-stage-dot" style="background:#22c55e;"></div>
+              <div>借助 V1 的 25% 流量覆盖，用 OneRec 自身生成样本做 on-policy RL</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. 架构 -->
+      <section id="arch">
+        <div class="sec-title">
+          <span class="sec-icon" style="background:#f0fdf4;">🏗️</span>
+          2. Lazy Decoder-Only 架构
+        </div>
+
+        <h3>2.1 设计原则：为什么不直接用 Decoder-Only？</h3>
+        <p>推荐系统中一条训练样本由"历史序列（Context）+ 目标 item（Target）"构成，只对 Target 计算 Loss。标准 Naive Decoder-Only 会把 Context 和 Target 拼接成一个序列，整体通过 Self-Attention——这样 Context 的计算量和 Decoder-Only 的 Encoder-Decoder 一样多，效率并无提升（见下表）。</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>架构</th>
+                <th>总 FLOPs（GFLOPs）</th>
+                <th>Target 解码 FLOPs</th>
+                <th>Target 占比</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Encoder-Decoder 0.5B:0.5B（V1）</td>
+                <td>346</td>
+                <td>8.1</td>
+                <td style="color:#dc2626;font-weight:700;">2.34%</td>
+              </tr>
+              <tr>
+                <td>Naive Decoder-Only 1B</td>
+                <td>632</td>
+                <td>18</td>
+                <td style="color:#dc2626;font-weight:700;">2.85%</td>
+              </tr>
+              <tr style="background:#f0fdf4;">
+                <td><strong>Lazy Decoder-Only 1B（V2）</strong></td>
+                <td><strong>18</strong></td>
+                <td><strong>18</strong></td>
+                <td style="color:#16a34a;font-weight:700;">≈ 100%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-blue">
+          <div class="callout-title">💡 核心思路</div>
+          Lazy Decoder-Only 把 Context 视为<strong>静态条件信号</strong>，仅通过 Cross-Attention 注入，自身不参与 Self-Attention 也不计入 Loss。等价于"只有 3 个 token 在做 Self-Attention"，FLOPs 下降 94%。
+        </div>
+
+        <h3 id="context-proc">2.2 Context Processor（异构用户特征统一化）</h3>
+
+        <div class="callout callout-blue">
+          <div class="callout-title">💡 要解决的核心问题</div>
+          推荐系统的用户画像来自三路<strong>完全不同形状</strong>的数据：User Static（几十个标量）、Short-term（最近互动的 item 序列）、Long-term（长期行为摘要）。它们维度不同、长度不同，没法直接塞进 Cross-Attention 的 K/V。Context Processor 的任务就是<strong>把三路异构特征拼成一条统一维度的序列，然后预先切成各层用的 KV 对</strong>——整个过程只做一次，所有 18 层 Decoder Block 复用同一组 KV。
+        </div>
+
+        <h4>Step 0：三路特征进来是啥样的</h4>
+        <p>以 1B 模型为例（$d_{model}=1792, N_{head}=14, d_{head}=128$）：</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>特征路</th><th>来源</th><th>经过</th><th>输出形状</th><th>典型长度</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>User Static</strong></td><td>年龄 / 性别 / 地域 / 设备</td><td>Embedding → Linear</td><td>$N_s$ 个向量，1792 维</td><td>$N_s=4$</td></tr>
+              <tr><td><strong>Short-term</strong></td><td>最近 10 分钟互动视频</td><td>Embedding → Transformer</td><td>$T_{short}$ 个向量，1792 维</td><td>$T_{short}=50$</td></tr>
+              <tr><td><strong>Long-term</strong></td><td>过去 6 个月行为摘要</td><td>Embedding → Pooling</td><td>$T_{long}$ 个向量，1792 维</td><td>$T_{long}=458$</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>三路 concat 成一条序列：</p>
+        <pre style="background:#f8fafc;color:#1a2033;border:1px solid #e2e8f0;font-size:13px;line-height:1.6;padding:14px 18px;border-radius:10px;">Context = [static_0, static_1, ..., short_0, ..., long_0, ...]
+形状：(N_s + T_short + T_long) × d_model
+     = (4 + 50 + 458) × 1792
+     = 512 × 1792</pre>
+
+        <h4>Step 1：维度设计——为什么要用 $d_{\text{context}}$ 公式</h4>
+        <p>Context 最终要变成 Cross-Attention 可以用的 K/V，而 Cross-Attention 的 K/V 维度必须匹配 Q 的 head 结构。公式：</p>
+
+        <div class="formula-block">
+          <div class="formula-label">Context 目标维度</div>
+          $$d_{\text{context}} = S_{kv} \cdot L_{kv} \cdot G_{kv} \cdot d_{\text{head}}$$
+          <p style="font-size:13px;color:var(--muted);margin-top:8px;margin-bottom:0;">以默认配置 $S_{kv}=1, L_{kv}=1, G_{kv}=14, d_{head}=128$ 为例：$d_{\text{context}} = 1 \times 1 \times 14 \times 128 = 1792 = d_{model}$。</p>
+        </div>
+
+        <p>每个 1792 维的 context 向量，沿特征维度被<strong>切分成 $S_{kv} \times L_{kv} = 1$ 份</strong>（因为所有层共享同一组 KV），每份形状为 $G_{kv} \times d_{head} = 14 \times 128$。</p>
+
+        <h4>Step 2：RMSNorm 产出最终 K/V</h4>
+        <pre style="background:#f8fafc;color:#1a2033;border:1px solid #e2e8f0;font-size:13px;line-height:1.6;padding:14px 18px;border-radius:10px;"># 默认配置 L_kv=1, S_kv=1 时：
+k_0 = RMSNorm(C_0)            # 512 × 14 × 128
+v_0 = k_0                     # S_kv=1 → K/V 共享同一表示，不需要额外投影
+
+# 如果 S_kv=2（K/V 独立）：
+k_0 = RMSNorm_k(C_0 的前半)    # 512 × 14 × 128
+v_0 = RMSNorm_v(C_0 的后半)    # 512 × 14 × 128
+
+# 如果 L_kv=3（每 6 层共享一组 KV）：
+# Context 沿特征维度切成 3 份 → C_0, C_1, C_2
+# Layer 0-5 用 k_0/v_0, Layer 6-11 用 k_1/v_1, Layer 12-17 用 k_2/v_2</pre>
+
+        <h4>Step 3：各层如何使用这组 KV</h4>
+        <div class="callout callout-green">
+          <div class="callout-title">✅ Lazy Cross-Attention 的"懒"体现在哪里</div>
+          <ul style="margin-bottom:0;">
+            <li><strong>K/V 只计算一次</strong>：Context Processor 在进入所有 Decoder Block 之前就预计算完毕，18 层全部复用同一组 KV（$L_{kv}=1$）</li>
+            <li><strong>去掉 $W_K$、$W_V$ 投影层</strong>：传统 Cross-Attention 每层都有独立的 $W_K$、$W_V$ 矩阵，把 encoder 输出投影成该层的 K/V。Lazy 版本直接用预计算的 KV，<strong>完全不做投影</strong>，省掉了这部分参数和计算</li>
+            <li><strong>Query 仍然有 Linear</strong>：Q 来自 target item tokens（只有 BOS + s1 + s2 = 3 个），经 $W_Q$ 投影，支持 GQA</li>
+            <li>计算量对比：传统每个 Block 的 Cross-Attention = $W_Q$ + $W_K$ + $W_V$ 三次大矩阵乘；Lazy 版本 = $W_Q$ 一次矩阵乘（K/V 已预计算好）</li>
+          </ul>
+        </div>
+
+        <div class="two-col">
+          <div class="mini-card" style="background:#fef2f2;border-color:#fca5a5;">
+            <h4 style="color:#dc2626;">❌ 传统 Encoder-Decoder（V1）</h4>
+            <pre style="background:#0f172a;color:#e2e8f0;font-size:12px;padding:10px 14px;border-radius:8px;margin-top:8px;">Context → Encoder（18层 Self-Attention）→ memory
+每个 Decoder Block：
+  memory × W_K → K      ← 每层独立投影
+  memory × W_V → V      ← 每层独立投影
+  target × W_Q → Q
+  Attention(Q, K, V)
+
+↑ Encoder 消耗 ~97% FLOPs
+↑ 每层还有 W_K/W_V 投影，额外参数+计算</pre>
+          </div>
+          <div class="mini-card" style="background:#f0fdf4;border-color:#86efac;">
+            <h4 style="color:#16a34a;">✅ Lazy Decoder-Only（V2）</h4>
+            <pre style="background:#0f172a;color:#e2e8f0;font-size:12px;padding:10px 14px;border-radius:8px;margin-top:8px;">Context → Linear + RMSNorm → KV（一次，极轻量）
+每个 Decoder Block：
+  直接用预计算的 K/V   ← 无投影，18层共享
+  target × W_Q → Q
+  Attention(Q, K, V)
+
+↑ Context 完全不做 Self-Attention
+↑ K/V 预计算一次，省掉 18× W_K/W_V</pre>
+          </div>
+        </div>
+
+        <h4>$L_{kv}$ 和 $S_{kv}$ 的消融直觉</h4>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>参数</th><th>含义</th><th>实验结论</th><th>直觉解释</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>$L_{kv}=1$</td><td>18 层全共享同一组 KV</td><td style="color:#16a34a;font-weight:700;">Loss 3.27，与 L=18 几乎一样</td><td>用户画像在不同 Decoder 层看起来都差不多——"年龄=25"不会因为层深就变了</td></tr>
+              <tr><td>$L_{kv}=9$</td><td>相邻 2 层共享一组 KV</td><td>Loss 3.27，FLOPs 略增</td><td>中间值，略增灵活性但收益极小</td></tr>
+              <tr><td>$L_{kv}=18$</td><td>每层独立 KV</td><td>Loss 3.27，显存 +2.3×</td><td style="color:#dc2626;">LLM 每层 KV 差异大（语义逐层抽象），推荐 Context 却很稳定，所以共享完全 OK</td></tr>
+              <tr><td>$S_{kv}=1$</td><td>K/V 共享同一表示</td><td style="color:#16a34a;font-weight:700;">Loss 3.27，省一半 KV 显存</td><td>"哪些 item 是我历史互动"和"我对这些 item 的偏好强度"在推荐 Context 中信息重叠度高</td></tr>
+              <tr><td>$S_{kv}=2$</td><td>K/V 各有独立 RMSNorm</td><td>Loss 3.27，略增参数</td><td>独立 K/V 更灵活，但对推荐 Context 无明显收益</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-amber">
+          <div class="callout-title">📌 为什么推荐 Context 可以共享 KV，而 LLM 不行？</div>
+          LLM 每层提取不同语义层次——浅层关注语法（"这个词是什么词性"），深层关注语义（"这句话是什么意思"），所以每层 KV 差异很大。但推荐系统的用户 Context 是<strong>静态画像</strong>（"这个用户是 25 岁男性，最近喜欢美食视频"），不管 Decoder 在第 1 层还是第 18 层，这个画像的内容<strong>不会变</strong>。所以所有层共享同一组 KV 是合理的。
+        </div>
+
+        <h3 id="lazy-block">2.3 Lazy Decoder Block 结构</h3>
+        <p>每个 Lazy Decoder Block 包含三个子模块，按以下顺序执行：</p>
+
+        <div class="timeline">
+          <div class="timeline-item">
+            <div class="timeline-dot"></div>
+            <div class="timeline-title">① Lazy Cross-Attention（无 KV Projection）</div>
+            <div class="timeline-desc">直接用 Context Processor 输出的预计算 KV，去掉传统 Cross-Attention 的 $W_K$、$W_V$ 投影层。Query 仍有 Linear，支持 GQA（G_kv 组共享 KV）。显存节省显著。</div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-dot"></div>
+            <div class="timeline-title">② Causal Self-Attention</div>
+            <div class="timeline-desc">仅对 3 个 target token（BOS + s1 + s2）做自回归 Self-Attention。输入序列极短，计算量极小。</div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-dot"></div>
+            <div class="timeline-title">③ Feed-Forward Network（深层改为 MoE）</div>
+            <div class="timeline-desc">前几层用 Dense FFN，深层替换为 MoE（53 个 Routed Expert + 1 Shared Expert，top-3 routing），总参数 4B、激活参数 0.5B，性能超越 2B Dense 模型。</div>
+          </div>
+        </div>
+
+        <h3 id="scaling">2.4 Scaling Law 验证</h3>
+        <p>首次在生成式推荐系统验证 Scaling Law，实验覆盖 0.1B 到 8B Dense 模型及 4B MoE 模型。拟合结果：</p>
+
+        <div class="formula-block">
+          <div class="formula-label">拟合公式（固定训练数据量 D）</div>
+          $$\hat{L}(N) = E + \frac{A}{N^{\alpha}}, \quad E=3.13,\ A=3660,\ \alpha=0.489$$
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>模型规模</th>
+                <th>d_model</th>
+                <th>层数</th>
+                <th>收敛 Loss</th>
+                <th>备注</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>0.1B Dense</td><td>640</td><td>12</td><td>3.57</td><td></td></tr>
+              <tr><td>0.5B Dense</td><td>1408</td><td>14</td><td>3.33</td><td></td></tr>
+              <tr><td>1B Dense</td><td>1792</td><td>18</td><td>3.27</td><td>线上部署规格</td></tr>
+              <tr><td>2B Dense</td><td>2304</td><td>22</td><td>3.23</td><td></td></tr>
+              <tr><td>4B Dense</td><td>2944</td><td>26</td><td>3.20</td><td></td></tr>
+              <tr><td>8B Dense</td><td>3584</td><td>34</td><td>3.19</td><td></td></tr>
+              <tr style="background:#f0fdf4;"><td><strong>4B MoE（0.5B 激活）</strong></td><td>1408</td><td>14</td><td><strong>3.22</strong></td><td>超越 2B Dense，仅需 0.5B 激活算力</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-green">
+          <div class="callout-title">✅ 关键结论</div>
+          <ul>
+            <li>Lazy Decoder-Only 在相同 FLOPs 下与 Encoder-Decoder 收敛 Loss 持平，却节省 94% 计算量</li>
+            <li>Loss 曲线平滑下降，与 Chinchilla Scaling Law 高度吻合，说明生成式推荐同样遵循 LLM 规律</li>
+            <li>4B MoE 以 0.5B 激活参数的代价，达到接近 4B Dense 的效果，是工业落地的最优配比</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- 3. RL -->
+      <section id="rl">
+        <div class="sec-title">
+          <span class="sec-icon" style="background:#fffbeb;">🎓</span>
+          3. 真实用户反馈强化学习
+        </div>
+
+        <p>V2 的后训练分两阶段：① SFT（流式曝光数据，与预训练同 Loss）保持实时兴趣捕捉并防止偏离；② RL 基于真实用户反馈，取代 V1 的 Reward Model 方案。</p>
+
+        <h3>3.1 Duration-Aware Reward Shaping</h3>
+        <p>视频观看时长（play time）是最密集的反馈信号，但有<strong>时长偏差</strong>：长视频天然有更高绝对观看时长，简单用 play time 作 Reward 会让模型偏向推长视频。</p>
+
+        <div class="callout callout-amber">
+          <div class="callout-title">📐 核心设计：同时长分位数排名</div>
+          <ol style="margin-bottom:0;">
+            <li>对历史视频按时长取对数分桶：$b = \lfloor \log_{\beta}(d + \epsilon) \rfloor$（$\beta$ 控制粒度，$\epsilon$ 防数值问题）</li>
+            <li>对目标视频，找出历史记录中<strong>相同时长桶</strong>内的所有观看时长，计算其分位数排名 $q_i$：
+              $$q_i = \frac{|\{p_j \in P_{u,b} \mid p_j \le p_i\}|}{|P_{u,b}|}$$</li>
+            <li>同批次内按 $q_i$ 排序，<strong>前 25%（top quartile）</strong>为正样本（$A_i=+1$），显式"不喜欢"行为为负样本（$A_i=-1$），其余过滤（$A_i=0$）</li>
+          </ol>
+        </div>
+
+        <p>这样同一用户对一个 3 分钟视频完整观看，比对一个 30 秒视频只看 5 秒，reward 更高——体现了真实满意度而非绝对时长。</p>
+
+        <h3 id="gbpo">3.2 GBPO：Gradient-Bounded Policy Optimization</h3>
+
+        <div class="callout callout-blue">
+          <div class="callout-title">💡 一句话核心</div>
+          OneRec 的 RL 训练里，<strong>大批样本的 importance ratio 恒等于 1</strong>，导致 GRPO/PPO 的 ratio-clipping 完全失效；同时 RL 负样本梯度 $\propto 1/\pi_\theta$，越压越爆炸。GBPO 用一个简单的 $\max()$ 修改分母，让 RL 负样本梯度恰好等于 <strong>BCE 负样本梯度</strong>——既保留所有样本，又天然有界。
+        </div>
+
+        <h4 style="margin-top:18px;">3.2.1 两类训练样本</h4>
+        <p>OneRec 在 RL 阶段使用的曝光样本来自两个源：</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>来源</th><th>$\pi_{old}$ 是什么</th><th>ratio $r = \pi_\theta / \pi_{old}$</th><th>占比</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>OneRec 自身曝光</strong></td>
+                <td style="color:#16a34a;">真实记录的曝光时刻概率</td>
+                <td>$\pi_\theta / \pi_{old}$（动态变化）</td>
+                <td>≤ 25% 流量</td>
+              </tr>
+              <tr>
+                <td><strong>传统 pipeline 曝光</strong></td>
+                <td style="color:#dc2626;">不可知 → 简化为 $sg(\pi_\theta)$</td>
+                <td><strong>$\equiv 1$ 恒定</strong></td>
+                <td>≥ 75% 流量</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout callout-purple">
+          <div class="callout-title">❓ 为什么传统 pipeline 样本要用 $sg(\pi_\theta)$？</div>
+          因为传统推荐 pipeline 由 召回→粗排→精排→重排 多个阶段组成，最终曝光给用户的 item 是一个复杂决策的产物，<strong>不是某个模型的"概率采样"结果</strong>。OneRec 在事后只能拿到"曝光了哪些 item"，无法回溯"曝光时该 item 在 OneRec 里的概率"。退而求其次，用当前 Actor 的概率作为代理，这就是 $\pi_{old} = sg(\pi_\theta)$。
+        </div>
+
+        <h4 style="margin-top:18px;">3.2.2 ratio=1 引发的两个连锁问题</h4>
+
+        <p style="margin-bottom:8px;"><strong>问题 1：clipping 失效。</strong>GRPO/PPO 的损失为 $\min(r \cdot A,\ \text{clip}(r, 1-\epsilon, 1+\epsilon) \cdot A)$，当 $r \equiv 1$ 时 clip 永不触发，对这 75% 样本毫无保护。</p>
+
+        <p style="margin-bottom:8px;"><strong>问题 2：负样本梯度爆炸。</strong>把 $\pi_{old} = sg(\pi_\theta)$ 代入并求导：</p>
+
+        <div class="formula-block">
+          <div class="formula-label">RL 负样本梯度（ratio=1 时）</div>
+          $$J_i = -A_i \cdot \frac{\pi_\theta}{sg(\pi_\theta)} \quad \Rightarrow \quad \frac{\partial J_i}{\partial \theta} = -A_i \cdot \frac{1}{\pi_\theta} \cdot \frac{\partial \pi_\theta}{\partial \theta}$$
+          <p style="font-size:13px;color:var(--muted);margin-top:8px;margin-bottom:0;">$sg()$ 阻断对分母的求导，但分母数值 $= \pi_\theta$。所以梯度系数为 $1/\pi_\theta$。负样本时 $A_i < 0$，模型会尝试压低 $\pi_\theta$，但 $\pi_\theta$ 越小梯度系数越大——形成<strong>正反馈</strong>。</p>
+        </div>
+
+        <div class="callout callout-purple">
+          <div class="callout-title">❓ $sg(\pi_\theta)$ 是常数，真实 $\pi_{old}$ 也是常数，为什么一个稳一个炸？</div>
+          <p style="margin-bottom:8px;">关键不在"是不是常数"，而在<strong>这个常数的数值会不会随 $\pi_\theta$ 同步漂移</strong>：</p>
+          <ul style="margin-bottom:0;">
+            <li><strong>真实 $\pi_{old}$（如 0.2）= 历史快照</strong>：写死在日志里。$\pi_\theta$ 怎么变它都是 0.2，梯度系数恒为 $1/0.2 = 5$，稳定。</li>
+            <li><strong>$sg(\pi_\theta)$ = 当前镜像</strong>：数值始终等于 $\pi_\theta$，$\pi_\theta$ 掉到 0.01 它也变 0.01，梯度系数变 100。"对照组"和"实验组"同步漂移，比较失去意义。</li>
+          </ul>
+        </div>
+
+        <h4 style="margin-top:18px;">3.2.3 关键观察：BCE 梯度天然有界</h4>
+        <p>对二元分类的 BCE Loss，单个负样本（$y=0$）的梯度为：</p>
+
+        <div class="formula-block">
+          <div class="formula-label">BCE 负样本梯度</div>
+          $$L_{BCE} = -\log(1 - p_\theta) \quad \Rightarrow \quad \frac{\partial L_{BCE}}{\partial \theta} = \frac{1}{1 - p_\theta} \cdot \frac{\partial p_\theta}{\partial \theta}$$
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>$\pi_\theta$（或 $p_\theta$）</th><th>RL 系数 $\frac{1}{\pi_\theta}$</th><th>BCE 系数 $\frac{1}{1-p_\theta}$</th><th>对比</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>0.5</td><td>2</td><td>2</td><td>持平</td></tr>
+              <tr><td>0.1</td><td>10</td><td>1.11</td><td>RL 是 BCE 的 9×</td></tr>
+              <tr><td>0.01</td><td style="color:#dc2626;font-weight:700;">100</td><td>1.01</td><td style="color:#dc2626;">RL 是 BCE 的 99×</td></tr>
+              <tr><td>0.001</td><td style="color:#dc2626;font-weight:700;">1000</td><td>1.001</td><td style="color:#dc2626;">RL 已经爆炸</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>BCE 的"自洽性"：模型越确定一个样本是负的，梯度越小（已经学好了不再用力）；而 RL 反过来，越确定越用力——这是 RL 不稳定的<strong>数学根源</strong>。</p>
+
+        <h4 style="margin-top:18px;">3.2.4 GBPO 的设计：用 max() 把 RL 梯度对齐到 BCE</h4>
+
+        <div class="formula-block">
+          <div class="formula-label">GBPO 目标函数（保留所有样本）</div>
+          $$J_{GBPO}(\theta) = -\mathbb{E}\left[\frac{1}{G}\sum_{i=1}^{G}\frac{\pi_\theta}{\pi'_{\theta_{old}}} \cdot A_i\right]$$
+          $$\pi'_{\theta_{old}} = \begin{cases} \max\!\big(\pi_{old},\; sg(\pi_\theta)\big), & A_i \ge 0 \;\;\text{(正样本)} \\[4px] \max\!\big(\pi_{old},\; 1 - sg(\pi_\theta)\big), & A_i < 0 \;\;\text{(负样本)} \end{cases}$$
+          <p style="font-size:13px;color:var(--muted);margin-top:10px;margin-bottom:0;">不裁剪分子（不丢弃任何样本），只在分母引入动态下界。</p>
+        </div>
+
+        <p><strong>为什么这个 max() 恰好等价于 BCE 梯度？</strong>对 ratio=1 的传统 pipeline 样本（$\pi_{old} = \pi_\theta$），代入并讨论 $\pi_\theta < 0.5$ 时：</p>
+
+        <div class="formula-block">
+          <div class="formula-label">GBPO 负样本梯度（ratio=1 时）</div>
+          $$\pi'_{\theta_{old}} = \max(\pi_\theta,\ 1-\pi_\theta) = 1 - \pi_\theta \quad (\text{当 } \pi_\theta < 0.5)$$
+          $$\frac{\partial J_i^{GBPO}}{\partial \theta} = -A_i \cdot \frac{1}{1 - \pi_\theta} \cdot \frac{\partial \pi_\theta}{\partial \theta}$$
+          <p style="font-size:13px;color:var(--muted);margin-top:10px;margin-bottom:0;">系数 $\frac{1}{1-\pi_\theta}$ <strong>正好</strong>是 BCE 负样本的梯度系数！这就是"以 BCE 梯度为 RL 梯度的上界"的精确含义。$\pi_\theta \to 0$ 时系数 $\to 1$，梯度有界、稳定。</p>
+        </div>
+
+        <p>正样本同理：$\max(\pi_{old}, \pi_\theta)$ 在 $\pi_\theta$ 已经很大时取 $\pi_\theta$，对应 BCE 正样本梯度系数 $1/p_\theta$，避免"模型已经很自信"时 ratio 变大引起更新震荡。</p>
+
+        <h4 style="margin-top:18px;">3.2.5 GBPO vs GRPO/ECPO 三方对比</h4>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>方法</th><th>核心机制</th><th>对 ratio=1 样本</th><th>对负样本梯度爆炸</th><th>是否丢弃样本</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong style="color:#dc2626;">GRPO / PPO</strong></td>
+                <td>$\text{clip}(r, 1\!-\!\epsilon, 1\!+\!\epsilon)$</td>
+                <td style="color:#dc2626;">❌ 永不触发</td>
+                <td style="color:#dc2626;">❌ 不解决</td>
+                <td>是（clip 外丢弃）</td>
+              </tr>
+              <tr>
+                <td><strong style="color:#b45309;">ECPO（V1）</strong></td>
+                <td>$\text{clip}$ 应用在 $\pi_{old}$ 而非 $r$<br>负样本仅设上界</td>
+                <td style="color:#b45309;">⚠️ 部分缓解</td>
+                <td style="color:#b45309;">⚠️ 仍可能</td>
+                <td>是（部分负样本丢弃）</td>
+              </tr>
+              <tr style="background:#f0fdf4;">
+                <td><strong style="color:#16a34a;">GBPO（V2）</strong></td>
+                <td>分母引入 $\max()$ bound<br>对齐 BCE 梯度</td>
+                <td style="color:#16a34a;">✅ 直接处理</td>
+                <td style="color:#16a34a;">✅ 数学可证</td>
+                <td><strong>否（全样本利用）</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4 style="margin-top:18px;">3.2.6 实验验证（论文图 9）</h4>
+        <div class="callout callout-green">
+          <div class="callout-title">✅ Gradient Norm 实测对比</div>
+          <ul style="margin-bottom:0;">
+            <li><strong>ECPO 负样本 gradient norm</strong>：在 0–5 之间剧烈震荡，多次出现脉冲峰值，模型最终 Loss 发散。</li>
+            <li><strong>GBPO 正/负样本 gradient norm</strong>：均稳定在 0.04–0.14 区间内平滑波动，训练全程无发散。</li>
+            <li>线上 A/B（快手主 Feed）相比纯 ECPO 基线：App 停留时长 +0.467%、互动指标全线提升。</li>
+          </ul>
+        </div>
+
+        <h3 id="rm-vs-uf">3.3 Reward Model vs 真实用户反馈 vs Hybrid</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>指标（快手主 Feed）</th>
+                <th>Reward Model</th>
+                <th>User Feedback</th>
+                <th>Hybrid</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>App 停留时长</strong></td><td>+0.269%</td><td style="color:#16a34a;font-weight:700;">+0.299%</td><td>+0.283%</td></tr>
+              <tr><td>Watch Time</td><td>+0.537%</td><td style="color:#16a34a;font-weight:700;">+0.610%</td><td>+0.118%</td></tr>
+              <tr><td>Video View</td><td>+0.505%</td><td style="color:#16a34a;font-weight:700;">+0.647%</td><td>+0.647%</td></tr>
+              <tr><td>Like</td><td style="color:#16a34a;font-weight:700;">+6.552%</td><td>+2.435%</td><td>+7.010%</td></tr>
+              <tr><td>Follow</td><td style="color:#16a34a;font-weight:700;">+7.265%</td><td>+2.007%</td><td>+8.458%</td></tr>
+              <tr><td>Comment</td><td style="color:#16a34a;font-weight:700;">+15.472%</td><td>+0.944%</td><td>+8.763%</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>关键发现：Reward Model 更擅长提升互动指标（Like/Follow/Comment），User Feedback 更擅长提升 App 停留时长（时长类指标）。两者方向互补，Hybrid 版本兼顾了两者，但不能简单叠加（有重叠）。</p>
+
+        <div class="callout callout-purple">
+          <div class="callout-title">💡 On-Policy 带来的自我迭代增益</div>
+          实验组"w/ OneRec Samples"（引入 OneRec 自身生成的曝光样本）对比"w/o OneRec Samples"（仅用传统 pipeline 样本），Video View 从 −0.901% 转正至 +0.716%，Like 从 −0.186% 升至 +2.897%——说明 25% 流量覆盖后，用自身生成样本做 on-policy RL 带来了显著的自我迭代收益。
+        </div>
+      </section>
+
+      <!-- 4. 在线结果 -->
+      <section id="online">
+        <div class="sec-title">
+          <span class="sec-icon" style="background:#dcfce7;">📊</span>
+          4. 在线 A/B 测试
+        </div>
+
+        <p>最终 V2 上线规格：<strong>1B 参数、context length 3000、Beam Size 512</strong>，L20 GPU 推理，时延 36ms，MFU 62%。使用 5% 流量实验组，观测一周。</p>
+
+        <div class="metric-grid">
+          <div class="metric-card">
+            <div class="metric-num">+0.467%</div>
+            <div class="metric-label">快手 App 停留时长</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-num">+0.741%</div>
+            <div class="metric-label">快手极速版停留时长</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-num">+1.367%</div>
+            <div class="metric-label">快手 Watch Time</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-num">+3.924%</div>
+            <div class="metric-label">快手 Like</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-num">+4.730%</div>
+            <div class="metric-label">快手 Follow</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-num">+5.394%</div>
+            <div class="metric-label">快手 Comment</div>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>场景</th><th>指标</th><th>OneRec-V2 vs V1</th></tr>
+            </thead>
+            <tbody>
+              <tr><td rowspan="9" style="font-weight:700;">快手主 Feed</td><td>App Stay Time</td><td style="color:#16a34a;font-weight:700;">+0.467%</td></tr>
+              <tr><td>LT7（7日留存）</td><td style="color:#16a34a;">+0.069%</td></tr>
+              <tr><td>Watch Time</td><td style="color:#16a34a;">+1.367%</td></tr>
+              <tr><td>Video View</td><td style="color:#16a34a;">+0.331%</td></tr>
+              <tr><td>Like</td><td style="color:#16a34a;">+3.924%</td></tr>
+              <tr><td>Follow</td><td style="color:#16a34a;">+4.730%</td></tr>
+              <tr><td>Comment</td><td style="color:#16a34a;">+5.394%</td></tr>
+              <tr><td>Collect</td><td style="color:#16a34a;">+2.112%</td></tr>
+              <tr><td>Forward</td><td style="color:#16a34a;">+3.183%</td></tr>
+              <tr><td rowspan="9" style="font-weight:700;">快手极速版</td><td>App Stay Time</td><td style="color:#16a34a;font-weight:700;">+0.741%</td></tr>
+              <tr><td>LT7（7日留存）</td><td style="color:#16a34a;">+0.034%</td></tr>
+              <tr><td>Watch Time</td><td style="color:#16a34a;">+0.762%</td></tr>
+              <tr><td>Video View</td><td style="color:#16a34a;">+0.259%</td></tr>
+              <tr><td>Like</td><td style="color:#16a34a;">+5.393%</td></tr>
+              <tr><td>Follow</td><td style="color:#16a34a;">+5.627%</td></tr>
+              <tr><td>Comment</td><td style="color:#16a34a;">+5.013%</td></tr>
+              <tr><td>Collect</td><td style="color:#16a34a;">+3.202%</td></tr>
+              <tr><td>Forward</td><td style="color:#16a34a;">+7.958%</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p style="font-size:13.5px;color:var(--muted);">特别说明：论文额外报告了"关闭缓存"（Caching Disabled）的 1% 流量实验，交互指标（Like/Follow/Comment/Forward）在两个平台的涨幅达到 9.6%–29.2%，但同时观察到冷启动视频曝光减少（44.7% / 36.7%）和 cluster density 上升，说明高强度 RL 对生态系统存在影响，这是未来需要关注的方向。</p>
+      </section>
+
+      <!-- 5. V1 vs V2 对比 -->
+      <section id="comparison">
+        <div class="sec-title">
+          <span class="sec-icon" style="background:#f5f3ff;">🔄</span>
+          5. OneRec V1 vs V2 关键对比
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>维度</th><th>OneRec-V1</th><th>OneRec-V2</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>预训练架构</strong></td>
+                <td>Encoder-Decoder（0.5B:0.5B，含 MoE Decoder）</td>
+                <td>Lazy Decoder-Only（1B 上线，支持至 8B）</td>
+              </tr>
+              <tr>
+                <td><strong>Context 处理方式</strong></td>
+                <td>Encoder 完整处理 → Cross-Attention 注入</td>
+                <td>Context Processor 线性变换 → 直接作为 KV，不做 Self-Attention</td>
+              </tr>
+              <tr>
+                <td><strong>计算分配</strong></td>
+                <td>97.66% FLOPs 用于上下文编码</td>
+                <td>≈ 100% FLOPs 用于 Target 解码</td>
+              </tr>
+              <tr>
+                <td><strong>可扩展规模</strong></td>
+                <td>~0.5B（受制于编码计算量）</td>
+                <td>0.1B → 8B，验证 Scaling Law</td>
+              </tr>
+              <tr>
+                <td><strong>RL 奖励来源</strong></td>
+                <td>Reward Model（proxy reward）</td>
+                <td>Duration-Aware 真实用户反馈 + 可选 Reward Model Hybrid</td>
+              </tr>
+              <tr>
+                <td><strong>RL 算法</strong></td>
+                <td>ECPO（Early Clipped GRPO）</td>
+                <td>GBPO（Gradient-Bounded Policy Optimization）</td>
+              </tr>
+              <tr>
+                <td><strong>On-Policy 覆盖</strong></td>
+                <td>1% 用户 roll-out</td>
+                <td>25% 流量（OneRec 自身生成样本）</td>
+              </tr>
+              <tr>
+                <td><strong>在线时延 / MFU</strong></td>
+                <td>未明确披露</td>
+                <td>36ms，MFU 62%（L20 GPU）</td>
+              </tr>
+              <tr>
+                <td><strong>App 停留时长增益</strong></td>
+                <td>快手 A/B +1.68%（总观看时长）</td>
+                <td>快手 +0.467%，快手极速版 +0.741%（App Stay Time，基于 V1）</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 6. 洞察 -->
+      <section id="insight">
+        <div class="sec-title">
+          <span class="sec-icon" style="background:#fef3c7;">💎</span>
+          6. 核心洞察与局限
+        </div>
+
+        <h3>核心洞察</h3>
+        <ul>
+          <li><strong>计算效率是 Scaling 的前提</strong>：V1 的 Encoder-Decoder 架构虽然合理解决了"历史序列 vs 目标 item"异构问题，但 97% FLOPs 浪费在不参与 Loss 的 Context 编码上，根本上限制了模型规模上限。Lazy Decoder 彻底解决了这个矛盾——把 Context 降级为"静态 KV 条件"，让 Decoder 专注于生成决策。</li>
+          <li><strong>Scaling Law 在推荐系统成立</strong>：这是该领域首次系统验证 Chinchilla 风格的 Scaling Law 曲线，从 0.1B 到 8B 平滑下降，为未来更大规模的生成式推荐提供了理论支撑和工程路线图。</li>
+          <li><strong>On-Policy 数据是 RL 自我进化的关键</strong>：V1 因覆盖率有限，无法使用自身生成的样本训练。V2 借助 25% 流量覆盖，用 OneRec 自身曝光样本做 on-policy RL，Video View 等全面指标均转正，体现了自我迭代的复利效应。</li>
+          <li><strong>Reward 偏好决定优化方向</strong>：Reward Model 更偏互动指标，真实时长 Reward 更偏停留时长，Hybrid 策略能在两者之间取得平衡而不加剧 seesaw 效应。选择 Reward 定义即选择模型优化的"北极星指标"。</li>
+          <li><strong>GBPO 解决了 ratio=1 时的梯度稳定问题</strong>：传统 pipeline 样本因无法获取老策略概率，$\pi_{old}=sg(\pi_\theta)$，ratio 恒为 1，GRPO/ECPO 等 clipping 方法无法截断，负样本梯度爆炸。GBPO 以 BCE 梯度为动态上界，是该问题的优雅解法。</li>
+        </ul>
+
+        <h3>局限与未来方向</h3>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>1. 长期价值与短期信号的对齐</h4>
+            <p>当前 Duration-Aware Reward 仍是基于规则的短期代理指标（观看时长分位数），并非用户长期满意度的直接信号。论文指出下一步要让模型直接优化长期价值（LT7 等），而非短期观看行为。</p>
+          </div>
+          <div class="mini-card">
+            <h4>2. 冷启动与生态多样性</h4>
+            <p>关闭缓存的实验观察到冷启动视频曝光下降 44.7%（快手）和 36.7%（极速版），cluster density 上升，说明强 RL 可能导致推荐同质化，对内容生态造成影响，需要在 Reward 设计中加入多样性约束。</p>
+          </div>
+        </div>
+
+        <div class="callout callout-blue">
+          <div class="callout-title">🔗 OneRec 系列演进脉络</div>
+          <div class="timeline" style="margin-top:12px;">
+            <div class="timeline-item">
+              <div class="timeline-dot" style="background:#94a3b8;box-shadow:0 0 0 2px #94a3b8;"></div>
+              <div class="timeline-title">OneRec-V1（2025.02）</div>
+              <div class="timeline-desc">Encoder-Decoder + MoE，IPA 偏好对齐，替代三级漏斗。快手 +1.68% 总观看时长。</div>
+            </div>
+            <div class="timeline-item">
+              <div class="timeline-dot" style="background:#94a3b8;box-shadow:0 0 0 2px #94a3b8;"></div>
+              <div class="timeline-title">OneRec Technical Report（2025.06）</div>
+              <div class="timeline-desc">补全工程细节：多模态 tokenizer、四路 Encoder、ECPO RL、25% QPS 承接、OPEX 仅 10.6%。</div>
+            </div>
+            <div class="timeline-item">
+              <div class="timeline-dot" style="background:#94a3b8;box-shadow:0 0 0 2px #94a3b8;"></div>
+              <div class="timeline-title">OneRec-Think（2025.10）</div>
+              <div class="timeline-desc">引入显式 CoT 推理：Itemic Alignment → Reasoning Activation → GRPO RL。Think-Ahead 解耦推理延迟。</div>
+            </div>
+            <div class="timeline-item">
+              <div class="timeline-dot"></div>
+              <div class="timeline-title">OneRec-V2（2025.08） ← 本文</div>
+              <div class="timeline-desc">Lazy Decoder-Only 解决计算失衡，GBPO + 真实用户反馈 RL，Scaling Law 验证 0.1B→8B。</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<footer>
+  <a href="../index.html">← 返回论文列表</a>
+  <span style="margin: 0 12px; color: var(--line);">|</span>
+  <span>arXiv: <a href="https://arxiv.org/abs/2508.20900" target="_blank">2508.20900</a></span>
+  <span style="margin: 0 12px; color: var(--line);">|</span>
+  <span style="color: var(--muted);">OneRec-V2 · 2025 · Kuaishou OneRec Team</span>
+</footer>
+
+</body>
+</html>

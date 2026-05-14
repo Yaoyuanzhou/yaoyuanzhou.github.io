@@ -1,0 +1,1355 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Self-EvolveRec | Paper Notes</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <style>
+    :root {
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #2563eb; --primary-soft: #eff6ff;
+      --accent: #7c3aed; --accent-soft: rgba(124,58,237,0.06);
+      --shadow: 0 10px 30px rgba(15,23,42,0.08); --radius: 18px; --max: 1300px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: linear-gradient(180deg,#f8fbff 0%,var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      line-height: 1.7;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .back-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 10px 20px; margin: 24px auto 0; max-width: var(--max);
+      font-size: 0.875rem; color: var(--muted);
+      border: 1px solid var(--line); border-radius: 8px;
+      background: var(--card); transition: all .2s;
+    }
+    .back-link:hover { color: var(--primary); border-color: var(--primary); text-decoration: none; }
+    .back-wrap { max-width: var(--max); margin: 0 auto; padding: 0 24px; }
+
+    .hero {
+      max-width: var(--max); margin: 16px auto 0; padding: 48px 40px;
+      background: radial-gradient(ellipse 80% 60% at 60% 30%, #e0e7ff 0%, var(--card) 70%);
+      border-radius: var(--radius); border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+    .eyebrow {
+      display: inline-block; padding: 4px 14px; border-radius: 20px;
+      background: var(--accent-soft); color: var(--accent);
+      font-size: 0.8rem; font-weight: 600; letter-spacing: .05em; margin-bottom: 16px;
+    }
+    .hero h1 { font-size: 1.9rem; font-weight: 800; line-height: 1.3; margin-bottom: 10px; }
+    .hero .subtitle { color: var(--muted); font-size: 1rem; margin-bottom: 24px; }
+    .meta-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px; margin-top: 20px;
+    }
+    .meta-item { background: var(--bg); border-radius: 10px; padding: 12px 16px; }
+    .meta-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+    .meta-value { font-size: 0.9rem; font-weight: 600; margin-top: 4px; }
+
+    .layout {
+      max-width: var(--max); margin: 32px auto 48px; padding: 0 24px;
+      display: grid; grid-template-columns: 260px minmax(0,1fr); gap: 28px;
+    }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      aside.toc { display: none; }
+    }
+
+    aside.toc {
+      position: sticky; top: 24px; height: fit-content;
+      background: var(--card); border-radius: var(--radius);
+      border: 1px solid var(--line); padding: 20px;
+      box-shadow: var(--shadow);
+    }
+    .toc-title { font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .08em; color: var(--muted); margin-bottom: 12px; }
+    .toc-list { list-style: none; }
+    .toc-list li { margin-bottom: 2px; }
+    .toc-list a {
+      display: block; padding: 5px 10px; border-radius: 7px;
+      font-size: 0.85rem; color: var(--text); transition: all .15s;
+    }
+    .toc-list a:hover { background: var(--primary-soft); color: var(--primary); text-decoration: none; }
+    .toc-sub { padding-left: 14px; margin-top: 2px; }
+    .toc-sub a { font-size: 0.8rem; color: var(--muted); }
+
+    .section {
+      background: var(--card); border-radius: var(--radius);
+      border: 1px solid var(--line); padding: 36px 40px;
+      box-shadow: var(--shadow); margin-bottom: 24px;
+    }
+    .section-title {
+      display: flex; align-items: center; gap: 12px;
+      font-size: 1.3rem; font-weight: 700; margin-bottom: 24px;
+    }
+    .section-title .icon {
+      width: 36px; height: 36px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem; flex-shrink: 0;
+    }
+    h3 { font-size: 1.05rem; font-weight: 700; margin: 24px 0 12px; color: var(--text); }
+    h4 { font-size: 0.95rem; font-weight: 600; margin: 18px 0 10px; color: var(--accent); }
+    p { margin-bottom: 14px; }
+
+    .callout-blue {
+      background: #eff6ff; border-left: 4px solid var(--primary);
+      border-radius: 8px; padding: 14px 18px; margin: 16px 0;
+    }
+    .callout-amber {
+      background: #fffbeb; border-left: 4px solid #f59e0b;
+      border-radius: 8px; padding: 14px 18px; margin: 16px 0;
+    }
+    .callout-green {
+      background: #f0fdf4; border-left: 4px solid #16a34a;
+      border-radius: 8px; padding: 14px 18px; margin: 16px 0;
+    }
+    .callout-purple {
+      background: #faf5ff; border-left: 4px solid var(--accent);
+      border-radius: 8px; padding: 14px 18px; margin: 16px 0;
+    }
+    .callout-title { font-weight: 700; margin-bottom: 6px; }
+
+    .example-box {
+      background: #f0fdf4; border: 1px solid #bbf7d0;
+      border-radius: 10px; padding: 16px 20px; margin: 16px 0;
+    }
+    .ex-title { font-weight: 700; color: #15803d; margin-bottom: 10px; }
+
+    .step-list { list-style: none; margin: 16px 0; }
+    .step { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 14px; }
+    .step-num {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: var(--primary); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.8rem; font-weight: 700; flex-shrink: 0; margin-top: 2px;
+    }
+
+    .flow-diagram { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 16px 0; }
+    .flow-box {
+      background: var(--primary-soft); border: 1px solid #bfdbfe;
+      border-radius: 8px; padding: 8px 14px; font-size: 0.88rem; font-weight: 600; color: var(--primary);
+    }
+    .flow-box-purple {
+      background: var(--accent-soft); border: 1px solid #c4b5fd;
+      border-radius: 8px; padding: 8px 14px; font-size: 0.88rem; font-weight: 600; color: var(--accent);
+    }
+    .flow-box-green {
+      background: #f0fdf4; border: 1px solid #86efac;
+      border-radius: 8px; padding: 8px 14px; font-size: 0.88rem; font-weight: 600; color: #15803d;
+    }
+    .flow-arrow { color: var(--muted); font-size: 1.2rem; }
+
+    .formula-block { background: #f8fafc; border-radius: 10px; padding: 20px; margin: 16px 0; text-align: center; }
+    .formula-vars {
+      background: #f1f5f9; border-radius: 8px; padding: 14px 18px; margin-top: 10px;
+    }
+    .formula-vars .var-title { font-weight: 700; font-size: 0.88rem; color: var(--muted); margin-bottom: 8px; }
+    .formula-vars ul { list-style: disc; padding-left: 20px; font-size: 0.88rem; }
+    .formula-vars li { margin-bottom: 4px; }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+    @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+    .mini-card {
+      background: var(--bg); border-radius: 10px; padding: 16px;
+      border: 1px solid var(--line);
+    }
+    .mini-card h4 { margin-top: 0; }
+
+    .table-wrap { overflow-x: auto; margin: 16px 0; border-radius: 10px; border: 1px solid var(--line); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    thead { background: var(--accent); color: #fff; }
+    thead th { padding: 10px 12px; text-align: left; font-weight: 600; }
+    tbody tr:nth-child(even) { background: var(--bg); }
+    tbody td { padding: 8px 12px; border-bottom: 1px solid var(--line); }
+    tbody tr:last-child td { border-bottom: none; }
+    .positive { color: #16a34a; font-weight: 700; }
+    .negative { color: #dc2626; font-weight: 700; }
+    .best { background: #f0fdf4 !important; font-weight: 700; color: #15803d; }
+
+    .note {
+      border: 1px dashed var(--line); border-radius: 8px;
+      padding: 12px 16px; margin: 14px 0; color: var(--muted); font-size: 0.88rem;
+    }
+
+    figure { margin: 20px 0; text-align: center; }
+    figure img {
+      max-width: 100%; border-radius: 10px;
+      border: 1px solid var(--line); box-shadow: 0 4px 16px rgba(0,0,0,0.07);
+    }
+    figcaption {
+      margin-top: 10px; font-size: 0.85rem; color: var(--muted); line-height: 1.5;
+    }
+    .fig-placeholder {
+      background: var(--bg); border: 1px dashed var(--line);
+      border-radius: 10px; padding: 32px 24px; color: var(--muted);
+      font-size: 0.9rem; text-align: center; line-height: 1.7;
+    }
+
+    .paper-info {
+      background: var(--accent-soft); border-radius: 10px; padding: 16px 20px; margin: 16px 0;
+      display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+    }
+    .paper-info-label { font-size: 0.78rem; color: var(--muted); margin-right: 6px; }
+
+    footer {
+      text-align: center; padding: 32px; color: var(--muted); font-size: 0.9rem;
+      border-top: 1px solid var(--line); margin-top: 16px;
+    }
+    footer a { color: var(--primary); }
+
+    .tag {
+      display: inline-block; padding: 3px 10px; border-radius: 6px;
+      font-size: 0.78rem; font-weight: 600; margin: 3px;
+      background: var(--primary-soft); color: var(--primary);
+    }
+    .tag-purple { background: var(--accent-soft); color: var(--accent); }
+    .tag-green { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+    .tag-amber { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+  </style>
+</head>
+<body>
+
+<div class="back-wrap">
+  <a class="back-link" href="../index.html">← 返回论文列表</a>
+</div>
+
+<!-- Hero -->
+<div class="hero">
+  <div class="eyebrow">LLM Agent · 推荐系统 · 自进化</div>
+  <h1>Self-EvolveRec</h1>
+  <p class="subtitle">Self-Evolving Recommender Systems with LLM-based Directional Feedback</p>
+  <div class="meta-grid">
+    <div class="meta-item">
+      <div class="meta-label">作者</div>
+      <div class="meta-value" style="font-size:0.82rem;">Sein Kim, Sangwu Park, Hongseok Kang 等</div>
+    </div>
+    <div class="meta-item">
+      <div class="meta-label">机构</div>
+      <div class="meta-value">KAIST（韩国）</div>
+    </div>
+    <div class="meta-item">
+      <div class="meta-label">发表年份</div>
+      <div class="meta-value">2026（arXiv:2602.12612）</div>
+    </div>
+    <div class="meta-item">
+      <div class="meta-label">核心命题</div>
+      <div class="meta-value" style="font-size:0.82rem;">用 User Simulator + Model Diagnosis Tool 提供方向性反馈，驱动 LLM 定向进化推荐代码</div>
+    </div>
+  </div>
+</div>
+
+<!-- Layout -->
+<div class="layout">
+
+  <!-- TOC -->
+  <aside class="toc">
+    <div class="toc-title">目录</div>
+    <ul class="toc-list">
+      <li><a href="#background">1. 背景与动机</a></li>
+      <li><a href="#method">2. 方法详解</a>
+        <ul class="toc-sub">
+          <li><a href="#overview">2.1 系统总览</a></li>
+          <li><a href="#user-sim">2.2 User Simulator</a></li>
+          <li><a href="#diag-tool">2.3 Model Diagnosis Tool</a></li>
+          <li><a href="#pipeline">2.4 四阶段进化流程</a></li>
+          <li><a href="#coevo">2.5 诊断工具协同进化</a></li>
+        </ul>
+      </li>
+      <li><a href="#experiments">3. 实验结果</a>
+        <ul class="toc-sub">
+          <li><a href="#main-results">3.1 主要性能对比</a></li>
+          <li><a href="#satisfaction">3.2 用户满意度</a></li>
+          <li><a href="#ablation">3.3 消融实验</a></li>
+          <li><a href="#case-study">3.4 Case Study</a></li>
+        </ul>
+      </li>
+      <li><a href="#understanding">4. 理解与评价</a></li>
+      <li><a href="#codebase">5. 代码库解读</a>
+        <ul class="toc-sub">
+          <li><a href="#codebase">5.1 文件结构</a></li>
+          <li><a href="#codebase">5.2 主循环</a></li>
+          <li><a href="#codebase">5.3 User Simulator</a></li>
+          <li><a href="#codebase">5.4 诊断工具实现</a></li>
+          <li><a href="#codebase">5.5 diff 代码进化</a></li>
+          <li><a href="#codebase">5.6 进化存档</a></li>
+          <li><a href="#ascii-arch">5.8 ASCII 架构全图</a></li>
+          <li><a href="#key-prompts">5.9 核心 Prompt 原文</a></li>
+        </ul>
+      </li>
+    </ul>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="content">
+
+    <!-- 论文信息 -->
+    <section class="section" id="info">
+      <div class="paper-info">
+        <span><span class="paper-info-label">arXiv</span><a href="https://arxiv.org/abs/2602.12612" target="_blank">2602.12612</a></span>
+        <span><span class="paper-info-label">Code</span><a href="https://github.com/Sein-Kim/self_evolverec" target="_blank">GitHub</a></span>
+        <span class="tag tag-purple">LLM Agent</span>
+        <span class="tag">RecSys</span>
+        <span class="tag tag-green">User Simulator</span>
+        <span class="tag tag-amber">KAIST</span>
+      </div>
+      <p>本文来自 KAIST，提出 <strong>Self-EvolveRec</strong>，核心创新是将"方向性反馈（Directional Feedback）"引入 LLM 驱动的推荐代码进化框架。区别于 AlphaEvolve / DeepEvolve 等仅依赖标量指标（NDCG、HR）的方法，Self-EvolveRec 用两个工具提供更丰富的反馈信号：<strong>User Simulator</strong>（定性批评）和 <strong>Model Diagnosis Tool</strong>（定量诊断），并引入"诊断工具-模型协同进化"确保诊断准则随模型架构同步更新。</p>
+    </section>
+
+    <!-- 1. 背景与动机 -->
+    <section class="section" id="background">
+      <div class="section-title">
+        <div class="icon" style="background:#eff6ff;">🌐</div>
+        1. 背景与动机
+      </div>
+
+      <h3>1.1 研究脉络</h3>
+      <p>推荐系统的自动化优化经历了三个阶段：</p>
+      <div class="flow-diagram">
+        <div class="flow-box">NAS<br><small>固定搜索空间<br>离散算子组合</small></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box">LLM Code Evolution<br><small>开放程序空间<br>标量指标引导</small></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box-purple">Self-EvolveRec<br><small>开放程序空间<br>方向性反馈引导</small></div>
+      </div>
+
+      <h3>1.2 现有方法的关键缺陷</h3>
+      <div class="callout-amber">
+        <div class="callout-title">⚠️ 标量指标的诊断盲区</div>
+        <p>AlphaEvolve、DeepEvolve 等框架仅依赖 NDCG、Hit Ratio 等标量指标。这些数字只能告诉你"推荐效果变差了"，但无法解释<strong>为什么变差</strong>：是流行度偏差？类别多样性不足？还是无法捕捉短期兴趣？</p>
+        <p>没有方向性，LLM 只能做无目的的试错搜索（trial-and-error），偶尔撞到好的方案，但无法系统性地定位和修复问题。</p>
+      </div>
+
+      <h3>1.3 三大核心痛点</h3>
+      <div class="two-col">
+        <div class="mini-card">
+          <h4>P1：NAS 搜索空间封闭</h4>
+          <p>NAS 只能在人工预定义的算子池（固定层类型、激活函数等）中组合，无法优化 loss 函数、负采样策略等非架构组件。</p>
+        </div>
+        <div class="mini-card">
+          <h4>P2：标量指标缺乏诊断信息</h4>
+          <p>NDCG 下降 0.01 不告诉你根因：是 embedding collapse？类别不平衡？还是时序信息丢失？LLM 无法据此做出有针对性的修改。</p>
+        </div>
+        <div class="mini-card">
+          <h4>P3：静态诊断工具过时</h4>
+          <p>随着模型架构不断进化，固定的诊断逻辑（如检测 embedding collapse 的方法）可能与新架构不兼容，产生错误的诊断信号。</p>
+        </div>
+        <div class="mini-card">
+          <h4>Self-EvolveRec 的对策</h4>
+          <p>① User Simulator 提供定性用户反馈，解释失败根因<br>② Model Diagnosis Tool 做定量结构验证，交叉验证<br>③ 诊断工具与模型架构同步进化</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. 方法详解 -->
+    <section class="section" id="method">
+      <div class="section-title">
+        <div class="icon" style="background:#faf5ff;">🔧</div>
+        2. 方法详解
+      </div>
+
+      <h3 id="overview">2.1 系统总览</h3>
+      <p>Self-EvolveRec 是一个迭代进化框架，核心是在每轮迭代中产生"方向性反馈"来指导 LLM 改写推荐代码：</p>
+
+      <figure>
+        <img
+          src="https://arxiv.org/html/2602.12612v1/x1.png"
+          alt="Figure 1: Self-EvolveRec 两大核心机制"
+          onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+            <b>Figure 1: Self-EvolveRec 两大核心机制</b><br><br>
+            (a) 方向性反馈生成：(a.1) User Simulator 采集用户 Persona 对推荐列表的自然语言批评；
+            (a.2) Model Diagnosis Tool 直接分析模型参数，输出结构化诊断报告。<br>
+            (b) 诊断工具-模型协同进化：当模型架构改变时，诊断工具同步更新其探针逻辑。
+          </div>`"
+        />
+        <figcaption><strong>Figure 1（论文原图）：</strong>Self-EvolveRec 两大核心机制。(a) 方向性反馈生成流程；(b) 诊断工具与模型协同进化机制。</figcaption>
+      </figure>
+
+      <figure>
+        <img
+          src="https://arxiv.org/html/2602.12612v1/x2.png"
+          alt="Figure 2: Self-EvolveRec 整体进化流程"
+          onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+            <b>Figure 2: Self-EvolveRec 整体进化流程</b><br><br>
+            四阶段循环：多维评估 → 反馈感知规划&检索 → 代码进化 → 诊断工具协同进化。
+            维护进化存档 𝒫 记录所有历史代码库和反馈，每轮从中采样父代码库。
+          </div>`"
+        />
+        <figcaption><strong>Figure 2（论文原图）：</strong>Self-EvolveRec 整体进化流程。维护进化存档（Evolutionary Archive），四阶段反复迭代。</figcaption>
+      </figure>
+
+      <h3>问题形式化</h3>
+      <p>给定种子代码库 $\mathcal{B}^{(0)}$（含推荐模型架构、数据处理、优化循环），目标是在 $T$ 次迭代内找到最优代码库 $\mathcal{B}^*$：</p>
+      <div class="formula-block">
+        $$\mathcal{B}^* = \arg\max_{\mathcal{B} \in \mathbb{S}} \mathcal{M}(f_\mathcal{B}(\mathcal{E}_{val}, \mathcal{X}; \theta^*_\mathcal{B}))$$
+        $$\text{s.t.} \quad \theta^*_\mathcal{B} = \arg\min_\theta \mathcal{L}_\mathcal{B}(f_\mathcal{B}(\mathcal{E}_{train}, \mathcal{X}; \theta))$$
+      </div>
+      <div class="formula-vars">
+        <div class="var-title">符号说明</div>
+        <ul>
+          <li>$\mathcal{B} \in \mathbb{S}$：开放程序空间中的任意代码库</li>
+          <li>$\mathcal{M}$：评估指标（如 NDCG@5、HR@5）</li>
+          <li>$f_\mathcal{B}$：代码库 $\mathcal{B}$ 定义的推荐模型</li>
+          <li>$\theta^*_\mathcal{B}$：内层优化得到的最优模型参数</li>
+          <li>$\mathcal{E}_{train}, \mathcal{E}_{val}$：训练集和验证集</li>
+          <li>$\mathcal{X}$：物品侧信息（类别、标题、价格等）</li>
+        </ul>
+      </div>
+      <p>这是一个<strong>双层优化问题</strong>：外层优化代码库（离散、开放），内层优化模型参数（连续、梯度）。</p>
+
+      <!-- 2.2 User Simulator -->
+      <h3 id="user-sim">2.2 User Simulator：定性用户批评</h3>
+      <p>User Simulator（SIM）让 LLM 扮演具有不同特征的虚拟用户，对推荐列表给出自然语言批评，而非只看数字。</p>
+
+      <h4>用户 Persona 构建</h4>
+      <p>每个虚拟用户 $u$ 的 Persona $\mathcal{T}_u$ 由三个社会心理学特征构成：</p>
+      <div class="two-col">
+        <div class="mini-card">
+          <h4>Activity（活跃度）</h4>
+          <p>用交互历史长度 $|\mathcal{H}_u|$ 量化。长 → HIGH（频繁互动用户），短 → LOW（偶尔用户）。</p>
+        </div>
+        <div class="mini-card">
+          <h4>Conformity（从众性）</h4>
+          <p>用用户打分与全局平均打分的偏差量化。偏差大 → LOW（独特口味），接近均值 → HIGH（追随主流）。</p>
+        </div>
+        <div class="mini-card">
+          <h4>Diversity（多样性）</h4>
+          <p>用交互集合中唯一类别数量量化。类别多 → HIGH（兴趣广泛），类别少 → LOW（专注特定领域）。</p>
+        </div>
+        <div class="mini-card">
+          <h4>量化→离散化→自然语言</h4>
+          <p>用分位数阈值将数值分成 LOW / MID / HIGH 三档，映射到预设的自然语言描述（如 "Activity (HIGH): Frequently interacts…"）。</p>
+        </div>
+      </div>
+
+      <h4>两步反馈生成</h4>
+      <ul class="step-list">
+        <li class="step"><span class="step-num">1</span><span><strong>个人评估（Individual Assessment）</strong>：对每个采样用户 $u$，基于其 Persona $\mathcal{T}_u$ 和历史 $\mathcal{H}_u$，评估推荐列表 $\mathcal{A}_u$，生成个人反馈报告 $R_u$。</span></li>
+        <li class="step"><span class="step-num">2</span><span><strong>聚合（Aggregation）</strong>：将所有采样用户 $\mathcal{U}_{sample}$ 的个人报告汇总为统一的用户反馈报告 $\mathcal{R}_{SIM}$，消除个体噪声。</span></li>
+      </ul>
+
+      <div class="example-box">
+        <div class="ex-title">💡 举例：User Simulator 的定性批评</div>
+        <p>假设某用户 Persona 为：Activity=LOW, Conformity=HIGH, Diversity=LOW（偶尔互动、追随主流、专注电子产品）。</p>
+        <p>模型推荐了 [手机壳、耳机、手机壳、SD卡、充电宝]。</p>
+        <p>SIM 生成批评："<em>I'm looking for reliable electronics accessories within a modest budget. The list is repetitive — two phone cases is redundant. I'd prefer more variety within the accessories category rather than duplicate items.</em>"</p>
+        <p>这一反馈明确指出了<strong>类别重复</strong>问题，远比 NDCG 下降 0.02 更有操作性。LLM 据此制定修改策略：引入多样性约束或 category-aware 负采样。</p>
+      </div>
+
+      <!-- 2.3 Model Diagnosis Tool -->
+      <h3 id="diag-tool">2.3 Model Diagnosis Tool：定量结构验证</h3>
+      <p>Model Diagnosis Tool（DIAG）直接访问模型参数 $\theta$ 和数据加载器，用探针（probe）检测无法从推荐列表表面看出来的<strong>结构性缺陷</strong>。</p>
+
+      <p>初始 DIAG 包含两个基础探针：</p>
+
+      <h4>探针 1：Embedding Collapse（表示退化）</h4>
+      <p>计算采样 item embedding 之间的均值成对余弦相似度。如果所有 embedding 聚集在一个狭小子空间，相似度会异常高——这意味着模型失去了区分不同物品的能力，即使推荐列表的 NDCG 可能还没明显下降。</p>
+
+      <h4>探针 2：Ranking Margin（排序边际）</h4>
+      <div class="formula-block">
+        $$\Delta_{u,v} = s(u, v) - s(u, v')$$
+        $$\bar{\Delta} = \mathbb{E}_{u \in \mathcal{U}, v \in \mathcal{H}_u}[\Delta_{u,v}]$$
+      </div>
+      <div class="formula-vars">
+        <div class="var-title">符号说明</div>
+        <ul>
+          <li>$s(u, v)$：模型预测的用户 $u$ 对真实正样本 $v$ 的打分（logit）</li>
+          <li>$s(u, v')$：用户 $u$ 对随机负样本 $v'$ 的打分</li>
+          <li>$\Delta_{u,v}$：单个正负对的排序边际，越大说明模型越能区分正负样本</li>
+          <li>$\bar{\Delta}$：全局平均边际，低值或负值 → 模型严重失去辨别力</li>
+        </ul>
+      </div>
+      <p>DIAG 还会定位边际极低的样本，统计其共同属性（如某些特定类别 "Computers" 的物品排序边际特别低），从而给出精确的失败模式定位。</p>
+
+      <div class="callout-blue">
+        <div class="callout-title">📌 SIM vs DIAG 的互补关系</div>
+        <p>两者缺一不可：</p>
+        <ul>
+          <li><strong>SIM 的局限</strong>：只能看到推荐列表表面，无法检测 embedding collapse 这类内部结构问题；且是 LLM 模拟，存在主观偏差。</li>
+          <li><strong>DIAG 的局限</strong>：提供数值信号但缺乏语义解释，且静态探针可能不适配新架构。</li>
+          <li><strong>结合</strong>：SIM 指出"推荐显得重复"，DIAG 用 embedding 相似度计算确认"确实存在 collapse"，两者互相验证，给出可靠的根因分析。</li>
+        </ul>
+      </div>
+
+      <div class="example-box">
+        <div class="ex-title">💡 举例：两者协同发现问题</div>
+        <p><strong>SIM 说</strong>：「I'm bored — the recommendations all feel the same, just different brands of headphones.」</p>
+        <p><strong>DIAG 检测</strong>：item embedding 的均值余弦相似度 = 0.87（正常应 &lt; 0.3），ranking margin 中"Electronics"类别物品普遍 Δ &lt; 0.05。</p>
+        <p><strong>诊断报告 $\mathcal{R}_{DIAG}$</strong>：「严重 Embedding Collapse，表示空间退化；Electronics 类目物品区分度极低，模型无法区分该类目内不同物品。」</p>
+        <p><strong>LLM 制定改进方案</strong>：引入 Category-Aware Hard Negative Sampling，让负样本优先从同类目物品中采样，强迫模型学习细粒度区分。</p>
+      </div>
+
+      <!-- 2.4 四阶段进化流程 -->
+      <h3 id="pipeline">2.4 四阶段进化流程</h3>
+      <p>每次迭代维护一个进化存档 $\mathcal{P}^{(t)}$（记录所有历史代码库和反馈），从中采样父代码库 $\mathcal{B}_{parent}$，然后执行四个阶段：</p>
+
+      <ul class="step-list">
+        <li class="step">
+          <span class="step-num">1</span>
+          <span>
+            <strong>多维评估（Multi-faceted Evaluation）</strong><br>
+            同时获取：标量指标 $score(\mathcal{B}_{parent})$、用户反馈 $\mathcal{R}_{SIM}$、诊断报告 $\mathcal{R}_{DIAG}$。三个维度共同构成下一步规划的输入。
+          </span>
+        </li>
+        <li class="step">
+          <span class="step-num">2</span>
+          <span>
+            <strong>反馈感知规划 &amp; 检索（Feedback-Aware Planning &amp; Retrieval）</strong><br>
+            LLM 作为规划者，基于 $\mathcal{R}_{SIM}$、$\mathcal{R}_{DIAG}$ 和历史存档 $\mathcal{P}^{(t)}$，生成<strong>有针对性</strong>的 arXiv 检索查询 $\mathcal{Q}$（如"检索缓解类别不匹配的方法"），而非泛化的知识检索。检索到文献 $\mathcal{K}$ 后，整合为结构化开发报告 $\mathcal{R}_{Dev}$。
+          </span>
+        </li>
+        <li class="step">
+          <span class="step-num">3</span>
+          <span>
+            <strong>代码进化（Code Evolution）</strong><br>
+            LLM 按照 $\mathcal{R}_{Dev}$ 实施代码修改，生成新代码库 $\mathcal{B}^{(t+1)}$，加入进化存档。
+          </span>
+        </li>
+        <li class="step">
+          <span class="step-num">4</span>
+          <span>
+            <strong>诊断工具协同进化（Diagnosis Tool Co-Evolution）</strong><br>
+            见 2.5 节。
+          </span>
+        </li>
+      </ul>
+
+      <div class="example-box">
+        <div class="ex-title">💡 举例：反馈感知规划 vs 普通 RAG 的区别</div>
+        <p><strong>DeepEvolve（普通 RAG）</strong>：每轮都检索"推荐系统最新方法"，获得的是通用知识，未必与当前失败模式相关。</p>
+        <p><strong>Self-EvolveRec（反馈感知规划）</strong>：SIM 指出"类别单一"，DIAG 确认"Electronics 区分度低"，规划阶段生成精确查询"<em>methods to improve within-category item discrimination for electronics recommendations</em>"，检索到 Category-Aware Hard Negative Sampling 方法，直接解决已识别的失败模式。</p>
+        <p>结果：有目标的修改 vs 无目标的试错。</p>
+      </div>
+
+      <!-- 2.5 协同进化 -->
+      <h3 id="coevo">2.5 诊断工具-模型协同进化</h3>
+      <p>随着推荐模型架构不断进化（引入新 loss 函数、新层结构等），静态的 DIAG 会出现两类问题：</p>
+      <ol style="padding-left:20px;margin-bottom:14px;">
+        <li><strong>结构不兼容</strong>：原有探针依赖旧架构的特定组件（如某个 embedding 层），新架构中该组件不存在或接口变了。</li>
+        <li><strong>无法量化新出现的定性问题</strong>：SIM 提出了新类型的批评（如"推荐太无聊"），但 DIAG 没有对应的指标来验证"多样性"是否真的不足。</li>
+      </ol>
+
+      <p>协同进化的触发流程（Phase 4）：</p>
+      <ul class="step-list">
+        <li class="step"><span class="step-num">A</span><span><strong>结构分析</strong>：扫描新代码库 $\mathcal{B}^{(t+1)}$ 与原 DIAG，生成结构分析报告 $\mathcal{R}_{Analyze}$（列出新增模块、修改的 loss 函数等）。</span></li>
+        <li class="step"><span class="step-num">B</span><span><strong>DIAG 规划检索</strong>：结合 $\mathcal{R}_{SIM}$（用户新抱怨）和 $\mathcal{R}_{Analyze}$（结构变化），生成 DIAG 专用检索查询，获取对应诊断方法文献。</span></li>
+        <li class="step"><span class="step-num">C</span><span><strong>DIAG 代码更新</strong>：生成新的诊断工具 $DIAG^{(t+1)}$，包含针对新架构的兼容性探针，以及量化 SIM 新质性反馈的专属指标。</span></li>
+      </ul>
+
+      <div class="example-box">
+        <div class="ex-title">💡 举例：协同进化的必要性</div>
+        <p><strong>第 t 轮</strong>：模型是带标准 self-attention 的 SASRec，DIAG 中有检测时序敏感性的探针。</p>
+        <p><strong>第 t+1 轮</strong>：LLM 引入了"指数衰减模块（Exponential Decay Module）"给近期交互更高权重。旧 DIAG 的时序敏感性探针与新模块接口不兼容。</p>
+        <p><strong>协同进化后的 $DIAG^{(t+1)}$</strong>：新增"Swap Sensitivity"探针——将交互序列最后两个物品对调，测量排序变化幅度。正常模型对位置高度敏感（Δ 大），若 Δ ≈ 0 说明指数衰减模块失效。</p>
+        <p>实验验证：故意破坏指数衰减模块后，协同进化的 DIAG 正确诊断为"Order-insensitive"，而静态 DIAG 对此一无所知。</p>
+      </div>
+    </section>
+
+    <!-- 3. 实验结果 -->
+    <section class="section" id="experiments">
+      <div class="section-title">
+        <div class="icon" style="background:#f0fdf4;">📊</div>
+        3. 实验结果
+      </div>
+
+      <h3>实验设置</h3>
+      <p><strong>数据集</strong>：4 个数据集（Amazon CDs、Electronics、Office，MovieLens）<br>
+      <strong>评估协议</strong>：leave-last-out，每个测试物品配 99 个负样本<br>
+      <strong>基线</strong>：NAS 类（AutoFIS, NASRec），LLM 进化类（AlphaEvolve, DeepEvolve）<br>
+      <strong>种子推荐器</strong>：NCF（MF）、NGCF（图）、SASRec（序列）、MoRec（多模态）<br>
+      <strong>LLM</strong>：GPT-5-mini（规划检索）+ GPT-5（编码 Agent）</p>
+
+      <h3 id="main-results">3.1 主要性能对比（部分数据）</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>数据集</th><th>指标</th><th>AutoFIS</th><th>NASRec</th>
+              <th>SASRec Seed</th><th>AlphaEvolve</th><th>DeepEvolve</th><th>Ours</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>CDs</td><td>NDCG@5</td><td>0.2077</td><td>0.2026</td>
+              <td>0.3559</td><td>0.3528</td><td>0.3610</td><td class="best">0.3865</td>
+            </tr>
+            <tr>
+              <td>CDs</td><td>HR@5</td><td>0.3040</td><td>0.2989</td>
+              <td>0.4676</td><td>0.4623</td><td>0.4870</td><td class="best">0.5274</td>
+            </tr>
+            <tr>
+              <td>Electronics</td><td>NDCG@5</td><td>0.1753</td><td>0.1706</td>
+              <td>0.2325</td><td>0.2063</td><td>0.2508</td><td class="best">0.2600</td>
+            </tr>
+            <tr>
+              <td>Electronics</td><td>HR@5</td><td>0.2456</td><td>0.2444</td>
+              <td>0.3208</td><td>0.2891</td><td>0.3427</td><td class="best">0.3591</td>
+            </tr>
+            <tr>
+              <td>Office</td><td>NDCG@5</td><td>0.1714</td><td>0.1377</td>
+              <td>0.1799</td><td>0.1939</td><td>0.1816</td><td class="best">0.2329</td>
+            </tr>
+            <tr>
+              <td>MovieLens</td><td>NDCG@5</td><td>0.1369</td><td>0.2916</td>
+              <td>0.5667</td><td>0.5583</td><td>0.5722</td><td class="best">0.5765</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">完整表格见论文 Table 1（涵盖 4 种种子推荐器 × 4 数据集 × 2 指标）。Self-EvolveRec 在所有组合下均排名第一。AlphaEvolve/DeepEvolve 在部分设置下甚至低于种子模型（无方向性反馈导致退化）。</p>
+
+      <h3 id="satisfaction">3.2 用户满意度评估</h3>
+      <p>除标量指标外，用 <strong>Agent4Rec</strong> 和 <strong>PUB</strong> 两个用户模拟框架评估三个满意度指标：</p>
+      <ul>
+        <li><strong>View</strong>（物品查看率）：用户实际点击查看的物品占比</li>
+        <li><strong>Satisfy</strong>（综合满意度评分，1-10）</li>
+        <li><strong>Depth</strong>（探索深度）：用户在终止会话前翻看的页面数</li>
+      </ul>
+      <p>结果：Self-EvolveRec 在所有满意度指标上均最优，且 Satisfaction 和 Depth 的提升幅度显著大于标量指标的提升——说明方向性反馈不只优化了数字，而是真实提升了用户体验。</p>
+
+      <figure>
+        <img
+          src="https://arxiv.org/html/2602.12612v1/x3.png"
+          alt="Figure 3: LLM-as-a-Judge 代码质量评估"
+          onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+            <b>Figure 3: LLM-as-a-Judge 代码质量评估</b><br><br>
+            四个维度：创新性（Creativity）、可解释性（Explicitness）、洞察力（Insight）、个性化（Personalization）。
+            Self-EvolveRec 在所有维度领先，Personalization 比基线高约 50%。
+          </div>`"
+        />
+        <figcaption><strong>Figure 3（论文原图）：</strong>LLM-as-a-Judge 评估进化代码库质量（GPT-5 打分，1-10）。Self-EvolveRec 在创新性、可解释性、洞察力、个性化四个维度全面领先。</figcaption>
+      </figure>
+
+      <h3 id="ablation">3.3 消融实验（Seed: SASRec）</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>配置</th><th>SIM</th><th>DIAG</th><th>协同进化</th><th>CDs NDCG@5</th><th>CDs HR@5</th><th>Elec NDCG@5</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>(1) DeepEvolve 基线</td><td>✗</td><td>✗</td><td>✗</td><td>0.3610</td><td>0.4870</td><td>0.2508</td></tr>
+            <tr><td>(2) +SIM</td><td>✓</td><td>✗</td><td>✗</td><td>0.3751</td><td>0.5102</td><td>0.2573</td></tr>
+            <tr><td>(3) +DIAG（静态）</td><td>✗</td><td>✓</td><td>✗</td><td>0.3676</td><td>0.4791</td><td>0.2515</td></tr>
+            <tr><td>(4) +SIM+DIAG（静态）</td><td>✓</td><td>✓</td><td>✗</td><td>0.3789</td><td>0.5164</td><td>0.2584</td></tr>
+            <tr><td>(5) +DIAG（协同进化）</td><td>✗</td><td>✓</td><td>✓</td><td>0.3727</td><td>0.5014</td><td>0.2532</td></tr>
+            <tr class="best"><td>(6) 完整 Self-EvolveRec</td><td>✓</td><td>✓</td><td>✓</td><td>0.3865</td><td>0.5274</td><td>0.2600</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>关键结论：</p>
+      <ul>
+        <li>SIM 单独引入（行2）比 DIAG 单独引入（行3）增益更大，说明定性反馈是主要驱动力</li>
+        <li>行3 vs 行5：仅添加静态 DIAG 效果有限，协同进化是必要的（+0.05 NDCG）</li>
+        <li>行4（SIM+静态DIAG）优于行5（无SIM+协同DIAG），说明定性反馈比动态诊断更重要，但两者结合才能达到最优</li>
+      </ul>
+
+      <h3 id="case-study">3.4 Case Study：进化轨迹对比</h3>
+      <div class="two-col">
+        <div class="mini-card">
+          <h4>Self-EvolveRec 的结构性进化</h4>
+          <p>Iter 0→1：SIM 指出"Ignores Subgenre"，DIAG 检测到"High Embedding Collapse"。</p>
+          <p>代码修改：引入"Category-Aware Hard Negatives"和"Popularity-annealed Weighting"。</p>
+          <p>效果：<span class="positive">HR: 0.4676 → 0.5138（+9.9%）</span></p>
+          <p>每步改进均有明确的失败根因支撑，因果链清晰。</p>
+        </div>
+        <div class="mini-card">
+          <h4>AlphaEvolve / DeepEvolve 的困境</h4>
+          <p>AlphaEvolve：Iter 3 错误合并 BCE+BPR 导致性能骤降，Iter 7 才撤回；全程未超过初始种子性能。</p>
+          <p>DeepEvolve：长期停留在低性能区（HR@5: 0.05-0.25），Iter 15 才借助 RAG 找到一个好模块。</p>
+          <p>无方向性反馈 → 搜索过程随机 → 大量迭代浪费在无效探索上。</p>
+        </div>
+      </div>
+
+      <h3>极端初始化场景</h3>
+      <div class="callout-green">
+        <div class="callout-title">✅ 从零开始（Random 种子）</div>
+        <p>从完全随机的推荐器出发（NDCG@5 = 0.0312），Self-EvolveRec 在 <strong>Iter 8</strong>（CDs）达到峰值 NDCG@5 = 0.3883，显著快于 AlphaEvolve（Iter 15）和 DeepEvolve（Iter 13）。方向性反馈让每一步改进都有目标，避免了长期在无效区域徘徊。</p>
+      </div>
+      <div class="callout-green">
+        <div class="callout-title">✅ 高起点（Ensemble 种子）</div>
+        <p>从 NCF+NGCF+SASRec 集成模型出发（NDCG = 0.3946），Self-EvolveRec 进一步提升到 0.4105。而 AlphaEvolve 在此设置下直接 FAIL（性能退化），DeepEvolve 也无法有效导航复杂集成架构的搜索空间。</p>
+      </div>
+    </section>
+
+    <!-- 4. 理解与评价 -->
+    <section class="section" id="understanding">
+      <div class="section-title">
+        <div class="icon" style="background:#faf5ff;">🔍</div>
+        4. 理解、亮点与不足
+      </div>
+
+      <h3>4.1 核心创新价值</h3>
+      <div class="callout-green">
+        <div class="callout-title">✅ "方向性反馈"这个概念本身非常有价值</div>
+        <p>将推荐优化从"标量数字驱动的随机搜索"升级为"有根因分析的定向修复"，这个范式转换是正确且必要的。推荐系统的失败确实是多维的，NDCG 无法承载这种复杂性。</p>
+      </div>
+      <div class="callout-green">
+        <div class="callout-title">✅ 诊断工具协同进化——少有人想到但极其重要</div>
+        <p>大多数自进化系统只进化模型，却忽视了评估工具本身也需要进化。固定的诊断标准在动态进化的架构下必然失效，这个洞察非常深刻。</p>
+      </div>
+      <div class="callout-green">
+        <div class="callout-title">✅ 用户满意度 ≠ 推荐指标，SIM 弥合了这个 Gap</div>
+        <p>用 NDCG 优化不等于用户真的满意。SIM 让进化过程直接以"用户是否满意"为目标，实验数据也证实满意度提升幅度优于 NDCG 提升幅度，说明真的捕捉到了 NDCG 遗漏的维度。</p>
+      </div>
+
+      <h3>4.2 局限与不足</h3>
+      <div class="callout-amber">
+        <div class="callout-title">⚠️ 计算成本高</div>
+        <p>每轮迭代需要：训练新模型（Θ hours）+ SIM 评估（采样用户 × LLM 调用）+ DIAG 运行 + 协同进化代码生成。论文自己也承认计算开销是未来要解决的主要问题。</p>
+      </div>
+      <div class="callout-amber">
+        <div class="callout-title">⚠️ SIM 的主观偏差问题</div>
+        <p>虽然 SIM 提供了更丰富的信号，但它本质上是 LLM 扮演虚拟用户，存在幻觉和主观偏差的风险。论文通过 DIAG 交叉验证来缓解，但无法完全消除。</p>
+      </div>
+      <div class="callout-amber">
+        <div class="callout-title">⚠️ Persona 特征的代表性</div>
+        <p>用 Activity、Conformity、Diversity 三个特征描述用户行为是简化的，现实中用户行为远比这复杂。论文提到可以替换为 Big Five 等更丰富的心理学特征，但未做系统实验。</p>
+      </div>
+
+      <h3>4.3 与 Self-Evolving RecSys（Google/YouTube）的对比</h3>
+      <div class="two-col">
+        <div class="mini-card">
+          <h4>Google/YouTube（工业部署）</h4>
+          <p>三类 Persona（Optimizer / Architecture / Reward），Reward Persona 用 SQL 做数据相关性分析；线上 A/B 实验验证北极星指标；已在 YouTube 生产落地。</p>
+        </div>
+        <div class="mini-card">
+          <h4>Self-EvolveRec（KAIST，学术）</h4>
+          <p>专注推荐代码的开放进化；独特的 User Simulator 提供定性用户反馈；诊断工具协同进化是其独有贡献；基于 benchmark 数据集验证。</p>
+        </div>
+      </div>
+      <p>两者共同揭示了同一趋势：<strong>标量指标已不足以驱动推荐系统的高质量优化，需要更丰富的反馈信号（无论是用户模拟还是 SQL 数据分析）来为 LLM 提供方向性指引</strong>。</p>
+
+      <h3>4.4 对推荐系统研究的启发</h3>
+      <div class="callout-purple">
+        <div class="callout-title">🚀 可借鉴的设计</div>
+        <ul>
+          <li><strong>失败根因分析</strong>：将推荐优化的评估粒度从"整体 NDCG"细化到"类别级 / 用户群级的行为分析"，指导针对性改进。</li>
+          <li><strong>动态诊断工具</strong>：构建推荐系统的"健康检查套件"，并随模型迭代同步更新，而非一次性写死。</li>
+          <li><strong>用户满意度信号</strong>：将用户研究中的定性反馈（问卷、访谈、眼动追踪等）系统性地接入算法优化循环，减少 NDCG 与真实体验的鸿沟。</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 5. 代码库解读 -->
+    <section class="section" id="codebase">
+      <div class="section-title">
+        <div class="icon" style="background:#f0fdf4;">💻</div>
+        5. 代码库解读
+      </div>
+
+      <div class="callout-blue">
+        <div class="callout-title">📁 代码库：<a href="https://github.com/Sein-Kim/self_evolverec" target="_blank">github.com/Sein-Kim/self_evolverec</a></div>
+        <p>共 12 个核心 Python 文件，代码架构清晰。以下按调用关系从入口到底层逐层解读。</p>
+      </div>
+
+      <h3>5.1 整体文件结构</h3>
+      <div class="flow-diagram" style="flex-direction:column;gap:6px;align-items:flex-start;">
+        <div style="display:flex;gap:8px;align-items:center;">
+          <div class="flow-box" style="min-width:260px;">self_evolverec.py</div>
+          <span>→ 主进化循环（Orchestrator），整个系统的入口</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <div class="flow-box" style="min-width:260px;">researcher_rec.py</div>
+          <span>→ 模型研究者 Agent（规划→搜索→写报告）</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <div class="flow-box" style="min-width:260px;">researcher_rec_diagnosis.py</div>
+          <span>→ 诊断工具研究者 Agent（结合 SIM 反馈）</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <div class="flow-box" style="min-width:260px;">coder_rec.py</div>
+          <span>→ 模型编码 Agent（生成 SEARCH/REPLACE diff）</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <div class="flow-box" style="min-width:260px;">coder_rec_diagnosis.py</div>
+          <span>→ 诊断工具编码 Agent（同步更新诊断代码）</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <div class="flow-box" style="min-width:260px;">coder_rec_debugger.py</div>
+          <span>→ 自动调试 Agent（代码运行报错时修复）</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <div class="flow-box" style="min-width:260px;">simulator/simulator.py</div>
+          <span>→ User Simulator（Persona 构建 + 反馈生成）</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <div class="flow-box" style="min-width:260px;">database2.py</div>
+          <span>→ 进化存档（MAP-Elites + Island 种群管理）</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <div class="flow-box" style="min-width:260px;">problem.py</div>
+          <span>→ 问题执行器（运行代码、收集指标）</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <div class="flow-box" style="min-width:260px;">examples/sasrec_cds/initial_code/</div>
+          <span>→ 种子代码（SASRec 模型 + 初始诊断工具）</span>
+        </div>
+      </div>
+
+      <h3>5.2 主循环：self_evolverec.py</h3>
+      <p><code>Self_EvolveRec</code> 类是整个框架的 Orchestrator。<code>run()</code> 方法是核心循环，每次迭代按 4 大步骤执行：</p>
+
+      <ul class="step-list">
+        <li class="step">
+          <span class="step-num">1</span>
+          <span>
+            <strong>采样父代码库</strong>（<code>self.database.sample()</code>）<br>
+            从进化存档中采样一个父代码库 <code>parent</code> 和若干 "inspirations"（其他历史代码库，作为参考）。
+            存档用 MAP-Elites + Island 算法管理，同时追踪三个维度（score / diversity / complexity）保证种群多样性。
+          </span>
+        </li>
+        <li class="step">
+          <span class="step-num">2</span>
+          <span>
+            <strong>双路深度研究</strong>（Step 2-1 / 2-2）<br>
+            <code>researcher.run()</code>：针对模型本身搜索 arXiv，规划→搜索→写研究报告，输出改进 idea。<br>
+            <code>diagnosis_researcher.run()</code>：针对诊断工具（结合 SIM 反馈）同步搜索，输出诊断工具的改进 idea。<br>
+            两路独立异步执行，互不干扰。
+          </span>
+        </li>
+        <li class="step">
+          <span class="step-num">3</span>
+          <span>
+            <strong>双路代码生成</strong>（Step 3-1 / 3-2 / 3-3）<br>
+            <code>coder.run()</code>：按研究报告生成模型代码的 SEARCH/REPLACE diff，应用后得到 <code>child_code</code>。<br>
+            <code>diagnosis_coder.run()</code>：同步生成诊断工具的 diff（接收 <code>child_code</code> 作为输入，确保诊断工具与新架构兼容），得到 <code>child_diagnosis_code</code>。<br>
+            <strong>最终代码 = 模型代码 + 诊断代码</strong>（直接字符串拼接）：<code>final_child_code = child_code + '\n\n' + child_diagnosis_code</code>
+          </span>
+        </li>
+        <li class="step">
+          <span class="step-num">4</span>
+          <span>
+            <strong>评估 + 入库</strong>（Step 4）<br>
+            <code>problem.evaluate(final_child_code)</code>：实际运行代码，训练模型，收集 NDCG/HR + SIM 反馈 + DIAG 报告。<br>
+            将结果封装为 <code>Program</code> 对象加入 <code>database</code>，记录完整血统（父 id、进化历史、两条反馈文本）。
+          </span>
+        </li>
+      </ul>
+
+      <div class="example-box">
+        <div class="ex-title">💡 举例：一次完整迭代的关键代码流</div>
+        <pre style="font-size:0.82rem;line-height:1.6;background:#f8fafc;padding:14px;border-radius:8px;overflow-x:auto;">
+# 1. 采样
+parent, inspirations = self.database.sample()
+
+# 2. 研究（模型 + 诊断工具，并行）
+research_reports = await self.researcher.run(parent, inspirations)
+diagnosis_reports = await self.diagnosis_researcher.run(parent, inspirations)
+
+# 3. 编码
+child_code = await self.coder.run(new_idea, parent, ...)
+diag_code  = await self.diagnosis_coder.run(new_idea_diag, parent, ...,
+                 current_recommender_code=child_code)  # 传入新模型代码
+
+final_code = child_code + '\n\n' + diag_code   # 简单拼接
+
+# 4. 评估（跑训练 + SIM + DIAG）
+metrics, final_code = await self.problem.evaluate(final_code, child_id)
+
+# 5. 入库
+self.database.add(Program(id=child_id, code=final_code, metrics=metrics, ...))</pre>
+      </div>
+
+      <h3>5.3 User Simulator：simulator/simulator.py</h3>
+      <p>Simulator 在 <code>main_code.py</code>（种子推荐代码）中直接实例化，嵌入训练/评估循环里。</p>
+
+      <h4>Persona 计算（get_personality）</h4>
+      <p>对训练集中每个用户计算三个特征的原始数值，再用分位数划分为 0/1/2 三档：</p>
+      <ul>
+        <li><strong>Activity</strong>：<code>len(user_train['History'][u])</code>，即交互历史长度。分位数阈值 [60%, 90%]。</li>
+        <li><strong>Diversity</strong>：<code>len(set(所有交互过的类别))</code>，唯一类别数。分位数 [33%, 66%]。</li>
+        <li><strong>Conformity</strong>：<code>mean((用户打分 - 该物品全局平均分)²)</code>，打分偏差的均方值。偏差大 → 低从众。分位数 [25%, 80%]。</li>
+      </ul>
+      <p>每个档位映射到自然语言描述字典 <code>defined_personality</code>，组合后构成 Prompt 中的"fixed traits"部分。</p>
+
+      <h4>反馈生成（两步 LLM 调用）</h4>
+      <p><strong>Step 1 — 个人评估</strong>：<code>get_userfeedback(personality, rec_page, interaction_his, results_1)</code></p>
+      <p>Prompt 结构：</p>
+      <ul>
+        <li><code>## Your fixed traits</code>：拼接好的 Persona 描述</li>
+        <li><code>## Your recent context</code>：用户最近交互的物品（含标题、类别、价格、时间戳）</li>
+        <li><code>## Current recommendation list</code>：模型当前的推荐列表</li>
+        <li><code>PART 1</code>：用户已做的行为决策（"是否会点击此物品"）</li>
+        <li><code>PART 2</code>：要求输出 MODEL_FEEDBACK_JSON，包含 <code>positive_alignment_reasons / negative_misalignment_reasons / overgeneralized_signals / missing_signals / summary_diagnosis</code></li>
+      </ul>
+      <p><strong>Step 2 — 聚合</strong>：<code>aggregator_prompt</code> 接收所有用户的 JSON，输出系统级诊断报告，格式包含 <code>status / WHERE_THE_SYSTEM_GETS_IT_RIGHT / WHERE_THE_SYSTEM_GETS_IT_WRONG / PRIMARY_FAILURE_MODE</code> 等字段。</p>
+
+      <h3>5.4 初始诊断工具：examples/sasrec_cds/initial_code/diagnosis_tools.py</h3>
+      <p>两个内置探针的具体实现：</p>
+
+      <h4>探针 1：analyze_embeddings_collapse_cosine</h4>
+      <pre style="font-size:0.82rem;line-height:1.6;background:#f8fafc;padding:14px;border-radius:8px;overflow-x:auto;">
+# 从 item_emb.weight 取出 embeddings
+emb = self.model.item_emb.weight.detach()[1:]   # 跳过 padding item
+# 随机采样 2048 个
+idx = torch.randperm(n)[:sample_size]
+x = F.normalize(emb[idx], p=2, dim=-1)           # L2 归一化
+# 计算 Gram 矩阵，取非对角元素均值
+gram = x @ x.t()
+mean_cos = (gram.sum() - gram.diag().sum()) / (k*(k-1))
+# 映射到 [0,1]：0=完全正交（健康），1=完全相同（collapse）
+collapse_score = (mean_cos + 1.0) * 0.5</pre>
+      <p>这个分数越接近 1.0，说明所有物品的 embedding 几乎一样，模型失去了区分能力。</p>
+
+      <h4>探针 2：analyze_pos_neg_margin_with_category_breakdown</h4>
+      <pre style="font-size:0.82rem;line-height:1.6;background:#f8fafc;padding:14px;border-radius:8px;overflow-x:auto;">
+# 对每个 (user, pos_item, neg_item) 三元组计算 margin
+margin = s(u, pos) - s(u, neg)   # logit 差值
+# margin < eps(0.5) → "低边际"样本（难以区分正负）
+# margin < 0 → "错误排序"样本（负样本得分高于正样本）
+# 记录低边际样本中，哪些类别出现频率最高 → 定位模型最弱的类别
+low_pos_cat[c] += 1  # 类别级别的错误统计</pre>
+      <p>输出结果包含：全局均值 margin、低边际样本比例、出错最多的 top-K 类别——直接指向模型需要改进的物品类别。</p>
+
+      <h3>5.5 代码进化机制：SEARCH/REPLACE diff 格式</h3>
+      <p>LLM（<code>coder_rec.py</code>）不输出完整文件，而是用自定义 diff 格式输出<strong>增量修改</strong>：</p>
+      <pre style="font-size:0.82rem;line-height:1.6;background:#f8fafc;padding:14px;border-radius:8px;overflow-x:auto;">
+&lt;&lt;&lt;&lt;&lt;&lt;&lt; SEARCH
+def f():
+    # 原有代码，必须精确匹配
+=======
+### &gt;&gt;&gt; Self_EvolveRec-BLOCK-START: Category-Aware Hard Negatives
+def f():
+    # 新代码
+### &lt;&lt;&lt; Self_EvolveRec-BLOCK-END
+&gt;&gt;&gt;&gt;&gt;&gt;&gt; REPLACE</pre>
+      <p>所有改动用 <code>Self_EvolveRec-BLOCK-START/END</code> 标记包裹，方便后续迭代识别"哪些部分是 LLM 加的"（通过 <code>parse_evolve_blocks()</code> 解析）。如果要修改已存在的 block，直接更新 block 内容并修改注释即可。</p>
+      <p>这比让 LLM 重写整个文件要<strong>稳定得多</strong>——整个文件大部分保持不变，只有 SEARCH/REPLACE 块被应用，出错概率大幅降低。</p>
+
+      <h3>5.6 进化存档：database2.py（ProgramDatabase）</h3>
+      <p>存档同时实现了两种种群管理算法：</p>
+      <div class="two-col">
+        <div class="mini-card">
+          <h4>MAP-Elites</h4>
+          <p>维护一个以 (score × diversity × complexity) 三维网格为索引的精英存档，每个格子保留该特征组合下的最优程序，确保在不同特征维度上都有代表性解。</p>
+        </div>
+        <div class="mini-card">
+          <h4>Island-based Evolution</h4>
+          <p>维护多个相对独立的子种群（默认 3 个 island），每个 island 在自己内部演化若干代后，通过"迁移"（migration）交换优秀个体，防止早熟收敛同时保持多样性。</p>
+        </div>
+      </div>
+      <p>采样策略：70% 从精英存档（exploitation）、20% 随机探索（exploration）、10% 当前 island 内部采样。每个 <code>Program</code> 对象记录完整元数据：<code>id / parent_id / code / metrics / user_feedback / diagnosis_feedback / evolution_history</code>。</p>
+
+      <h3>5.7 配置文件：configs/config_baseline.yaml</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>参数</th><th>默认值</th><th>含义</th></tr></thead>
+          <tbody>
+            <tr><td>max_iterations</td><td>21</td><td>最大进化轮数</td></tr>
+            <tr><td>researcher.planner/writer</td><td>gpt-5-mini</td><td>规划和报告写作用轻量模型（省钱）</td></tr>
+            <tr><td>coder.developer</td><td>gpt-5</td><td>代码生成用强模型</td></tr>
+            <tr><td>database.population_size</td><td>25</td><td>种群总规模</td></tr>
+            <tr><td>database.archive_size</td><td>5</td><td>精英存档大小</td></tr>
+            <tr><td>database.num_islands</td><td>3</td><td>岛屿数量</td></tr>
+            <tr><td>database.exploitation_ratio</td><td>0.7</td><td>70% 从精英采样</td></tr>
+            <tr><td>max_debug_retry</td><td>10</td><td>代码报错最多自动调试 10 次</td></tr>
+            <tr><td>max_research_reflect</td><td>1</td><td>研究阶段反思轮数</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout-green">
+        <div class="callout-title">✅ 代码库的关键设计亮点</div>
+        <ul>
+          <li><strong>双路并行（模型进化 + 诊断工具进化）</strong>：研究者和编码者各有两套实例，model 和 diagnosis_tool 同步迭代，诊断工具编码时会读取最新的模型代码，确保兼容性。</li>
+          <li><strong>SEARCH/REPLACE diff 而非全量输出</strong>：LLM 只输出变更部分，显著降低幻觉（不会遗漏未改动参数），且 block 标记使历史可追溯。</li>
+          <li><strong>完整的容错链</strong>：Debugger（自动调试）→ 最多 10 次重试，确保生成的代码能实际运行；运行超时（>30分钟）也有超时检测并返回 0 分。</li>
+          <li><strong>反馈深度嵌入执行代码</strong>：SIM 和 DIAG 不是独立系统，而是直接嵌在 <code>main_code.py</code>（进化的目标代码）中，训练结束后自动调用，结果通过 <code>simulator_comment / diagnosis_comment</code> 字段返回给主进化循环。</li>
+        </ul>
+      </div>
+
+      <!-- 5.8 ASCII 架构全图 -->
+      <h3 id="ascii-arch" style="margin-top:2rem;">5.8 ASCII 架构全图</h3>
+      <p>以下 ASCII 图完整呈现了 Self-EvolveRec 各模块的调用关系与数据流向，可直接对应代码文件阅读。</p>
+
+      <pre style="font-size:0.78rem;line-height:1.55;background:#0f172a;color:#e2e8f0;padding:20px 24px;border-radius:10px;overflow-x:auto;white-space:pre;">
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                            Self-EvolveRec 主进化循环                              │
+│                           self_evolverec.py · run()                              │
+└────────────────────────────────────┬────────────────────────────────────────────┘
+                                     │
+              ┌──────────────────────▼──────────────────────┐
+              │           ProgramDatabase (database2.py)      │
+              │   MAP-Elites Grid + 3 Islands 种群管理         │
+              │   programs: {id → Program}                    │
+              │   采样策略: 70% 精英 / 20% 探索 / 10% island  │
+              └──────────────────────┬──────────────────────┘
+                                     │ sample(parent, inspirations)
+                    ╔════════════════▼════════════════╗
+                    ║         每轮迭代 (Iter i)         ║
+                    ╠═════════════════════════════════╣
+                    ║  STEP 1  采样父代码库             ║
+                    ║   parent = database.sample()    ║
+                    ╠═══════════════════╦═════════════╣
+                    ║  STEP 2-1         ║  STEP 2-2   ║
+                    ║  模型研究         ║  诊断工具研究 ║
+                    ╚═══════════════════╩═════════════╝
+                           │                   │
+          ┌────────────────▼──┐        ┌───────▼─────────────────┐
+          │  ResearcherAgent  │        │ ResearcherAgent_Diagnosis│
+          │ researcher_rec.py │        │ researcher_rec_diag.py   │
+          │                   │        │                          │
+          │ Planner (mini)    │        │ Planner (mini)           │
+          │   ↓ 生成查询       │        │   ↓ 结合 SIM 反馈生成查询  │
+          │ Searcher (mini)   │        │ Searcher (mini)          │
+          │   ↓ arXiv 搜索    │        │   ↓ arXiv 搜索           │
+          │ Writer (mini)     │        │ Writer (mini)            │
+          │   ↓ 输出 Report   │        │   ↓ 输出 DIAG Report     │
+          └────────┬──────────┘        └──────────┬───────────────┘
+                   │ new_idea                      │ new_idea_diagnosis
+          ╔════════▼════════╗           ╔══════════▼══════════╗
+          ║  STEP 3-1       ║           ║  STEP 3-3           ║
+          ║  模型代码生成    ║           ║  诊断工具代码生成    ║
+          ╚════════╤════════╝           ╚══════════╤══════════╝
+                   │                               │
+          ┌────────▼──────────┐         ┌──────────▼────────────┐
+          │    CoderAgent     │         │  CoderAgent_Diagnosis  │
+          │  coder_rec.py     │         │ coder_rec_diagnosis.py │
+          │                   │         │                        │
+          │ 输入: idea +       │         │ 输入: idea_diag +      │
+          │       parent.code │         │   parent.code +        │
+          │                   │         │   child_code ←─────────┼── 接收最新模型代码
+          │ 输出:              │         │                        │
+          │  SEARCH/REPLACE   │         │ 输出:                  │
+          │  diff 块          │         │  SEARCH/REPLACE diff 块 │
+          │   ↓ apply_diff()  │         │   ↓ apply_diff()       │
+          │  child_code       │────────▶│  diag_code             │
+          └────────┬──────────┘         └──────────┬────────────┘
+                   │                               │
+                   └──────────────┬────────────────┘
+                                  │
+                    final_code = child_code + '\n\n' + diag_code
+                                  │
+                    ╔═════════════▼═════════════╗
+                    ║        STEP 3-2           ║
+                    ║  Debugger (自动修复)       ║
+                    ║  coder_rec_debugger.py    ║
+                    ║  运行失败 → 最多重试 10 次  ║
+                    ╚═════════════╤═════════════╝
+                                  │ final_code (可运行)
+                    ╔═════════════▼═════════════╗
+                    ║        STEP 4             ║
+                    ║  problem.evaluate()       ║
+                    ║  problem.py               ║
+                    ╠═══════════════════════════╣
+                    ║  实际执行 final_code        ║
+                    ║                           ║
+                    ║  ┌─────────────────────┐  ║
+                    ║  │  main_code.py        │  ║
+                    ║  │  (进化后的推荐代码)   │  ║
+                    ║  │  训练 SASRec/NCF 等   │  ║
+                    ║  │  模型 (PyTorch)       │  ║
+                    ║  │         ↓             │  ║
+                    ║  │  ┌────────────────┐  │  ║
+                    ║  │  │   Simulator    │  │  ║
+                    ║  │  │ simulator.py   │  │  ║
+                    ║  │  │ 计算 Persona   │  │  ║
+                    ║  │  │  Activity      │  │  ║
+                    ║  │  │  Conformity    │  │  ║
+                    ║  │  │  Diversity     │  │  ║
+                    ║  │  │      ↓         │  │  ║
+                    ║  │  │ Step1: 个人评估 │  │  ║
+                    ║  │  │ Step2: 聚合    │  │  ║
+                    ║  │  │      ↓         │  │  ║
+                    ║  │  │ simulator_     │  │  ║
+                    ║  │  │  comment      │  │  ║
+                    ║  │  └────────────────┘  │  ║
+                    ║  │  ┌────────────────┐  │  ║
+                    ║  │  │ DiagnosisProbe │  │  ║
+                    ║  │  │ diagnosis_     │  │  ║
+                    ║  │  │  tools.py      │  │  ║
+                    ║  │  │ 探针1:         │  │  ║
+                    ║  │  │  Embedding     │  │  ║
+                    ║  │  │  Collapse      │  │  ║
+                    ║  │  │  (cosine sim)  │  │  ║
+                    ║  │  │ 探针2:         │  │  ║
+                    ║  │  │  Ranking       │  │  ║
+                    ║  │  │  Margin        │  │  ║
+                    ║  │  │  (pos-neg)     │  │  ║
+                    ║  │  │      ↓         │  │  ║
+                    ║  │  │ diagnosis_     │  │  ║
+                    ║  │  │  comment      │  │  ║
+                    ║  │  └────────────────┘  │  ║
+                    ║  │  ↓                   │  ║
+                    ║  │  NDCG@5 / HR@5       │  ║
+                    ║  └─────────────────────┘  ║
+                    ╠═══════════════════════════╣
+                    ║  返回 metrics = {          ║
+                    ║    ndcg_score,            ║
+                    ║    hr_score,              ║
+                    ║    combined_score,        ║
+                    ║    simulator_comment,     ║
+                    ║    diagnosis_comment      ║
+                    ║  }                        ║
+                    ╚═════════════╤═════════════╝
+                                  │
+                    ┌─────────────▼─────────────┐
+                    │    封装 Program 对象         │
+                    │  id / parent_id / code      │
+                    │  metrics / user_feedback    │
+                    │  diagnosis_feedback         │
+                    │  evolution_history[]        │
+                    └─────────────┬─────────────┘
+                                  │ database.add(child_program)
+                    ┌─────────────▼─────────────┐
+                    │     ProgramDatabase        │
+                    │  更新 MAP-Elites Grid       │
+                    │  检查是否触发 Island 迁移   │
+                    │  保存 Checkpoint           │
+                    └───────────────────────────┘
+                                  │
+                    └─────────────────────────────→ 下一轮迭代（最多 21 轮）</pre>
+
+      <p style="margin-top:1rem;font-size:0.9rem;color:var(--muted);">补充说明：双路研究 + 双路编码完全对称；<code>diag_code</code> 编写时会读取 <code>child_code</code>，确保与最新模型兼容；反馈信号（<code>simulator_comment / diagnosis_comment</code>）在下一轮迭代中直接注入 Planner Prompt，形成闭环。</p>
+
+      <!-- 5.9 核心 Prompt 原文 -->
+      <h3 id="key-prompts" style="margin-top:2.5rem;">5.9 核心 Prompt 原文</h3>
+      <p>以下是系统中 4 个最关键的 Prompt，直接影响进化质量。</p>
+
+      <!-- Prompt 1: Planner -->
+      <div style="margin-bottom:2rem;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="background:#dbeafe;color:#1e40af;border-radius:4px;padding:2px 8px;font-size:0.78rem;font-weight:600;">Prompt 1</span>
+          <strong>ResearcherAgent · Planner</strong>
+          <code style="font-size:0.78rem;color:var(--muted);">researcher_rec.py · PLANNER_INSTRUCTIONS</code>
+        </div>
+        <p style="font-size:0.88rem;color:var(--muted);margin-bottom:6px;">角色：规划研究方向、生成多样化 arXiv 检索查询。输入包含当前研究思路、历史 inspirations、用户诊断（SIM）和定量诊断（DIAG）。</p>
+        <pre style="font-size:0.78rem;line-height:1.6;background:#f8fafc;padding:16px;border-radius:8px;overflow-x:auto;border:1px solid #e2e8f0;">You are a professor responsible for planning deep and effective research strategies.
+
+You will be provided with the context of:
+ - a research problem based on an initial research question
+ - a starting research idea, possibly with a history showing how idea evolves through previous attempt
+ - inspirations from earlier attempts
+ - qualitative user diagnosis from user
+ - quantitative mathematical diagnosis
+
+Your task is to develop search queries that identify directions for researchers to advance
+the idea in a transformative way. Rather than combining existing inspirations in small
+increments, the queries should guide researchers toward substantial evolutions. Because
+other researchers will rely on this plan, it must emphasize major, novel approaches
+instead of minor refinements.
+
+You will also be told whether the research progress is early or mature:
+- If the progress is early, focus on ideas that are feasible and practical, and can
+  grow later and have great future potential.
+- If the progress is mature, focus on bold, high-impact shifts that challenge the
+  current approach.
+
+Your plan should follow two steps:
+1. Formulate 1 to 3 precise and diverse search queries. Make sure the queries are
+   diverse—cover different perspectives, challenge untested assumptions, and explore
+   alternative methods.
+2. For each query, include a short note explaining why you chose it and what you hope
+   it will reveal.</pre>
+      </div>
+
+      <!-- Prompt 2: Writer -->
+      <div style="margin-bottom:2rem;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="background:#dbeafe;color:#1e40af;border-radius:4px;padding:2px 8px;font-size:0.78rem;font-weight:600;">Prompt 2</span>
+          <strong>ResearcherAgent · Writer</strong>
+          <code style="font-size:0.78rem;color:var(--muted);">researcher_rec.py · WRITER_INSTRUCTIONS</code>
+        </div>
+        <p style="font-size:0.88rem;color:var(--muted);margin-bottom:6px;">角色：综合检索结果、输出新研究 idea 报告。重点是 <strong>双对齐约束</strong>：候选 idea 必须同时覆盖 ≥2 个用户诊断失败模式 + ≥1 个模型诊断失败模式。</p>
+        <pre style="font-size:0.78rem;line-height:1.6;background:#f8fafc;padding:16px;border-radius:8px;overflow-x:auto;border:1px solid #e2e8f0;">You are a senior researcher responsible for proposing new ideas to address a defined
+research problem. You will receive:
+- The research problem, including its evaluation metric and available data
+- A starting research idea, possibly with its evolution history
+- Inspirations from earlier attempts
+- A list of related online search results
+- A research progress score (0-100%) indicating how far the idea has advanced
+
+[...5 步结构化框架...]
+
+4. Generate and evaluate ideas
+   - Propose 3-10 algorithmic ideas of varying originality and complexity.
+   - For each idea, critically assess with scores:
+     - Originality (0-10)
+     - Future Potential (0-10)
+     - User Diagnosis Alignment (0-10)     ← 与 SIM 反馈对齐
+     - Model Diagnosis Alignment (0-10)    ← 与 DIAG 探针对齐
+     - Code Difficulty (0-10)
+   - Then, select the single best idea:
+     ★ The chosen idea MUST explicitly address at least TWO user-facing failure
+       modes identified in the User Diagnosis.
+     ★ The chosen idea MUST explicitly address at least ONE model-facing failure
+       mode identified in the Model Diagnosis.
+     If either constraint is not met, the idea is NOT eligible, regardless of
+     its other scores.</pre>
+      </div>
+
+      <!-- Prompt 3: User Simulator (Step 2) -->
+      <div style="margin-bottom:2rem;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="background:#dcfce7;color:#166534;border-radius:4px;padding:2px 8px;font-size:0.78rem;font-weight:600;">Prompt 3</span>
+          <strong>User Simulator · 个人评估（Step 2）</strong>
+          <code style="font-size:0.78rem;color:var(--muted);">simulator/simulator.py · get_userfeedback()</code>
+        </div>
+        <p style="font-size:0.88rem;color:var(--muted);margin-bottom:6px;">角色：模拟单个用户，从<strong>模型改进视角</strong>解释推荐的因果原因，输出标准化 JSON 供聚合器使用。注意：禁止讨论 UI/曝光策略，只允许从用户决策逻辑角度发言。</p>
+        <pre style="font-size:0.78rem;line-height:1.6;background:#f8fafc;padding:16px;border-radius:8px;overflow-x:auto;border:1px solid #e2e8f0;">You excel at role-playing. Picture yourself as a single user exploring a
+recommendation page like Amazon.
+The goal of this task is NOT UI feedback.
+It is to help improve the recommendation model itself by explaining WHY certain
+items felt right or wrong.
+
+## Your fixed traits
+{personality}          ← Activity / Conformity / Diversity 三维 Persona
+
+## Your recent context (recent interactions)
+- {interaction_his}
+
+## Current recommendation list
+{rec_page}
+
+------------------------------------------------------------
+PART 2 — MODEL_FEEDBACK_JSON (model-improvement focused)
+------------------------------------------------------------
+Analyze the recommendation list from the perspective of *decision reasons*.
+
+Focus on:
+- Why the items you liked felt like strong matches.
+- Why the items you disliked felt off, even if they looked similar on the surface.
+- What signals seem to be overused or underused by the system.
+- Where the system generalized correctly vs incorrectly from your recent behavior.
+
+IMPORTANT RULES:
+- Do NOT talk about UI, layout, or presentation.
+- Do NOT suggest business rules or exposure tricks.
+- Do NOT mention model internals or technical terms.
+- Speak as a user, but explain your choices clearly and causally.
+
+Output ONLY the following JSON:
+
+MODEL_FEEDBACK_JSON:
+{
+  "positive_alignment_reasons": [...],
+  "negative_misalignment_reasons": [...],
+  "overgeneralized_signals": [...],
+  "missing_or_underweighted_signals": [...],
+  "summary_diagnosis": "One short sentence summarizing how the system interpreted
+                         your intent, correctly or incorrectly."
+}</pre>
+      </div>
+
+      <!-- Prompt 4: Aggregator -->
+      <div style="margin-bottom:2rem;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="background:#dcfce7;color:#166534;border-radius:4px;padding:2px 8px;font-size:0.78rem;font-weight:600;">Prompt 4</span>
+          <strong>User Simulator · 聚合器（Aggregator）</strong>
+          <code style="font-size:0.78rem;color:var(--muted);">simulator/simulator.py · aggregator_prompt</code>
+        </div>
+        <p style="font-size:0.88rem;color:var(--muted);margin-bottom:6px;">角色：将 N 个用户个人诊断 JSON 压缩为系统级报告，输出 <code>simulator_comment</code>，直接作为下一轮 Researcher Planner 的输入。<code>status: CRITICAL</code> 时才触发下轮进化（与 DIAG 取 AND 逻辑）。</p>
+        <pre style="font-size:0.78rem;line-height:1.6;background:#f8fafc;padding:16px;border-radius:8px;overflow-x:auto;border:1px solid #e2e8f0;">You are a Lead Recommender Systems Analyst synthesizing user simulation feedback
+to diagnose how the recommendation model is behaving.
+
+Input:
+- A list of User Feedback Reports (JSON objects) from multiple simulated users:
+{per_user_json_list}
+
+Goal:
+Produce a concise, system-level diagnosis of:
+- what decision patterns the model appears to rely on,
+- where those patterns align or misalign with actual user choice logic,
+- which misalignments most directly reduce the quality of top-ranked items.
+
+Do NOT discuss UI, layout, exposure strategy, or business rules.
+Do NOT propose specific model architectures or losses.
+Stay at the level of behavioral decision logic inferred from user feedback.
+
+OUTPUT FORMAT (JSON ONLY — all keys required):
+{
+  "status": "&lt;CRITICAL | NEEDS_IMPROVEMENT | STABLE&gt;",
+  "SYSTEM_INTERPRETATION_OF_USER_INTENT": "One short sentence...",
+  "WHERE_THE_SYSTEM_GETS_IT_RIGHT": [...],
+  "WHERE_THE_SYSTEM_GETS_IT_WRONG": [...],
+  "OVERUSED_DECISION_PATTERNS": [...],
+  "UNDERUSED_OR_MISSED_DECISION_PATTERNS": [...],
+  "PRIMARY_FAILURE_MODE_AT_TOP_OF_LIST": "One sentence explaining...",
+  "DIAGNOSTIC_SIGNALS_TO_TRACK": [...]
+}
+
+Rules:
+- No numeric scores or internal error codes.
+- No UI or exposure language.
+- No raw user quotes; always generalize and compress.
+- Every statement should describe a repeatable system behavior or decision pattern.
+- Focus on issues that, if corrected, would materially improve how many top-ranked
+  items users would realistically choose.</pre>
+      </div>
+
+      <!-- Prompt 5: Coder -->
+      <div style="margin-bottom:2rem;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="background:#fef3c7;color:#92400e;border-radius:4px;padding:2px 8px;font-size:0.78rem;font-weight:600;">Prompt 5</span>
+          <strong>CoderAgent · 代码编写</strong>
+          <code style="font-size:0.78rem;color:var(--muted);">coder_rec.py · CODER_INSTRUCTIONS</code>
+        </div>
+        <p style="font-size:0.88rem;color:var(--muted);margin-bottom:6px;">角色：将研究 idea 转化为 SEARCH/REPLACE diff 代码块。强调<strong>最小变更原则</strong>：只改必要部分，禁止重写整个文件；所有修改必须用 <code>Self_EvolveRec-BLOCK</code> 标记包裹，便于历史追溯。</p>
+        <pre style="font-size:0.78rem;line-height:1.6;background:#f8fafc;padding:16px;border-radius:8px;overflow-x:auto;border:1px solid #e2e8f0;">You are a researcher with strong software engineering skills, improving algorithmic
+code through iterative, performance-driven modifications in multiple rounds.
+
+You MUST use the exact SEARCH/REPLACE diff format. Do NOT use Git diff format.
+Do NOT use line prefixes like +, -, or @@.
+
+Use this structure exactly:
+&lt;&lt;&lt;&lt;&lt;&lt;&lt; SEARCH
+# Original code (must match exactly)
+=======
+### &gt;&gt;&gt; Self_EvolveRec-BLOCK-START: &lt;research idea&gt;
+# New code here
+### &lt;&lt;&lt; Self_EvolveRec-BLOCK-END
+&gt;&gt;&gt;&gt;&gt;&gt;&gt; REPLACE
+
+Task Guidelines:
+1. Think before coding, understand the research idea and performance bottlenecks.
+2. Propose specific, actionable changes aligned with the target metrics.
+3. You may suggest multiple improvements beyond the research idea.
+4. When updating code:
+   - Verify new parameters are invoked in ALL call sites.
+   - If a NEW parameter defaults to None, confirm non-None triggers the code path.
+   - Walk through function calls to confirm each new branch executes.
+
+Code Format Guidelines:
+1. All SEARCH blocks must match the original code exactly.
+2. Wrap changes with Self_EvolveRec-BLOCK markers.
+3. If updating existing BLOCK, edit only lines within that block.
+4. Do NOT nest Self_EvolveRec blocks inside one another.
+5. Limit changes to what is strictly necessary.
+6. Preserve original indentation and formatting.</pre>
+      </div>
+
+    </section>
+
+  </main>
+</div>
+
+<footer>
+  <a href="../index.html">← 返回论文列表</a>
+  <span style="margin: 0 12px; color: var(--line);">|</span>
+  <span>arXiv: <a href="https://arxiv.org/abs/2602.12612" target="_blank">2602.12612</a></span>
+  <span style="margin: 0 12px; color: var(--line);">|</span>
+  <span style="color: var(--muted);">Self-EvolveRec · 2026 · KAIST</span>
+</footer>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    renderMathInElement(document.body, {
+      delimiters: [
+        {left: "$$", right: "$$", display: true},
+        {left: "$", right: "$", display: false}
+      ],
+      throwOnError: false
+    });
+  });
+</script>
+</body>
+</html>

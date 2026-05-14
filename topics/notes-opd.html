@@ -1,0 +1,1670 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>On-Policy Distillation（OPD）完全指南</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      // TOC 滚动高亮
+      const tocAnchors = document.querySelectorAll('[id]');
+      const links = document.querySelectorAll('.toc-list a');
+      const obs = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+          if (e.isIntersecting) {
+            links.forEach(l => l.classList.remove('active'));
+            const a = document.querySelector('.toc-list a[href="#' + e.target.id + '"]');
+            if (a) a.classList.add('active');
+          }
+        });
+      }, { rootMargin: '-10% 0px -70% 0px' });
+      tocAnchors.forEach(el => obs.observe(el));
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #7c3aed; --primary-soft: #faf5ff;
+      --accent: #2563eb; --shadow: 0 10px 30px rgba(15,23,42,0.08);
+      --radius: 18px; --max: 1300px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: linear-gradient(180deg,#fdf4ff 0%,var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      line-height: 1.85;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .page { max-width: var(--max); margin: 0 auto; padding: 32px 20px 80px; }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    .back-link:hover { color: var(--primary); text-decoration: none; }
+
+    /* ── Layout ── */
+    .layout { display: grid; grid-template-columns: 260px minmax(0,1fr); gap: 22px; align-items: start; }
+    .hero {
+      background: radial-gradient(circle at top right,rgba(124,58,237,0.12),transparent 30%),
+                  radial-gradient(circle at left bottom,rgba(37,99,235,0.08),transparent 24%), var(--card);
+      border: 1px solid rgba(124,58,237,0.15); border-radius: 24px;
+      box-shadow: var(--shadow); padding: 34px 34px 28px; margin-bottom: 22px;
+    }
+    .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: #faf5ff; color: #6d28d9; font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+    h1 { margin: 0 0 10px; font-size: 28px; line-height: 1.25; letter-spacing: -0.02em; }
+    .subtitle { margin: 0; color: var(--muted); font-size: 15px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; margin-top: 24px; }
+    .meta-card { background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 16px; padding: 14px 16px; }
+    .meta-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .meta-value { font-size: 13px; font-weight: 600; word-break: break-word; }
+
+    /* ── TOC ── */
+    .toc { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; max-height: calc(100vh - 40px); overflow-y: auto; }
+    .toc h2 { margin: 0 0 12px; font-size: 15px; }
+    .toc-list { list-style: none; margin: 0; padding: 0; }
+    .toc-list li { margin: 0; }
+    .toc-list a { display: block; padding: 5px 8px; border-radius: 8px; color: var(--muted); font-size: 13px; transition: all 0.15s; }
+    .toc-list a:hover { color: var(--primary); background: #faf5ff; text-decoration: none; }
+    .toc-list a.active { color: var(--primary); background: #eff6ff; font-weight: 600; border-left: 3px solid var(--primary); padding-left: 5px; }
+    .toc-sub { list-style: none; padding-left: 12px; margin: 0; }
+    .toc-sub a { font-size: 12px; padding: 3px 8px; }
+
+    /* ── Content ── */
+    .content { display: flex; flex-direction: column; gap: 18px; }
+    .section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 26px 28px; }
+    .section-title { display: flex; align-items: center; gap: 12px; margin: 0 0 20px; font-size: 20px; font-weight: 700; }
+    .icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+    h3 { margin: 28px 0 12px; font-size: 17px; color: #111827; border-left: 3px solid #e9d5ff; padding-left: 10px; }
+    h4 { margin: 20px 0 8px; font-size: 15px; color: #374151; font-weight: 700; }
+    h5 { margin: 14px 0 6px; font-size: 14px; color: #4b5563; font-weight: 700; }
+    p { margin: 0 0 12px; }
+
+    /* ── Callouts ── */
+    .callout-blue   { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-amber  { background: #fffbeb; border: 1px solid #fde68a; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-green  { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-purple { background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-red    { background: #fff1f2; border: 1px solid #fecdd3; border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+    .callout-title  { font-weight: 700; font-size: 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+    .callout-blue .callout-title   { color: #1d4ed8; }
+    .callout-amber .callout-title  { color: #92400e; }
+    .callout-green .callout-title  { color: #166534; }
+    .callout-purple .callout-title { color: #6d28d9; }
+    .callout-red .callout-title    { color: #9f1239; }
+
+    /* ── Special boxes ── */
+    .analogy-box { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 14px; padding: 18px 20px; margin: 18px 0; }
+    .analogy-title { font-weight: 700; color: #92400e; margin-bottom: 10px; font-size: 14px; }
+    .big-concept { background: linear-gradient(135deg,#faf5ff 0%,#eff6ff 100%); border: 2px solid #c4b5fd; border-radius: 16px; padding: 20px 24px; margin: 20px 0; }
+    .big-concept-title { font-size: 17px; font-weight: 800; color: #4c1d95; margin-bottom: 10px; }
+
+    /* ── Table ── */
+    .table-wrap { overflow-x: auto; margin: 16px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th { background: #faf5ff; color: #4c1d95; text-align: left; font-weight: 700; padding: 10px 14px; border-bottom: 2px solid #e9d5ff; }
+    td { padding: 10px 14px; border-bottom: 1px solid #eef2f7; vertical-align: top; }
+    tbody tr:nth-child(even) { background: #fefaff; }
+
+    /* ── Code ── */
+    pre.code-block { background: #1e1e2e; border-radius: 12px; padding: 16px 20px; margin: 14px 0; overflow-x: auto; font-size: 13px; line-height: 1.8; color: #cdd6f4; white-space: pre; }
+    code { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 6px; padding: 2px 7px; font-size: 13px; color: #6d28d9; }
+
+    /* ── Misc ── */
+    blockquote { margin: 18px 0; padding: 16px 20px; border-left: 4px solid var(--primary); background: rgba(124,58,237,0.05); border-radius: 0 12px 12px 0; color: #3f3f46; font-size: 15px; }
+    ul, ol { padding-left: 24px; margin: 8px 0 12px; }
+    li { margin: 6px 0; }
+    .katex { color: inherit; }
+    .katex-display { overflow-x: auto; padding: 6px 0; }
+
+    @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } .toc { position: static; } }
+    @media (max-width: 640px) { .page { padding: 18px 12px 56px; } .hero, .section { padding: 20px 18px; } h1 { font-size: 22px; } }
+  </style>
+</head>
+<body>
+<div class="page">
+  <a class="back-link" href="notes-agentic-training.html">← 返回：Agentic 能力从哪里来？</a>
+
+  <header class="hero">
+    <div class="eyebrow">📝 技术笔记 · 持续学习 · KL 散度 · GLM-5</div>
+    <h1>On-Policy Distillation（OPD）完全指南</h1>
+    <p class="subtitle">什么是 OPD · On-Policy Cross-Stage Distillation · Forward KL vs Reverse KL · 工业界实践（Qwen3 / GLM-5 / MiMo / DeepSeek V4）</p>
+    <div class="meta-grid">
+      <div class="meta-card"><div class="meta-label">核心方法</div><div class="meta-value">On-Policy Distillation (OPD)</div></div>
+      <div class="meta-card"><div class="meta-label">核心概念</div><div class="meta-value">OPD · Forward KL · Reverse KL · Confident Conflict · 灾难性遗忘</div></div>
+      <div class="meta-card"><div class="meta-label">关联文件</div><div class="meta-value"><a href="notes-agentic-training.html">notes-agentic-training.html</a></div></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- ══ TOC ══ -->
+    <aside class="toc">
+      <h2>目录</h2>
+      <ul class="toc-list">
+        <li><a href="#opd-intro">§1 什么是 On-Policy Distillation？</a>
+          <ul class="toc-sub">
+            <li><a href="#opd-problem">1.1 解决了什么问题</a></li>
+            <li><a href="#opd-algorithm">1.2 算法核心流程</a></li>
+            <li><a href="#opd-vs-offpolicy">1.3 vs Off-Policy 蒸馏</a></li>
+            <li><a href="#opd-vs-rl">1.4 vs On-Policy RL</a></li>
+            <li><a href="#opd-logit-space">1.5 Logit 空间整合的意义</a></li>
+          </ul>
+        </li>
+        <li><a href="#distillation">§2 On-Policy Cross-Stage Distillation</a>
+          <ul class="toc-sub">
+            <li><a href="#distillation-bg">2.1 问题背景：灾难性遗忘</a></li>
+            <li><a href="#distillation-why-rl">2.2 为什么 RL 天然抗遗忘</a></li>
+            <li><a href="#distillation-design">2.3 OPD 的设计</a></li>
+            <li><a href="#distillation-example">2.4 具体例子</a></li>
+            <li><a href="#distillation-vs-offpolicy">2.5 对比 Off-Policy 蒸馏</a></li>
+            <li><a href="#distillation-compare">2.6 三类方法横向对比</a></li>
+          </ul>
+        </li>
+        <li><a href="#kl-direction">§3 Forward KL vs Reverse KL</a>
+          <ul class="toc-sub">
+            <li><a href="#kl-def">2.1 数学定义</a></li>
+            <li><a href="#kl-bimodal">2.2 双峰分布例子</a></li>
+            <li><a href="#kl-forward-why">2.3 为何 SFT 是 Forward KL</a></li>
+            <li><a href="#kl-reverse-why">2.4 为何 RL 行为是 Reverse KL</a></li>
+            <li><a href="#kl-compare">2.5 性格差异对比</a></li>
+            <li><a href="#kl-math">2.6 数学推导</a></li>
+          </ul>
+        </li>
+        <li><a href="#industry">§4 各大模型 OPD 实践</a>
+          <ul class="toc-sub">
+            <li><a href="#industry-compare">3.0 四家实现横向总览</a></li>
+            <li><a href="#industry-qwen3">3.1 Qwen3：效率革命</a></li>
+            <li><a href="#industry-glm5">3.2 GLM-5：灾难性遗忘修复</a></li>
+            <li><a href="#industry-mimo">3.3 MiMo-V2：多专家整合</a></li>
+            <li><a href="#industry-deepseek">3.4 DeepSeek V4：万亿参数压缩</a></li>
+            <li><a href="#industry-signal">3.5 关键设计维度对比</a></li>
+          </ul>
+        </li>
+        <li><a href="#future">§5 未来展望</a>
+          <ul class="toc-sub">
+            <li><a href="#future-fullvocab">4.1 Full-Vocabulary KL</a></li>
+            <li><a href="#future-prm">4.2 OPD + PRM</a></li>
+            <li><a href="#future-iterative">4.3 迭代师生进化</a></li>
+            <li><a href="#future-longctx">4.4 长上下文张力</a></li>
+            <li><a href="#future-inference">4.5 推理时蒸馏</a></li>
+          </ul>
+        </li>
+      </ul>
+    </aside>
+
+    <main class="content">
+
+      <!-- ══ 核心直觉总结（置顶）══ -->
+      <section class="section" style="background:linear-gradient(135deg,#faf5ff 0%,#eff6ff 100%);border:2px solid #c4b5fd;">
+        <div class="section-title">
+          <div class="icon" style="background:#ede9fe;">🧠</div>
+          为什么 SFT 是 Forward KL，OPD/RL 是 Reverse KL？——核心直觉
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:16px 0;">
+          <div style="background:#fff;border:1.5px solid #fecaca;border-radius:14px;padding:20px 22px;">
+            <div style="font-size:15px;font-weight:800;color:#991b1b;margin-bottom:14px;">SFT → Forward KL</div>
+            <div style="font-size:14px;color:#374151;line-height:1.95;">
+              SFT 是基于已有的数据让 model teacher force 得到输出概率，然后用交叉熵来约束，在正确的那个 token 前面就是 $1 \times \log q(x)$，前面的 1 就是真实的 token 的概率。这样会导致模型强行拟合真实数据所有的分布。
+            </div>
+          </div>
+          <div style="background:#fff;border:1.5px solid #bbf7d0;border-radius:14px;padding:20px 22px;">
+            <div style="font-size:15px;font-weight:800;color:#166534;margin-bottom:14px;">OPD / RL → Reverse KL</div>
+            <div style="font-size:14px;color:#374151;line-height:1.95;">
+              但 RL 和 OPD 是模型自己采样的路径，模型能采样出的路径说明都是模型觉得高概率的东西，然后将 reward 搞成
+              $$\hat{A}_t = \text{sg}\!\left[\log\frac{\pi_{teacher}(y_t|x,y_{&lt;t})}{\pi_{student}(y_t|x,y_{&lt;t})}\right]$$
+              然后 loss 在这个优势上乘上 $\log\pi_\theta(y_t|x,y_{&lt;t})$，这里是 $\pi_\theta(y_t|x,y_{&lt;t})$ 作为的系数而不是真实概率，因此是 reverse 的，说明模型在自己高置信的样本上才会要求跟 teacher 保持一致，即使 teacher 在某些样本上有高置信，也不会导致 student 学习到，因为 student 都不会采样到。
+            </div>
+          </div>
+        </div>
+      </section>
+
+
+      <section class="section" id="opd-intro">
+        <div class="section-title">
+          <div class="icon" style="background:#dbeafe;">💡</div>
+          §1 什么是 On-Policy Distillation？
+        </div>
+
+        <p style="font-size:15px;color:#374151;line-height:1.9;">
+          过去一年，On-Policy Distillation（OPD）正在成为大模型后训练的事实新范式。从 Qwen3 用它高效训练轻量模型，到 GLM-5 用它修复多阶段 RL 后的能力遗忘，各家技术报告都指向同一趋势：后训练不再只依赖昂贵的 RL 探索，而是越来越重视把<strong>已有强模型的能力稳定迁移</strong>到目标模型。
+        </p>
+
+        <!-- 1.1 解决了什么问题 -->
+        <h3 id="opd-problem">1.1 解决了什么问题：Off-Policy 蒸馏的根本缺陷</h3>
+
+        <p>传统的知识蒸馏（Knowledge Distillation）是 <strong>Off-Policy</strong> 的：先让 teacher 生成一批轨迹，学生在这批轨迹上做 SFT（最大化 teacher 输出的对数似然）。这有两个根本问题：</p>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:16px 0;">
+          <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:14px;padding:16px 18px;">
+            <div style="font-size:14px;font-weight:700;color:#991b1b;margin-bottom:8px;">❌ 问题一：分布错位（Distribution Mismatch）</div>
+            <div style="font-size:13px;color:#374151;line-height:1.85;">
+              Teacher 生成的序列是 teacher 自己的"语言"——对于已经有了一定训练基础的 student 来说，teacher 的路径可能是 student <em>从未走过的路</em>。Student 一旦在某一步犯了错，后续每一步的分布都会与 teacher 不一致，错误不断累积。<br><br>
+              这就是 <strong>Exposure Bias（暴露偏差）</strong>：训练时看到的是"正确路径"，推理时走的是"自己的路径"，两者差距越大，性能越差。
+            </div>
+          </div>
+          <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:14px;padding:16px 18px;">
+            <div style="font-size:14px;font-weight:700;color:#991b1b;margin-bottom:8px;">❌ 问题二：Confident Conflict（强迫冲突）</div>
+            <div style="font-size:13px;color:#374151;line-height:1.85;">
+              Teacher 输出中某些 token，student 认为概率极低（比如 1%），但 off-policy SFT 强行要求拟合这个 token。此时梯度极大，会暴力更新参数，破坏 student 已有的通用表示能力。<br><br>
+              Diao et al. (2025) 的研究发现，这些 "Confident Conflict" token 是导致 SFT 灾难性遗忘的主要原因之一。
+            </div>
+          </div>
+        </div>
+
+        <div class="callout-green">
+          <div class="callout-title">✅ On-Policy Distillation 的核心思路</div>
+          <p style="font-size:14px;margin:0;line-height:1.85;"><strong>让 student 自己走路，teacher 在旁边纠偏</strong>：<br>
+          • Student 从<em>自身分布</em>中采样轨迹（on-policy）——永远走自己熟悉的路，消除暴露偏差<br>
+          • Teacher 在 student 生成的每个 token 上提供<em>密集的概率纠偏信号</em>——不是强迫走陌生路，而是在自己的路上微调方向<br>
+          • 无 Confident Conflict：student 自己生成的序列，概率不低，梯度温和</p>
+        </div>
+
+        <!-- 1.2 算法核心流程 -->
+        <h3 id="opd-algorithm">1.2 算法核心流程</h3>
+
+        <div style="position:relative;padding-left:44px;margin:18px 0;">
+          <div style="position:absolute;left:12px;top:0;bottom:0;width:2px;background:linear-gradient(to bottom,#7c3aed,#c4b5fd);border-radius:2px;"></div>
+
+          <div style="position:relative;margin-bottom:18px;">
+            <div style="position:absolute;left:-38px;top:2px;width:26px;height:26px;border-radius:50%;background:#7c3aed;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;">1</div>
+            <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:12px;padding:14px 18px;">
+              <strong style="color:#4c1d95;">给定 prompt $x$，Student 自己采样完整轨迹 $y$</strong>
+              <p style="font-size:13px;margin:6px 0 0;color:#374151;">不使用 teacher 的输出，student 按自身分布生成完整序列。这保证了所有后续计算都在 student "熟悉的" 分布上进行。</p>
+            </div>
+          </div>
+
+          <div style="position:relative;margin-bottom:18px;">
+            <div style="position:absolute;left:-38px;top:2px;width:26px;height:26px;border-radius:50%;background:#7c3aed;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;">2</div>
+            <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:12px;padding:14px 18px;">
+              <strong style="color:#4c1d95;">对轨迹中每个 token，计算 Token 级 Advantage</strong>
+              <div style="overflow-x:auto;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 18px;margin:10px 0;text-align:center;">
+                $$\hat{A}_t = \text{sg}\!\left[\log\frac{\pi_{\text{teacher}}(y_t \mid x,\,y_{&lt;t})}{\pi_{\text{student}}(y_t \mid x,\,y_{&lt;t})}\right]$$
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;">
+                <div style="background:#dcfce7;border-radius:8px;padding:10px 12px;font-size:12px;">
+                  <strong style="color:#166534;">Â &gt; 0：teacher 比 student 更确信该 token</strong><br>
+                  <span style="color:#374151;">student 偏保守，需要提高该 token 概率，向 teacher 靠拢</span>
+                </div>
+                <div style="background:#fef3c7;border-radius:8px;padding:10px 12px;font-size:12px;">
+                  <strong style="color:#92400e;">Â &lt; 0：student 比 teacher 更偏爱该 token</strong><br>
+                  <span style="color:#374151;">student 概率超过 teacher 预期，适当压低，校正偏差</span>
+                </div>
+              </div>
+              <p style="font-size:12px;color:#6b7280;margin:8px 0 0;"><code>sg[·]</code> = stop-gradient，Advantage 只指导方向，不反传到 teacher</p>
+            </div>
+          </div>
+
+          <div style="position:relative;margin-bottom:18px;">
+            <div style="position:absolute;left:-38px;top:2px;width:26px;height:26px;border-radius:50%;background:#7c3aed;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;">3</div>
+            <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:12px;padding:14px 18px;">
+              <strong style="color:#4c1d95;">代入策略优化损失，更新 Student</strong>
+              <div style="overflow-x:auto;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 18px;margin:10px 0;text-align:center;">
+                $$\mathcal{L}(\theta) = -\mathbb{E}_{x,y\sim\pi_\theta}\!\left[\frac{1}{|y|}\sum_{t=1}^{|y|} \hat{A}_t \cdot \log\pi_\theta(y_t \mid x, y_{&lt;t})\right]$$
+              </div>
+              <p style="font-size:13px;color:#374151;margin:6px 0 0;">因为 $\hat{A}_t$ 已经是常量（stop-gradient），这等价于在 student 自己的轨迹上向 teacher 分布做加权最大似然——但数据是 on-policy 的，彻底避免了 off-policy 的强迫冲突。</p>
+            </div>
+          </div>
+
+          <div style="position:relative;">
+            <div style="position:absolute;left:-38px;top:2px;width:26px;height:26px;border-radius:50%;background:#7c3aed;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;">4</div>
+            <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:12px;padding:14px 18px;">
+              <strong style="color:#4c1d95;">循环迭代直到收敛</strong>
+              <p style="font-size:13px;color:#374151;margin:6px 0 0;">每轮迭代 student 更新后，下一轮继续从新的 student 分布采样——始终 on-policy，不会出现分布漂移积累的问题。</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 1.3 vs Off-Policy 蒸馏 -->
+        <h3 id="opd-vs-offpolicy">1.3 OPD vs Off-Policy 蒸馏（传统 KD）</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>维度</th>
+                <th style="background:#fef2f2;color:#991b1b;">Off-Policy 蒸馏（传统 KD / SFT）</th>
+                <th style="background:#f0fdf4;color:#166534;">On-Policy 蒸馏（OPD）</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>轨迹来源</strong></td>
+                <td>Teacher 预先生成，训练期间<strong>固定不变</strong></td>
+                <td>Student 当前版本<strong>实时采样</strong></td>
+              </tr>
+              <tr>
+                <td><strong>监督信号</strong></td>
+                <td>Teacher 的 token 序列（hard label 或 soft logit）<br>强迫 student 走 teacher 的路</td>
+                <td>Teacher 在 <em>student 自己路径</em>上的 logit 差（dense Advantage）<br>在 student 自己的路上纠偏</td>
+              </tr>
+              <tr>
+                <td><strong>暴露偏差</strong></td>
+                <td style="color:#dc2626;font-weight:600;">存在（训练分布 ≠ 推理分布）</td>
+                <td style="color:#16a34a;font-weight:600;">消除（训练时就在 student 自己的分布上）</td>
+              </tr>
+              <tr>
+                <td><strong>Confident Conflict</strong></td>
+                <td style="color:#dc2626;font-weight:600;">严重（强迫拟合 student 概率极低的 token）</td>
+                <td style="color:#16a34a;font-weight:600;">不存在（只在 student 自己生成的 token 上计算）</td>
+              </tr>
+              <tr>
+                <td><strong>遗忘风险</strong></td>
+                <td style="color:#dc2626;font-weight:600;">高（Mode-Covering，被迫覆盖新分布）</td>
+                <td style="color:#16a34a;font-weight:600;">低（温和校正，不暴力改写参数）</td>
+              </tr>
+              <tr>
+                <td><strong>计算成本</strong></td>
+                <td>低（数据预生成，离线）</td>
+                <td>中（需要实时 teacher forward + student sampling）</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 1.4 vs On-Policy RL -->
+        <h3 id="opd-vs-rl">1.4 OPD vs On-Policy RL（PPO / GRPO）</h3>
+
+        <p>OPD 和 RL 都是 on-policy 的，因此都具备抗遗忘的优势。但两者在监督信号上有本质区别：</p>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:16px 0;">
+          <div style="background:#fef9f0;border:1px solid #fde68a;border-radius:14px;padding:16px 18px;">
+            <div style="font-size:14px;font-weight:700;color:#78350f;margin-bottom:8px;">On-Policy RL（PPO/GRPO）</div>
+            <div style="font-size:13px;color:#374151;line-height:1.85;">
+              <strong>奖励信号稀疏：</strong>只在序列最终结果上给出 reward（比如"答案对/错"），整条轨迹所有 token 共享同一个信号。<br><br>
+              <strong>Advantage 估计困难：</strong>需要多次 rollout（group size=8~32）来通过组内对比估计 baseline，计算开销大。<br><br>
+              <strong>细粒度不足：</strong>不知道轨迹中哪些 token"走错了"，只知道整体结果好坏。
+            </div>
+          </div>
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;padding:16px 18px;">
+            <div style="font-size:14px;font-weight:700;color:#166534;margin-bottom:8px;">On-Policy Distillation（OPD）</div>
+            <div style="font-size:13px;color:#374151;line-height:1.85;">
+              <strong>信号密集：</strong>每一个 token 都有 teacher 概率作为纠偏信号（dense feedback），无需等最终结果。<br><br>
+              <strong>无需多次 rollout：</strong>Group size = 1 即可，因为 Advantage 直接由 teacher-student log ratio 给出，不依赖组内对比。Batch size 可以大幅增大（如 1024）。<br><br>
+              <strong>收敛更快：</strong>Xie et al. (ICML 2025) 实验显示，OPD 在推理任务上相同数据量下训练速度比 GRPO 快 8–16 倍。
+            </div>
+          </div>
+        </div>
+
+        <div class="callout-purple">
+          <div class="callout-title">📌 OPD = RL 的 On-Policy 优势 + SFT 的密集监督信号</div>
+          <p style="font-size:14px;margin:0;line-height:1.85;">OPD 同时继承了两种方法的优点：<br>
+          • 来自 RL：<strong>on-policy 抗遗忘</strong>（分布真实、低 KL、避免强迫冲突）<br>
+          • 来自 SFT：<strong>密集监督信号</strong>（每个 token 都有校正，不需要等最终结果）<br>
+          • 克服 RL 的缺点：<strong>奖励稀疏问题</strong>（teacher logit 提供 per-token 信号）<br>
+          • 克服 SFT 的缺点：<strong>Confident Conflict 问题</strong>（student 自己生成序列）</p>
+        </div>
+
+        <!-- 1.5 Logit 空间整合 -->
+        <h3 id="opd-logit-space">1.5 Logit 空间整合 vs 参数空间整合</h3>
+
+        <p>OPD 的一个更深层的方法论意义在于：它提供了一种<strong>在 logit 空间整合知识</strong>的方式，区别于传统的参数空间操作。</p>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:16px 0;">
+          <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:14px;padding:16px 18px;">
+            <div style="font-size:14px;font-weight:700;color:#991b1b;margin-bottom:8px;">❌ 参数空间整合（传统方案）</div>
+            <div style="font-size:13px;color:#374151;line-height:1.85;">
+              <strong>Weight Merge（模型平均）：</strong>直接对多个专家的参数取平均或加权混合。各专家能力在参数空间里"稀释"，精细能力消失。<br><br>
+              <strong>Mixed RL：</strong>同时对多个领域目标做联合强化，各目标梯度互相干扰（See-Saw Effect），很难同时提升所有能力。<br><br>
+              <strong>根本问题：</strong>不同任务/领域的能力在参数空间里共用相同的权重矩阵，整合时必然相互干扰。
+            </div>
+          </div>
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;padding:16px 18px;">
+            <div style="font-size:14px;font-weight:700;color:#166534;margin-bottom:8px;">✅ Logit 空间整合（OPD）</div>
+            <div style="font-size:13px;color:#374151;line-height:1.85;">
+              <strong>专家保持独立：</strong>各领域 teacher 模型完全独立存在，不需要合并参数。<br><br>
+              <strong>知识以分布形式流动：</strong>Teacher 的知识以"在 student 自己轨迹上的 logit 概率"形式传入 student，不是参数层面的直接操作。<br><br>
+              <strong>两个空间互不干扰：</strong>Teacher 的参数空间和 student 的训练更新空间完全分离，各专家能力通过 logit 信号有序整合，精细差异得以保留。
+            </div>
+          </div>
+        </div>
+
+        <div class="big-concept">
+          <div class="big-concept-title">🔬 核心洞见：语言模型的能力更容易在 Logit 空间合并</div>
+          <p style="font-size:14px;margin:0;line-height:1.9;">
+            OPD 被 Qwen3、GLM-5、MiMo-V2、DeepSeek V4 四家团队从不同角度独立发现并采用，说明它触及了某种更深层的结构性真理：<br><br>
+            <em>"语言模型的能力，在 logit 空间比在参数空间更容易合并、迁移和保留。"</em><br><br>
+            这是因为 logit 分布直接编码了"给定上下文，模型认为什么 token 合适"——这是模型能力的直接表达，而参数矩阵是这种表达的间接编码，整合参数等于间接整合能力，误差不可避免。
+          </p>
+        </div>
+      </section>
+
+
+      <!-- ══ §1 OPD ══ -->
+      <section class="section" id="distillation">
+        <div class="section-title">
+          <div class="icon" style="background:#ede9fe;">🔬</div>
+          §2 On-Policy Cross-Stage Distillation：防止训了一路忘了一路
+        </div>
+
+        <h3>§2 On-Policy Cross-Stage Distillation：防止训了一路忘了一路</h3>
+
+        <!-- ── 1.1 问题背景 ── -->
+        <h4 id="distillation-bg">1.1 问题背景：多阶段 RL 的灾难性遗忘</h4>
+        <p>GLM-5 的 Post-Training 流水线是 SFT → Reasoning RL → Agentic RL → General RL 四段串联。每个阶段针对不同目标优化，但这也带来了一个严峻问题：</p>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0;">
+          <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:14px 16px;">
+            <div style="font-size:13px;font-weight:700;color:#991b1b;margin-bottom:6px;">😰 灾难性遗忘（Catastrophic Forgetting）</div>
+            <div style="font-size:13px;color:#374151;line-height:1.7;">Agentic RL 阶段专注于 SWE / 终端任务的多步执行，但使用的数据分布与数学推理完全不同。训练结束时，模型很可能忘掉了 Reasoning RL 阶段学到的精密数学推导能力。</div>
+          </div>
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:14px 16px;">
+            <div style="font-size:13px;font-weight:700;color:#166534;margin-bottom:6px;">🎯 目标：全能不偏科</div>
+            <div style="font-size:13px;color:#374151;line-height:1.7;">我们希望最终模型能同时保留：Reasoning RL 的数学推理、Agentic RL 的多步执行、General RL 的通用对话质量。任何一项的退化都是不可接受的。</div>
+          </div>
+        </div>
+
+        <!-- 数据支撑 -->
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:16px 20px;margin:14px 0;">
+          <div style="font-size:13px;font-weight:700;color:#78350f;margin-bottom:10px;">📊 实证数据：SFT 遗忘 vs RL 遗忘对比</div>
+          <p style="font-size:13px;color:#374151;margin:0 0 8px;">来自 Lai et al. (2025) [arXiv:2507.05386] 在 7 个多模态任务上的持续后训练实验（基座模型 Qwen-2.5-VL-7B-Instruct）：</p>
+          <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+              <thead>
+                <tr style="background:#fef9c3;">
+                  <th style="padding:7px 10px;text-align:left;border:1px solid #fde68a;">训练方法</th>
+                  <th style="padding:7px 10px;text-align:center;border:1px solid #fde68a;">最终平均准确率 AvgAcc</th>
+                  <th style="padding:7px 10px;text-align:center;border:1px solid #fde68a;">遗忘度量 FM（越接近 0 越好）</th>
+                  <th style="padding:7px 10px;text-align:left;border:1px solid #fde68a;">说明</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td style="padding:6px 10px;border:1px solid #fde68a;font-weight:600;">多任务联合训练（上限）</td><td style="padding:6px 10px;border:1px solid #fde68a;text-align:center;">62.9%</td><td style="padding:6px 10px;border:1px solid #fde68a;text-align:center;">—</td><td style="padding:6px 10px;border:1px solid #fde68a;">理想上限，同时访问所有数据</td></tr>
+                <tr style="background:#fef3f2;"><td style="padding:6px 10px;border:1px solid #fde68a;font-weight:600;">SFT 持续训练</td><td style="padding:6px 10px;border:1px solid #fde68a;text-align:center;color:#dc2626;">54%</td><td style="padding:6px 10px;border:1px solid #fde68a;text-align:center;color:#dc2626;">−10.4%</td><td style="padding:6px 10px;border:1px solid #fde68a;">严重遗忘，越往后越差</td></tr>
+                <tr style="background:#f0fdf4;"><td style="padding:6px 10px;border:1px solid #fde68a;font-weight:600;">GRPO (RL) 持续训练</td><td style="padding:6px 10px;border:1px solid #fde68a;text-align:center;color:#16a34a;">60%</td><td style="padding:6px 10px;border:1px solid #fde68a;text-align:center;color:#16a34a;">−2.3%</td><td style="padding:6px 10px;border:1px solid #fde68a;">接近上限，遗忘极小</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p style="font-size:12px;color:#6b7280;margin:8px 0 0;">SFT 的非目标任务准确率下降最多达 30%，而 RL 的准确率下降不足 1%（Chen et al. 2025 [arXiv:2510.18874]）。</p>
+        </div>
+
+        <!-- ── 1.2 为什么 RL 天然抗遗忘 ── -->
+        <h4 id="distillation-why-rl">1.2 为什么 RL 天然抗遗忘？三个视角</h4>
+
+        <!-- 视角 1：Mode-Seeking vs Mode-Covering -->
+        <div style="border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;margin:14px 0;">
+          <div style="background:#1e3a5f;padding:11px 18px;">
+            <span style="color:#93c5fd;font-size:13px;font-weight:700;">视角一：Mode-Seeking vs Mode-Covering（目标函数的根本差异）</span>
+          </div>
+          <div style="padding:16px 18px;background:#f8fafc;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+              <div style="background:#fef2f2;border-radius:10px;padding:12px 14px;">
+                <div style="font-size:13px;font-weight:700;color:#991b1b;margin-bottom:6px;">SFT ≈ 前向 KL（Mode-Covering）</div>
+                <div style="font-size:13px;color:#374151;line-height:1.7;">
+                  SFT 的负对数似然等价于：<br>
+                  <code style="background:#fee2e2;padding:2px 6px;border-radius:4px;font-size:12px;">minimize KL(π* ‖ π_θ)</code><br><br>
+                  这是 Mode-Covering 目标——模型对数据集中的<strong>任何一个输出</strong>都不敢忽视，必须给每种完成方式分配一定概率，否则对数概率趋近负无穷会导致巨大的损失。<br><br>
+                  <strong>后果：</strong>新任务数据和旧任务分布完全不同时，模型被迫"覆盖"新分布，不可避免地破坏了对旧分布的记忆。
+                </div>
+              </div>
+              <div style="background:#f0fdf4;border-radius:10px;padding:12px 14px;">
+                <div style="font-size:13px;font-weight:700;color:#166534;margin-bottom:6px;">RL ≈ 逆向 KL（Mode-Seeking）</div>
+                <div style="font-size:13px;color:#374151;line-height:1.7;">
+                  RL 的目标等价于：<br>
+                  <code style="background:#dcfce7;padding:2px 6px;border-radius:4px;font-size:12px;">minimize KL(π_θ ‖ π*)</code><br><br>
+                  这是 Mode-Seeking 目标——模型只专注于高奖励的输出模式，不需要覆盖所有可能。对低奖励的输出概率降低，不会形成"被迫覆盖新分布"的情况。<br><br>
+                  <strong>后果：</strong>即使新任务分布与旧任务不同，模型也只沿着奖励梯度更新，不会无差别地破坏旧能力。
+                </div>
+              </div>
+            </div>
+            <div style="background:#eff6ff;border-left:3px solid #3b82f6;border-radius:0 8px 8px 0;padding:10px 14px;font-size:12px;color:#1e40af;line-height:1.7;">
+              <strong>数学直觉：</strong>当目标分布是多峰的（既有旧任务能力又有新任务能力），前向 KL 强迫模型覆盖所有峰，导致旧峰被新峰"稀释"；逆向 KL 让模型只爬到它自己认为最重要的峰，保持对旧能力的峰值。
+            </div>
+          </div>
+        </div>
+
+        <!-- 视角 2：On-Policy 数据 -->
+        <div style="border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;margin:14px 0;">
+          <div style="background:#1e3a5f;padding:11px 18px;">
+            <span style="color:#93c5fd;font-size:13px;font-weight:700;">视角二：On-Policy 数据消除了"强迫冲突"</span>
+          </div>
+          <div style="padding:16px 18px;background:#f8fafc;">
+            <p style="font-size:13px;color:#374151;margin:0 0 10px;">Diao et al. (2025) [arXiv:2601.02151] 观测到一个关键现象：SFT 中存在大量 <strong>"Confident Conflict"（自信冲突）</strong> token——模型对该 token 几乎确定是另一个词（低概率、低熵），但 SFT 标注强迫它去拟合这个 token。</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+              <div style="background:#fef2f2;border-radius:8px;padding:12px;font-size:13px;">
+                <div style="font-weight:700;color:#991b1b;margin-bottom:5px;">❌ SFT：强迫冲突</div>
+                <div style="color:#374151;line-height:1.7;">模型对某 token 的概率极低（比如 1%），但标注数据要求它出现。SFT 的梯度极大，会暴力更新参数，破坏通用表示。</div>
+              </div>
+              <div style="background:#f0fdf4;border-radius:8px;padding:12px;font-size:13px;">
+                <div style="font-weight:700;color:#166534;margin-bottom:5px;">✅ RL：自然选择</div>
+                <div style="color:#374151;line-height:1.7;">RL 使用 on-policy 数据，模型生成的序列本身就是模型"觉得对的"序列，概率不低，梯度温和，不会激烈改写已有知识。</div>
+              </div>
+            </div>
+            <div style="background:#fef9f0;border:1px solid #fcd34d;border-radius:8px;padding:10px 14px;font-size:12px;color:#374151;line-height:1.7;">
+              <strong style="color:#92400e;">实验验证：</strong>Chen et al. (2025) 将 SFT 改成 on-policy SFT（每轮重新采样当前模型的输出作为训练数据），遗忘程度立即大幅降低，接近 RL 水平——说明 <strong>抗遗忘的核心是 on-policy 数据，而不是 RL 算法本身</strong>。
+            </div>
+          </div>
+        </div>
+
+        <!-- 视角 3：RL's Razor -->
+        <div style="border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;margin:14px 0;">
+          <div style="background:#1e3a5f;padding:11px 18px;">
+            <span style="color:#93c5fd;font-size:13px;font-weight:700;">视角三：RL's Razor——RL 天然偏向低 KL 解</span>
+          </div>
+          <div style="padding:16px 18px;background:#f8fafc;">
+            <p style="font-size:13px;color:#374151;margin:0 0 10px;">Shenfeld et al. (2025) [arXiv:2509.04259] 提出了 "RL's Razor" 定理：<strong>在众多可以得高分的解中，RL（on-policy 方法）天然偏向那些与原始 policy 相距最近（KL 最小）的解</strong>。</p>
+            <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:14px 16px;font-size:13px;color:#374151;line-height:1.8;">
+              <strong style="color:#5b21b6;">为什么？</strong>RL 的优化目标中，reward 最大化和 KL 最小化同时存在——on-policy 更新带来的约束隐式地惩罚了大的分布偏移，使得 RL 总是倾向于在当前 policy 附近找到满足 reward 的解，而不是跳到很远的参数空间。<br><br>
+              <strong>实验量化：</strong>在 Qwen-2.5-3B-Instruct 上，SFT 与 base 模型的 KL 散度可能达到 RL 的 5-10 倍；这个 KL 散度与任务遗忘程度呈高度相关。换句话说，<strong>KL 散度就是遗忘程度的最强预测指标</strong>。
+            </div>
+          </div>
+        </div>
+
+        <!-- ── 1.3 OPD 的设计 ── -->
+        <h4 id="distillation-design">1.3 On-Policy Cross-Stage Distillation 的设计</h4>
+
+        <p>GLM-5 选择了一种"事后补救"方案：在所有 RL 阶段结束后，专门增加一个 <strong>On-Policy Cross-Stage Distillation（跨阶段在线蒸馏）</strong> 阶段，系统性地"复习"各阶段的能力。</p>
+
+        <div class="analogy-box">
+          <div class="analogy-title">🧸 类比</div>
+          <p style="font-size:14px;margin:0;">一个学生先学了数学、然后学编程、最后学写作——每学一科都可能忘掉之前学的。Cross-Stage Distillation 相当于学完所有科目后的"期末综合复习"——请每位科目老师分别出题让学生做，哪里掌握不好就纠正哪里。</p>
+        </div>
+
+        <!-- 技术组成 -->
+        <h5 style="font-weight:700;color:#4c1d95;margin:16px 0 10px;">① Teacher 的构成</h5>
+        <div style="overflow-x:auto;margin:10px 0 16px;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+              <tr style="background:#ede9fe;">
+                <th style="padding:8px 12px;text-align:left;border:1px solid #ddd6fe;">Teacher Checkpoint</th>
+                <th style="padding:8px 12px;text-align:left;border:1px solid #ddd6fe;">擅长的能力</th>
+                <th style="padding:8px 12px;text-align:left;border:1px solid #ddd6fe;">对应的训练集（采样来源）</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td style="padding:7px 12px;border:1px solid #ede9fe;font-weight:600;">SFT 最终 checkpoint</td><td style="padding:7px 12px;border:1px solid #ede9fe;">通用对话、格式遵循</td><td style="padding:7px 12px;border:1px solid #ede9fe;">SFT 训练集</td></tr>
+              <tr style="background:#faf5ff;"><td style="padding:7px 12px;border:1px solid #ede9fe;font-weight:600;">Reasoning RL 最终 checkpoint</td><td style="padding:7px 12px;border:1px solid #ede9fe;">数学推理、科学推理、代码竞赛</td><td style="padding:7px 12px;border:1px solid #ede9fe;">Reasoning RL 训练集（数学/科学/代码题目）</td></tr>
+              <tr><td style="padding:7px 12px;border:1px solid #ede9fe;font-weight:600;">General RL 最终 checkpoint</td><td style="padding:7px 12px;border:1px solid #ede9fe;">人类偏好、情感智能、任务质量</td><td style="padding:7px 12px;border:1px solid #ede9fe;">General RL 训练集（写作/QA/角色扮演等）</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p style="font-size:13px;color:#4b5563;">GLM-5 论文原文：<em>"the final checkpoints from the preceding training stages serve as teacher models, where the training prompts are sampled from the corresponding teachers' RL training sets and mixed in appropriate proportions."</em></p>
+
+        <!-- 多 Teacher 冲突问题 -->
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:14px 18px;margin:12px 0 18px;">
+          <div style="font-size:13px;font-weight:700;color:#78350f;margin-bottom:10px;">❓ 多个 teacher 同时存在，不会产生冲突吗？</div>
+          <p style="font-size:13px;color:#374151;margin:0 0 10px;line-height:1.7;"><strong>不会冲突——因为每个 prompt 只由一个 teacher 负责，teacher 之间是「分工」而不是「同时指挥」。</strong></p>
+
+          <!-- 示意图：batch 分工 -->
+          <div style="overflow-x:auto;margin-bottom:12px;">
+            <table style="border-collapse:collapse;font-size:12px;min-width:480px;width:100%;">
+              <thead>
+                <tr style="background:#fef9c3;">
+                  <th style="padding:7px 10px;text-align:left;border:1px solid #fde68a;">Batch 内样本</th>
+                  <th style="padding:7px 10px;text-align:left;border:1px solid #fde68a;">来自哪个 Teacher 的训练集</th>
+                  <th style="padding:7px 10px;text-align:left;border:1px solid #fde68a;">Advantage 由谁计算</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td style="padding:6px 10px;border:1px solid #fef9c3;">数学推导题 prompt₁</td><td style="padding:6px 10px;border:1px solid #fef9c3;">Reasoning RL teacher</td><td style="padding:6px 10px;border:1px solid #fef9c3;color:#7c3aed;font-weight:600;">Reasoning RL teacher</td></tr>
+                <tr style="background:#fafafa;"><td style="padding:6px 10px;border:1px solid #fef9c3;">数学推导题 prompt₂</td><td style="padding:6px 10px;border:1px solid #fef9c3;">Reasoning RL teacher</td><td style="padding:6px 10px;border:1px solid #fef9c3;color:#7c3aed;font-weight:600;">Reasoning RL teacher</td></tr>
+                <tr><td style="padding:6px 10px;border:1px solid #fef9c3;">写作对话题 prompt₃</td><td style="padding:6px 10px;border:1px solid #fef9c3;">General RL teacher</td><td style="padding:6px 10px;border:1px solid #fef9c3;color:#166534;font-weight:600;">General RL teacher</td></tr>
+                <tr style="background:#fafafa;"><td style="padding:6px 10px;border:1px solid #fef9c3;">指令遵循题 prompt₄</td><td style="padding:6px 10px;border:1px solid #fef9c3;">SFT teacher</td><td style="padding:6px 10px;border:1px solid #fef9c3;color:#1d4ed8;font-weight:600;">SFT teacher</td></tr>
+                <tr><td style="padding:6px 10px;border:1px solid #fef9c3;">写作对话题 prompt₅</td><td style="padding:6px 10px;border:1px solid #fef9c3;">General RL teacher</td><td style="padding:6px 10px;border:1px solid #fef9c3;color:#166534;font-weight:600;">General RL teacher</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px;">
+            <div style="background:#fef2f2;border-radius:8px;padding:10px 12px;">
+              <strong style="color:#991b1b;">❌ 若同一 prompt 同时问多个 teacher</strong><br>
+              <span style="color:#374151;line-height:1.7;">同一道数学题——Reasoning RL teacher 说"应该推导"，General RL teacher 说"应该简洁"，两个梯度方向相反，会相互抵消，白白浪费计算资源，甚至导致震荡。</span>
+            </div>
+            <div style="background:#f0fdf4;border-radius:8px;padding:10px 12px;">
+              <strong style="color:#166534;">✅ OPD 的实际做法：按来源分配</strong><br>
+              <span style="color:#374151;line-height:1.7;">prompt 采样自哪个 teacher 的训练集，就只由那个 teacher 计算 advantage。就像多任务学习里不同任务的样本在同一个 batch 混合——每条样本只属于一个任务，梯度不冲突。</span>
+            </div>
+          </div>
+
+          <div style="background:#f5f3ff;border-left:3px solid #7c3aed;border-radius:0 8px 8px 0;padding:9px 13px;font-size:12px;color:#374151;line-height:1.7;margin-top:10px;">
+            <strong style="color:#5b21b6;">本质上：</strong>多个 teacher 的关系是<strong>并行的专家分工</strong>，不是"多个老师同时指导同一道题"——每位老师只批改自己出的题目。GLM-5 论文明确说"prompts are sampled from the <em>corresponding</em> teachers' RL training sets"，对应的就是这个分工关系。
+          </div>
+        </div>
+
+        <!-- 核心算法 -->
+        <h5 style="font-weight:700;color:#4c1d95;margin:16px 0 10px;">② 核心算法流程（竖向时间线）</h5>
+
+        <div style="position:relative;padding-left:52px;margin:18px 0;">
+          <div style="position:absolute;left:15px;top:0;bottom:0;width:2px;background:linear-gradient(to bottom,#7c3aed,#c4b5fd);border-radius:2px;"></div>
+
+          <!-- Step 1 -->
+          <div style="position:relative;margin-bottom:20px;">
+            <div style="position:absolute;left:-45px;top:0;width:30px;height:30px;border-radius:50%;background:#7c3aed;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;box-shadow:0 2px 8px rgba(124,58,237,0.35);">1</div>
+            <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:12px;padding:14px 18px;">
+              <strong style="font-size:14px;color:#4c1d95;">采样 Prompt $x$</strong>
+              <p style="font-size:13px;color:#374151;margin:6px 0 0;">从各 teacher 的训练集按比例混合采样 prompt。比例的设计需要平衡各阶段能力的重要性，GLM-5 未公开具体比例，但原则是"哪个阶段能力退化最多，就多采样哪个阶段的 prompt"。</p>
+            </div>
+          </div>
+
+          <!-- Step 2 -->
+          <div style="position:relative;margin-bottom:20px;">
+            <div style="position:absolute;left:-45px;top:0;width:30px;height:30px;border-radius:50%;background:#7c3aed;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;box-shadow:0 2px 8px rgba(124,58,237,0.35);">2</div>
+            <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:12px;padding:14px 18px;">
+              <strong style="font-size:14px;color:#4c1d95;">On-Policy 生成轨迹 $y$</strong>
+              <p style="font-size:13px;color:#374151;margin:6px 0 10px;">用当前 student（即 Agentic RL 完成后的模型）在 prompt 上生成轨迹。<strong>Group size = 1</strong>（每个 prompt 只生成 1 条轨迹，不需要多条来估计 reward 方差）。</p>
+
+              <!-- ── 三列精准对比表 ── -->
+              <div style="background:#fff;border:1px solid #ddd6fe;border-radius:12px;padding:14px 16px;">
+                <div style="font-size:13px;font-weight:700;color:#5b21b6;margin-bottom:10px;">💡 Off-Policy vs On-Policy：三类方法精确对比</div>
+
+                <!-- 核心说明 -->
+                <p style="font-size:13px;color:#374151;margin:0 0 12px;line-height:1.7;"><strong>Policy（策略）= 模型本身</strong>，即给定上下文输出下一个 token 的概率分布 $\pi(y_t \mid x, y_{&lt;t})$。On/Off-Policy 的区别在于：<strong>训练数据是由「当前正在被训练的模型」生成的，还是由其他来源提供的</strong>。</p>
+
+                <!-- 对比表 -->
+                <div style="overflow-x:auto;margin-bottom:14px;">
+                  <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:560px;">
+                    <thead>
+                      <tr style="background:#ede9fe;">
+                        <th style="padding:8px 10px;text-align:left;border:1px solid #ddd6fe;min-width:110px;">维度</th>
+                        <th style="padding:8px 10px;text-align:left;border:1px solid #ddd6fe;background:#fef2f2;color:#991b1b;">Off-Policy<br><span style="font-weight:400;">SFT</span></th>
+                        <th style="padding:8px 10px;text-align:left;border:1px solid #ddd6fe;background:#f0fdf4;color:#166534;">On-Policy<br><span style="font-weight:400;">PPO / GRPO</span></th>
+                        <th style="padding:8px 10px;text-align:left;border:1px solid #ddd6fe;background:#eff6ff;color:#1d4ed8;">On-Policy<br><span style="font-weight:400;">OPD（本阶段）</span></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;font-weight:600;color:#4b5563;">数据来源</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#fef9f9;">Teacher / 人工预先生成，<br>训练期间<strong>固定不变</strong></td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#f9fefe;">Student 当前版本<strong>实时采样</strong></td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#f8fbff;">Student 当前版本<strong>实时采样</strong></td>
+                      </tr>
+                      <tr style="background:#fafafa;">
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;font-weight:600;color:#4b5563;">监督信号</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#fef9f9;"><strong>Hard label NTP</strong><br>下一个 token 必须是什么（one-hot）</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#f9fefe;"><strong>Sparse Reward</strong><br>仅最终答案对/错才有信号，所有 token 共享同一奖励</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#f8fbff;"><strong>Dense Soft Label</strong><br>每个 token 都有 teacher 的概率分布作为纠偏信号</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;font-weight:600;color:#4b5563;">比值 $r_t$ 的含义</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#fef9f9;">——（无此概念）</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#f9fefe;"><strong>重要性采样比</strong>（IS ratio）<br>$r_t = \dfrac{\pi_\theta(y_t)}{\pi_\text{old}(y_t)}$<br><br>作用：校正"采样时的模型"与"更新时的模型"之间的分布偏差，使得一批数据可以做多步梯度更新</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#f8fbff;">——（也有 IS ratio，但 Advantage 不来自 reward，而来自 teacher-student 对数差）</td>
+                      </tr>
+                      <tr style="background:#fafafa;">
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;font-weight:600;color:#4b5563;">Advantage 来源</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#fef9f9;">——（无 Advantage，直接 MLE）</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#f9fefe;"><strong>组内 Reward 对比</strong><br>同组 G 条回答，答对的 $A&gt;0$，答错的 $A&lt;0$</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#f8fbff;"><strong>Teacher–Student 对数差</strong><br>$\hat{A}_t = \log\pi_\text{teacher}(y_t) - \log\pi_\text{student}(y_t)$<br>无需 reward，直接由概率差驱动</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;font-weight:600;color:#4b5563;">KL 约束 / 参考模型</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#fef9f9;">无</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#f9fefe;"><strong>$\pi_\text{ref}$（冻结的 SFT 模型）</strong><br>KL 惩罚项 $\beta \cdot D_\text{KL}(\pi_\theta \| \pi_\text{ref})$，防止模型偏离 SFT 分布太远、让 reward model 打分失效（<strong>≠ teacher，是锚点</strong>）</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#f8fbff;">Teacher 本身即约束，advantage 为负时自动压制偏离方向，无需额外 KL 项</td>
+                      </tr>
+                      <tr style="background:#fafafa;">
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;font-weight:600;color:#4b5563;">遗忘风险</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#fef9f9;color:#dc2626;font-weight:600;">高</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#f9fefe;color:#ca8a04;font-weight:600;">中（on-policy 天然抑制遗忘，但奖励稀疏）</td>
+                        <td style="padding:7px 10px;border:1px solid #ede9fe;background:#f8fbff;color:#16a34a;font-weight:600;">低（on-policy + 密集信号 + 显式指向旧能力）</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <!-- 关键澄清 -->
+                <div style="background:#fef9c3;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#374151;line-height:1.7;">
+                  <strong style="color:#92400e;">⚠️ 容易混淆的地方：PPO 中的 $\pi_\text{old}$ 和 $\pi_\text{ref}$ 是两回事！</strong><br>
+                  • <strong>$\pi_\text{old}$</strong>（采样策略）：上一批次更新前的快照，每个 mini-batch 后就替换。用于计算重要性采样比 $r_t$，让同一批数据可以做多步更新，是 <strong>on-policy 机制的一部分</strong>。<br>
+                  • <strong>$\pi_\text{ref}$</strong>（参考模型）：训练开始时冻结的 SFT 模型，全程不变。用于 KL 散度惩罚项，防止模型飘得太远，是<strong>约束 / 锚点</strong>，不是 teacher。<br>
+                  两者目的完全不同，$\pi_\text{old}$ 解决"分布漂移的梯度校正"，$\pi_\text{ref}$ 解决"防止 reward hacking"。
+                </div>
+              </div>
+
+              <div style="background:#eff6ff;border-left:3px solid #3b82f6;padding:9px 13px;border-radius:0 8px 8px 0;font-size:12px;color:#1e40af;line-height:1.7;margin-top:10px;">
+                <strong>Group size = 1 的原因：</strong>普通 GRPO 中 group size 设为 8–32，是为了通过组内奖励对比来估计 Advantage。OPD 不需要这个——Advantage 直接由 teacher 和 student 的对数概率差计算，不依赖组内对比，所以一条样本就够。这大幅提升了吞吐量（batch size 设为 1024）。
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 3 -->
+          <div style="position:relative;margin-bottom:20px;">
+            <div style="position:absolute;left:-45px;top:0;width:30px;height:30px;border-radius:50%;background:#7c3aed;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;box-shadow:0 2px 8px rgba(124,58,237,0.35);">3</div>
+            <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:12px;padding:14px 18px;">
+              <strong style="font-size:14px;color:#4c1d95;">计算 Token 级 Advantage</strong>
+              <p style="font-size:13px;color:#374151;margin:6px 0 8px;">对 student 生成的轨迹中<strong>每个 token</strong>，分别用 teacher 和 student 前向算一遍，得到两个对数概率，相减得到 Advantage：</p>
+              <div style="overflow-x:auto;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:18px 22px;margin:8px 0;">
+                <div style="color:#e2e8f0;font-size:15px;text-align:center;">
+                  $$\hat{A}_{i,t} = \text{sg}\!\left[\log\frac{\pi_{\theta_{\text{teacher}}}^{\text{infer}}(y_{i,t}\mid x,\, y_{i,&lt;t})}{\pi_{\theta}^{\text{train}}(y_{i,t}\mid x,\, y_{i,&lt;t})}\right]$$
+                </div>
+              </div>
+              <p style="font-size:12px;color:#6b7280;margin:6px 0 10px;">其中 <code>sg[·]</code> 表示 stop gradient（停止梯度回传），Advantage 只用于指导更新方向，不参与对 teacher 参数的梯度计算。teacher 用推理引擎取概率，student 用训练引擎计算梯度。</p>
+              <!-- Advantage 含义 -->
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div style="background:#dcfce7;border-radius:8px;padding:10px 12px;font-size:13px;">
+                  <strong style="color:#166534;">Â &gt; 0：teacher 认为该 token 更重要</strong><br>
+                  <span style="color:#374151;font-size:12px;">student 生成了该 token，但 teacher 比 student 更"确信"它是对的。推动 student 提高该 token 的概率——意味着 student 在这个位置偏保守，需要向 teacher 学习。</span>
+                </div>
+                <div style="background:#fef3c7;border-radius:8px;padding:10px 12px;font-size:13px;">
+                  <strong style="color:#92400e;">Â &lt; 0：student 比 teacher 更偏爱该 token</strong><br>
+                  <span style="color:#374151;font-size:12px;">student 对该 token 的概率超过了 teacher 的预期，可能是"过度生成"某些词。推动 student 适当降低该 token 概率，校正偏差。</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 4 -->
+          <div style="position:relative;margin-bottom:20px;">
+            <div style="position:absolute;left:-45px;top:0;width:30px;height:30px;border-radius:50%;background:#7c3aed;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;box-shadow:0 2px 8px rgba(124,58,237,0.35);">4</div>
+            <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:12px;padding:14px 18px;">
+              <strong style="font-size:14px;color:#4c1d95;">代入策略优化损失更新 Student</strong>
+              <p style="font-size:13px;color:#374151;margin:6px 0 8px;">将 Advantage 代入 GLM-5 采用的 IcePop-GRPO 框架（见式 3.2），替换掉原本的基于 reward 的 Advantage，其余优化过程与 RL 一致。</p>
+              <div style="overflow-x:auto;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:18px 22px;margin:8px 0;">
+                <div style="font-size:14px;text-align:center;">
+                  $$\mathcal{L}(\theta) = -\mathbb{E}_{x,y\sim\pi_\theta}\left[\frac{1}{|y|}\sum_{t=1}^{|y|} \hat{A}_{i,t} \cdot \log\pi_\theta(y_t \mid x, y_{&lt;t})\right]$$
+                </div>
+              </div>
+              <p style="font-size:12px;color:#6b7280;margin:6px 0 0;">因为 $\hat{A}$ 已经是 stop gradient 的常量，这实际上等价于让 student 在自己生成的轨迹上向 teacher 的分布做最大似然拟合——但关键是数据是 on-policy 的，避免了暴力拟合陌生序列的问题。</p>
+            </div>
+          </div>
+
+          <!-- Step 5 -->
+          <div style="position:relative;">
+            <div style="position:absolute;left:-45px;top:0;width:30px;height:30px;border-radius:50%;background:#7c3aed;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;box-shadow:0 2px 8px rgba(124,58,237,0.35);">5</div>
+            <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:12px;padding:14px 18px;">
+              <strong style="font-size:14px;color:#4c1d95;">多 Teacher 串行/并行</strong>
+              <p style="font-size:13px;color:#374151;margin:6px 0 0;">每个 teacher（SFT / Reasoning RL / General RL）对应一批 prompt，在同一次训练中以混合 batch 的形式并行蒸馏。对 student 而言，每个 batch 里可能同时有"让我回想数学能力"和"让我回想写作能力"的信号。</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── 1.4 具体例子 ── -->
+        <h4 id="distillation-example">1.4 具体例子：Agentic RL 后数学能力下降的修复</h4>
+
+        <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:14px;overflow:hidden;margin:14px 0;">
+          <div style="background:#495057;color:#fff;padding:11px 18px;font-size:13px;font-weight:700;">📖 场景：GLM-5 在 Agentic RL 后的状态</div>
+          <div style="padding:16px 18px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px;">
+              <div style="background:#f0fdf4;border-radius:8px;padding:10px;font-size:12px;text-align:center;">
+                <div style="font-weight:700;color:#166534;margin-bottom:4px;">Reasoning RL 结束后</div>
+                <div style="color:#374151;">AIME 2024 准确率：<strong style="color:#16a34a;">42%</strong></div>
+              </div>
+              <div style="background:#fef2f2;border-radius:8px;padding:10px;font-size:12px;text-align:center;">
+                <div style="font-weight:700;color:#991b1b;margin-bottom:4px;">Agentic RL 结束后（遗忘）</div>
+                <div style="color:#374151;">AIME 2024 准确率：<strong style="color:#dc2626;">~28%</strong>（示意）</div>
+              </div>
+              <div style="background:#f0fdf4;border-radius:8px;padding:10px;font-size:12px;text-align:center;">
+                <div style="font-weight:700;color:#166534;margin-bottom:4px;">Cross-Stage Distillation 后</div>
+                <div style="color:#374151;">AIME 2024 准确率：<strong style="color:#16a34a;">~40%</strong>（恢复）</div>
+              </div>
+            </div>
+
+            <p style="font-size:13px;color:#374151;margin:0 0 12px;">Cross-Stage Distillation 如何恢复数学能力？以某道 AIME 题目为例：</p>
+
+            <div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;font-size:12px;">
+              <!-- Header -->
+              <div style="display:grid;grid-template-columns:120px 1fr 1fr;background:#f3f4f6;">
+                <div style="padding:8px 12px;font-weight:700;color:#4b5563;border-right:1px solid #e5e7eb;">训练阶段</div>
+                <div style="padding:8px 12px;font-weight:700;color:#4b5563;border-right:1px solid #e5e7eb;">Prompt: 求 $\sum_{n=1}^{2024}\lfloor\log_2 n\rfloor$</div>
+                <div style="padding:8px 12px;font-weight:700;color:#4b5563;">信号来源</div>
+              </div>
+              <!-- Row 1 -->
+              <div style="display:grid;grid-template-columns:120px 1fr 1fr;border-top:1px solid #e5e7eb;">
+                <div style="padding:8px 12px;color:#374151;border-right:1px solid #e5e7eb;background:#fef9f0;">Reasoning RL Teacher</div>
+                <div style="padding:8px 12px;color:#374151;border-right:1px solid #e5e7eb;">能清晰输出：「先数每个 $k$ 对应多少 $n$，$k=0$ 对应 $n=1$，$k=1$ 对应 $n=2,3$，…」</div>
+                <div style="padding:8px 12px;color:#374151;background:#f0fdf4;">teacher 对这些推导 token 的概率很高（0.85+）</div>
+              </div>
+              <!-- Row 2 -->
+              <div style="display:grid;grid-template-columns:120px 1fr 1fr;border-top:1px solid #e5e7eb;background:#fef2f2;">
+                <div style="padding:8px 12px;color:#374151;border-right:1px solid #e5e7eb;">Agentic RL 后的 Student</div>
+                <div style="padding:8px 12px;color:#374151;border-right:1px solid #e5e7eb;">倾向于输出工具调用：「我需要写一段 Python 来计算这个」（走了捷径）</div>
+                <div style="padding:8px 12px;color:#374151;">student 对"先数每个 $k$ 对应多少 $n$"的概率很低（0.12）</div>
+              </div>
+              <!-- Row 3 -->
+              <div style="display:grid;grid-template-columns:120px 1fr 1fr;border-top:1px solid #e5e7eb;">
+                <div style="padding:8px 12px;color:#374151;border-right:1px solid #e5e7eb;background:#faf5ff;">Distillation 信号</div>
+                <div style="padding:8px 12px;color:#374151;border-right:1px solid #e5e7eb;">$\hat{A} = \log(0.85) - \log(0.12) \approx +1.96$（正值，大力提升这些推导 token 的概率）</div>
+                <div style="padding:8px 12px;color:#374151;background:#dcfce7;">student 被推动，下次做数学题时倾向于数学推导而非直接写代码</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── 1.5 OPD 对比 Off-Policy 蒸馏 ── -->
+        <h4 id="distillation-vs-offpolicy">1.5 为什么不直接用 Off-Policy 蒸馏（直接让 Student 模仿 Teacher 输出）？</h4>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0;">
+          <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:14px 16px;">
+            <div style="font-size:13px;font-weight:700;color:#991b1b;margin-bottom:8px;">❌ Off-Policy 蒸馏（Offline KD）的问题</div>
+            <div style="font-size:13px;color:#374151;line-height:1.8;">
+              做法：让 teacher 生成回答，作为标签 SFT 训练 student。<br><br>
+              <strong>问题1 暴露偏差（Exposure Bias）：</strong>Teacher 生成的序列可能是 student 从未"走过的路"，student 一旦犯了一个错，后续所有步骤的分布都会和 teacher 的不一致，错误累积。<br><br>
+              <strong>问题2 强迫冲突：</strong>Teacher 输出中某些 token 的概率在 student 看来极低，强行拟合会产生大梯度破坏旧能力（即 Confident Conflict 现象）。
+            </div>
+          </div>
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:14px 16px;">
+            <div style="font-size:13px;font-weight:700;color:#166534;margin-bottom:8px;">✅ On-Policy 蒸馏（OPD）的优势</div>
+            <div style="font-size:13px;color:#374151;line-height:1.8;">
+              做法：student 自己生成序列，teacher 在这些序列上提供逐 token 的概率作为"校正信号"。<br><br>
+              <strong>优势1 消除暴露偏差：</strong>Student 自己走出这条路，永远处于自己"熟悉的"分布上，不会发生路径漂移。<br><br>
+              <strong>优势2 温和校正：</strong>Teacher 只在 student 自己选择的 token 上提供纠偏，而不是强迫 student 生成完全不同的序列，梯度不会过大。
+            </div>
+          </div>
+        </div>
+
+        <!-- 来自 OPSD 论文的引用 -->
+        <div style="background:#eff6ff;border-left:3px solid #3b82f6;padding:12px 16px;border-radius:0 10px 10px 0;margin:14px 0;font-size:13px;color:#1e40af;line-height:1.7;">
+          <strong>来自 OPSD 论文（Xie et al., ICML 2025）：</strong><br>
+          On-policy distillation 是"<em>distributional realism of on-policy training</em>（on-policy 训练的分布真实性）"与"<em>dense feedback of supervised learning</em>（监督学习的密集反馈）"的结合，在推理任务上，相同数据量下训练速度比 GRPO 快 8-16 倍，同时比 off-policy SFT 性能更好。
+        </div>
+
+        <!-- ── 1.6 三类方法横向对比 ── -->
+        <h4 id="distillation-compare">1.6 三类持续学习方法横向对比</h4>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>维度</th>
+                <th>SFT（off-policy）</th>
+                <th>普通 RL（on-policy）</th>
+                <th>On-Policy Distillation（OPD）</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>数据来源</strong></td>
+                <td>预先收集的标注数据集（固定）</td>
+                <td>当前模型实时生成（动态）</td>
+                <td>当前模型实时生成（动态）</td>
+              </tr>
+              <tr>
+                <td><strong>监督信号</strong></td>
+                <td>Hard label（下一个 token 是什么）</td>
+                <td>Sparse reward（最终结果对不对）</td>
+                <td>Soft label（teacher 对每个 token 的概率分布）</td>
+              </tr>
+              <tr>
+                <td><strong>信号密度</strong></td>
+                <td>每个 token 都有标签，但 off-policy</td>
+                <td>稀疏（只有最终奖励），token 级无区分</td>
+                <td>密集（每个 token 都有 teacher 概率作为校正）</td>
+              </tr>
+              <tr>
+                <td><strong>遗忘风险</strong></td>
+                <td style="color:#dc2626;font-weight:600;">高（Confident Conflict 导致破坏性梯度）</td>
+                <td style="color:#ca8a04;font-weight:600;">中（on-policy 抗遗忘，但新任务 reward 偏置明显）</td>
+                <td style="color:#16a34a;font-weight:600;">低（on-policy + 温和校正 + 显式指向旧能力）</td>
+              </tr>
+              <tr>
+                <td><strong>新能力吸收</strong></td>
+                <td>强，直接模仿标签分布</td>
+                <td>中，只优化奖励方向，细粒度不足</td>
+                <td>强，teacher 提供分布级细粒度指导</td>
+              </tr>
+              <tr>
+                <td><strong>计算效率</strong></td>
+                <td>高，无需 teacher 前向推理</td>
+                <td>低，需多次 rollout 估计 reward 方差</td>
+                <td>中（需 teacher 前向，但 group=1 节省大量采样）</td>
+              </tr>
+              <tr>
+                <td><strong>典型应用</strong></td>
+                <td>第一阶段能力注入</td>
+                <td>专项能力提升</td>
+                <td>多阶段能力整合与遗忘修复</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ── 总结框 ── -->
+        <div class="big-concept">
+          <div class="big-concept-title">🔬 核心洞见：把 Distillation 当成"软 RL"</div>
+          <p style="font-size:14px;margin:0;line-height:1.9;">
+          On-Policy Cross-Stage Distillation 的本质是：<strong>用 teacher-student 的对数概率差作为 Advantage，代替稀疏 reward，驱动 RL 风格的策略优化</strong>。<br><br>
+          • 它继承了 RL 的 <strong>on-policy 抗遗忘性</strong>（分布真实、低 KL、避免强迫冲突）<br>
+          • 它继承了 SFT 的 <strong>密集监督信号</strong>（每个 token 都有校正）<br>
+          • 它克服了 RL 的 <strong>奖励稀疏问题</strong>（不需要等到最终答案才能得到反馈）<br>
+          • 它克服了 SFT 的 <strong>Confident Conflict 问题</strong>（student 自己生成序列，不强行拟合陌生路径）<br><br>
+          GLM-5 选择将 OPD 放在所有 RL 阶段的最后，作为"<strong>收尾综合复习</strong>"，在一个阶段内同时恢复所有前序阶段的能力，是多阶段 RL 训练工程中的重要实践经验。
+          </p>
+        </div>
+
+        <!-- 参考文献 -->
+        <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:16px 20px;margin:16px 0;font-size:12px;color:#4b5563;line-height:2.0;">
+          <div style="font-weight:700;color:#374151;margin-bottom:8px;">📚 本节主要参考文献</div>
+          <div>[1] GLM-5 Team. <em>GLM-5: from Vibe Coding to Agentic Engineering.</em> arXiv:2602.15763 (2025). <em>— OPD 在 GLM-5 中的具体实现</em></div>
+          <div>[2] Xie et al. <em>On-Policy Self-Distillation for Large Language Models.</em> ICML 2025. arXiv:2601.18734. <em>— OPSD：teacher 与 student 同一模型，不同 context 的 on-policy 蒸馏</em></div>
+          <div>[3] Lai et al. <em>Reinforcement Fine-Tuning Naturally Mitigates Forgetting in Continual Post-Training.</em> arXiv:2507.05386 (2025). <em>— RL 天然抗遗忘的实证研究</em></div>
+          <div>[4] Chen et al. <em>Retaining by Doing: The Role of On-Policy Data in Mitigating Forgetting.</em> arXiv:2510.18874 (2025). <em>— On-policy 数据是抗遗忘的关键</em></div>
+          <div>[5] Shenfeld et al. <em>RL's Razor: Why Online Reinforcement Learning Forgets Less.</em> arXiv:2509.04259 (2025). <em>— RL 偏向低 KL 解的理论分析</em></div>
+          <div>[6] Diao et al. <em>Entropy-Adaptive Fine-Tuning: Resolving Confident Conflicts to Mitigate Forgetting.</em> arXiv:2601.02151 (2025). <em>— Confident Conflict 现象分析</em></div>
+          <div>[7] Cao et al. <em>X-OPD: Cross-Modal On-Policy Distillation for Capability Alignment in Speech LLMs.</em> arXiv:2603.24596 (2025). <em>— 跨模态 on-policy 蒸馏的扩展实践</em></div>
+        </div>
+      </section>
+
+      <section class="section" id="kl-direction">
+        <div class="section-title">
+          <div class="icon" style="background:#dbeafe;">🔀</div>
+          §3 Forward KL vs Reverse KL：优化方向决定遗忘程度
+        </div>
+
+        <p>在 3.5.2 节中，我们提到<strong>SFT ≈ Forward KL（Mode-Covering）</strong>而<strong>RL ≈ Reverse KL（Mode-Seeking）</strong>，这直接决定了两种方法的遗忘风险差异。本节深入解释这一关键概念。</p>
+
+        <!-- ── 2.1 数学定义 ── -->
+        <h4 id="kl-def">2.1 数学定义：两个方向不是对称的</h4>
+
+        <div style="overflow-x:auto;margin:14px 0;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+              <tr style="background:#ede9fe;">
+                <th style="padding:10px 14px;text-align:left;border:1px solid #ddd6fe;">类型</th>
+                <th style="padding:10px 14px;text-align:left;border:1px solid #ddd6fe;">数学定义</th>
+                <th style="padding:10px 14px;text-align:left;border:1px solid #ddd6fe;">展开形式</th>
+                <th style="padding:10px 14px;text-align:left;border:1px solid #ddd6fe;">求和权重</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="background:#fef2f2;">
+                <td style="padding:9px 14px;border:1px solid #ddd6fe;font-weight:600;color:#991b1b;">Forward KL<br><span style="font-weight:400;font-size:12px;">KL(P‖Q)</span></td>
+                <td style="padding:9px 14px;border:1px solid #ddd6fe;">$\displaystyle \sum_x P(x) \log \frac{P(x)}{Q(x)}$</td>
+                <td style="padding:9px 14px;border:1px solid #ddd6fe;">$\sum_x P(x)\log P(x) - \sum_x P(x)\log Q(x)$</td>
+                <td style="padding:9px 14px;border:1px solid #ddd6fe;"><strong>用 P(x) 加权</strong><br><span style="font-size:12px;color:#6b7280;">只在 P 高概率的地方惩罚</span></td>
+              </tr>
+              <tr style="background:#f0fdf4;">
+                <td style="padding:9px 14px;border:1px solid #ddd6fe;font-weight:600;color:#166534;">Reverse KL<br><span style="font-weight:400;font-size:12px;">KL(Q‖P)</span></td>
+                <td style="padding:9px 14px;border:1px solid #ddd6fe;">$\displaystyle \sum_x Q(x) \log \frac{Q(x)}{P(x)}$</td>
+                <td style="padding:9px 14px;border:1px solid #ddd6fe;">$\sum_x Q(x)\log Q(x) - \sum_x Q(x)\log P(x)$</td>
+                <td style="padding:9px 14px;border:1px solid #ddd6fe;"><strong>用 Q(x) 加权</strong><br><span style="font-size:12px;color:#6b7280;">只在 Q 高概率的地方惩罚</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:14px 18px;margin:14px 0;">
+          <div style="font-size:14px;font-weight:700;color:#78350f;margin-bottom:10px;">💡 核心洞察："谁有概率谁说了算"</div>
+          <div style="font-size:13px;color:#374151;line-height:1.8;">
+            <strong>Forward KL：</strong>P(x) 是求和权重。如果某处 P(x₀) > 0 但 Q(x₀) ≈ 0，那么 $\log Q(x_0) \to -\infty$，KL 散度爆炸。<br>
+            → <strong>惩罚机制：</strong>Q 不能在任何 P 高概率的地方没概率 → Q 必须<strong>覆盖</strong>P 的所有高概率区域。<br><br>
+            <strong>Reverse KL：</strong>Q(x) 是求和权重。如果某处 Q(x₀) > 0 但 P(x₀) ≈ 0，那么 $\log P(x_0) \to -\infty$，KL 散度爆炸。<br>
+            → <strong>惩罚机制：</strong>Q 不能在任何自己高概率的地方和 P 冲突 → Q 只能在 P 高概率的地方有质量。
+          </div>
+        </div>
+
+        <!-- ── 2.2 直观例子 ── -->
+        <h4 id="kl-bimodal">2.2 直观例子：双峰分布的拟合</h4>
+
+        <p>假设目标分布 P 是<strong>双峰高斯</strong>：</p>
+
+        <div style="overflow-x:auto;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px 20px;margin:12px 0;">
+          <div style="font-size:14px;text-align:center;">
+            $$P(x) = 0.5 \cdot \mathcal{N}(-3, 1) + 0.5 \cdot \mathcal{N}(3, 1)$$
+          </div>
+        </div>
+
+        <p>我们用一个<strong>单峰高斯</strong> $Q(x) = \mathcal{N}(\mu, \sigma^2)$ 去逼近 P。参数 μ 和 σ² 怎么选？</p>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:16px 0;">
+          <!-- Forward KL -->
+          <div style="border:1px solid #fecaca;border-radius:14px;overflow:hidden;">
+            <div style="background:#fef2f2;padding:12px 16px;">
+              <span style="font-size:14px;font-weight:700;color:#991b1b;">最小化 KL(P‖Q) (Forward)</span>
+            </div>
+            <div style="background:#fafafa;padding:14px 16px;">
+              <p style="font-size:13px;color:#374151;margin:0 0 12px;"><strong>最优解：</strong></p>
+              <ul style="font-size:13px;color:#374151;margin:0;padding-left:18px;line-height:1.8;">
+                <li>均值 $\mu^* \approx 0$（取两个峰的中间）</li>
+                <li>方差 $\sigma^{*2} \approx 10$（变大以覆盖两个峰）</li>
+              </ul>
+              <div style="background:#fff;border-left:3px solid #ef4444;padding:10px 13px;margin-top:12px;font-size:12px;color:#374151;line-height:1.7;">
+                <strong>原因：</strong>P 在 -3 和 3 都有高概率。如果 Q 只选一个峰，另一个峰的 P 很高但 Q ≈ 0 → KL 爆炸。被迫选中间"摊大饼"。
+              </div>
+            </div>
+          </div>
+          <!-- Reverse KL -->
+          <div style="border:1px solid #bbf7d0;border-radius:14px;overflow:hidden;">
+            <div style="background:#f0fdf4;padding:12px 16px;">
+              <span style="font-size:14px;font-weight:700;color:#166534;">最小化 KL(Q‖P) (Reverse)</span>
+            </div>
+            <div style="background:#fafafa;padding:14px 16px;">
+              <p style="font-size:13px;color:#374151;margin:0 0 12px;"><strong>最优解：</strong></p>
+              <ul style="font-size:13px;color:#374151;margin:0;padding-left:18px;line-height:1.8;">
+                <li>均值 $\mu^* \approx -3$ <strong>或</strong> $\mu^* \approx 3$（选一个峰）</li>
+                <li>方差 $\sigma^{*2} \approx 1$（保持尖锐）</li>
+              </ul>
+              <div style="background:#fff;border-left:3px solid #22c55e;padding:10px 13px;margin-top:12px;font-size:12px;color:#374151;line-height:1.7;">
+                <strong>原因：</strong>Q 在某峰有高概率，只要 P 在那里也高，KL 就小。另一个峰 P 高但 Q ≈ 0，但<strong>权重是 Q</strong>，所以不惩罚。
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ASCII 图示 -->
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:16px 20px;margin:14px 0;">
+          <div style="font-size:14px;font-weight:700;color:#334155;margin-bottom:14px;">📊 拟合效果可视化</div>
+          <pre style="font-size:12px;color:#374151;background:#fff;border-radius:8px;padding:12px;overflow-x:auto;margin:0;">
+P(x)：目标分布（双峰）
+    ▲
+    │    ▓▓▓          ▓▓▓
+    │   ▓▓▓▓▓        ▓▓▓▓▓
+    │  ▓▓▓▓▓▓▓      ▓▓▓▓▓▓▓
+    └─────────────────────────→ x
+        -3    0        3
+
+─────────────────────────────────────────
+
+Forward KL 最优的 Q (μ≈0, σ变大)：
+    ▲
+    │         ▓▓▓▓▓▓▓▓▓▓▓
+    │        ▓▓▓▓▓▓▓▓▓▓▓▓▓
+    │       ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+    └─────────────────────────→ x
+         -3    0        3
+    → 覆盖两个峰，但每个都不精准
+
+─────────────────────────────────────────
+
+Reverse KL 最优的 Q (μ≈-3 或 μ≈3)：
+    ▲
+    │    ▓▓▓                或                ▓▓▓
+    │   ▓▓▓▓▓                              ▓▓▓▓▓
+    │  ▓▓▓▓▓▓▓                            ▓▓▓▓▓▓▓
+    └─────────────────────────→ x
+        -3    0        3          -3    0        3
+    → 只抓一个峰，但拟合精准
+          </pre>
+        </div>
+
+        <div style="background:#eff6ff;border-left:3px solid #3b82f6;border-radius:0 10px 10px 0;padding:11px 15px;font-size:13px;color:#1e40af;line-height:1.7;">
+          <strong>一句话记忆：</strong><br>
+          • Forward KL = Mode-Covering = "摊大饼"（覆盖所有，但可能模糊）<br>
+          • Reverse KL = Mode-Seeking = "狙击手"（只抓一个，但很准）
+        </div>
+
+        <!-- ── 2.3 为什么 Pre-train/SFT 是 Forward KL ── -->
+        <h4 id="kl-forward-why">2.3 为什么 Pre-train / SFT / 传统蒸馏是 Forward KL？</h4>
+
+        <p>这些方法的核心目标是<strong>最大化对数似然（MLE）</strong>：</p>
+
+        <div style="overflow-x:auto;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px 20px;margin:12px 0;">
+          <div style="font-size:14px;text-align:center;">
+            $$\max_\theta \;\mathbb{E}_{(x,y) \sim \mathcal{D}}\bigl[\log P_\theta(y \mid x)\bigr]$$
+          </div>
+        </div>
+
+        <p>把求和权重明确写出来：</p>
+
+        <div style="overflow-x:auto;background:#fef9f0;border-radius:12px;padding:14px 20px;margin:10px 0;">
+          <div style="color:#78350f;font-size:14px;text-align:center;">
+            $$= \sum_{x,y} P_{\text{data}}(x,y)\,\log P_\theta(y \mid x)
+              = -\,\text{KL}\!\bigl(P_{\text{data}} \,\|\, P_\theta\bigr) + \underbrace{\text{const}}_{\text{与}\theta\text{无关}}$$
+          </div>
+        </div>
+
+        <div class="callout-amber">
+          <div class="callout-title">🔑 关键：求和权重是 P_data</div>
+          <p style="font-size:14px;margin:0;line-height:1.85;">
+            MLE 等价于最小化 <strong>KL(P_data ‖ P_θ)</strong>，即 <em>P_data 在前、P_θ 在后</em>，这就是 Forward KL 的定义。<br><br>
+            回忆 Forward KL 的惩罚机制：<strong>P_data(x₀) &gt; 0 但 P_θ(x₀) ≈ 0 → log P_θ(x₀) → −∞ → KL 爆炸</strong><br><br>
+            → 优化过程极力避免这种情况，迫使 P_θ 在 P_data 有概率的<em>每一处</em>都必须有对应的概率<br>
+            → <strong>结论：SFT 模型被迫"覆盖"训练数据的所有模式（Mode-Covering）</strong>
+          </p>
+        </div>
+
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:14px 18px;margin:14px 0;">
+          <div style="font-size:13px;font-weight:700;color:#78350f;margin-bottom:8px;">🎯 为什么会导致遗忘？</div>
+          <div style="font-size:13px;color:#374151;line-height:1.85;">
+            当模型继续 SFT 新任务时，新任务的 P_data 分布完全不同。Forward KL 要求 P_θ 覆盖<em>新</em>数据的每个高概率区域。模型容量有限，只能把参数挪向新分布，自然"挤压"了旧能力的参数空间 → <strong>灾难性遗忘</strong>。
+          </div>
+        </div>
+
+        <!-- ── 2.4 为什么 DPO/RL 是 Reverse KL ── -->
+        <h4 id="kl-reverse-why">2.4 为什么 OPD / RL / DPO 是 Reverse KL？</h4>
+
+        <p>最直接的方式：对比 SFT 和 OPD/RL 的优化目标，看<strong>谁在控制梯度的"权重"</strong>。</p>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:16px 0;">
+          <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:14px;padding:18px 20px;">
+            <div style="font-size:14px;font-weight:700;color:#991b1b;margin-bottom:12px;">SFT（Forward KL）</div>
+            <div style="text-align:center;margin-bottom:12px;">
+              $$\mathcal{L}_{\text{SFT}} = -\mathbb{E}_{y \sim P_{\text{data}}}[\log \pi_\theta(y)]$$
+            </div>
+            <div style="font-size:13px;color:#374151;line-height:1.85;">
+              期望是对 <strong>P_data（训练数据）</strong> 求的。<br>
+              P_data 在前给权重，模型必须跟上 P_data 有概率的每一处。<br><br>
+              等价于 $\min KL(P_{\text{data}} \| \pi_\theta)$ → <strong>Forward KL → Mode-Covering</strong>
+            </div>
+          </div>
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;padding:18px 20px;">
+            <div style="font-size:14px;font-weight:700;color:#166534;margin-bottom:12px;">OPD / GRPO（Reverse KL）</div>
+            <div style="text-align:center;margin-bottom:12px;">
+              $$\mathcal{L}_{\text{OPD}} = -\mathbb{E}_{y \sim \pi_\theta}\!\left[\hat{A}_t \cdot \log \pi_\theta(y)\right]$$
+            </div>
+            <div style="font-size:13px;color:#374151;line-height:1.85;">
+              期望是对 <strong>π_θ（模型自身当前分布）</strong> 求的。<br>
+              模型在自己走过的路上学习，π_θ 在前给权重。<br><br>
+              等价于 $\min KL(\pi_\theta \| \pi_{\text{teacher}})$ → <strong>Reverse KL → Mode-Seeking</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout-blue">
+          <div class="callout-title">📌 一句话记住：谁在前，谁给权重</div>
+          <div style="font-size:14px;color:#1e40af;line-height:1.85;">
+            回忆 KL 的定义：$\text{KL}(P\|Q) = \sum_x P(x)\log\frac{P(x)}{Q(x)}$，<strong>P 在前，P 给权重</strong>。<br><br>
+            → SFT 的期望用 P_data 采样 → P_data 给权重 → P_data 在前 → <strong>Forward KL</strong><br>
+            → OPD/RL 的期望用 π_θ 自身采样 → π_θ 给权重 → π_θ 在前 → <strong>Reverse KL</strong>
+          </div>
+        </div>
+
+        <div class="callout-green">
+          <div class="callout-title">✅ 为什么 Reverse KL = Mode-Seeking = 抗遗忘？</div>
+          <div style="font-size:14px;color:#166534;line-height:1.85;">
+            Reverse KL 只在 <strong>π_θ 自己走到的地方</strong> 才产生梯度（因为权重是 π_θ 自身的概率）。<br>
+            如果某个区域 π_θ 自己从没走到（π_θ(x) = 0），那里的 teacher/reward 信号对梯度<strong>没有贡献</strong>。<br><br>
+            → 模型不会被强迫覆盖自己从没走过的路<br>
+            → 只在高奖励 / teacher 更好的区域集中概率<br>
+            → 不会无差别地破坏旧能力 → <strong>遗忘风险低</strong>
+          </div>
+        </div>
+
+        <!-- ── 2.5 具体例子对比 ── -->
+        <h4 id="kl-compare">2.5 具体例子：两种训练方法的"性格差异"</h4>
+
+        <p>假设训练数据中，一个问题有 5 种合理回答：</p>
+
+        <div style="overflow-x:auto;margin:14px 0;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+              <tr style="background:#ede9fe;">
+                <th style="padding:10px 14px;text-align:left;border:1px solid #ddd6fe;">回答</th>
+                <th style="padding:10px 14px;text-align:center;border:1px solid #ddd6fe;">奖励分数</th>
+                <th style="padding:10px 14px;text-align:center;border:1px solid #ddd6fe;background:#fef2f2;">SFT 后概率<br><span style="font-size:11px;font-weight:400;">(Forward KL)</span></th>
+                <th style="padding:10px 14px;text-align:center;border:1px solid #ddd6fe;background:#f0fdf4;">DPO 后概率<br><span style="font-size:11px;font-weight:400;">(Reverse KL)</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="padding:9px 14px;border:1px solid #ede9fe;">A1：详细、专业、推导完整</td>
+                <td style="padding:9px 14px;border:1px solid #ede9fe;text-align:center;"><strong style="color:#16a34a;">9.0</strong></td>
+                <td style="padding:9px 14px;border:1px solid #ede9fe;text-align:center;background:#fef9f9;">~20%</td>
+                <td style="padding:9px 14px;border:1px solid #ede9fe;text-align:center;background:#f0fdf4;"><strong style="color:#16a34a;">~60%</strong></td>
+              </tr>
+              <tr style="background:#fafafa;">
+                <td style="padding:9px 14px;border:1px solid #ede9fe;">A2：简短、准确、直击要点</td>
+                <td style="padding:9px 14px;border:1px solid #ede9fe;text-align:center;"><strong style="color:#16a34a;">8.5</strong></td>
+                <td style="padding:9px 14px;border:1px solid #ede9fe;text-align:center;background:#fef9f9;">~20%</td>
+                <td style="padding:9px 14px;border:1px solid #ede9fe;text-align:center;background:#f0fdf4;"><strong style="color:#16a34a;">~30%</strong></td>
+              </tr>
+              <tr>
+                <td style="padding:9px 14px;border:1px solid #ede9fe;">A3：模糊、平庸、不算错</td>
+                <td style="padding:9px 14px;border:1px solid #ede9fe;text-align:center;"><span style="color:#ca8a04;">5.0</span></td>
+                <td style="padding:9px 14px;border:1px solid #ede9fe;text-align:center;background:#fef9f9;">~20%</td>
+                <td style="padding:9px 14px;border:1px solid #ede9fe;text-align:center;background:#f0fdf4;"><span style="color:#6b7280;">~5%</span></td>
+              </tr>
+              <tr style="background:#fafafa;">
+                <td style="padding:9px 14px;border:1px solid #ede9fe;">A4：有风险、不够严谨</td>
+                <td style="padding:9px 14px;border:1px solid #ede9fe;text-align:center;"><span style="color:#dc2626;">3.0</span></td>
+                <td style="padding:9px 14px;border:1px solid #ede9fe;text-align:center;background:#fef9f9;">~20%</td>
+                <td style="padding:9px 14px;border:1px solid #ede9fe;text-align:center;background:#f0fdf4;"><span style="color:#6b7280;">~3%</span></td>
+              </tr>
+              <tr>
+                <td style="padding:9px 14px;border:1px solid #ede9fe;">A5：有害、会误导用户</td>
+                <td style="padding:9px 14px;border:1px solid #ede9fe;text-align:center;"><span style="color:#dc2626;">1.0</span></td>
+                <td style="padding:9px 14px;border:1px solid #ede9fe;text-align:center;background:#fef9f9;">~20%</td>
+                <td style="padding:9px 14px;border:1px solid #ede9fe;text-align:center;background:#f0fdf4;"><span style="color:#6b7280;">~2%</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0;">
+          <div style="background:#fef2f2;border-radius:10px;padding:12px 14px;font-size:13px;">
+            <div style="font-weight:700;color:#991b1b;margin-bottom:6px;">📌 SFT（Forward KL）</div>
+            <div style="color:#374151;line-height:1.7;">
+              训练数据里这 5 种回答都有，模型学会<strong>平均分配概率</strong>。生成时随机性大，可能产出低质量回答，但<strong>多样性高</strong>。
+            </div>
+          </div>
+          <div style="background:#f0fdf4;border-radius:10px;padding:12px 14px;font-size:13px;">
+            <div style="font-weight:700;color:#166534;margin-bottom:6px;">📌 DPO（Reverse KL）</div>
+            <div style="color:#374151;line-height:1.7;">
+              奖励模型给 A1、A2 高分，模型<strong>集中火力</strong>到这两个回答。生成时更稳定、更像"专家"，但<strong>可能偏激</strong>，对未见过的模式概率很低。
+            </div>
+          </div>
+        </div>
+
+        <!-- ── 2.6 数学推导 ── -->
+        <h4 id="kl-math">2.6 数学推导：为什么会有这种行为差异</h4>
+
+        <p>展开 Forward KL 并分析优化目标：</p>
+
+        <div style="overflow-x:auto;background:#fef2f2;border-radius:12px;padding:16px 20px;margin:12px 0;">
+          <div style="color:#991b1b;font-size:14px;">
+            $$\text{KL}(P\|Q) = \underbrace{\sum_x P(x) \log P(x)}_{\text{P 的熵（常数）}} - \underbrace{\sum_x P(x) \log Q(x)}_{\text{交叉熵}}$$
+          </div>
+        </div>
+
+        <p>优化时只看第二项：</p>
+
+        <div style="overflow-x:auto;background:#fef9f0;border-radius:12px;padding:16px 20px;margin:12px 0;">
+          <div style="color:#78350f;font-size:14px;text-align:center;">
+            $$\min_Q \text{KL}(P\|Q) \Leftrightarrow \max_Q \sum_x P(x) \log Q(x)$$
+          </div>
+        </div>
+
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:14px 18px;margin:14px 0;">
+          <div style="font-size:13px;font-weight:700;color:#78350f;margin-bottom:10px;">⚡ 惩罚机制分析</div>
+          <div style="font-size:13px;color:#374151;line-height:1.8;">
+            <strong>假设某 x₀ 满足 P(x₀) > 0：</strong><br>
+            • 如果 Q(x₀) ≈ 0，那么 $\log Q(x_0) \to -\infty$，整个求和项被拖到负无穷。<br>
+            • 优化过程会极力避免这种情况，迫使 Q 在所有 P 高概率的地方都有概率。<br><br>
+            <strong>结论：</strong>Forward KL 的惩罚机制是"Q 在 P 高处必须高"→ Mode-Covering。
+          </div>
+        </div>
+
+        <p>展开 Reverse KL 并分析优化目标：</p>
+
+        <div style="overflow-x:auto;background:#f0fdf4;border-radius:12px;padding:16px 20px;margin:12px 0;">
+          <div style="color:#166534;font-size:14px;">
+            $$\text{KL}(Q\|P) = \underbrace{\sum_x Q(x) \log Q(x)}_{\text{Q 的负熵}} - \underbrace{\sum_x Q(x) \log P(x)}_{\text{交叉熵}}$$
+          </div>
+        </div>
+
+        <div style="background:#fef9c3;border:1px solid #fde68a;border-radius:12px;padding:14px 18px;margin:14px 0;">
+          <div style="font-size:13px;font-weight:700;color:#78350f;margin-bottom:10px;">⚠️ 关键区别：两项都不是常数！</div>
+          <div style="font-size:13px;color:#374151;line-height:1.8;">
+            与 Forward KL 不同（Forward KL 的第一项 Σ P(x) log P(x) 相对于 Q 是常数），Reverse KL 的<strong>两项都会随 Q 变化</strong>：<br><br>
+            • <strong>第一项：</strong>Q 的负熵 $-\!H(Q)$，鼓励 Q <strong>分散开</strong>（熵大则负熵小，KL 小）<br>
+            • <strong>第二项：</strong>交叉熵 $-\!\sum Q(x)\log P(x)$，鼓励 Q 把质量放在 <strong>P 高的地方</strong><br><br>
+            两项之间存在张力：熵项想要均匀化，交叉熵项想要集中化。最终解取决于 P 的形状和 Q 的参数化。
+          </div>
+        </div>
+
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:14px 18px;margin:14px 0;">
+          <div style="font-size:13px;font-weight:700;color:#166534;margin-bottom:10px;">⚡ 惩罚机制分析</div>
+          <div style="font-size:13px;color:#374151;line-height:1.8;">
+            <strong>假设某 x₀ 满足 Q(x₀) > 0：</strong><br>
+            • 如果 P(x₀) ≈ 0，那么 $\log P(x_0) \to -\infty$，整个求和项被拖到负无穷。<br>
+            • 优化过程会极力避免这种情况，迫使 Q 只在 P 高概率的地方有质量。<br><br>
+            <strong>但关键点：</strong>如果 Q(x₀) ≈ 0，即使 P(x₀) 很高，这一项的权重 Q(x₀) 也是 0，<strong>不产生惩罚</strong>。<br><br>
+            <strong>结论：</strong>Reverse KL 的惩罚机制是"Q 在自己高处，P 也必须高"→ Q 可以选择性忽略 P 的某些峰 → Mode-Seeking。
+          </div>
+        </div>
+
+        <!-- ── 总结框 ── -->
+        <div class="big-concept">
+          <div class="big-concept-title">🔬 核心洞见：KL 方向决定优化行为</div>
+          <p style="font-size:14px;margin:0;line-height:1.9;">
+          <strong>Forward KL (KL(P‖Q))：</strong><br>
+          • 求和权重是 P → "P 高的地方 Q 必须高"<br>
+          • 模型被迫覆盖目标分布的所有模式<br>
+          • 应用：SFT、传统蒸馏、Pre-training<br>
+          • 特性：多样化、保守、可能平庸<br>
+          • 遗忘风险：<strong style="color:#dc2626;">高</strong>（被迫覆盖新分布时挤占旧能力）<br><br>
+          <strong>Reverse KL (KL(Q‖P))：</strong><br>
+          • 求和权重是 Q → "Q 高的地方 P 必须高"<br>
+          • 模型可以选择性逼近目标分布的某个模式<br>
+          • 应用：RLHF、DPO、GRPO<br>
+          • 特性：尖锐、专业、可能偏激<br>
+          • 遗忘风险：<strong style="color:#16a34a;">低</strong>（选择性学习，不强迫覆盖）
+          </p>
+        </div>
+
+      </section>
+
+
+      <!-- ══ §3 各大模型 OPD 实践 ══ -->
+      <section class="section" id="industry">
+        <div class="section-title">
+          <div class="icon" style="background:#fef3c7;">🏭</div>
+          §4 各大模型 OPD 实践：从技术报告看新范式
+        </div>
+
+        <p>过去一年，On-Policy Distillation 已从边缘技术演变为事实上的后训练新范式。Qwen3、GLM-5、MiMo-V2、DeepSeek V4 四家技术报告都指向同一趋势：后训练不再只依赖昂贵的 RL 探索，而是越来越重视把已有强模型的能力稳定迁移到目标模型中。</p>
+
+        <div class="callout-purple">
+          <div class="callout-title">💡 OPD 的核心优势（为什么各家都选择它）</div>
+          <p style="margin:0;font-size:14px;line-height:1.9;">
+            <strong>• On-Policy 避免分布错位：</strong>学生从自身分布中采样，避免 off-policy 蒸馏的暴露偏差<br>
+            <strong>• 密集反馈：</strong>教师对每个 token 提供概率分布，信号密度远高于稀疏 reward<br>
+            <strong>• Logit 空间整合：</strong>把能力整合从参数空间（weight merge）转移到 logit 空间，绕开梯度干扰<br>
+            <strong>• 无需 reward hacking 防护：</strong>教师 logit 是密集软标签，不存在稀疏 reward 被 hack 的问题
+          </p>
+        </div>
+
+        <!-- 四家对比总览表 -->
+        <h3 id="industry-compare">3.0 四家实现横向总览</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>模型</th>
+                <th>OPD 在 Pipeline 中的位置</th>
+                <th>核心功能定位</th>
+                <th>教师策略</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Qwen3</strong></td>
+                <td>轻量模型独立子流水线</td>
+                <td>替代完整 RL，效率优先</td>
+                <td>旗舰模型（235B-A22B / 32B）→ 6个轻量学生</td>
+              </tr>
+              <tr>
+                <td><strong>GLM-5</strong></td>
+                <td>最终收尾阶段</td>
+                <td>防灾难性遗忘，能力恢复</td>
+                <td>同架构前序 RL checkpoint（Reasoning + General RL）</td>
+              </tr>
+              <tr>
+                <td><strong>MiMo-V2</strong></td>
+                <td>主体第三阶段（核心位置）</td>
+                <td>多专家能力整合，解决 see-saw effect</td>
+                <td>各领域独立 RL 专家 + SFT + 自蒸馏</td>
+              </tr>
+              <tr>
+                <td><strong>DeepSeek V4</strong></td>
+                <td>统一化阶段（完全替代 mixed RL）</td>
+                <td>10+ 专家知识压缩入单模型</td>
+                <td>10+ 独立训练专家（各领域 × 三种推理强度变体）</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 3.1 Qwen3 -->
+        <h3 id="industry-qwen3">3.1 Qwen3：效率革命，OPD 最早的系统性应用</h3>
+        <div class="callout-blue">
+          <div class="callout-title">🔷 背景</div>
+          <p style="margin:0;font-size:14px;">旗舰模型（Qwen3-235B-A22B / 32B）走完完整四阶段 RL 流水线（Long-CoT Cold Start → Reasoning RL → Thinking Mode Fusion → General RL），OPD 专门用于降低<strong>轻量模型</strong>的训练成本。</p>
+        </div>
+
+        <h4>Two-Stage Strong-to-Weak Distillation</h4>
+        <div style="position:relative;padding-left:40px;margin:16px 0;">
+          <div style="position:absolute;left:10px;top:0;bottom:0;width:2px;background:linear-gradient(to bottom,#3b82f6,#93c5fd);border-radius:2px;"></div>
+          <div style="position:relative;margin-bottom:16px;">
+            <div style="position:absolute;left:-35px;top:2px;width:24px;height:24px;border-radius:50%;background:#3b82f6;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;">1</div>
+            <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px 16px;">
+              <strong style="color:#1d4ed8;">Off-policy 蒸馏（打底）</strong>
+              <p style="font-size:13px;margin:6px 0 0;">收集旗舰模型在 <code>/think</code> 和 <code>/no_think</code> 两种模式下的输出，做标准 SFT，让学生建立基础的双模式切换能力。目的：避免 on-policy 阶段初期因学生输出质量太差导致教师信号噪声过大。</p>
+            </div>
+          </div>
+          <div style="position:relative;">
+            <div style="position:absolute;left:-35px;top:2px;width:24px;height:24px;border-radius:50%;background:#3b82f6;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;">2</div>
+            <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px 16px;">
+              <strong style="color:#1d4ed8;">On-policy 蒸馏（精调）</strong>
+              <p style="font-size:13px;margin:6px 0 0;">学生从自身分布采样轨迹，对齐教师 logit，最小化 KL 散度。</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout-green">
+          <div class="callout-title">📊 效果</div>
+          <ul style="font-size:14px;margin:0;padding-left:20px;line-height:1.9;">
+            <li><strong>Qwen3-30B-A3B</strong>（总参 30B，激活 3B）通过 OPD 获得的推理能力，可与 <strong>QwQ-32B</strong>（32B 全激活）相当</li>
+            <li><strong>Qwen3-0.6B</strong> 明显超越 Qwen2.5-1.5B 同规模对手</li>
+            <li>整个轻量模型系列训练只需旗舰四阶段 RL 的 <strong>1/10 GPU 时间</strong>——为 6 个不同规模模型做完整 RL 本需 6 倍成本，OPD 压缩到旗舰成本的 1/10</li>
+          </ul>
+        </div>
+
+        <!-- 3.2 GLM-5 -->
+        <h3 id="industry-glm5">3.2 GLM-5：修复多阶段 RL 的灾难性遗忘</h3>
+        <div class="callout-blue">
+          <div class="callout-title">🔷 背景</div>
+          <p style="margin:0;font-size:14px;">GLM-5 设计了四阶段 RL 流水线：Overall SFT → Reasoning RL（数学/科学/代码/TIR）→ Agentic RL（SWE/终端/多步搜索）→ General RL（教学正确性/情感智能/任务质量）。顺序优化多个目标天然产生灾难性遗忘。</p>
+        </div>
+
+        <p>GLM-5 的解法（§1 详细介绍）：将 OPD 作为<strong>最终收尾阶段</strong>，把 Reasoning RL 和 General RL 两个阶段的最终 checkpoint 同时作为教师。由于教师是同一模型的前序版本，架构和词表完全对齐，logit 信号直接可用。</p>
+
+        <div class="callout-amber">
+          <div class="callout-title">⚡ 精巧实现细节：Group size 从 32 降至 1</div>
+          <p style="font-size:14px;margin:0;line-height:1.85;">GRPO 在 RL 训练时 group size 通常设为 32，目的是通过组内对比估计 advantage 基线。但在 OPD 阶段，advantage 直接由<strong>教师 log ratio</strong> 给出，无需组内对比。因此：
+          <br>• group size 降至 <strong>1</strong>
+          <br>• batch size 从 32 扩大到 <strong>1024</strong>
+          <br>→ 大幅提升数据吞吐量</p>
+        </div>
+
+        <div class="callout-green">
+          <div class="callout-title">📊 效果</div>
+          <ul style="font-size:14px;margin:0;padding-left:20px;line-height:1.9;">
+            <li>LMArena 中文本和代码双排行榜登顶</li>
+            <li>Humanity's Last Exam：<strong>50.4</strong></li>
+            <li>SWE-bench Verified：<strong>77.8</strong></li>
+            <li>Terminal-Bench 2.0：<strong>56.2</strong>（均优于或持平 Claude Opus 4.5）</li>
+          </ul>
+        </div>
+
+        <!-- 3.3 MiMo-V2 -->
+        <h3 id="industry-mimo">3.3 MiMo-V2-Flash：多专家能力整合，解决 See-Saw Effect</h3>
+        <div class="callout-blue">
+          <div class="callout-title">🔷 背景：See-Saw Effect</div>
+          <p style="font-size:14px;margin:0;line-height:1.85;">AI 后训练中普遍存在的能力跷跷板现象：同时提升数学推理会压制代码能力，提升代码又损害通用对话质量。在统一参数空间对多个目标同时做 RL，各目标梯度方向相互干扰。Weight merge（参数平均）是常见逃法，但实验证明会导致可观性能损耗。</p>
+        </div>
+
+        <h4>MiMo 三阶段方案</h4>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin:14px 0;">
+          <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:12px;padding:14px 16px;text-align:center;">
+            <div style="font-size:13px;font-weight:700;color:#6d28d9;margin-bottom:6px;">Stage 1</div>
+            <div style="font-size:13px;color:#374151;">通用 SFT<br>建立基础能力</div>
+          </div>
+          <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:12px;padding:14px 16px;text-align:center;">
+            <div style="font-size:13px;font-weight:700;color:#6d28d9;margin-bottom:6px;">Stage 2</div>
+            <div style="font-size:13px;color:#374151;">独立领域专家 RL<br>（代码/搜索/数学/通用/安全各自独立训练，互不干扰）</div>
+          </div>
+          <div style="background:#faf5ff;border:2px solid #c4b5fd;border-radius:12px;padding:14px 16px;text-align:center;">
+            <div style="font-size:13px;font-weight:700;color:#6d28d9;margin-bottom:6px;">Stage 3：MOPD</div>
+            <div style="font-size:13px;color:#374151;">Multi-Teacher On-Policy Distillation<br>在 logit 空间完成能力整合</div>
+          </div>
+        </div>
+
+        <h4>MOPD Advantage 公式（Eq. 9）</h4>
+        <div style="overflow-x:auto;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:18px 22px;margin:12px 0;">
+          <div style="font-size:14px;text-align:center;">
+            $$\hat{A}_{\text{MOPD},t} = \text{sg}\!\left[\log \frac{\pi_{\text{domain}_x}(y_t|x,y_{&lt;t})}{\pi_\theta(y_t|x,y_{&lt;t})}\right] + \alpha \cdot \hat{A}_{\text{ORM}}$$
+          </div>
+        </div>
+        <p style="font-size:13px;color:#4b5563;">其中 $\pi_{\text{domain}_x}$ 是根据提示所属领域动态选取的教师策略。KL 项给出 dense 的 per-token 方向信号；ORM（Outcome Reward Model）项保留与可验证结果的端到端对齐；两者以系数 $\alpha$ 权衡。</p>
+
+        <div class="callout-amber">
+          <div class="callout-title">⚡ 创新：Rollout Routing Replay (R3)</div>
+          <p style="font-size:14px;margin:0;line-height:1.85;">MoE 模型在推理时（rollout）和训练时（update）的 expert routing 可能不一致，引入梯度噪声。R3 通过<strong>缓存 rollout 时的 routing 决策</strong>并在训练时复现，保证两阶段 routing 一致，使 RL 训练更稳定。</p>
+        </div>
+
+        <div class="callout-green">
+          <div class="callout-title">📊 效果（MOPD 让学生超越最强教师）</div>
+          <ul style="font-size:14px;margin:0;padding-left:20px;line-height:1.9;">
+            <li>AIME 2025：+0.2；HMMT Feb 2025：+1.8；LiveCodeBench：+0.6；HLE：+0.9</li>
+            <li>SWE-Bench Verified：<strong>73.4%</strong>（登顶开源排行）</li>
+            <li>SWE-Bench Multilingual：<strong>71.7%</strong></li>
+            <li>MiMo 的 ablation 清晰展示层级关系：纯 ORM RL &lt; MOPD w/o ORM &lt; MOPD（ORM+KL）</li>
+          </ul>
+        </div>
+
+        <!-- 3.4 DeepSeek V4 -->
+        <h3 id="industry-deepseek">3.4 DeepSeek V4：万亿参数专家知识的 Logit-Space 压缩</h3>
+        <div class="callout-blue">
+          <div class="callout-title">🔷 背景：规模最大，挑战最复杂</div>
+          <p style="font-size:14px;margin:0;line-height:1.85;">需要整合 <strong>10 个以上独立训练的专家模型</strong>，每个专家针对一个领域（数学/代码/Agent/指令跟随），还有三种推理强度变体（Non-think / Think High / Think Max）。传统方案均失败：weight merge 导致能力稀释，Mixed RL 有 see-saw effect。DeepSeek V4 选择<strong>完全放弃 Mixed RL，用 OPD 作为整个后训练的统一化终点</strong>。</p>
+        </div>
+
+        <h4>多专家加权 OPD 目标</h4>
+        <div style="overflow-x:auto;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:18px 22px;margin:12px 0;">
+          <div style="font-size:14px;text-align:center;">
+            $$\mathcal{L}_{\text{OPD}}(\theta) = \sum_{i=1}^{N} w_i \cdot D_{\text{KL}}(\pi_0^i \| \pi_\theta^i)$$
+          </div>
+        </div>
+        <p style="font-size:13px;color:#4b5563;">系统在任何给定 prompt 上，自动路由到对应领域的专家获取监督信号，以 per-expert 权重 $w_i$ 加权贡献。</p>
+
+        <h4>三层工程支持（Full-Vocabulary Logit Distillation）</h4>
+        <div style="display:grid;grid-template-columns:1fr;gap:10px;margin:14px 0;">
+          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px 18px;">
+            <div style="font-size:14px;font-weight:700;color:#1e40af;margin-bottom:8px;">1️⃣ Teacher Weight Scheduling</div>
+            <p style="font-size:13px;color:#374151;margin:0;line-height:1.7;">10+ 万亿参数的教师权重无法常驻显存，系统将它们卸载到分布式存储，用 ZeRO-like 共享机制按需加载，每次 mini-batch 每个教师 head 只加载一次。</p>
+          </div>
+          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px 18px;">
+            <div style="font-size:14px;font-weight:700;color:#1e40af;margin-bottom:8px;">2️⃣ Cached Hidden States</div>
+            <p style="font-size:13px;color:#374151;margin:0;line-height:1.7;">教师 forward pass 只缓存最后一层 hidden state（而非词表维度的完整 logits），需要 logit 时实时经过 prediction head 重建——彻底消除词表维度的显存瓶颈。</p>
+          </div>
+          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px 18px;">
+            <div style="font-size:14px;font-weight:700;color:#1e40af;margin-bottom:8px;">3️⃣ 专用 TileLang Kernel</div>
+            <p style="font-size:13px;color:#374151;margin:0;line-height:1.7;">精确计算两个完整词表分布之间的 KL，加速运算并压制动态内存分配。（TileLang 已开源）</p>
+          </div>
+        </div>
+
+        <div class="callout-green">
+          <div class="callout-title">📊 效果</div>
+          <p style="font-size:14px;margin:0;line-height:1.9;">DeepSeek-V4-Pro-Max 在知识密集型任务（HLE、Terminal Bench 2.0）上显著超越 GPT-5.2 和 Gemini-3.0-Pro；在 Agent 任务上持平甚至超越 Kimi-K2.6 和 GLM-5.1。</p>
+        </div>
+
+        <!-- 2.2 额外奖励信号 -->
+        <h3 id="industry-signal">3.5 关键设计维度对比</h3>
+        <h4>① 纯蒸馏 vs OPD + ORM 混合</h4>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0;">
+          <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:14px 16px;">
+            <div style="font-size:13px;font-weight:700;color:#991b1b;margin-bottom:6px;">纯蒸馏路线（GLM-5 / DeepSeek V4）</div>
+            <div style="font-size:13px;color:#374151;line-height:1.7;">OPD 阶段只使用 KL 散度作为信号，完全不叠加 outcome reward。GLM-5 的逻辑：OPD 是最终收尾阶段，目标纯粹是"恢复能力"，不需要再探索新行为空间。DeepSeek V4 则是用 OPD 完全替代 mixed RL，整个统一化过程只有 KL 信号驱动。</div>
+          </div>
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:14px 16px;">
+            <div style="font-size:13px;font-weight:700;color:#166534;margin-bottom:6px;">OPD + ORM 混合路线（MiMo MOPD）</div>
+            <div style="font-size:13px;color:#374151;line-height:1.7;">KL 项提供 token 级 dense 局部信号，ORM 项提供序列级 sparse 全局信号，系数 α 调和。MiMo ablation 结论：纯 ORM RL &lt; MOPD w/o ORM &lt; MOPD（ORM+KL），KL 信号显著加速收敛，ORM 信号保持与可验证结果的对齐，缺一不可。</div>
+          </div>
+        </div>
+
+        <h4>② 教师选取策略对比</h4>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>方案</th>
+                <th>教师来源</th>
+                <th>优势</th>
+                <th>代价</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>同架构前序 checkpoint</strong><br><span style="font-size:12px;color:#6b7280;">（GLM-5）</span></td>
+                <td>同一模型不同 RL 阶段完毕的 checkpoint</td>
+                <td>logit 空间天然对齐；实现最简单，信号质量有保障</td>
+                <td>教师多样性受限，只有 2 个来自不同阶段的版本</td>
+              </tr>
+              <tr>
+                <td><strong>多领域专家混合路由</strong><br><span style="font-size:12px;color:#6b7280;">（MiMo）</span></td>
+                <td>各领域 RL 专家 + SFT + 学生自身（self-distillation）</td>
+                <td>教师集合可随时增减，无需重训整个流水线；学生自蒸馏防现有能力退化</td>
+                <td>路由逻辑设计复杂，需要维护多个教师的显存</td>
+              </tr>
+              <tr>
+                <td><strong>大→小跨尺度蒸馏</strong><br><span style="font-size:12px;color:#6b7280;">（Qwen3）</span></td>
+                <td>旗舰模型（235B-A22B / 32B）→ 轻量模型</td>
+                <td>尺度跨度最大，效率收益最显著（1/10 GPU 时间）</td>
+                <td>off-policy 打底阶段仍不可省略</td>
+              </tr>
+              <tr>
+                <td><strong>10+ 异构专家加权</strong><br><span style="font-size:12px;color:#6b7280;">（DeepSeek V4）</span></td>
+                <td>10 个独立训练专家，含三种推理强度变体</td>
+                <td>信号覆盖面最广，全词表 KL 精度最高</td>
+                <td>工程复杂度最高；需要 Teacher Weight Scheduling 等专项基础设施</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 核心洞见 -->
+        <div class="big-concept">
+          <div class="big-concept-title">🔬 核心洞见：Logit 空间 vs 参数空间</div>
+          <p style="font-size:14px;margin:0;line-height:1.9;">
+          OPD 的核心贡献不仅在于训练效率，更在于它提供了一种<strong>在 logit 空间而非参数空间整合知识</strong>的方法论。<br><br>
+          传统知识整合方案（weight merge、adapter 叠加、混合 RL）都在参数空间操作，各专家能力的"干扰"不可避免。OPD 则绕开了这个问题：专家模型独立存在，它们的知识以 logit 分布的形式流入学生，学生的参数在自身生成的轨迹上学习，两个空间的操作互不干扰。<br><br>
+          <em>"语言模型的能力，在 logit 空间比在参数空间更容易合并、迁移和保留。"</em>——这一洞察被四家团队从不同角度独立发现，相继写入各自技术报告。
+          </p>
+        </div>
+      </section>
+
+      <!-- ══ §5 未来展望 ══ -->
+      <section class="section" id="future">
+        <div class="section-title">
+          <div class="icon" style="background:#dcfce7;">🔭</div>
+          §5 未来展望
+        </div>
+
+        <p>OPD 在不到一年内从边缘技术变为主流范式，接下来的演化方向已经初现轮廓。</p>
+
+        <!-- 4.1 Full-Vocab KL -->
+        <h3 id="future-fullvocab">4.1 Full-Vocabulary KL 将成为标配</h3>
+        <p>DeepSeek V4 已经证明全词表 KL 在理论和实践上都优于 token-level 近似（后者高方差会掩盖各专家的细微差异）。随着 hidden state 缓存和专用 kernel 的开源化（DeepSeek V4 已开源 TileLang），其他团队复制这套工程方案的成本大幅降低。</p>
+        <div class="callout-purple">
+          <div class="callout-title">预期趋势</div>
+          <p style="margin:0;font-size:14px;">未来 12–18 个月内，主要实验室的 OPD 实现会向<strong>全词表方向收敛</strong>，工程门槛持续下降。</p>
+        </div>
+
+        <!-- 4.2 OPD + PRM -->
+        <h3 id="future-prm">4.2 OPD + PRM：从结果监督到过程监督</h3>
+        <p>MiMo 的 MOPD 证明 KL + ORM（序列级结果奖励）的组合优于单独任一方案。下一步自然演化是将 ORM 替换为 <strong>Process Reward Model（PRM）</strong>——对每个推理步骤而非最终答案打分。</p>
+        <div class="callout-blue">
+          <div class="callout-title">三重叠加信号配置</div>
+          <ul style="font-size:14px;margin:0;padding-left:20px;line-height:1.9;">
+            <li><strong>教师 logit（全局方向）</strong>：per-token dense 信号，对齐教师分布</li>
+            <li><strong>PRM（步骤正确性）</strong>：在轨迹中途识别"推理失误的关键 fork point"</li>
+            <li><strong>ORM（最终结果）</strong>：保持与可验证结果的端到端对齐</li>
+          </ul>
+          <p style="font-size:13px;color:#1d4ed8;margin-top:8px;">PRM 可以与 OPD 的 per-token 信号在粒度上高度匹配——这可能是目前最密集的训练信号配置。</p>
+        </div>
+
+        <!-- 4.3 Iterative Co-Evolution -->
+        <h3 id="future-iterative">4.3 Iterative Co-Evolution：自强化的师生螺旋</h3>
+        <p>MiMo 在论文中提出前瞻性路线图：蒸馏产生的学生模型可以重新进入专家 RL 训练阶段，成为更强的下一代教师，再反哺下一代学生——形成<strong>自强化循环</strong>。</p>
+        <div class="analogy-box">
+          <div class="analogy-title">🎮 类比 AlphaZero</div>
+          <p style="font-size:14px;margin:0;line-height:1.85;">这与 AlphaZero 的 self-play 范式在结构上高度相似，区别在于 OPD 框架让"教师-学生"角色的切换更加显式和可控。如果这个循环被验证有效，意味着 OPD 不只是一次性的知识压缩操作，而是一种<strong>持续改进机制</strong>——每一代模型都可以在前一代基础上自动提升，无需持续引入新的外部数据或人工标注。</p>
+        </div>
+
+        <!-- 4.4 长上下文张力 -->
+        <h3 id="future-longctx">4.4 OPD 与百万 Token 长上下文的张力</h3>
+        <p>DeepSeek V4 和 MiMo 都将百万 token 长上下文作为核心能力目标，但 OPD 面临一个显著工程困难：</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0;">
+          <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:14px 16px;font-size:13px;">
+            <div style="font-weight:700;color:#991b1b;margin-bottom:6px;">困难</div>
+            <div style="color:#374151;line-height:1.7;">在百万 token 长轨迹上做 on-policy 采样，推理成本极高；计算完整轨迹每个 token 的教师 logit，显存需求随序列长度线性增长。目前靠"分段采样"和"轨迹截断"缓解，但理论上不完美。</div>
+          </div>
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:14px 16px;font-size:13px;">
+            <div style="font-weight:700;color:#166534;margin-bottom:6px;">潜在解法</div>
+            <div style="color:#374151;line-height:1.7;">只在关键决策点做 OPD 更新，其余位置用 RL——即识别出"forking token"（决定推理路径走向的关键节点），集中在这些 token 上利用教师 logit 信号。</div>
+          </div>
+        </div>
+
+        <!-- 4.5 推理时蒸馏 -->
+        <h3 id="future-inference">4.5 Inference-Time Distillation：推理时的动态教师</h3>
+        <p>目前的 OPD 全部发生在训练阶段。一个更激进的方向是 <strong>inference-time distillation</strong>：</p>
+        <div class="callout-purple">
+          <div class="callout-title">思路</div>
+          <p style="font-size:14px;margin:0;line-height:1.85;">在模型推理时，对于识别出的关键 "forking token"，实时查询教师模型的分布，在 beam search 或 sampling 过程中加入教师引导。这本质上是将 OPD 的信号从训练时延伸到推理时——学生在每次推理中都能实时"请教"教师，而不是只在训练阶段学习一次就固化。thinkingmachines.ai 的实验发现，forking token 上的 OPD 惩罚信号特别大，正是学生偏离教师正确路径的关键节点。</p>
+        </div>
+
+        <!-- 参考文献 -->
+        <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:16px 20px;margin:20px 0;font-size:12px;color:#4b5563;line-height:2.0;">
+          <div style="font-weight:700;color:#374151;margin-bottom:8px;">📚 本节主要参考文献</div>
+          <div>[1] Qwen3 Technical Report. arXiv:2505.09388 (2025).</div>
+          <div>[2] GLM-5: from Vibe Coding to Agentic Engineering. arXiv:2602.15763 (2025).</div>
+          <div>[3] MiMo-V2-Flash Technical Report. arXiv:2601.02780 (2025).</div>
+          <div>[4] DeepSeek-V4 Technical Report (2025).</div>
+          <div>[5] On-Policy Distillation. thinkingmachines.ai (2025).</div>
+          <div>[6] 从技术报告看On-Policy Distillation的崛起: 大模型后训练新范式. 知乎专栏 (2025).</div>
+        </div>
+      </section>
+
+    </main>
+  </div><!-- /.layout -->
+</div><!-- /.page -->
+
+<!-- KaTeX 放在 body 末尾：DOM 完全解析后执行，确保公式被渲染 -->
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+<script>
+  var dbl = '$' + '$';
+  renderMathInElement(document.body, {
+    delimiters: [
+      { left: dbl, right: dbl, display: true },
+      { left: '\\[', right: '\\]', display: true },
+      { left: '$', right: '$', display: false },
+      { left: '\\(', right: '\\)', display: false }
+    ],
+    throwOnError: false
+  });
+</script>
+</body>
+</html>

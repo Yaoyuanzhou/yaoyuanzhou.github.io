@@ -216,7 +216,9 @@
           <ul class="toc-sub">
             <li><a href="#unet-to-dit">8.1 为什么换成 DiT</a></li>
             <li><a href="#t2i-modern">8.2 现代文生图</a></li>
+            <li><a href="#flux-detail">　└ 8.2.1 代表：FLUX 详解</a></li>
             <li><a href="#t2v-modern">8.3 现代文生视频</a></li>
+            <li><a href="#wan21-detail">　└ 8.3.1 代表：Wan2.1 详解</a></li>
             <li><a href="#arch-summary">8.4 架构总结</a></li>
           </ul>
         </li>
@@ -1193,6 +1195,70 @@
           </ul>
         </div>
 
+        <h3 id="flux-detail">8.2.1 文生图代表：FLUX 做了什么</h3>
+
+        <p>FLUX（Black Forest Labs，2024）是目前开源文生图里效果最强的模型之一，12B 参数。它的技术选择几乎代表了当前主流的最佳实践：</p>
+
+        <div class="callout-purple">
+          <div class="callout-title">🔑 Flow Matching：为什么要替换 DDPM？</div>
+          <p>DDPM 的核心问题是：噪声调度（noise schedule）定义的扩散路径是<strong>曲折的</strong>——加噪/去噪都沿着一条弯弯曲曲的概率轨迹走，需要很多步（通常 20~100 步）才能收敛到高质量图像。</p>
+          <p style="margin-top:10px;">Flow Matching 的思路：<strong>用"直线路径"替换"曲线路径"</strong>。</p>
+          <div class="table-wrap" style="margin-top:12px;">
+            <table>
+              <thead><tr><th>对比维度</th><th>DDPM</th><th>Flow Matching（FLUX/SD3 采用）</th></tr></thead>
+              <tbody>
+                <tr><td>路径形状</td><td>曲线（马尔可夫链噪声过程）</td><td>直线插值：$x_t = (1-t)\,x_0 + t\,\epsilon$</td></tr>
+                <tr><td>训练目标</td><td>预测每步噪声 $\epsilon$</td><td>预测"速度"向量场 $v = \epsilon - x_0$（直线方向）</td></tr>
+                <tr><td>采样步数</td><td>通常 20~100 步</td><td>4~8 步即可（直线更好近似）</td></tr>
+                <tr><td>理论基础</td><td>随机微分方程（SDE）</td><td>常微分方程（ODE），路径确定、可逆</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p style="margin-top:12px;font-size:13px;color:#6d28d9;">直觉：DDPM 像走迷宫（每步只走一小步，路径弯曲）；Flow Matching 像走直线（知道起点和终点，直接连线，速度快得多）。</p>
+        </div>
+
+        <div class="callout-blue" style="margin-top:16px;">
+          <div class="callout-title">🏗️ FLUX 的架构：双流 DiT（MMDiT）</div>
+          <p>FLUX 和 SD3 一样采用 MMDiT 双流架构，但做了进一步优化：</p>
+          <div class="step-box" style="margin-top:12px;">
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <strong>图像编码：VAE + patch 化</strong>
+              <p style="font-size:13px;margin:4px 0 0;">原始图像经 VAE 压缩到 16× 下采样的隐空间（如 $1024×1024$ → $64×64×16$），再切成 $2×2$ patch → 每张图变成 $32×32=1024$ 个 image token</p>
+            </div>
+          </div>
+          <div class="step-box">
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <strong>文本编码：T5-XXL + CLIP 双路</strong>
+              <p style="font-size:13px;margin:4px 0 0;">T5-XXL（4096维）负责语义理解（长文本、复杂关系）；CLIP（768维）负责视觉-语言对齐。两者 concat 后得到 text token 序列</p>
+            </div>
+          </div>
+          <div class="step-box">
+            <div class="step-num">3</div>
+            <div class="step-content">
+              <strong>双流 Attention（前 19 层）→ 单流 Attention（后 38 层）</strong>
+              <p style="font-size:13px;margin:4px 0 0;">前半段：image token 和 text token 各自有独立的参数，但在 attention 时拼在一起——图文信息双向流动，各自保留独立表示。后半段：图文 token 合并成一条序列，共享参数做 Full Attention，深度融合</p>
+            </div>
+          </div>
+          <div class="step-box">
+            <div class="step-num">4</div>
+            <div class="step-content">
+              <strong>时间步 + 条件注入：adaLN（自适应 LayerNorm）</strong>
+              <p style="font-size:13px;margin:4px 0 0;">把时间步 $t$ 和全局 CLIP embedding 用 MLP 映射成缩放/偏移参数，注入每个 Transformer block 的 LayerNorm 中——替代 U-Net 里的 ResBlock 时间嵌入</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="example-box" style="margin-top:16px;">
+          <div class="ex-title">📊 FLUX 和 SD1.x 的差距：为什么那么明显</div>
+          <ul>
+            <li><strong>文本理解</strong>：T5-XXL（110亿参数的语言模型）vs CLIP-ViT-L（4亿参数）——SD1.x 靠 CLIP，写复杂 prompt 经常"读不懂"；FLUX 的 T5 能理解长句、多属性、空间关系</li>
+            <li><strong>全局一致性</strong>：双流 MMDiT 的 Full Attention 让每个图像 token 都能看到所有文字 token，文本与图像区域精准绑定；SD1.x 的 Cross-Attention 是"逐层插入"，信息流不完整</li>
+            <li><strong>细节质量</strong>：Flow Matching 路径更平滑，梯度估计更准确，手指/文字等细节错误大幅减少</li>
+          </ul>
+        </div>
+
         <h3 id="t2v-modern">8.3 现代文生视频：从 U-Net 到 3D DiT</h3>
 
         <p>视频生成的难点：除了空间维度（H×W），还有时间维度（T 帧），需要同时建模<strong>空间一致性</strong>（每帧的图像质量）和<strong>时序一致性</strong>（帧间运动流畅）。</p>
@@ -1279,6 +1345,62 @@
           <div class="ex-title">💡 Sora 的核心思路（一句话）</div>
           <p>把视频看成"时空 patch 的序列"，和 LLM 把文本看成"token 序列"是同一个范式——<strong>生成视频 = 在 token 序列上做扩散，而不是逐帧生成</strong>。这样模型天然能建模帧间一致性，也能任意扩展时长和分辨率。</p>
           <p style="margin-top:10px;font-size:13px;color:#166534;">类比 LLM：GPT 不是"逐词独立生成"，而是在整个 token 序列上建模上下文。Sora 也不是"逐帧独立生成"，而是在整个时空 token 序列上建模一致性。</p>
+        </div>
+
+        <h3 id="wan21-detail">8.3.1 文生视频代表：Wan2.1 做了什么</h3>
+
+        <p>Wan2.1（阿里，2025）是目前开源文生视频里效果最强的模型，14B 参数。其架构设计是 3D DiT + Flow Matching 路线的集大成者，也是目前工业界可落地的最佳开源方案之一。</p>
+
+        <div class="callout-cyan">
+          <div class="callout-title">🔑 Wan2.1 的核心架构：3D VAE → 时空 patch → DiT + Flow Matching</div>
+          <div class="step-box" style="margin-top:12px;">
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <strong>3D Causal VAE：时间+空间统一压缩</strong>
+              <p style="font-size:13px;margin:4px 0 0;">Wan2.1 用<strong>因果 3D VAE</strong>压缩视频：空间下采样 8×（如 $480×832$ → $60×104$），时间下采样 4×（如 81 帧 → 21 帧），通道扩展到 16 维。"因果"意味着每帧只能看到过去的帧，和自回归 LLM 的 causal mask 思路类似，保证视频可以流式生成</p>
+            </div>
+          </div>
+          <div class="step-box">
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <strong>时空 patch 化：统一成 token 序列</strong>
+              <p style="font-size:13px;margin:4px 0 0;">把 3D 隐向量按 $2×2×1$（空间×空间×时间）切成 patch，每个 patch 是一个 token。$81$ 帧 $480×832$ 的视频最终变成约 $13000$ 个 token——数量远多于图像（一张 $1024×1024$ 约 $4096$ token），这也是为什么视频模型显存开销极大</p>
+            </div>
+          </div>
+          <div class="step-box">
+            <div class="step-num">3</div>
+            <div class="step-content">
+              <strong>文本编码：umt5-xxl（中英双语 T5）</strong>
+              <p style="font-size:13px;margin:4px 0 0;">Wan2.1 专门使用支持中英双语的 umt5-xxl 作为文本编码器，max_length=512，输出 text token 序列通过 Cross-Attention 注入每个 DiT block。这也是 Wan2.1 对中文 prompt 特别友好的核心原因</p>
+            </div>
+          </div>
+          <div class="step-box">
+            <div class="step-num">4</div>
+            <div class="step-content">
+              <strong>DiT + Flow Matching 去噪</strong>
+              <p style="font-size:13px;margin:4px 0 0;">骨干是标准 Transformer（40层，hidden_dim=5120），在所有时空 token 上做 Full Self-Attention——每个 patch token 能"看到"所有帧的所有 patch，天然建模帧间一致性。训练目标用 Flow Matching（直线路径），推理只需 50 步左右即可得到高质量视频</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout-amber" style="margin-top:16px;">
+          <div class="callout-title">⚠️ 为什么视频生成的 Full Attention 那么贵</div>
+          <p>以 Wan2.1 生成 81帧 480P 视频为例：</p>
+          <ul>
+            <li>图像 token 数：约 13000 个（每次推理）</li>
+            <li>Full Attention 的计算量：$O(N^2)$，即 $13000^2 \approx 1.7 \times 10^8$ 次 attention 运算/层</li>
+            <li>40 层 × 50 步 = 大量计算，这就是为什么生成一个视频需要 24GB+ 显存和数分钟时间</li>
+          </ul>
+          <p style="margin-top:8px;">一些模型（如早期 AnimateDiff）会把 Attention 分解成 Spatial Attention（只在同一帧内）+ Temporal Attention（只在同一位置的不同帧间），牺牲全局建模能力来换速度。Wan2.1/HunyuanVideo 选择了 Full Attention，效果更好但更贵。</p>
+        </div>
+
+        <div class="callout-green" style="margin-top:16px;">
+          <div class="callout-title">✅ Wan2.1 还支持什么</div>
+          <ul>
+            <li><strong>图生视频（I2V）</strong>：把第一帧图像作为条件注入，生成以该图像为起点的视频——图像 token 和 noise token 一起输入 DiT</li>
+            <li><strong>视频续写</strong>：给定视频前几秒，续生后续内容——已有帧作为 context token，新帧从噪声中去噪</li>
+            <li><strong>可变分辨率/时长</strong>：因为是 token-based，不需要固定输入尺寸，只需在 position embedding 里编码时空坐标即可支持任意分辨率和时长</li>
+          </ul>
         </div>
 
         <h3 id="arch-summary">8.4 架构总结</h3>

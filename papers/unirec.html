@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UniRec 论文解读</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false }
+          ],
+          throwOnError: false
+        });
+      }
+      // TOC active highlight
+      const sections = document.querySelectorAll('section[id]');
+      const tocLinks = document.querySelectorAll('.toc-list a');
+      const obs = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+          if (e.isIntersecting) {
+            tocLinks.forEach(l => l.classList.remove('active'));
+            const a = document.querySelector(`.toc-list a[href="#${e.target.id}"]`);
+            if (a) a.classList.add('active');
+          }
+        });
+      }, { threshold: 0.3 });
+      sections.forEach(s => obs.observe(s));
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #2563eb; --primary-soft: #eff6ff;
+      --accent: #7c3aed; --accent-soft: rgba(124,58,237,0.06);
+      --shadow: 0 10px 30px rgba(15,23,42,0.08); --radius: 18px; --max: 1300px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: linear-gradient(180deg,#f8fbff 0%,var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      line-height: 1.8;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .page { max-width: var(--max); margin: 0 auto; padding: 32px 20px 80px; }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    .back-link:hover { color: var(--primary); text-decoration: none; }
+    .hero {
+      background: radial-gradient(circle at top right,rgba(37,99,235,0.14),transparent 30%),
+                  radial-gradient(circle at left bottom,rgba(124,58,237,0.10),transparent 24%), var(--card);
+      border: 1px solid rgba(37,99,235,0.08); border-radius: 24px;
+      box-shadow: var(--shadow); padding: 34px 34px 28px; margin-bottom: 22px;
+    }
+    .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--primary-soft); color: var(--primary); font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+    h1 { font-size: 34px; line-height: 1.25; letter-spacing: -0.02em; margin-bottom: 10px; }
+    .subtitle { color: var(--muted); font-size: 16px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-top: 24px; }
+    .meta-card { background: #fbfdff; border: 1px solid #e7eefb; border-radius: 16px; padding: 14px 16px; }
+    .meta-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .meta-value { font-size: 14px; font-weight: 600; word-break: break-word; }
+    .layout { display: grid; grid-template-columns: 260px minmax(0,1fr); gap: 22px; align-items: start; }
+    .toc { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; }
+    .toc h2 { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+    .toc-list { list-style: none; }
+    .toc-list li { margin: 7px 0; }
+    .toc-list a { font-size: 13.5px; color: var(--muted); }
+    .toc-list a:hover { color: var(--primary); text-decoration: none; }
+    .toc-list a.active { color: var(--primary); background: #eff6ff; font-weight: 600; border-left: 3px solid var(--primary); padding-left: 5px; }
+    .toc-sub { padding-left: 14px; margin-top: 4px; }
+    .toc-sub li { margin: 4px 0; }
+    .toc-sub a { font-size: 12.5px; }
+    .content { display: flex; flex-direction: column; gap: 20px; }
+    .section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 28px 30px; }
+    .section-title { font-size: 22px; font-weight: 800; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 2px solid #f0f4ff; display: flex; align-items: center; gap: 10px; }
+    .section-title .icon { width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+    h3 { font-size: 18px; font-weight: 700; margin: 26px 0 12px; color: #111827; }
+    h4 { font-size: 15px; font-weight: 700; margin: 20px 0 10px; color: #1d4ed8; }
+    p { margin-bottom: 12px; }
+    p:last-child { margin-bottom: 0; }
+    ul, ol { padding-left: 22px; }
+    li { margin-bottom: 8px; }
+    .callout { border-radius: 14px; padding: 14px 18px; margin: 16px 0; font-size: 14.5px; }
+    .callout-title { font-weight: 700; margin-bottom: 8px; font-size: 14px; }
+    .callout-blue { background: linear-gradient(180deg,rgba(37,99,235,0.08),rgba(37,99,235,0.04)); border: 1px solid rgba(37,99,235,0.16); }
+    .callout-blue strong { color: #1d4ed8; }
+    .callout-amber { background: #fffbeb; border: 1px solid #fde68a; }
+    .callout-amber strong { color: #92400e; }
+    .callout-green { background: #f0fdf4; border: 1px solid #86efac; }
+    .callout-green strong { color: #166534; }
+    .callout-purple { background: var(--accent-soft); border: 1px solid rgba(124,58,237,0.18); }
+    .callout-purple strong { color: #6d28d9; }
+    .note { background: #f8faff; border: 1px dashed #cbd5e1; border-radius: 12px; padding: 12px 16px; color: #475467; font-size: 13.5px; margin: 12px 0; }
+    .example-box { background: #f0fdf4; border: 1px solid #86efac; border-radius: 14px; padding: 16px 20px; margin: 16px 0; }
+    .example-box .ex-title { font-size: 12px; font-weight: 700; color: #166534; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
+    .example-box p { margin-bottom: 8px; font-size: 14px; color: #166534; }
+    blockquote { margin: 16px 0; padding: 14px 18px; border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 0 12px 12px 0; color: #3f3f46; font-size: 14.5px; }
+    .paper-info { background: #fafbff; border-left: 4px solid var(--primary); border-radius: 12px; padding: 14px 16px; margin: 16px 0; color: #334155; font-size: 14px; }
+    .paper-info p { margin: 5px 0; }
+    .table-wrap { overflow-x: auto; margin: 16px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th { background: #f0f4ff; color: #1e40af; font-weight: 700; padding: 10px 14px; text-align: left; border-bottom: 2px solid #dbeafe; }
+    td { padding: 9px 14px; border-bottom: 1px solid #f0f4ff; color: #374151; }
+    tr:hover td { background: #fafbff; }
+    .big-concept { background: linear-gradient(135deg,rgba(37,99,235,0.06),rgba(124,58,237,0.06)); border: 1px solid rgba(124,58,237,0.14); border-radius: 16px; padding: 18px 22px; margin: 16px 0; }
+    .big-concept-title { font-size: 15px; font-weight: 800; color: #4f46e5; margin-bottom: 10px; }
+    .flow-box { background: var(--card); border: 1.5px solid #dbeafe; border-radius: 12px; padding: 12px 16px; font-size: 13.5px; text-align: center; flex: 1; min-width: 120px; }
+    .flow-box.green { border-color: #86efac; }
+    .flow-arrow { font-size: 20px; color: #94a3b8; display: flex; align-items: center; }
+    .flow-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .mini-card { background: #f8faff; border-radius: 12px; padding: 14px 16px; }
+    .step-box { display: flex; gap: 14px; margin: 14px 0; align-items: flex-start; }
+    .step-num { width: 28px; height: 28px; border-radius: 50%; background: var(--primary); color: #fff; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
+    .step-content { flex: 1; }
+    .step-content strong { display: block; margin-bottom: 4px; font-size: 15px; }
+    .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; margin: 0 3px; }
+    .badge-blue { background: #dbeafe; color: #1d4ed8; }
+    .badge-purple { background: rgba(124,58,237,0.1); color: #6d28d9; }
+    .badge-green { background: #dcfce7; color: #166534; }
+    .badge-amber { background: #fef9c3; color: #92400e; }
+    .result-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 16px 0; }
+    .result-card { background: linear-gradient(135deg,#f0f9ff,#f8faff); border: 1px solid #bae6fd; border-radius: 14px; padding: 16px; text-align: center; }
+    .result-num { font-size: 28px; font-weight: 800; color: #0369a1; line-height: 1; }
+    .result-label { font-size: 13px; color: var(--muted); margin-top: 6px; }
+    figure { margin: 16px 0; }
+    figcaption { text-align: center; font-size: 13px; color: var(--muted); margin-top: 8px; }
+    /* 值得借鉴 banner */
+    .insights-banner { background: linear-gradient(135deg,rgba(124,58,237,0.07),rgba(37,99,235,0.07)); border: 1px solid rgba(124,58,237,0.18); border-radius: 22px; padding: 28px 30px; margin-bottom: 22px; }
+    .insights-title { font-size: 17px; font-weight: 800; color: #4f46e5; margin-bottom: 20px; }
+    .insights-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+    @media(max-width:900px){ .insights-grid { grid-template-columns: 1fr; } }
+    .insight-card { background: #fff; border: 1px solid rgba(124,58,237,0.14); border-radius: 16px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; }
+    .insight-num { font-size: 28px; font-weight: 900; color: rgba(124,58,237,0.25); line-height: 1; }
+    .insight-head { font-size: 15px; font-weight: 700; color: #3730a3; margin-bottom: 6px; }
+    .insight-body p { font-size: 13.5px; line-height: 1.85; color: #374151; margin: 0; }
+    /* 折叠框 */
+    .primer-details { margin: 18px 0; border: 1px solid #c4b5fd; border-radius: 14px; overflow: hidden; }
+    .primer-details summary {
+      cursor: pointer; padding: 14px 18px; font-size: 14.5px; font-weight: 600;
+      color: #5b21b6; background: rgba(124,58,237,0.06); list-style: none;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .primer-details summary::-webkit-details-marker { display: none; }
+    .primer-details[open] summary { border-bottom: 1px solid #c4b5fd; }
+    .primer-body { padding: 20px 22px; background: #fdfaff; font-size: 14px; line-height: 1.9; }
+    .primer-body h4 { font-size: 14.5px; font-weight: 700; color: #4c1d95; margin: 18px 0 8px; }
+    .primer-body h4:first-child { margin-top: 0; }
+    .primer-body ul { padding-left: 20px; }
+    .primer-body li { margin-bottom: 6px; }
+    .primer-example { background: #f3e8ff; border-left: 4px solid #a78bfa; border-radius: 0 10px 10px 0; padding: 12px 16px; margin: 12px 0; font-size: 13.5px; color: #3b0764; line-height: 1.8; }
+    @media(max-width:768px){
+      .layout { grid-template-columns: 1fr; }
+      .toc { display: none; }
+      .meta-grid { grid-template-columns: 1fr 1fr; }
+      .two-col { grid-template-columns: 1fr; }
+      .result-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+  <a class="back-link" href="../index.html">← 返回首页</a>
+
+  <div class="hero">
+    <div class="eyebrow">🔁 生成式推荐 · Shopee · ACM 2026</div>
+    <h1>UniRec</h1>
+    <p class="subtitle">Bridging the Expressive Gap between Generative and Discriminative Recommendation via Chain-of-Attribute</p>
+    <p class="subtitle" style="margin-top:6px;">用 Chain-of-Attribute 弥合生成式与判别式推荐的表达力鸿沟</p>
+    <div class="meta-grid">
+      <div class="meta-card">
+        <div class="meta-label">机构</div>
+        <div class="meta-value">Shopee</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">Venue</div>
+        <div class="meta-value">ACM Conference '26</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">arXiv</div>
+        <div class="meta-value"><a href="https://arxiv.org/abs/2604.12234" target="_blank">2604.12234</a></div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">核心方法</div>
+        <div class="meta-value">CoA + Capacity-SID + CDC + RFT/DPO</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 值得借鉴 -->
+  <div class="insights-banner">
+    <div class="insights-title">💡 值得借鉴的三个设计思想</div>
+    <div class="insights-grid">
+      <div class="insight-card">
+        <div class="insight-num">01</div>
+        <div class="insight-body">
+          <div class="insight-head">先推理特征，再推理 item</div>
+          <p>CoA 的核心直觉：生成式模型解码时看不到 Item 侧特征，表达力天然受限。UniRec 的解法是把"先预测粗粒度属性（类目、品牌），再生成 SID"的两阶段串行化——<strong>用推理链弥补信息差</strong>，而不是试图把所有信息都塞进 SID token。更难能可贵的是，论文通过贝叶斯公式给出了严格的理论保证：只要属性 token 和 SID 之间存在条件互信息 $I(\mathbf{a}; s_l \mid s_{&lt;l}, u) &gt; 0$，每步解码的不确定性就严格下降。理论先行、实验验证，这个论证框架本身就很值得学习。</p>
+        </div>
+      </div>
+      <div class="insight-card">
+        <div class="insight-num">02</div>
+        <div class="insight-body">
+          <div class="insight-head">场景 token 控制生成方向</div>
+          <p>Task-Conditioned BOS 把"当前是什么场景/目标"注入解码起点，将整条生成轨迹锁定到对应分布上——这和<strong>可控序列生成</strong>的思路高度一致：在生成开始前注入控制信号，比在每步生成时插入约束更彻底、更稳定。KDD 可控序列生成论文里的场景/意图控制 token 与之异曲同工：同一个统一模型，通过起始 token 的差异，驱动出完全不同的生成行为，避免了为每个场景单独训练模型的成本，同时又保留了场景间的知识迁移。</p>
+        </div>
+      </div>
+      <div class="insight-card">
+        <div class="insight-num">03</div>
+        <div class="insight-body">
+          <div class="insight-head">路径哈希 embedding 融入组合信息</div>
+          <p>Content Summary 的思路很实用：SID 解码路径上的 token 对（如 L2类目 × $s_0$）携带远比单个 token 更丰富的联合语义，但全量存储所有组合的 embedding 参数爆炸（$4000^2$ 量级）。用多个哈希函数把 token 对映射到共享小 table 上，<strong>以可接受的碰撞率换取极低的参数成本</strong>，是一种工程上非常务实的 trick。类似的思想在工业推荐特征工程里也很常见（Feature Hashing / FeatureHash），UniRec 把它搬进了自回归解码的每步打分中，是一个轻量但有效的组合特征注入方式。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="layout">
+    <aside class="toc">
+      <h2>目录</h2>
+      <ul class="toc-list">
+        <li><a href="#tldr">⚡ TL;DR</a></li>
+        <li><a href="#motivation">§1 动机：表达力鸿沟</a></li>
+        <li><a href="#theory">§2 理论基础：贝叶斯等价</a></li>
+        <li><a href="#method">§3 方法体系</a>
+          <ul class="toc-sub">
+            <li><a href="#cap-sid">3.1 Capacity-constrained SID</a></li>
+            <li><a href="#coa">3.2 Chain-of-Attribute (CoA)</a></li>
+            <li><a href="#cdc">3.3 Conditional Decoding Context</a></li>
+            <li><a href="#alignment">3.4 RFT + DPO 对齐</a></li>
+          </ul>
+        </li>
+        <li><a href="#arch">§4 整体架构</a></li>
+        <li><a href="#experiments">§5 实验结果</a></li>
+        <li><a href="#ablation">§6 消融分析</a></li>
+        <li><a href="#summary">§7 总结与思考</a></li>
+      </ul>
+    </aside>
+
+    <main class="content">
+
+      <!-- TL;DR -->
+      <section class="section" id="tldr">
+        <div class="section-title">
+          <div class="icon" style="background:#eff6ff;">⚡</div>
+          TL;DR · 三分钟读懂 UniRec
+        </div>
+        <div class="big-concept">
+          <div class="big-concept-title">核心一句话</div>
+          <p>生成式推荐（GR）之所以不如判别式推荐，不是因为模型结构弱，而是因为解码时看不到 Item 侧特征。UniRec 通过在 SID 解码前先生成属性 token（Chain-of-Attribute），把 Item 侧信息"还给"生成器，同时搭配曝光均衡的 SID 构建、多场景条件解码、以及 RFT+DPO 业务对齐，在 Shopee 线上取得 GMV +5.60%、订单 +4.76% 的显著增益。</p>
+        </div>
+        <div class="result-grid">
+          <div class="result-card">
+            <div class="result-num">+22.6%</div>
+            <div class="result-label">离线 HR@50 相对提升<br/>（vs. 最强 GR baseline）</div>
+          </div>
+          <div class="result-card">
+            <div class="result-num">+5.60%</div>
+            <div class="result-label">线上 A/B GMV 提升<br/>（Shopee 主场景）</div>
+          </div>
+          <div class="result-card">
+            <div class="result-num">110ms</div>
+            <div class="result-label">端到端延迟<br/>（传统 pipeline 266ms）</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 动机 -->
+      <section class="section" id="motivation">
+        <div class="section-title">
+          <div class="icon" style="background:#fef3c7;">🎯</div>
+          §1 动机：生成式 vs 判别式推荐的表达力鸿沟
+        </div>
+
+        <p>现代推荐系统的主流范式是多阶段判别式 pipeline（召回 → 粗排 → 精排 → 重排），但这套架构有三个根深蒂固的问题：</p>
+        <ul>
+          <li><strong>阶段目标不一致</strong>：各阶段各自优化局部目标，全局最优无从保证</li>
+          <li><strong>样本选择偏差</strong>：精排模型只在曝光空间上训练，对未曝光候选泛化差</li>
+          <li><strong>误差逐层传播</strong>：上游召回的错误无法被下游纠正</li>
+        </ul>
+
+        <p>生成式推荐（Generative Recommendation, GR）把"推荐"重新定义为<strong>对 Semantic ID（SID）序列的自回归解码</strong>，用一个模型统一了召回和排序，从架构上规避了上述三个问题。但一个直觉上很明显的疑问始终存在：</p>
+
+        <div class="callout-amber callout">
+          <div class="callout-title">⚠️ 核心疑问</div>
+          <p>判别式模型打分时，可以直接拿到目标 Item 的特征向量（类目、品牌、卖家…），做 User-Item 特征交叉；而生成式模型在解码时只看 SID token，根本不知道候选 Item 是什么——这会不会导致生成式模型表达力天然更弱？</p>
+        </div>
+
+        <p>UniRec 的出发点就是给这个问题一个<strong>精确的理论答案</strong>，然后用方法论把差距填平。</p>
+      </section>
+
+      <!-- 理论 -->
+      <section class="section" id="theory">
+        <div class="section-title">
+          <div class="icon" style="background:#f3e8ff;">🔬</div>
+          §2 理论基础：贝叶斯等价性
+        </div>
+
+        <h3>2.1 判别式 = 生成式（在完整特征下）</h3>
+        <p>判别式模型对 Item 的打分是 $p(y \mid \mathbf{f}, u)$，其中 $\mathbf{f}$ 是 Item 特征，$u$ 是用户上下文。由贝叶斯公式：</p>
+
+        $$p(y \mid \mathbf{f}, u) \propto p(\mathbf{f} \mid y, u) \cdot p(y \mid u)$$
+
+        <p>其中 $p(y \mid u)$ 与 $\mathbf{f}$ 无关，因此<strong>按判别式分数排序等价于按生成后验 $p(\mathbf{f} \mid y, u)$ 排序</strong>。生成后验进一步按链式法则展开：</p>
+
+        $$p(\mathbf{f} \mid y, u) = \prod_{k=1}^{n} p(f_k \mid f_{&lt;k}, y, u)$$
+
+        <p>这正好对应对 Item 特征序列的自回归解码。因此：</p>
+
+        <div class="callout-blue callout">
+          <div class="callout-title">🔑 理论结论</div>
+          <p><strong>一个能完整访问 Item 特征 $\mathbf{f}$ 的生成模型，与判别式模型表达能力等价。</strong>二者的实际差距不来自"模型范式本身"，而来自<strong>特征覆盖度</strong>——SID 把丰富的 Item 语义压缩成了紧凑的离散 code，结构化属性（类目、品牌、卖家）在解码时变成了隐藏信号。</p>
+        </div>
+
+        <!-- 例子：直觉讲解 -->
+        <div class="example-box">
+          <div class="ex-title">💡 举例：这段推导在说什么？</div>
+          <p><strong>场景：</strong>给用户 $u$（喜欢运动的男生）推荐商品，候选有 Nike 跑鞋（Item A）和口红（Item B）。</p>
+          <p><strong>判别式做法：</strong>把用户特征 + Item A 的完整特征向量 $\mathbf{f}_A$（类目=运动、品牌=Nike、价格=¥599）输入模型，直接输出点击概率 $p(y=1 \mid \mathbf{f}_A, u)$。谁分高推谁。</p>
+          <p><strong>贝叶斯变形告诉我们：</strong>"用户点 Nike 跑鞋的概率" ∝ "已知用户点了一件商品，它的特征恰好是运动/Nike/¥599 的概率" × "该用户点任意商品的基础概率"。后者对所有候选相同，排序时可扔掉。所以<strong>按判别式分数排序 = 按"这件商品的特征对这个用户有多自然"排序</strong>。</p>
+          <p><strong>链式展开的意义：</strong>$p(\mathbf{f}_A \mid y=1, u)$ 是对整个特征向量的联合概率。用链式法则拆开后 = 先算"第一个特征是'运动'的概率" × "已知是'运动'，第二个特征是'鞋'的概率" × … 这<strong>和语言模型逐 token 生成文字的方式完全一样</strong>——只是这里生成的不是文字，而是 Item 的特征序列。</p>
+          <p><strong>结论：</strong>只要生成模型解码时能看到完整的 Item 特征，它和判别式模型理论上等价。问题在于 SID 把特征压缩成了 3 个 code，大量细节丢失了。</p>
+        </div>
+
+        <!-- 折叠框：贝叶斯公式和链式法则基础 -->
+        <details class="primer-details">
+          <summary>📖 背景知识：贝叶斯公式和链式法则是什么？</summary>
+          <div class="primer-body">
+            <h4>贝叶斯公式</h4>
+            <p>贝叶斯公式描述的是"条件概率的互换"。最基础的形式是：</p>
+            $$P(A \mid B) = \frac{P(B \mid A) \cdot P(A)}{P(B)}$$
+            <p>用大白话说：</p>
+            <ul>
+              <li>$P(A \mid B)$：已知 B 发生了，A 发生的概率（后验概率）</li>
+              <li>$P(B \mid A)$：已知 A 发生了，B 发生的概率（似然）</li>
+              <li>$P(A)$：A 本身的概率（先验概率），与 B 无关</li>
+              <li>$P(B)$：B 本身的概率，是个归一化常数</li>
+            </ul>
+            <div class="primer-example">
+              <strong>🎯 生活例子：</strong>下雨天（B），带伞（A）的概率是多少？<br/>
+              $P(\text{带伞} \mid \text{下雨}) = \dfrac{P(\text{下雨} \mid \text{带伞}) \cdot P(\text{带伞})}{P(\text{下雨})}$<br/><br/>
+              意思是：先看"带伞的人里有多少比例是下雨天带的"，乘上"带伞这件事本身有多常见"，再除以"下雨的概率"做归一化。分母对所有条件相同，排序时可以忽略，所以经常写成 $\propto$（正比于）。
+            </div>
+            <h4>为什么这里用 $\propto$ 而不是 $=$？</h4>
+            <p>在推荐系统里，我们只需要<strong>比大小（排序）</strong>，不需要精确概率值。贝叶斯公式的分母 $P(\mathbf{f} \mid u)$ 对所有候选 Item 都是同一个常数，不影响排序，所以直接写成"正比于"，把分母省掉。</p>
+            <hr style="border:none;border-top:1px solid #e5e7eb;margin:18px 0;"/>
+            <h4>链式法则（Chain Rule）</h4>
+            <p>链式法则是概率论里计算"多个事件同时发生的概率"的公式：</p>
+            $$P(A_1, A_2, A_3) = P(A_1) \cdot P(A_2 \mid A_1) \cdot P(A_3 \mid A_1, A_2)$$
+            <p>通用形式：</p>
+            $$P(x_1, x_2, \ldots, x_n) = \prod_{k=1}^{n} P(x_k \mid x_1, \ldots, x_{k-1})$$
+            <div class="primer-example">
+              <strong>🎯 生活例子：</strong>抽扑克牌，连抽 3 张都是红心的概率？<br/>
+              = P(第1张是红心) × P(第2张是红心 | 第1张已是红心) × P(第3张是红心 | 前两张都是红心)<br/>
+              = 13/52 × 12/51 × 11/50<br/><br/>
+              每一步都以"前面已知的结果"为条件，这就是链式法则。
+            </div>
+            <h4>联系到论文：为什么用链式法则？</h4>
+            <p>Item 的特征向量 $\mathbf{f} = (f_1, f_2, \ldots, f_n)$ 是一个多维向量（比如 $f_1$=类目、$f_2$=品牌、$f_3$=价格档位…）。直接建模这个高维联合概率 $p(\mathbf{f} \mid y, u)$ 很难，但用链式法则分解后，变成了一串"条件概率相乘"——这正好是<strong>自回归语言模型</strong>做的事情：每次预测下一个 token，条件是所有已预测的 token。</p>
+            <p>所以论文得出的结论是：<strong>生成式推荐（自回归解码 SID token）在数学形式上和判别式推荐（直接打分）是等价的</strong>，只差在解码时能不能访问完整特征。</p>
+          </div>
+        </details>
+
+        <h3>2.2 CoA：用属性 token 补回特征覆盖度</h3>
+        <p>完整地对所有 Item 特征逐 token 自回归解码，延迟开销无法承受。CoA 的解法是<strong>只补回最关键、被 SID 压缩丢失最多的粗粒度结构化属性</strong>（类目层级、品牌、卖家），在 SID 解码前先生成这 $m$ 个属性 token：</p>
+
+        $$p(\mathbf{s} \mid u) = p(\mathbf{a} \mid u) \cdot \prod_{l=0}^{L-1} p(s_l \mid \mathbf{a}, s_{&lt;l}, u)$$
+
+        <p>理论上，属性条件化带来每步解码的信息熵下降（即生成不确定性降低）：</p>
+
+        $$\Delta H_l = H(s_l \mid s_{&lt;l}, u) - H(s_l \mid \mathbf{a}, s_{&lt;l}, u) = I(\mathbf{a}; s_l \mid s_{&lt;l}, u) \geq 0$$
+
+        <p>由于共享相同属性的 Item 在 SID 语义空间中占据相邻区域，属性 token 和 SID token 在构造上就高度相关，因此 $\Delta H_l$ 严格为正。累积的信息熵下降 $\sum_l \Delta H_l$ 稳定了 beam search 的搜索轨迹，同时逐层减少 token 预测错误率，最终在端到端层面实现<strong>错误衰减</strong>（error attenuation）。</p>
+      </section>
+
+      <!-- 方法 -->
+      <section class="section" id="method">
+        <div class="section-title">
+          <div class="icon" style="background:#ecfeff;">🛠️</div>
+          §3 方法体系：四个核心模块
+        </div>
+
+        <p>UniRec 由四个相互独立但互补的模块构成：</p>
+        <div class="flow-row">
+          <div class="flow-box">Capacity-constrained SID<br/><span style="font-size:11px;color:#6b7280;">均衡的 SID 构建</span></div>
+          <div class="flow-arrow">+</div>
+          <div class="flow-box" style="border-color:#c4b5fd;">Chain-of-Attribute<br/><span style="font-size:11px;color:#6b7280;">属性先行，再解码 SID</span></div>
+          <div class="flow-arrow">+</div>
+          <div class="flow-box" style="border-color:#a7f3d0;">CDC<br/><span style="font-size:11px;color:#6b7280;">多场景条件解码</span></div>
+          <div class="flow-arrow">+</div>
+          <div class="flow-box" style="border-color:#fde68a;">RFT + DPO<br/><span style="font-size:11px;color:#6b7280;">业务价值对齐</span></div>
+        </div>
+      </section>
+
+      <!-- Capacity SID -->
+      <section class="section" id="cap-sid">
+        <div class="section-title">
+          <div class="icon" style="background:#fef3c7;">⚖️</div>
+          §3.1 Capacity-constrained SID：治理 Matthew 效应
+        </div>
+
+        <h3>问题：曝光不均的 Matthew 效应</h3>
+        <p>传统 RQ-KMeans 按 item 数量均衡聚类。但在推荐场景中，item 热度呈长尾分布——即使每个 cluster 的 item 数量相同，高曝光 item 会主导 cluster 的训练信号：</p>
+
+        <div class="callout-amber callout">
+          <div class="callout-title">实测数据（Shopee 生产流量）</div>
+          <ul style="margin-top:8px;">
+            <li>$s_0$ 层：Top 10% token 占总曝光的 <strong>33.2%</strong>（中等偏斜）</li>
+            <li>$(s_0, s_1)$ 组合：Top 10% 占 <strong>87.9%</strong>（极度集中，2.6× 放大）</li>
+            <li>$(s_0, s_1, s_2)$ 组合：Top 10% 占 <strong>89.6%</strong></li>
+          </ul>
+          <p style="margin-top:8px;">即使 $s_0$ 层只有温和的不均衡，到三层组合时已经接近"赢者通吃"——beam search 反复走相同的少数 token 路径，长尾 item 几乎得不到生成机会。</p>
+        </div>
+
+        <h3>解法：曝光加权的残差量化</h3>
+        <p>引入曝光量 $w_i$（历史曝光次数）作为权重，对每个 cluster $k$ 定义<strong>曝光负载</strong>：</p>
+
+        $$V_k = \sum_{i: z_i = k} w_i$$
+
+        <p>限制每个 cluster 的曝光负载不超过阈值 $\tau \cdot C_{cap}$（其中 $C_{cap} = \frac{1}{K}\sum_i w_i$ 是均值负载）：</p>
+
+        $$\min_{\{z_i\}, \{\boldsymbol{\mu}_k\}} \sum_{i=1}^{N} \|x_i - \boldsymbol{\mu}_{z_i}\|_2^2 \quad \text{s.t.} \quad V_k \leq \tau C_{cap}, \;\forall k$$
+
+        <p>求解策略：先按距离贪心分配（最小化量化误差），再对超载 cluster 执行<strong>修复操作</strong>——把超出容量的 item 重新分配到最近的未满 cluster。实测效果：Top 1% token 曝光份额从 57.3% 降至 26.0%，大幅改善长尾 item 的表征质量。</p>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：为什么"按人头分"会出问题？</div>
+          <p><strong>假设场景：</strong>Shopee 的 item 池里有 10 万个商品，用 $K=4$ 个 cluster（码本大小简化为 4）做第一层 SID 聚类。</p>
+          <p><strong>标准 RQ-KMeans（按人头分）：</strong>每个 cluster 分 2.5 万个 item，看起来很均衡。但热门商品（爆款手机壳、网红零食）每天被点击几十万次，冷门商品每天只被点 2-3 次。</p>
+          <ul>
+            <li>Cluster A：2.5 万 item，但其中 100 个爆款占了 <strong>90% 的训练信号</strong>（梯度）</li>
+            <li>Cluster B/C/D：其余 7.5 万 item 里大多是冷门，训练信号极其稀疏</li>
+          </ul>
+          <p>结果：模型学到的 $s_0$ token A 其实只代表"那 100 个爆款"，Beam Search 几乎永远先走 A 路径，冷门 item 几乎永远进不了候选集。</p>
+          <p><strong>Capacity-constrained SID（按流量分）：</strong>限制每个 cluster 的总曝光量不超过均值的 1.05 倍。爆款被强制分散到不同 cluster，每个 cluster 的训练信号趋于均衡。</p>
+          <ul>
+            <li>原来全挤在 Cluster A 的 100 个爆款，被拆散分配到 A/B/C/D 四个 cluster</li>
+            <li>每个 cluster 内热门 item 数量受限，冷门 item 也获得了相应的梯度更新机会</li>
+            <li>Beam Search 不再永远只走 A 路径，长尾 item 也有机会被召回</li>
+          </ul>
+          <p><strong>代价：</strong>部分 item 为了均衡被分到了"不是语义上最近"的 cluster，量化重建误差略有上升——这是论文在精确度和公平性之间做的 trade-off。</p>
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2604.12234v3/x2.png" alt="Figure 2: SID 曝光集中度分析"
+               style="width:100%;border-radius:12px;border:1px solid #e5e7eb;"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder' style='padding:28px 24px;text-align:center;background:#fffbeb;border-radius:12px;color:#92400e;font-size:14px;border:2px dashed #fde68a;line-height:1.9;'><strong style=color:#78350f>Figure 2：SID 曝光集中度（Lorenz 曲线）</strong><br/>横轴：按曝光降序的 token 排位；纵轴：累计曝光占比<br/>$(s_0,s_1)$ 组合 Top 10% → 87.9% 曝光；Capacity-SID 将 Top 1% 从 57.3% 降至 26.0%<br/><a href='https://arxiv.org/abs/2604.12234' target='_blank' style='font-size:13px;color:#2563eb;'>原图见论文</a></div>`" />
+          <figcaption><strong>Figure 2（论文原图）：</strong>标准 RQ-KMeans 与 Capacity-constrained SID 的曝光集中度对比。各层 token 及组合的 Lorenz 曲线显示，$(s_0, s_1)$ 组合层面的头部集中度极度放大（Matthew 效应），Capacity-SID 有效拉平了曝光分布</figcaption>
+        </figure>
+      </section>
+
+      <!-- CoA -->
+      <section class="section" id="coa">
+        <div class="section-title">
+          <div class="icon" style="background:#f3e8ff;">🔗</div>
+          §3.2 Chain-of-Attribute (CoA)：先猜属性，再解码 SID
+        </div>
+
+        <h3>核心思想：Speculate-then-Refine</h3>
+        <p>传统 GR 的解码顺序是直接生成 SID token 序列；CoA 在 SID 序列前<strong>先生成 $m$ 个粗粒度属性 token</strong>（如 L2 类目 → L3 类目），再以属性为条件解码 SID：</p>
+
+        <div class="flow-row" style="justify-content:center;">
+          <div class="flow-box" style="background:#fef3c7;">BOS<br/><span style="font-size:11px;">任务/场景</span></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-box" style="background:#f3e8ff;border-color:#c4b5fd;">$a_1$ (L2类目)<br/><span style="font-size:11px;">属性 token</span></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-box" style="background:#f3e8ff;border-color:#c4b5fd;">$a_2$ (L3类目)<br/><span style="font-size:11px;">属性 token</span></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-box" style="border-color:#93c5fd;">$s_0$</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-box" style="border-color:#93c5fd;">$s_1$</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-box" style="border-color:#93c5fd;">$s_2$</div>
+        </div>
+
+        <h3>为什么 L2→L3→SID 是最优配置</h3>
+        <p>论文对多种属性链配置做了对比实验（见实验部分）：</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>属性链</th><th>L2@3</th><th>L3@3</th><th>$s_0$@3</th><th>HR@50</th><th>HR@100</th></tr></thead>
+            <tbody>
+              <tr><td>无属性（直接 SID）</td><td>—</td><td>—</td><td>0.314</td><td>0.458</td><td>0.532</td></tr>
+              <tr><td>L1 → SID</td><td>—</td><td>—</td><td>0.488</td><td>0.471</td><td>0.569</td></tr>
+              <tr><td>L2 → SID</td><td>0.755</td><td>—</td><td>0.591</td><td>0.515</td><td>0.597</td></tr>
+              <tr><td>L3 → SID</td><td>—</td><td>0.694</td><td>0.654</td><td>0.517</td><td>0.601</td></tr>
+              <tr style="background:#f0fdf4;"><td><strong>L2 → L3 → SID</strong></td><td><strong>0.757</strong></td><td><strong>0.962</strong></td><td><strong>0.682</strong></td><td><strong>0.537</strong></td><td><strong>0.618</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>加属性后 $s_0$ 的 top-3 命中率从 0.314 → 0.682，说明属性有效地<strong>缩小了 $s_0$ 层的搜索空间</strong>。L2→L3 的层级链比单独用 L3 效果更好（0.537 vs 0.517），因为两步粗到细的属性预测本身精度更高（L3@3 = 0.962 vs 单独 0.694）。</p>
+
+        <div class="callout-purple callout">
+          <div class="callout-title">💡 与 GRACE 的对比</div>
+          <p>GRACE（RecSys'25）也用了属性前缀，但把它当成一个纯工程 trick；CoA 提供了第一个信息论视角的理论解释，用互信息 $I(\mathbf{a}; s_l \mid s_{&lt;l}, u) \geq 0$ 精确量化了属性条件化带来的不确定性下降。</p>
+        </div>
+      </section>
+
+      <!-- CDC -->
+      <section class="section" id="cdc">
+        <div class="section-title">
+          <div class="icon" style="background:#ecfeff;">🎛️</div>
+          §3.3 Conditional Decoding Context (CDC)：多场景稳定解码
+        </div>
+
+        <h3>Task-Conditioned BOS：告诉模型"现在要干什么"</h3>
+        <p>一个统一的 GR 模型需要同时服务多个业务场景（主 feed 点击预估、购买转化预估、跨境商品、搜索排序…）。不同场景的行为分布迥异，如果用同一个固定 BOS token，模型无法区分场景，导致梯度相互干扰。</p>
+
+        <p>解法：把 BOS token 替换为<strong>可学习的、场景条件化的 embedding</strong>：</p>
+
+        $$c_{\text{task}} \in \{\text{click, purchase, cart, cross-border, \ldots}\} \times \{\text{main feed, search, similar items, flash sale, \ldots}\}$$
+
+        <p>Task-Conditioned BOS 在解码序列的最初就注入场景信号，把整个生成轨迹"锁定"到对应的场景分布上。多场景联合训练实验验证：联合训练比单场景模型 HR@50 高 +0.9 点，再加 Task-Conditioned BOS 又进一步提升。</p>
+
+        <h3>Content Summary：捕捉 token 组合的联合语义</h3>
+
+        <p>先理解<strong>问题本身</strong>：CoA 的解码顺序是 L2类目 → L3类目 → $s_0$ → $s_1$ → $s_2$。每一步解码时，模型需要知道"我现在走到的这条路径"——比如已经确定了 L2=运动、L3=跑步，下一步 $s_0$ 应该偏向哪个 token？这个"已走路径"包含的<strong>组合信息</strong>（比如"运动 × $s_0$=7"这个组合对应什么含义）才是关键条件，而不是每个 token 单独的含义。</p>
+
+        <p>Self-Attention 可以隐式建模 token 交互，但对于<strong>显式的笛卡尔积组合特征</strong>（如 L2类目 × $s_0$）表达力有限。全量存储所有 token 对组合的 embedding 参数爆炸（$4000^2 \approx 1600$ 万条）。</p>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：为什么单独的 token embedding 不够？</div>
+          <p><strong>场景：</strong>模型已经解码出 L2=运动（token #5）、$s_0$=7，现在要预测 $s_1$。</p>
+          <p><strong>只看单个 token embedding 的问题：</strong></p>
+          <ul>
+            <li>"运动"的 embedding 告诉模型：这是体育类商品</li>
+            <li>"$s_0$=7"的 embedding 告诉模型：这是某个 SID 区域</li>
+            <li>但"运动 × $s_0$=7"这个<strong>组合</strong>的语义（例如：运动类里跑鞋子类下的某品牌）模型无法从两个向量简单相加/拼接中准确捕捉到</li>
+          </ul>
+          <p><strong>类比：</strong>就像学语言——你知道"苹果"是水果，"手机"是电子产品，但"苹果手机"这个组合是一个完全不同的概念，不能靠把两个词意思叠加来理解。</p>
+          <p><strong>全量存储行不通：</strong>码本大小 4000，两两组合就有 $4000 \times 4000 = 1600$ 万条 embedding，内存爆炸，训练也慢。</p>
+          <p><strong>Content Summary 的解法：</strong>用 3 个哈希函数把"已走路径的所有关键 token 对"映射到一个小得多的共享 embedding table（大小 $S \ll 4000^2$），3 个哈希结果的 embedding 求和后拼入每步的 Rank Head。这样：
+          <ul>
+            <li>参数量从 1600 万降到 $3 \times S$（$S$ 是哈希表大小，可控）</li>
+            <li>哈希碰撞引入少量噪声，但实测对效果影响很小</li>
+            <li>每步解码都能"知道"自己所在的 token 路径组合，而不只是当前单个 token</li>
+          </ul>
+          </p>
+        </div>
+
+        <p>Content Summary 借鉴 Bloom Filter 思想，用 $M$ 个哈希函数将解码路径投影到共享 embedding table：</p>
+
+        $$\mathbf{c}_t = \bigoplus_{i=1}^{M} E_{\text{hash}}\!\left(H_i(\text{path}_{&lt;t}) \bmod S\right)$$
+
+        <div class="formula-vars" style="background:#f8faff;border:1px solid #e0e7ff;border-radius:12px;padding:14px 18px;margin:12px 0;font-size:13.5px;">
+          <div style="font-weight:700;color:#3730a3;margin-bottom:8px;">符号说明</div>
+          <ul style="padding-left:18px;line-height:2;">
+            <li>$\mathbf{c}_t$：第 $t$ 步解码时的 Content Summary 向量，拼入 Rank Head 参与打分</li>
+            <li>$M$：哈希函数数量，论文取 $M=3$</li>
+            <li>$\bigoplus$：向量相加（element-wise sum），把 $M$ 个哈希分支的 embedding 合并</li>
+            <li>$E_{\text{hash}}(\cdot)$：共享的哈希 embedding table，形状 $S \times d_{\text{hash}}$；给定一个整数索引，返回对应行的 embedding 向量</li>
+            <li>$H_i(\text{path}_{&lt;t})$：第 $i$ 个哈希函数，输入是当前解码路径上的某对 token（如 L2 和 $s_0$），输出一个整数</li>
+            <li>$\bmod S$：把哈希值映射到 $[0, S)$ 范围内，作为 embedding table 的索引；$S$ 是 table 行数（超参数，控制存储大小）</li>
+            <li>$d_{\text{hash}}$：每个哈希 embedding 的维度</li>
+            <li>$M \times S \times d_{\text{hash}}$：整个 Content Summary 模块的总参数量</li>
+          </ul>
+        </div>
+
+        <p><strong>五个笛卡尔积对的意义：</strong>论文选了 $(L2, s_0)$、$(L2, s_1)$、$(L3, s_0)$、$(L3, s_1)$、$(s_0, s_1)$ 这 5 对 token 做组合特征。每个"对"就是上面举例里说的"苹果手机"式联合语义——单独看一个 token 不够，要看<strong>两个 token 的组合对应什么</strong>。3 个哈希函数分别对每对 token $(x, y)$ 做：</p>
+        <ul>
+          <li>$H_1(x,y)=x+y$：线性组合，捕捉两个 token ID 的加性关系</li>
+          <li>$H_2(x,y)=x \cdot y$：乘性组合，捕捉两个 token 的交叉关系</li>
+          <li>$H_3(x,y)=p_1 x + p_2 y$（$p_1, p_2$ 为质数）：带权线性组合，质数权重降低哈希碰撞概率</li>
+        </ul>
+        <p>三个哈希对同一个 token 对给出三个不同的整数索引，从 $E_{\text{hash}}$ 里分别取三个 embedding 向量相加，拼入 Rank Head。这样用 $3 \times S$ 行的小 table（而非 $4000^2$ 行的大 table）就近似地表达了所有关键 token 对的组合语义。Content Summary 以轻量参数量（$M \times S \times d_{\text{hash}}$）注入每步 Rank Head，显著提升了 token 路径的条件预测精度。</p>
+      </section>
+
+      <!-- RFT DPO -->
+      <section class="section" id="alignment">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">🎯</div>
+          §3.4 RFT + DPO：业务价值对齐
+        </div>
+
+        <p>NTP 训练优化的是"分布匹配"，不直接优化业务指标（GMV、转化率）。UniRec 在 NTP 之上加了两个互补的对齐机制：</p>
+
+        <div class="two-col" style="margin-top:16px;">
+          <div class="mini-card" style="border-left:4px solid #3b82f6;">
+            <h4 style="margin-top:0;">Reward-Driven Fine-tuning (RFT)</h4>
+            <p style="font-size:13.5px;">用连续的业务价值估计（GMV、观看时长）对训练样本重加权。高业务价值样本被放大，低价值样本被压制：</p>
+            <p style="font-size:13px;margin-top:8px;">$\mathcal{L}_{\text{RFT}} = -\sum_{i \in \mathcal{B}} \sum_t (1 + \lambda \tilde{A}_i) \cdot \alpha_i \cdot \log p_\theta(s^\star_{i,t} \mid \cdots)$</p>
+            <div style="background:#eff6ff;border-radius:10px;padding:10px 14px;margin-top:10px;font-size:12.5px;line-height:1.9;color:#1e40af;">
+              <strong>符号说明：</strong><br/>
+              $\mathcal{B}$：一个训练 mini-batch 内的样本集合<br/>
+              $i$：第 $i$ 条训练样本（一条用户请求 + 一个正样本 item）<br/>
+              $t$：解码步（第 $t$ 个 token，包括属性 token 和 SID token）<br/>
+              $s^\star_{i,t}$：第 $i$ 条样本第 $t$ 步的真实 token（ground truth）<br/>
+              $p_\theta(s^\star_{i,t} \mid \cdots)$：模型预测该真实 token 的概率（NTP loss 的基础）<br/>
+              $\tilde{A}_i$：样本 $i$ 的 advantage 值 = 归一化后的业务价值（如 GMV 在 batch 内 z-score 后 clip），正值 = 高于平均价值，负值 = 低于平均价值<br/>
+              $\lambda$：控制业务价值重加权强度的超参数<br/>
+              $(1 + \lambda \tilde{A}_i)$：加权系数——高 GMV 样本系数 &gt;1（放大梯度），低 GMV 样本系数 &lt;1（压制梯度）<br/>
+              $\alpha_i$：NTP loss 的基础样本权重（如按序列长度归一化）
+            </div>
+          </div>
+          <div class="mini-card" style="border-left:4px solid #8b5cf6;">
+            <h4 style="margin-top:0;">Direct Preference Optimization (DPO)</h4>
+            <p style="font-size:13.5px;">从线上流量中构建行为偏序对：购买 ≻ 点击 ≻ 仅曝光。对每个请求，将同一上下文下的曝光 item 按行为等级两两配对：</p>
+            <p style="font-size:13px;margin-top:8px;">$\mathcal{L}_{\text{DPO}} = -\mathbb{E}\left[\log \sigma\!\left(\beta \left(\log\frac{\pi_\theta(y_w|u)}{\pi_{\text{ref}}(y_w|u)} - \log\frac{\pi_\theta(y_l|u)}{\pi_{\text{ref}}(y_l|u)}\right)\right)\right]$</p>
+            <div style="background:#f5f3ff;border-radius:10px;padding:10px 14px;margin-top:10px;font-size:12.5px;line-height:1.9;color:#4c1d95;">
+              <strong>符号说明：</strong><br/>
+              $y_w$：偏好对中"更好"的 item（winner），如被购买的商品<br/>
+              $y_l$：偏好对中"较差"的 item（loser），如只被曝光未点击的商品<br/>
+              $u$：用户上下文（行为序列 + 场景信息）<br/>
+              $\pi_\theta(y \mid u)$：当前模型（policy）生成 item $y$ 的完整序列概率（所有 token 概率之积）<br/>
+              $\pi_{\text{ref}}(y \mid u)$：参考模型（reference policy）的概率，通常是 RFT 前的 checkpoint，固定不更新<br/>
+              $\log\frac{\pi_\theta}{\pi_{\text{ref}}}$：当前模型相对参考模型的"偏好程度"变化量，winner 的这个值越大越好<br/>
+              $\beta$：温度超参数，控制 KL 约束力度，越大越保守<br/>
+              $\sigma(\cdot)$：sigmoid 函数，把实数映射到 (0,1) 概率区间
+            </div>
+          </div>
+        </div>
+
+        <div class="callout-amber callout" style="margin-top:18px;">
+          <div class="callout-title">❓ Layer-wise Stop Gradient 是什么意思？</div>
+          <p><strong>背景：</strong>UniRec 的 Rank Head 不是一个，而是<strong>每个解码步各有一个独立的 Rank Head</strong>——前 $m$ 步（属性 token，如 L2/L3 类目）有各自的 Rank Head，后 $L$ 步（SID token $s_0, s_1, s_2$）也有各自的 Rank Head。可以理解为解码链上有 $m+L$ 个"打分器"各司其职。</p>
+          <p><strong>问题：</strong>DPO 的训练信号来自"哪个 item 最终更被用户偏好"，这是一个<strong>全局结果</strong>（整条 item 序列的偏好），不是每步属性 token 的精准偏好。如果 DPO 梯度直接传回到属性预测层（L2/L3 Rank Head），会把"属性预测器"往一个错误的方向拉——它会为了让某 winner item 的最终概率高，扭曲属性预测的分布，破坏属性预测本身的精度。</p>
+          <p><strong>解法：Layer-wise Stop Gradient</strong> = 在反向传播时，DPO 的梯度只允许流向<strong>最后一层 SID Rank Head</strong>（即 $s_2$ 的打分器），不允许继续往前传回到属性 Rank Head 和 SID 前几层。相当于给梯度加了一道"防火墙"：</p>
+          <ul>
+            <li>✅ DPO 梯度更新：最后一层 SID Rank Head（$s_2$ 的打分器）</li>
+            <li>🚫 DPO 梯度不更新：属性 Rank Head（L2/L3）、$s_0$/$s_1$ 的 Rank Head、Backbone 参数</li>
+          </ul>
+          <p>这样 DPO 只对"最终 item 选择"的偏好排序负责，属性预测和前几步 SID 的解码精度由 NTP + RFT 保证，互不干扰。</p>
+        </div>
+
+        <p style="margin-top:16px;">两者联合优化：$\mathcal{L} = \mathcal{L}_{\text{RFT}} + \lambda_{\text{DPO}} \mathcal{L}_{\text{DPO}}$。RFT 用连续信号补充分布匹配，DPO 用离散的行为偏好对注入用户真实意图，二者覆盖了互补的信号维度。</p>
+      </section>
+
+      <!-- 架构 -->
+      <section class="section" id="arch">
+        <div class="section-title">
+          <div class="icon" style="background:#ffe4e6;">🏗️</div>
+          §4 整体架构：Decoder-Only + Cross-Attention
+        </div>
+
+        <p>UniRec 使用 <strong>Decoder-Only</strong> 骨干网络，通过 Cross-Attention 接入用户行为序列，每个解码步有独立的 <strong>Rank Head</strong> 输出 token 分布。</p>
+
+        <figure>
+          <img src="https://arxiv.org/html/2604.12234v3/x1.png" alt="Figure 1: UniRec 整体架构图"
+               style="width:100%;border-radius:12px;border:1px solid #e5e7eb;"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder' style='padding:28px 24px;text-align:center;background:#f8faff;border-radius:12px;color:#94a3b8;font-size:14px;border:2px dashed #e2e8f0;line-height:1.9;'><strong style=color:#6b7280>Figure 1：UniRec 整体架构图</strong><br/>左侧：Capacity-constrained SID；中间：Decoder-Only 主干；右侧：CoA 解码链 + RFT/DPO<br/><a href='https://arxiv.org/abs/2604.12234' target='_blank' style='font-size:13px;color:#2563eb;'>原图见论文</a></div>`" />
+          <figcaption><strong>Figure 1（论文原图）：</strong>UniRec 系统整体架构，展示了四个核心模块的协同关系——Capacity-constrained SID 构建、CoA 解码链（BOS → 属性 token → SID token）、Cross-Attention Decoder、以及 RFT+DPO 对齐训练</figcaption>
+        </figure>
+
+        <h3>输入特征</h3>
+        <div class="step-box">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <strong>静态 Profile</strong>
+            <p style="font-size:13px;margin:4px 0 0;">用户 ID、人口属性、上下文特征 → RMSNorm 拼接 → $h_{\text{static}} \in \mathbb{R}^{d_{\text{static}}}$</p>
+          </div>
+        </div>
+        <div class="step-box">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <strong>行为序列</strong>
+            <p style="font-size:13px;margin:4px 0 0;">每个历史点击的 Item 属性（item, shop, category…）Linear 投影后拼成序列 $H_{\text{seq}} \in \mathbb{R}^{T \times d_{\text{model}}}$</p>
+          </div>
+        </div>
+        <div class="step-box">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <strong>多模态 SID 特征</strong>
+            <p style="font-size:13px;margin:4px 0 0;">由多模态内容对齐生成的 SID token embedding，追加到行为序列末尾，提供 Item 内容侧语义</p>
+          </div>
+        </div>
+
+        <h3>Cross-Attention 解码</h3>
+        <p>解码侧（BOS + 属性 token + SID token）作为 Query，行为序列作为固定的 Key-Value。每层使用 Gated Cross-Attention + MMoE-FFN（SwiGLU 激活，4 个 expert），共 3 层，8 头。Gating 参数 $\gamma$ 控制行为上下文的注入强度。</p>
+
+        <h3>Hierarchical Rank Head</h3>
+        <p>每个解码步 $t$ 有独立的 Rank Head，输入为：cross-attention 输出 $q_t$ + 前缀 embedding $e_{\text{prefix}}$ + Content Summary $c_t$ + 聚合表示 $h_{\text{agg}}$，经 SENet + MaskNet 后 Softmax 输出 token 分布。前 $m$ 步预测属性 token（类目层级），后 $L$ 步预测 SID token。</p>
+
+        <div class="note">模型默认配置：$d_{\text{model}} = 256$，行为序列长度 $T = 200$，SID 码本大小 $K = 4000$/层，3 层 SID 层级，容量容忍系数 $\tau = 1.05$，总参数约 50M（0.05B）。</div>
+      </section>
+
+      <!-- 实验 -->
+      <section class="section" id="experiments">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">📊</div>
+          §5 实验结果
+        </div>
+
+        <h3>5.1 离线 Baseline 对比</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>方法</th>
+                <th>类型</th>
+                <th>HR@50</th><th>HR@100</th><th>HR@200</th>
+                <th>Order HR@50</th><th>Order HR@100</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>SASRec</td><td>判别式</td><td>0.421</td><td>0.489</td><td>0.556</td><td>0.548</td><td>0.631</td></tr>
+              <tr><td>TIGER (0.05B)</td><td>GR Enc-Dec</td><td>0.437</td><td>0.508</td><td>0.578</td><td>0.567</td><td>0.652</td></tr>
+              <tr><td>OneRec-V2 (0.05B)</td><td>GR Dec-Only</td><td>0.438</td><td>0.523</td><td>0.587</td><td>0.582</td><td>0.671</td></tr>
+              <tr style="background:#f0fdf4;font-weight:700;"><td>UniRec (0.05B)</td><td>GR + CoA</td><td>0.537</td><td>0.618</td><td>0.688</td><td>0.672</td><td>0.774</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>UniRec 在所有样本上相对 OneRec-V2 HR@50 提升 <strong>+22.6%</strong>，在高价值 Order 样本上 HR@50 提升 <strong>+15.5%</strong>。Order 样本的高提升源于 Task-Conditioned BOS 对多目标（点击、购买、加购）的区分能力，以及 RFT 对高 GMV 样本的重加权。</p>
+
+        <h3>5.2 线上 A/B 测试（Shopee 生产环境）</h3>
+        <div class="result-grid" style="grid-template-columns: repeat(4, 1fr);">
+          <div class="result-card">
+            <div class="result-num">+5.37%</div>
+            <div class="result-label">PVCTR（页面 CTR）</div>
+          </div>
+          <div class="result-card">
+            <div class="result-num">+4.76%</div>
+            <div class="result-label">总订单量</div>
+          </div>
+          <div class="result-card" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-color:#86efac;">
+            <div class="result-num" style="color:#166534;">+5.60%</div>
+            <div class="result-label">GMV</div>
+          </div>
+          <div class="result-card">
+            <div class="result-num">110ms</div>
+            <div class="result-label">延迟（vs 266ms）</div>
+          </div>
+        </div>
+
+        <p>Landing Page 场景（商品详情页推荐）增益更高：订单 +5.78%，GMV +6.19%。端到端延迟 110ms vs 传统多阶段 pipeline 的 266ms，说明统一架构在削减跨阶段通信成本方面确实显著。</p>
+
+        <figure>
+          <img src="https://arxiv.org/html/2604.12234v3/x3.png" alt="Figure 3: 线上 A/B 实验结果"
+               style="width:100%;border-radius:12px;border:1px solid #e5e7eb;"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder' style='padding:28px 24px;text-align:center;background:#f0fdf4;border-radius:12px;color:#166534;font-size:14px;border:2px dashed #86efac;line-height:1.9;'><strong style=color:#14532d>Figure 3：线上 A/B 实验结果汇总</strong><br/>Shopee 生产环境 A/B：GMV +5.60%，订单 +4.76%，PVCTR +5.37%<br/>Landing Page 场景：GMV +6.19%，订单 +5.78%<br/>延迟：UniRec 110ms vs 传统 266ms<br/><a href='https://arxiv.org/abs/2604.12234' target='_blank' style='font-size:13px;color:#2563eb;'>原图见论文</a></div>`" />
+          <figcaption><strong>Figure 3（论文原图）：</strong>Shopee 线上 A/B 实验汇总，包含各指标在主 feed 场景及 Landing Page 场景的增益，以及延迟对比</figcaption>
+        </figure>
+      </section>
+
+      <!-- 消融 -->
+      <section class="section" id="ablation">
+        <div class="section-title">
+          <div class="icon" style="background:#fef3c7;">🔬</div>
+          §6 消融分析
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>消融配置</th><th>HR@50</th><th>HR@100</th><th>HR@200</th><th>相对下降</th></tr></thead>
+            <tbody>
+              <tr style="background:#f0fdf4;font-weight:700;"><td>Full Model（UniRec）</td><td>0.537</td><td>0.618</td><td>0.688</td><td>—</td></tr>
+              <tr><td>替换为标准 RQ-KMeans（去 Capacity SID）</td><td>0.481</td><td>0.558</td><td>0.627</td><td>HR@100 −9.7%</td></tr>
+              <tr><td>去除 Task-Conditioned BOS</td><td>0.493</td><td>0.570</td><td>0.638</td><td>HR@100 −7.8%</td></tr>
+              <tr><td>去除 Content Summary</td><td>0.485</td><td>0.565</td><td>0.637</td><td>HR@100 −8.6%</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>三个核心工程模块（Capacity SID、Task-Cond BOS、Content Summary）贡献了大约相近的收益，且彼此正交——去掉任意一个都有约 8-10% 的 HR@100 下降，说明系统价值来自各模块的协同。</p>
+
+        <div class="callout-green callout">
+          <div class="callout-title">🔍 Scaling 趋势</div>
+          <p>$d_{\text{model}}$ 从 64→128→256→512，HR@50 单调增长（0.397→0.477→0.537→0.557），呈现清晰的 scaling law，说明 UniRec 架构设计是计算友好的，更大模型仍有提升空间。</p>
+        </div>
+      </section>
+
+      <!-- 总结 -->
+      <section class="section" id="summary">
+        <div class="section-title">
+          <div class="icon" style="background:#f3e8ff;">✨</div>
+          §7 总结与我的思考
+        </div>
+
+        <h3>论文贡献总结</h3>
+        <ul>
+          <li><strong>理论贡献</strong>：第一个用 Bayes 定理精确量化 GR 与 DR 表达力差距来源的信息论分析，结论干净——差距来自特征覆盖度，不来自范式本身</li>
+          <li><strong>方法贡献（CoA）</strong>：以最小延迟开销（$m$ 步额外解码），通过"先猜属性、再生成 SID"的 speculate-then-refine 范式，有效补回被 SID 压缩丢失的 Item 侧特征</li>
+          <li><strong>工程贡献</strong>：Capacity-constrained SID + CDC（Task-Cond BOS + Content Summary）解决了大规模部署中两个实际痛点：token collapse 和多场景干扰</li>
+          <li><strong>对齐贡献</strong>：RFT（连续业务价值重加权）+ DPO（行为偏好对）的联合框架，将生成式推荐真正对接业务目标</li>
+        </ul>
+
+        <h3>值得思考的问题</h3>
+
+        <div class="callout-blue callout">
+          <div class="callout-title">Q1: CoA 的属性预测错了怎么办？</div>
+          <p>论文数据显示 L2@3 = 0.757，即 L2 类目的 top-3 召回率只有 75.7%——意味着约 25% 的情况属性预测会偏离。论文的理论要求 $I(\mathbf{a}; s_l \mid \ldots) &gt; 0$ 为严格正，这在期望上成立，但单条样本的错误属性会引导 SID 解码走向错误方向。这个 cascading error 在 beam search 下的实际影响值得进一步量化。</p>
+        </div>
+
+        <div class="callout-blue callout">
+          <div class="callout-title">Q2: Capacity SID 的量化误差代价</div>
+          <p>为了均衡曝光负载，Capacity SID 会把部分 item 分配到"不是最近的"cluster（修复操作），这必然增大量化重建误差。论文用 HR 指标说明整体是正向的，但理论上对于低曝光 item，这个 trade-off 的净收益如何，论文没有单独拆分分析。</p>
+        </div>
+
+        <div class="callout-blue callout">
+          <div class="callout-title">Q3: DPO 偏好对的构建偏差</div>
+          <p>从同一请求的曝光 item 里构建偏序对（购买 ≻ 点击 ≻ 曝光），这个偏序本身受位置偏差（position bias）影响——排位靠前的 item 曝光更多但不一定更优质。论文没有提到对 position bias 的校正处理，这在实际工业系统里是一个重要的工程细节。</p>
+        </div>
+
+        <h3>关联阅读</h3>
+        <ul>
+          <li><a href="onerec.html">OneRec</a>：统一多阶段 pipeline 的生成式推荐，UniRec 的直接前作之一</li>
+          <li><a href="tiger.html">TIGER</a>：GR 的开创性工作，引入 RQ-VAE 构建层级 SID</li>
+          <li><a href="semid.html">SemID</a>：语义 ID 的质量与泛化性研究</li>
+          <li><a href="onesearch.html">OneSearch</a>：GR 在电商搜索场景的应用，同样结合了 DPO</li>
+        </ul>
+      </section>
+
+    </main>
+  </div>
+</div>
+</body>
+</html>
