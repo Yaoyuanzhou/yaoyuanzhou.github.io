@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GR4AD 论文解读 — 大规模广告生成式推荐</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false }
+          ],
+          throwOnError: false
+        });
+      }
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #2563eb; --primary-soft: #eff6ff;
+      --accent: #7c3aed; --accent-soft: rgba(124,58,237,0.06);
+      --shadow: 0 10px 30px rgba(15,23,42,0.08); --radius: 18px; --max: 1300px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: linear-gradient(180deg,#f8fbff 0%,var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      line-height: 1.8;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .page { max-width: var(--max); margin: 0 auto; padding: 32px 20px 80px; }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    .back-link:hover { color: var(--primary); text-decoration: none; }
+    .hero {
+      background: radial-gradient(circle at top right,rgba(37,99,235,0.14),transparent 30%),
+                  radial-gradient(circle at left bottom,rgba(124,58,237,0.10),transparent 24%), var(--card);
+      border: 1px solid rgba(37,99,235,0.08); border-radius: 24px;
+      box-shadow: var(--shadow); padding: 34px 34px 28px; margin-bottom: 22px;
+    }
+    .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--primary-soft); color: var(--primary); font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+    h1 { font-size: 32px; line-height: 1.25; letter-spacing: -0.02em; margin-bottom: 10px; }
+    .subtitle { color: var(--muted); font-size: 16px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-top: 24px; }
+    .meta-card { background: #fbfdff; border: 1px solid #e7eefb; border-radius: 16px; padding: 14px 16px; }
+    .meta-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .meta-value { font-size: 14px; font-weight: 600; word-break: break-word; }
+    .layout { display: grid; grid-template-columns: 260px minmax(0,1fr); gap: 22px; align-items: start; }
+    .toc { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; max-height: calc(100vh - 40px); overflow-y: auto; }
+    .toc h2 { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+    .toc-list { list-style: none; }
+    .toc-list li { margin: 7px 0; }
+    .toc-list a { font-size: 13.5px; color: var(--muted); }
+    .toc-list a:hover { color: var(--primary); }
+    .toc-list a.active, .toc-sub a.active { color: var(--primary); background: #eff6ff; font-weight: 600; border-left: 3px solid var(--primary); padding-left: 6px; display: inline-block; border-radius: 4px; }
+    .toc-sub { padding-left: 14px; margin-top: 4px; list-style: none; }
+    .toc-sub li { margin: 4px 0; }
+    .toc-sub a { font-size: 12.5px; }
+    .content { display: flex; flex-direction: column; gap: 20px; }
+    .section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 28px 30px; }
+    .section-title { font-size: 22px; font-weight: 800; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 2px solid #f0f4ff; display: flex; align-items: center; gap: 10px; }
+    .section-title .icon { width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; background: var(--primary-soft); color: var(--primary); }
+    h3 { font-size: 18px; font-weight: 700; margin: 26px 0 12px; color: #111827; }
+    h4 { font-size: 15px; font-weight: 700; margin: 20px 0 10px; color: #1d4ed8; }
+    p { margin-bottom: 12px; }
+    ul, ol { padding-left: 22px; }
+    li { margin-bottom: 6px; }
+    .callout { border-radius: 14px; padding: 14px 18px; margin: 16px 0; font-size: 14.5px; }
+    .callout-blue { background: linear-gradient(180deg,rgba(37,99,235,0.08),rgba(37,99,235,0.04)); border: 1px solid rgba(37,99,235,0.16); }
+    .callout-blue strong { color: #1d4ed8; }
+    .callout-amber { background: #fffbeb; border: 1px solid #fde68a; }
+    .callout-amber strong { color: #92400e; }
+    .callout-green { background: #f0fdf4; border: 1px solid #86efac; }
+    .callout-green strong { color: #166534; }
+    .callout-purple { background: var(--accent-soft); border: 1px solid rgba(124,58,237,0.18); }
+    .callout-purple strong { color: #6d28d9; }
+    .note { background: #f8faff; border: 1px dashed #cbd5e1; border-radius: 12px; padding: 12px 16px; color: #475467; font-size: 13.5px; margin: 12px 0; }
+    .example-box { background: #f0fdf4; border: 1px solid #86efac; border-radius: 14px; padding: 16px 20px; margin: 16px 0; }
+    .example-box .ex-title { font-size: 12px; font-weight: 700; color: #166534; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
+    .example-box p { margin-bottom: 8px; font-size: 14px; color: #14532d; }
+    .example-box p:last-child { margin-bottom: 0; }
+    blockquote { margin: 16px 0; padding: 14px 18px; border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 0 12px 12px 0; color: #3f3f46; font-size: 14.5px; }
+    .paper-info { background: #fafbff; border-left: 4px solid var(--primary); border-radius: 12px; padding: 14px 16px; margin: 16px 0; color: #334155; font-size: 14px; }
+    .paper-info p { margin: 5px 0; }
+    figure { margin: 22px 0; background: #fbfdff; border: 1px solid #e8edf5; border-radius: 16px; padding: 14px; }
+    figure img { width: 100%; display: block; border-radius: 12px; background: #fff; }
+    figcaption { margin-top: 10px; font-size: 13.5px; color: var(--muted); line-height: 1.6; }
+    .fig-placeholder { padding: 36px 24px; text-align: center; background: #f8faff; border-radius: 12px; color: #94a3b8; font-size: 14px; border: 2px dashed #e2e8f0; line-height: 1.9; }
+    .formula-block { background: #fafbff; border: 1px solid #e8edf5; border-radius: 14px; padding: 16px 20px; margin: 14px 0; overflow-x: auto; }
+    .formula-vars { background: #f0f7ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 12px 16px; margin: 6px 0 16px; font-size: 13.5px; color: #374151; }
+    .formula-vars .var-title { font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+    .formula-vars ul { margin: 0; padding-left: 18px; }
+    .formula-vars li { margin: 5px 0; }
+    .katex-display { overflow-x: auto; overflow-y: hidden; padding: 6px 0; }
+    .table-wrap { overflow-x: auto; margin: 16px 0; }
+    table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 12px; font-size: 13.5px; }
+    thead th { background: #f3f6fb; color: #334155; font-weight: 700; border-bottom: 2px solid var(--line); text-align: left; padding: 10px 12px; }
+    td { padding: 9px 12px; border-bottom: 1px solid #eef2f7; vertical-align: top; }
+    tbody tr:nth-child(even) { background: #fafcff; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+    .mini-card { border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; background: #fff; }
+    .mini-card h4 { margin-top: 0; font-size: 14px; }
+    .step-list { display: flex; flex-direction: column; gap: 10px; margin: 14px 0; }
+    .step { background: #fafbff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: flex; gap: 12px; align-items: flex-start; }
+    .step-num { flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
+    footer { margin-top: 30px; text-align: center; color: var(--muted); font-size: 13px; }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .toc { position: static; max-height: none; }
+      .meta-grid { grid-template-columns: repeat(2,1fr); }
+      .two-col { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+  <a class="back-link" href="../index.html">← 返回论文列表</a>
+
+  <header class="hero">
+    <span class="eyebrow">📄 生成式推荐 · 广告系统 · 工业落地</span>
+    <h1>GR4AD：为大规模广告系统量身设计的生成式推荐器</h1>
+    <p class="subtitle">Generative Recommendation for Large-Scale Advertising · Kuaishou Technology</p>
+    <div class="meta-grid">
+      <div class="meta-card"><div class="meta-label">作者</div><div class="meta-value">Peng Jiang, Kun Gai et al.（快手广告团队）</div></div>
+      <div class="meta-card"><div class="meta-label">机构</div><div class="meta-value">Kuaishou Technology</div></div>
+      <div class="meta-card"><div class="meta-label">来源</div><div class="meta-value">arXiv:2602.22732v3 · 2026</div></div>
+      <div class="meta-card"><div class="meta-label">核心命题</div><div class="meta-value">在 Tokenization / Architecture / Learning / Serving 四个维度做 co-design，把生成式推荐真正跑进广告系统</div></div>
+    </div>
+    <div class="paper-info" style="margin-top:18px;">
+      <p>📎 <strong>论文</strong>：<a href="https://arxiv.org/abs/2602.22732" target="_blank">arxiv.org/abs/2602.22732</a></p>
+      <p>🚀 <strong>工业落地</strong>：快手广告全量部署，4 亿用户，A/B 收入 <strong>+4.2%</strong>，QPS 翻倍，&lt;100ms 延迟</p>
+      <p>🎯 <strong>核心创新</strong>：UA-SID（多粒度多分辨率 SID）· LazyAR（懒惰自回归解码）· VSL+RSPO（list-wise RL）· DBS（动态 beam serving）</p>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="toc">
+      <h2>📋 目录</h2>
+      <ul class="toc-list">
+        <li><a href="#tldr">⚡ TL;DR</a></li>
+        <li><a href="#bg">1. 背景与动机</a>
+          <ul class="toc-sub">
+            <li><a href="#bg-trend">1.1 GR 的工业潮流</a></li>
+            <li><a href="#bg-gap">1.2 广告场景的三个 Gap</a></li>
+          </ul>
+        </li>
+        <li><a href="#method">2. 方法详解</a>
+          <ul class="toc-sub">
+            <li><a href="#m-overview">2.1 整体架构</a></li>
+            <li><a href="#m-uasid">2.2 UA-SID</a></li>
+            <li><a href="#m-lazyar">2.3 LazyAR Decoder</a></li>
+            <li><a href="#m-vsl">2.4 VSL 价值感知监督</a></li>
+            <li><a href="#m-rspo">2.5 RSPO 排序对齐 RL</a></li>
+            <li><a href="#m-unified">2.6 VSL & RSPO 统一</a></li>
+          </ul>
+        </li>
+        <li><a href="#serving">3. 部署与服务</a>
+          <ul class="toc-sub">
+            <li><a href="#s-system">3.1 闭环系统</a></li>
+            <li><a href="#s-dbs">3.2 Dynamic Beam Serving</a></li>
+            <li><a href="#s-other">3.3 其它优化</a></li>
+          </ul>
+        </li>
+        <li><a href="#exp">4. 实验结果</a>
+          <ul class="toc-sub">
+            <li><a href="#exp-main">4.1 主表对比</a></li>
+            <li><a href="#exp-scaling">4.2 Scaling Law</a></li>
+            <li><a href="#exp-uasid">4.3 UA-SID 质量</a></li>
+            <li><a href="#exp-biz">4.4 业务指标</a></li>
+          </ul>
+        </li>
+        <li><a href="#thoughts">5. 我的理解</a>
+          <ul class="toc-sub">
+            <li><a href="#think-bright">5.1 亮点</a></li>
+            <li><a href="#think-flaw">5.2 不足</a></li>
+            <li><a href="#think-takeaway">5.3 启发</a></li>
+          </ul>
+        </li>
+      </ul>
+    </aside>
+
+    <main class="content">
+
+      <!-- ============ TL;DR ============ -->
+      <section class="section" id="tldr">
+        <h2 class="section-title"><span class="icon">⚡</span>TL;DR</h2>
+        <div class="callout callout-blue">
+          <p><strong>问题</strong>：把 LLM 风格的生成式推荐（GR）直接搬到广告系统，会被 <em>多粒度业务字段</em>、<em>list-level eCPM 优化</em>、<em>实时多候选 &lt;100ms 服务</em> 三件事卡住。</p>
+          <p><strong>方案（GR4AD = 四件套 co-design）</strong>：</p>
+          <ul style="margin-top:6px;">
+            <li><strong>UA-SID</strong>：MLLM 端到端微调 + MGMR RQ-Kmeans，码本碰撞率 85% → 18%。</li>
+            <li><strong>LazyAR</strong>：前 K 层不依赖 $s_{t-1}$ 可并行 + 跨 beam 共享，QPS 翻倍且基本不掉点。</li>
+            <li><strong>VSL + RSPO</strong>：value-aware CE + LambdaLoss 风格的 list-wise RL（被证明是 NDCG 上界）。</li>
+            <li><strong>Dynamic Beam Serving</strong>：分层 beam + 流量自适应 + result cache + FP8。</li>
+          </ul>
+          <p><strong>结果</strong>：快手广告全量部署，A/B 收入 +4.2%，500+ QPS / L20，&lt;100ms 延迟，中小广告主投放量 +17.5%，转化率 +10.17%。</p>
+        </div>
+
+        <div class="callout callout-purple">
+          <p><strong>📖 阅读约定：贯穿全文的一条样本</strong></p>
+          <p>为了让抽象的模块落到具体数字，本文用一条<strong>固定样本</strong>串起所有方法模块，请记住它：</p>
+          <ul style="margin-top:6px;">
+            <li><strong>用户 U</strong>：30 岁男，最近 30 天点击过 12 条运动相关广告，长期广告价值高（$w_{user}=1.5$）</li>
+            <li><strong>广告 $i$</strong>：「<strong>李宁旗舰店篮球鞋短视频</strong>」，价格 ¥399，转化方式=直播间引流，eCPM=12（桶号 v=8/10）</li>
+            <li><strong>真实标签</strong>：U 看完后 <strong>购买</strong> 了（$w_{behavior}=3.0$）</li>
+            <li><strong>由 MGMR 量化出的 UA-SID</strong> = <code>(2, 1, 387)</code></li>
+          </ul>
+          <p>下文每个模块都会让你看到这条样本被怎么处理、loss 怎么算、为什么 LazyAR 不会让 ta 召不回来、为什么 RSPO 比 DPO 更能把 ta 排到第 1 位。</p>
+        </div>
+      </section>
+
+      <!-- ============ 1. 背景 ============ -->
+      <section class="section" id="bg">
+        <h2 class="section-title"><span class="icon">①</span>背景与动机</h2>
+
+        <h3 id="bg-trend">1.1 GR 的工业潮流</h3>
+        <p>过去一两年，工业界（Meta HSTU、快手 OneRec、Google PLUM、美团 MTGR…）开始把传统 <strong>DLRM</strong>（Deep Learning Recommendation Model）改造成 <strong>生成式推荐器</strong>，希望复用 LLM 的两大红利：</p>
+        <ul>
+          <li><strong>Scaling Law</strong>：模型加参数就能涨点。</li>
+          <li><strong>统一架构</strong>：把召回/粗排/精排/重排压进同一个 next-token-prediction 框架。</li>
+        </ul>
+        <p>代表工作：TIGER（RQ-VAE SID）、OneRec（统一召排）、PLUM（多分辨率码本）、HSTU（千亿参数序列 transducer）等。</p>
+
+        <h3 id="bg-gap">1.2 广告场景的三个 Gap</h3>
+        <p>把 GR 直接搬进广告，<strong>会立刻撞上三堵墙</strong>：</p>
+
+        <div class="callout callout-amber">
+          <p><strong>Gap 1：Tokenization 不够用</strong></p>
+          <p>广告短视频混合了 <em>视频画面 + 商品信息 + 商家 B 端属性 + 转化类型 + 账户 ID</em>。纯语义 SID（TIGER 风格）抓不住非语义业务字段——同样视频但不同转化类型，投放轨迹完全不同。</p>
+        </div>
+
+        <div class="callout callout-amber">
+          <p><strong>Gap 2：学习范式不对齐</strong></p>
+          <p>广告优化的是 <strong>list-level 收益</strong>（eCPM、NDCG），而 LLM 风格的 token-level CE loss 是 point-wise 的，不能直接优化排序；同时广告样本既来自模型自产，又来自其它生产 pipeline，offline DPO/SimPO 不够用。</p>
+        </div>
+
+        <div class="callout callout-amber">
+          <p><strong>Gap 3：实时服务约束</strong></p>
+          <p>广告必须 <em>多候选（数十/上百）+ 高并发 + &lt;100ms</em>。这和 LLM 单次响应可以"慢慢出"完全不同，beam 数指数膨胀直接把 GR 干爆。</p>
+        </div>
+
+        <p class="note">GR4AD 的回答：<strong>不是拼 LLM</strong>，而是在 tokenization / architecture / learning / serving 四个维度都做"recommendation-native"的 co-design。</p>
+      </section>
+
+      <!-- ============ 2. 方法 ============ -->
+      <section class="section" id="method">
+        <h2 class="section-title"><span class="icon">②</span>方法详解</h2>
+
+        <h3 id="m-overview">2.1 整体架构</h3>
+        <p>GR4AD 的整体训练-服务架构如 Figure 1 所示，由四块串联：</p>
+
+        <div class="step-list">
+          <div class="step"><div class="step-num">1</div><div><strong>Context Processor</strong>（轻量线性）：把结构化特征 + 跨域用户序列 + 广告序列编码成 context $X=(x_1,\dots,x_S)$。</div></div>
+          <div class="step"><div class="step-num">2</div><div><strong>LazyAR Decoder</strong>：前 K 层并行（不依赖 $s_{t-1}$），后 L−K 层自回归，输出 UA-SID 序列 $y=(s_1,\dots,s_T)$。</div></div>
+          <div class="step"><div class="step-num">3</div><div><strong>VSL + RSPO 联合训练</strong>：VSL 学 user-interest 分布；RSPO 用 list-wise reward 拉到高 eCPM。</div></div>
+          <div class="step"><div class="step-num">4</div><div><strong>Realtime Serving</strong>：DBS（动态 beam）+ result cache + FP8，把延迟和吞吐压进预算。</div></div>
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2602.22732v3/x1.png" alt="Figure 1: GR4AD overall architecture"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+                 <b>Figure 1：GR4AD 整体架构</b><br><br>
+                 左：Context Processor 把结构特征 + 跨域序列 + 广告序列做 linear 投影<br>
+                 中：LazyAR Decoder（K 层并行 + L−K 层 AR）<br>
+                 右：VSL（CE + eCPM 桶 token + 样本权重） + RSPO（list-wise reward）联合训练<br>
+                 下：Reference Model 提供 p_ref，Reward System 给 list-wise reward
+               </div>`" />
+          <figcaption><strong>Figure 1（论文原图）：</strong>GR4AD 模型架构与学习算法总览。Decoder 由 K 层并行 + (L−K) 层自回归组成；右侧是 VSL + RSPO 的统一训练流。</figcaption>
+        </figure>
+
+        <h3 id="m-uasid">2.2 UA-SID：统一广告语义 ID</h3>
+
+        <h4>2.2.1 UAE：Unified Advertisement Embedding</h4>
+        <p>广告 item 包含三类异质信息：<strong>Video</strong>（画面/ASR/OCR/BGM）、<strong>Product</strong>（标题/价格/卖点）、<strong>Advertiser</strong>（地域/粉丝/价值）。GR4AD 基于 Qwen3-VL-7B 做端到端微调，主要两件事：</p>
+
+        <p><strong>① Instruction Tuning（IT）</strong>：设计 6 种 prompt 模板覆盖快手不同广告类型，例如：</p>
+        <ul>
+          <li>直播间主播 → 让 MLLM 分析 profile + 地域</li>
+          <li>外循环商家 → 让 MLLM 聚焦行业 + 品牌</li>
+          <li>短视频创意 → 让 MLLM 解构心理触发点</li>
+        </ul>
+
+        <p><strong>② Co-occurrence Learning（CL）</strong>：用 <em>Swing</em> 算法估计 item 共现强度，在 (Video, Product, Advertiser) 三元组上构造正样本对，配合 InfoNCE：</p>
+
+        <div class="formula-block">
+          $$
+          \mathcal{L}_{NCE}(i) = -\log \frac{\sum_{j \in \mathcal{P}_i} \exp(z_i^\top z_j / \tau)}{\sum_{k \neq i} \exp(z_i^\top z_k / \tau)}
+          $$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$z_i, z_j, z_k$：item 的 MLLM 最后一层 hidden state（即广告 embedding）</li>
+            <li>$\mathcal{P}_i$：与 item $i$ 高共现的正样本集合（Swing 估计）</li>
+            <li>$\tau$：温度超参，越小正负样本区分越锐</li>
+            <li>分母：batch 内除自身外的全部样本（in-batch negatives）</li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：跟着一条「李宁篮球鞋」广告走完 UAE 全流程</div>
+          <p>假设广告 $i$ = 「李宁旗舰店的篮球鞋短视频」，输入到 Qwen3-VL-7B 的内容是：</p>
+          <ul style="color:#14532d;">
+            <li><strong>Video</strong>：6 帧画面（球场+球员运球）、ASR="夏天打球，必备这双轻量篮球鞋"、OCR="满 199 减 50"、BGM=hiphop</li>
+            <li><strong>Product</strong>：标题="李宁䨻轻弹篮球鞋"、价格=¥399、品牌=李宁、行业=运动鞋服</li>
+            <li><strong>Advertiser</strong>：账号="李宁官方旗舰店"、地域=福建、粉丝=820w、广告价值=高</li>
+          </ul>
+          <p><strong>Step 1 — IT</strong>：选中 Prompt Template 2（聚焦品牌+行业），MLLM 生成结构化理解 → 把 hidden state $z_i \in \mathbb{R}^{4096}$ 输出。</p>
+          <p><strong>Step 2 — CL（Swing）</strong>：在历史日志里发现，看过 $i$ 的用户中有 12.3% 在 30 分钟内点击了广告 $j$ = 「安踏跑鞋直播间」 → Swing 分数 0.47，列为正样本对 $(i,j)\in \mathcal{P}_i$。</p>
+          <p><strong>Step 3 — InfoNCE</strong>：同 batch 256 条样本里，把 $z_i^\top z_j$（高）拉大，把 $z_i^\top z_k$（$k$=「某手机广告」、「某美妆广告」）压小。温度 $\tau=0.07$。</p>
+          <p><strong>训完的效果</strong>：在 photo-to-photo recall@1 测试（同款商品的两条不同视频能否互相召回），从 Qwen3-VL-7B 的 0.769 提升到 <strong>0.896</strong>（Table 2）— 这就是 IT+CL 带来的具体收益。</p>
+        </div>
+
+        <h4>2.2.2 MGMR RQ-Kmeans：多粒度多分辨率量化</h4>
+        <p>传统 RQ-Kmeans 用等大码本（4096-4096-4096），实测 <strong>码本利用率仅 0.1‰</strong>，碰撞率 85%。GR4AD 提出两个关键改进：</p>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>① Multi-Resolution（MR）</h4>
+            <p style="font-size:13.5px;color:#475569;">浅层用大码本（16384）抓粗粒度主因子（高熵），深层用小码本（1024）建模低熵残差。+ Balanced K-means 提升利用率。</p>
+          </div>
+          <div class="mini-card">
+            <h4>② Multi-Granularity（MG）</h4>
+            <p style="font-size:13.5px;color:#475569;">把<strong>最后一层换成 hash</strong>，输入是非语义业务字段（账户 ID、转化类型）。语义相同但业务不同的广告由此被精确区分。</p>
+          </div>
+        </div>
+
+        <p>每个 item 最终被映射成离散 SID 序列：</p>
+        <div class="formula-block">
+          $$
+          y = (s_1, s_2, \dots, s_T),\quad s_t \in \mathcal{V}_t
+          $$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$T$：UA-SID 总深度（论文中 T=3，前两层语义 + 最后一层 hash）</li>
+            <li>$\mathcal{V}_t$：第 $t$ 层的码本（前层大、后层小）</li>
+            <li>$s_t$：第 $t$ 层离散 token（前两层来自 RQ-Kmeans，最后一层来自非语义字段 hash）</li>
+          </ul>
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2602.22732v3/x2.png" alt="Figure 2: UA-SID structure"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+                 <b>Figure 2：UA-SID 结构</b><br><br>
+                 左：Unified Ad Embedding（MLLM + IT + CL）输入 Video/Product/Advertiser<br>
+                 右：MGMR RQ-Kmeans，前两层 RQ-Kmeans 出语义 SID，最后一层 hash 注入业务字段<br>
+                 输出：(2, 1, 3) 这样的 3 级 SID
+               </div>`" />
+          <figcaption><strong>Figure 2（论文原图）：</strong>UA-SID 的两阶段结构 — UAE（语义 embedding）+ MGMR 量化（语义 SID + 业务 hash）。</figcaption>
+        </figure>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：MGMR 量化一步步把「李宁篮球鞋」打成 SID</div>
+          <p>承接上例，UAE 给出 embedding $z_i \in \mathbb{R}^{4096}$。MGMR 走三步：</p>
+          <p><strong>Level 1（语义粗粒度，码本 16384）</strong>：在 16384 个聚类中心里找最近的，比如落到聚类 #2（簇含义≈「运动+服饰+男性向」）→ $s_1 = 2$，残差 $r_1 = z_i - c_2$。</p>
+          <p><strong>Level 2（语义中粒度，码本 4096）</strong>：把 $r_1$ 再在 4096 个中心里找最近，比如 #1（簇含义≈「篮球/球类专项装备」）→ $s_2 = 1$，残差 $r_2 = r_1 - c'_1$。</p>
+          <p><strong>Level 3（业务字段 hash，槽位 1024）</strong>：注意 — 这里 <strong>不</strong>再用 K-means。直接 $s_3 = \mathrm{hash}(\text{accountID}=\text{"李宁旗舰店"},\ \text{conversion}=\text{"直播间引流"}) \bmod 1024 = 387$。</p>
+          <p>最终 UA-SID = <code>(2, 1, 387)</code>。</p>
+          <p style="background:#e6f9ee;border-left:3px solid #16a34a;padding:8px 10px;margin-top:10px;"><strong>对比看 MG 的价值</strong>：同样视觉特征「篮球鞋」，但「安踏官方店 / 商品成交」的另一条广告 → $s_1=2, s_2=1$ 完全一致（因为画面+品类相同），但 hash 后 $s_3 = 819$ → SID 变成 <code>(2, 1, 819)</code>。<br>没有 MG 时这两条会被合成同一个 SID，模型完全无法区分两家品牌的转化轨迹；加了 MG 后碰撞率从 <strong>85.4% → 18.3%</strong>。</p>
+        </div>
+
+        <p><strong>效果（Table 2）</strong>：碰撞率 85.4% → <strong>18.3%</strong>，码本利用率 0.10‰ → 0.34‰，压缩比 3.54 → 1.07。</p>
+      </section>
+
+      <!-- ============ 2.3 LazyAR ============ -->
+      <section class="section">
+        <h3 id="m-lazyar" style="margin-top:0;">2.3 LazyAR：懒惰自回归解码器</h3>
+
+        <div class="callout callout-purple">
+          <p><strong>核心观察</strong>：在生成 SID 时，<strong>第 1 级 SID 的 loss 最大、最难学</strong>，但 beam 数 = 1（解码刚开始）；后续层 loss 反而小，beam 数却指数膨胀。也就是说，<em>"难的便宜，易的贵"</em> — 这是推荐场景特有的 mismatch。</p>
+          <p>能否让后期层 <strong>少跑几层 AR</strong>，把算力省下来？</p>
+        </div>
+
+        <h4>三种解码方式对比</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>方式</th><th>结构</th><th>优缺点</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Vanilla AR</strong></td><td>每层都喂 $s_{t-1}$，所有 SID 都跑全 $L$ 层</td><td>简单但慢，beam 越大越爆</td></tr>
+              <tr><td><strong>DeepSeek-MTP</strong></td><td>给每个后续 token 单独加浅 decoder</td><td>引入额外参数，效果反而下降</td></tr>
+              <tr><td><strong>LazyAR (本文)</strong></td><td>前 K 层不依赖 $s_{t-1}$（可并行），第 K 层注入，后 L−K 层 AR</td><td>前 K 层跨 beam 共享，省算力且不掉点</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2602.22732v3/x3.png" alt="Figure 3: Vanilla AR vs DeepSeek-MTP vs LazyAR"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+                 <b>Figure 3：三种解码器对比</b><br><br>
+                 (a) Vanilla AR：所有层都用 s_{t-1}，串行<br>
+                 (b) DeepSeek-MTP：为后续 step 单独叠 decoder，参数膨胀<br>
+                 (c) LazyAR：前 K 层共享/并行，第 K 层 Fuse 注入 s_{t-1}，后 L-K 层 AR
+               </div>`" />
+          <figcaption><strong>Figure 3（论文原图）：</strong>Vanilla AR / DeepSeek-MTP / LazyAR 解码结构对比。</figcaption>
+        </figure>
+
+        <h4>LazyAR 数学定义</h4>
+        <p>给定 $1 \le K < L$，对每个 SID 级 $t$，先跑前 $K$ 层而不依赖 $s_{t-1}$：</p>
+        <div class="formula-block">
+          $$
+          m_t^{(0)} = p_t,\qquad m_t^{(\ell)} = \mathrm{Dec}^{(\ell)}\!\left(m_t^{(\ell-1)},\, X\right),\ \ \ell = 1,\dots,K
+          $$
+        </div>
+        <p>然后在第 K 层用 Fuse 算子注入 $s_{t-1}$：</p>
+        <div class="formula-block">
+          $$
+          \tilde m_t^{(K)} = \mathrm{Fuse}\!\left(m_t^{(K)},\, s_{t-1}\right) = W_f \big[\, m_t^{(K)} \odot (W_g s_{t-1});\ s_{t-1}\,\big]
+          $$
+        </div>
+        <p>最后跑后 L−K 层自回归：</p>
+        <div class="formula-block">
+          $$
+          h_t^{(\ell)} = \mathrm{Dec}^{(\ell)}\!\left(h_t^{(\ell-1)},\, X\right),\ \ \ell = K+1,\dots,L,\quad h_t^{(K)} \triangleq \tilde m_t^{(K)}
+          $$
+          $$
+          p(s_t \mid s_1,\dots,s_{t-1}, X) = \mathrm{Softmax}\!\left(W_t h_t^{(L)}\right)
+          $$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$X = (x_1,\dots,x_S)$：context（用户序列 + 结构特征经线性 processor 得到）</li>
+            <li>$p_t$：第 $t$ 级 SID 的位置 embedding</li>
+            <li>$s_{t-1}$：上一级 SID 的 embedding（$s_0$ = BOS）</li>
+            <li>$\mathrm{Fuse}$：门控融合 — $W_g$ 投影 + 元素积 + 拼接 + $W_f$ 投影</li>
+            <li>$K$：可调超参，$K=1$ 退化为标准 AR；论文取 $K = 2L/3$（实验 $L=9, K=6$）</li>
+            <li>$\odot$：元素积；$[\cdot;\cdot]$：拼接</li>
+          </ul>
+        </div>
+
+        <h4>为什么不掉点</h4>
+        <ol>
+          <li><strong>第 1 级 SID 仍走完整 L 层</strong>（$s_0=$ BOS，没有 $s_{t-1}$ 可"晚注入"）— 最难的没省。</li>
+          <li>引入 <strong>MTP-style 辅助 loss</strong>：训练时把 $h_t^{(K)} \triangleq m_t^{(K)}$ 直接预测目标 token，强迫前 K 层学到足够丰富的 latent 表示。</li>
+          <li>前 K 层 <strong>跨 beam 共享、并行计算</strong>，每个 SID 级只要算一次；只有后 L−K 层需要 beam 内 AR — 实际 beam search 的瓶颈就在后期层。</li>
+        </ol>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：beam=512、L=9、K=6 时 LazyAR 到底快在哪</div>
+          <p>承接上例，现在线上来了一个用户请求，要为 ta 召回 ≤512 个广告 SID（每个 SID 是 3 级，如 <code>(2,1,387)</code>）。Decoder 共 9 层。</p>
+
+          <p><strong>① Vanilla AR 的算账</strong>：</p>
+          <ul style="color:#14532d;">
+            <li>第 1 级（s₁）：beam=1，跑 9 层 → 9 次 decoder-layer 计算</li>
+            <li>第 2 级（s₂）：beam 扩到 512，跑 9 层 → 512 × 9 = 4608</li>
+            <li>第 3 级（s₃）：beam=512，跑 9 层 → 4608</li>
+            <li>合计 ≈ <strong>9225 次</strong> decoder-layer 计算，且 9 层必须严格串行（每层依赖 $s_{t-1}$）</li>
+          </ul>
+
+          <p><strong>② LazyAR（K=6）的算账</strong>：</p>
+          <ul style="color:#14532d;">
+            <li>前 6 层（不依赖 $s_{t-1}$）：3 个 SID 级一次性并行算完 → 3 × 6 = 18，且可一次 GPU forward 完成</li>
+            <li>后 3 层（AR）：第 1 级 beam=1 → 3 次；第 2 级 beam=512 → 1536；第 3 级 beam=512 → 1536</li>
+            <li>合计 ≈ 18 + 3075 ≈ <strong>3093 次</strong>，<strong>约 1/3 算力</strong>，且前 6 层完全并行</li>
+          </ul>
+
+          <p><strong>③ 具体到那条「李宁篮球鞋」</strong>：</p>
+          <ul style="color:#14532d;">
+            <li>第 1 级用 BOS + context（用户最近看了 5 条运动相关视频）跑完整 9 层 → 输出概率最高 5 个：$s_1\in\{2, 7, 11, 3, 18\}$（top-1=2，对应"运动服饰男向"）— <strong>这里 LazyAR 不省，因为最难</strong></li>
+            <li>第 2 级以 $s_1=2$ 为前缀展开 beam=512，对每条 beam，前 6 层结果其实和 $s_1$ 无关 → 直接复用；只有最后 3 层注入 $s_1$ 的 emb 后 AR 计算</li>
+            <li>第 3 级同理，前 6 层再次复用，最后 3 层做 hash bucket 预测</li>
+          </ul>
+
+          <p style="background:#e6f9ee;border-left:3px solid #16a34a;padding:8px 10px;margin-top:10px;">→ 实测 <strong>QPS +117%</strong>，revenue 仅从 +4.32% 跌到 +4.28%（≈无损）。对比 DeepSeek-MTP 同等 QPS 下跌到 +3.98%。</p>
+        </div>
+
+        <p><strong>实验</strong>：LazyAR 让 QPS +117%，revenue 仅从 +4.32% → +4.28%（几乎无损）；而 DeepSeek-MTP 同等 QPS 下 revenue 跌到 +3.98%。</p>
+      </section>
+
+      <!-- ============ 2.4 VSL ============ -->
+      <section class="section">
+        <h3 id="m-vsl" style="margin-top:0;">2.4 VSL：价值感知监督学习</h3>
+
+        <p>在标准 SID next-token-prediction loss</p>
+        <div class="formula-block">
+          $$
+          \mathcal{L}_{SID} = -\sum_{t=1}^T \log p(s_t \mid s_1,\dots,s_{t-1}, X)
+          $$
+        </div>
+        <p>之外，VSL 增加三件事：</p>
+
+        <h4>① eCPM Token Prediction</h4>
+        <p>把连续 eCPM 离散化成等概率桶，作为 SID 之后的额外预测 step：</p>
+        <div class="formula-block">
+          $$
+          \mathcal{L}_{eCPM} = -\log p(v \mid y, X),\qquad
+          \mathcal{L}_{NTP} = \mathcal{L}_{SID} + \lambda_e \mathcal{L}_{eCPM}
+          $$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$v$：当前样本的离散化 eCPM token（按等概率分桶）</li>
+            <li>$y$：UA-SID 序列；$X$：context</li>
+            <li>$\lambda_e$：eCPM loss 权重超参</li>
+            <li>推理时 $p(v\mid y, X)$ 可用于对生成的 SID 做 re-rank</li>
+          </ul>
+        </div>
+
+        <h4>② Value-Aware Sample Weighting</h4>
+        <p>每条样本权重 $w = w_{user}\cdot w_{behavior}$：</p>
+        <ul>
+          <li>$w_{user}$：用户长期广告价值（高价值用户权重大）</li>
+          <li>$w_{behavior}$：行为深度（购买 &gt; 加购 &gt; 点击）</li>
+        </ul>
+
+        <h4>③ MTP Auxiliary Loss</h4>
+        <p>配合 LazyAR 的设计，强迫前 K 层 trunk 自己就能预测目标 token，形成 $\mathcal{L}_{MTP}$。</p>
+
+        <div class="formula-block">
+          $$
+          \mathcal{L}_{VSL} = \mathbb{E}_{D}\!\left[\, w \left(\mathcal{L}_{NTP} + \lambda_{mtp}\mathcal{L}_{MTP}\right) \right]
+          $$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$D$：训练样本流（在线日志）</li>
+            <li>$w = w_{user}\cdot w_{behavior}$：sample-level 权重</li>
+            <li>$\lambda_{mtp}$：MTP 辅助 loss 强度</li>
+          </ul>
+        </div>
+
+        <p class="note">VSL 的本质：把"分布拟合"和"业务价值"两件事缝进同一个 CE 框架里。</p>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：VSL 对「李宁篮球鞋」这条样本的 loss 是怎么算的</div>
+          <p>用户 U 看完一个 30 元蛋白粉广告后，<strong>购买</strong>了我们的李宁篮球鞋（target SID = (2, 1, 387)，eCPM=12，桶号 v=8/10）。同时另一条样本是 U <strong>仅点击</strong>了某条手游广告（SID=(18,5,71)，eCPM=0.8，v=1/10）。</p>
+
+          <p><strong>① $\mathcal{L}_{SID}$（标准 CE，3 步）</strong>：</p>
+          <ul style="color:#14532d;">
+            <li>step 1：$-\log p(s_1=2 \mid X) = -\log 0.18 \approx 1.71$（第 1 级最难，loss 最大）</li>
+            <li>step 2：$-\log p(s_2=1 \mid s_1=2, X) = -\log 0.42 \approx 0.87$</li>
+            <li>step 3：$-\log p(s_3=387 \mid s_{1:2}, X) = -\log 0.71 \approx 0.34$</li>
+            <li>$\mathcal{L}_{SID} = 1.71+0.87+0.34 = 2.92$</li>
+          </ul>
+
+          <p><strong>② $\mathcal{L}_{eCPM}$（多预测一个 eCPM 桶）</strong>：$-\log p(v=8 \mid y, X) = -\log 0.25 \approx 1.39$</p>
+          <p>设 $\lambda_e=0.3$ → $\mathcal{L}_{NTP} = 2.92 + 0.3\times 1.39 = 3.34$</p>
+
+          <p><strong>③ Sample weight</strong>：</p>
+          <ul style="color:#14532d;">
+            <li>李宁鞋样本：$w = w_{user}\cdot w_{behavior} = 1.5\times 3.0 = 4.5$（高价值用户 + 购买行为）</li>
+            <li>手游点击样本：$w = 0.8\times 1.0 = 0.8$（低活用户 + 浅点击）</li>
+            <li>→ 李宁鞋样本贡献的最终 loss ≈ <strong>4.5 × 3.34 = 15.0</strong>；手游样本即使 NTP loss 一样大，也只贡献 ≈ 2.7</li>
+          </ul>
+
+          <p style="background:#e6f9ee;border-left:3px solid #16a34a;padding:8px 10px;margin-top:10px;">→ 同一份训练数据下，模型会<strong>优先学好「高价值用户深度转化」的分布</strong>，而不是被海量"低活用户的浅点击"稀释。这就是 VSL 对纯 CE 的直接超越（+2.80% vs OneRec-V2 +1.68%）。</p>
+        </div>
+      </section>
+
+      <!-- ============ 2.5 RSPO ============ -->
+      <section class="section">
+        <h3 id="m-rspo" style="margin-top:0;">2.5 RSPO：Ranking-Guided Softmax Preference Optimization</h3>
+
+        <p>VSL 是 point-wise 拟合 logged 分布，<strong>不直接优化 list-level NDCG</strong>。RSPO 把 LambdaLoss 思想嫁接到 DPO/SDPO 框架，用一条统一的 list-wise 目标。</p>
+
+        <div class="formula-block">
+          $$
+          \mathcal{L}_{RSPO} = -\mathbb{E}_{(X, y_i, \mathcal{E}_i)\sim D}\!\left[
+          \log_2 \sigma\!\left(
+          - \log\sum_{y_j \in \mathcal{E}_i}\!\! M_{ij}\exp\!\left(
+          \beta \log\frac{p_\theta(y_j\mid X)}{p_{ref}(y_j\mid X)^{C_{ij}}}
+          - \beta \log\frac{p_\theta(y_i\mid X)}{p_{ref}(y_i\mid X)^{C_{ij}}}
+          \right)
+          \right)
+          \right]
+          $$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\mathcal{Y}=\{y_1,\dots,y_n\}$：候选列表，$v_i$ 是 $y_i$ 的 reward（eCPM）</li>
+            <li>$\mathcal{E}_i = \{y_j \mid v_j &lt; v_i\}$：reward 比 $y_i$ 低的候选集</li>
+            <li>$M_{ij}=\big|\,\tfrac{1}{D_{|i-j|-1}}-\tfrac{1}{D_{|i-j|+1}}\big|\cdot|G_i - G_j|$：LambdaRank 系数</li>
+            <li>$G_i=(2^{v_i}-1)/Z$，$D_i=\log_2(1+i)$，$Z$ 是 ideal DCG</li>
+            <li>$\beta$：偏好强度</li>
+            <li>$C_{ij}$：reference 可用性二值 gate（公式 18 阈值 $\delta$ 控制，离 $p_{ref}$ 太远就丢掉 reference）</li>
+          </ul>
+        </div>
+
+        <p><strong>NDCG 上界（论文附录 A.1）</strong>：</p>
+        <div class="formula-block">
+          $$
+          \mathrm{NDCG}_{cost} = \sum_{i=1}^n G_i - \sum_{i=1}^n \frac{G_i}{D_i} = \sum_{i=1}^n G_i - \mathrm{NDCG}
+          $$
+        </div>
+        <p>论文证明 $\mathcal{L}_{RSPO}$ 是 $\mathrm{NDCG}_{cost}$ 的上界 → 最小化 RSPO ⇒ 最大化 NDCG，<strong>提供 RL 端的排序对齐保证</strong>。</p>
+
+        <h4>为什么需要 $C_{ij}$ 这个 gate？</h4>
+        <ul>
+          <li>样本来自异构源：GR4AD 自产样本可记录 $p_{ref}$；其它 pipeline 来的样本没有 $p_{ref}$。</li>
+          <li>即便有 $p_{ref}$，distribution drift 也可能让它失效，此时强行约束反而引入噪声。</li>
+          <li>实现：当 $\frac{1}{|\mathcal{E}_i \cup\{y_i\}|}\sum |\log p_\theta/p_{ref}| &lt; \delta$ 时启用 reference，否则丢掉。</li>
+        </ul>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：RSPO vs DPO 在同一条候选列表上的差别</div>
+          <p>承接上例，用户请求被 GR4AD 召回了 5 条广告（取 beam top-5 简化），ground-truth reward（eCPM）排序：</p>
+
+          <div class="table-wrap" style="margin:10px 0;">
+            <table style="font-size:13px;">
+              <thead><tr><th>SID</th><th>含义</th><th>eCPM (v)</th><th>ideal rank</th><th>模型当前 likelihood rank</th></tr></thead>
+              <tbody>
+                <tr><td>(2,1,387)</td><td>李宁篮球鞋（这条）</td><td><strong>12.0</strong></td><td>1</td><td>3 ❌</td></tr>
+                <tr><td>(2,1,819)</td><td>安踏跑鞋</td><td>10.5</td><td>2</td><td>1</td></tr>
+                <tr><td>(7,3,55)</td><td>男士运动短裤</td><td>6.2</td><td>3</td><td>2</td></tr>
+                <tr><td>(11,2,9)</td><td>蛋白粉</td><td>3.1</td><td>4</td><td>4</td></tr>
+                <tr><td>(18,5,71)</td><td>手游下载</td><td>0.8</td><td>5</td><td>5</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p><strong>① DPO 的处理</strong>：</p>
+          <ul style="color:#14532d;">
+            <li>只能构造 chosen/rejected 对，最常见做法是把最高 reward 当 chosen、随机抽个低 reward 当 rejected → 比如 (李宁鞋 vs 手游)。</li>
+            <li><strong>问题</strong>：模型已经把"手游"排到最后了（rank=5，对齐 reward），这对里没"难样本"；而真正错的是「李宁鞋 vs 安踏鞋」（rank 1↔3 颠倒），DPO 这一对 loss 几乎为 0，<strong>错过了关键梯度</strong>。</li>
+          </ul>
+
+          <p><strong>② RSPO 的处理</strong>：以李宁鞋（i=1）为 anchor，$\mathcal{E}_1 = \{$安踏、短裤、蛋白粉、手游$\}$（reward 全部更低）。</p>
+          <ul style="color:#14532d;">
+            <li>对每个 $y_j\in \mathcal{E}_1$ 算 LambdaRank 系数 $M_{1j} \propto |G_1 - G_j|\cdot|1/D_{|1-j|-1} - 1/D_{|1-j|+1}|$</li>
+            <li><strong>关键</strong>：模型把李宁鞋（高 reward）排到了第 3，安踏鞋（低 reward）排到了第 1 → $M_{1,2}$（rank 临近 + reward gap 较大）<strong>非常大</strong>，这条对的 softmax 项主导整个 loss → 梯度优先把这对 swap 回来。</li>
+            <li>而 (李宁 vs 手游) 这种 rank 已经"对的方向"的对，$M$ 自动很小，几乎不消耗梯度。</li>
+          </ul>
+
+          <p style="background:#e6f9ee;border-left:3px solid #16a34a;padding:8px 10px;margin-top:10px;">→ <strong>DPO 像随机刷题，RSPO 像哪里错重点刷哪里</strong>。Table 1 上 RSPO (+3.86%) 显著优于 DPO (+3.16%) 与 GRPO (+3.21%)。</p>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：$C_{ij}$ gate 何时丢掉 reference</div>
+          <p>同一条李宁鞋样本，假设：</p>
+          <ul style="color:#14532d;">
+            <li><strong>场景 A（GR4AD 自产，新鲜）</strong>：$p_{ref}$ 是 1 小时前的模型快照，$|\log p_\theta/p_{ref}|$ 平均 0.3 &lt; 阈值 $\delta=1.0$ → $C_{ij}=1$，用 reference 做正则。</li>
+            <li><strong>场景 B（其它 pipeline，无 ref）</strong>：根本没记录 $p_{ref}$ → $C_{ij}=0$，等价于把分母里 $p_{ref}$ 设成 1，loss 退化为纯 list-wise SimPO 形式。</li>
+            <li><strong>场景 C（GR4AD 自产，但模型已大改）</strong>：$p_{ref}$ 是 3 天前的，$|\log p_\theta/p_{ref}|$ 平均 1.8 &gt; $\delta$ → 强行拉回反而拖后腿，$C_{ij}=0$ 直接丢掉。</li>
+          </ul>
+          <p>这种 gate 让 RSPO 能消化<strong>异构来源 + 漂移的训练流</strong>，是在线学习能跑稳的关键工程细节。</p>
+        </div>
+      </section>
+
+      <!-- ============ 2.6 Unified ============ -->
+      <section class="section">
+        <h3 id="m-unified" style="margin-top:0;">2.6 Unified Learning of VSL & RSPO</h3>
+
+        <p>工业在线学习无法像 LLM 那样把 SFT / RL 分阶段做，必须 <strong>同流训练</strong>。GR4AD 借鉴 HPT 思想，引入 sample-level <em>rank discrepancy</em>：</p>
+
+        <div class="formula-block">
+          $$
+          A^{(i)} = \frac{|r_p^{(i)} - r_v^{(i)}|}{n - 1},\qquad A^{(i)} \in [0, 1]
+          $$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$r_p^{(i)}$：候选 $i$ 在模型 likelihood $p_\theta(y_i\mid X)$ 下的 rank</li>
+            <li>$r_v^{(i)}$：候选 $i$ 在 reward $v_i$（eCPM）下的 rank</li>
+            <li>$n$：候选列表长度</li>
+            <li>$A^{(i)}$ 越大，模型偏离 reward 越远</li>
+          </ul>
+        </div>
+
+        <p>动态分配 VSL / RL 权重：</p>
+        <div class="formula-block">
+          $$
+          w_{VSL}^{(i)} = w_0 \cdot \exp\!\left(A^{(i)}\cdot \log(1+v_i)\right)
+          $$
+          $$
+          w_{RL}^{(i)} = w_0 \cdot Z_{max}^{1 - A^{(i)}}
+          $$
+          $$
+          \mathcal{L} = \mathbb{E}_{i\sim D}\!\left[\, w_{VSL}^{(i)}\mathcal{L}_{VSL}^{(i)} + w_{RL}^{(i)}\mathcal{L}_{RSPO}^{(i)} \right]
+          $$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$w_0$：基础缩放因子</li>
+            <li>$Z_{max}$：RL 权重上限（避免训练发散）</li>
+            <li>$A$ 大 → VSL 权重大（先把分布对齐到 reward）；$A$ 小 → RL 权重大（专注 list 级优化）</li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：同一条样本两阶段，权重如何自动切换</div>
+          <p>还是这条召回列表（n=5），李宁鞋 reward 排第 1，模型当前 likelihood 排第 3。我们看权重怎么算：</p>
+
+          <p><strong>T₀ 时刻（模型刚冷启）</strong>：</p>
+          <ul style="color:#14532d;">
+            <li>$r_p^{(1)}=3, r_v^{(1)}=1$ → $A^{(1)} = |3-1|/(5-1) = 0.5$（偏离较大）</li>
+            <li>$w_{VSL}^{(1)} = w_0 \cdot \exp(0.5\cdot \log(1+12)) = w_0 \cdot 13^{0.5} \approx 3.6\,w_0$ （<strong>VSL 权重大</strong>）</li>
+            <li>$w_{RL}^{(1)} = w_0 \cdot Z_{max}^{1-0.5} = w_0 \cdot \sqrt{Z_{max}}$ （RL 权重适中）</li>
+            <li>👉 这条样本主要走 VSL：先让模型学到「李宁鞋这种 SID 在这个用户的 context 下概率应该更高」</li>
+          </ul>
+
+          <p><strong>T₅₀₀ 时刻（在线训练 500 步后）</strong>：</p>
+          <ul style="color:#14532d;">
+            <li>模型已经把李宁鞋拉到 rank=2，安踏到 rank=1 → $A^{(1)} = |2-1|/4 = 0.25$（基本对齐）</li>
+            <li>$w_{VSL}^{(1)} = w_0\cdot 13^{0.25} \approx 1.9\,w_0$ （VSL 权重下降）</li>
+            <li>$w_{RL}^{(1)} = w_0\cdot Z_{max}^{0.75}$ （<strong>RL 权重接近上限</strong>）</li>
+            <li>👉 此时样本主要走 RSPO：精修「李宁 vs 安踏」这种相邻位置的 list 级 ranking 错误</li>
+          </ul>
+
+          <p style="background:#e6f9ee;border-left:3px solid #16a34a;padding:8px 10px;margin-top:10px;">→ 等价于"<strong>新样本先模仿、老样本再精调</strong>"，且完全 sample-level 自适应。比固定 $\lambda_{SFT}+\lambda_{RL}$ 的 HPT 更稳，是在线学习能避免训练崩盘的关键。</p>
+        </div>
+      </section>
+
+      <!-- ============ 3. 部署 ============ -->
+      <section class="section" id="serving">
+        <h2 class="section-title"><span class="icon">③</span>部署与服务</h2>
+
+        <h3 id="s-system">3.1 闭环系统</h3>
+        <p>GR4AD（0.16B 参数）已在快手广告全量上线，服务 4 亿用户。系统分四块组成闭环：</p>
+
+        <div class="step-list">
+          <div class="step"><div class="step-num">1</div><div><strong>Realtime Serving</strong>：处理在线请求，返回排序好的广告列表，同时把 serving context + 用户反馈打 log。</div></div>
+          <div class="step"><div class="step-num">2</div><div><strong>Realtime Index</strong>：维护 Item ↔ UA-SID 双向索引。新广告到来时，秒级算出 UA-SID 并更新索引（传统 DLRM 是分钟级 embedding 索引重建）。</div></div>
+          <div class="step"><div class="step-num">3</div><div><strong>Online Learning</strong>：消费请求 + 反馈流，构造 VSL 日志（重正样本）+ RL 日志（送 reward system）；mini-batch 持续训练，参数实时同步推理服务。</div></div>
+          <div class="step"><div class="step-num">4</div><div><strong>Reward System</strong>：用真实曝光数据训练 reward model，离线给候选打分 → 输出 RL log，关闭整个闭环。</div></div>
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2602.22732v3/x4.png" alt="Figure 4: GR4AD system overview"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+                 <b>Figure 4：GR4AD 训练-服务闭环</b><br><br>
+                 Realtime Serving (DBS) ↔ Realtime Index (UA-SID 双向) ↔ Online Learning (VSL/RSPO) ↔ Reward System
+               </div>`" />
+          <figcaption><strong>Figure 4（论文原图）：</strong>GR4AD 闭环系统总览 — 实时服务、实时索引、在线学习、奖励系统四块互联。</figcaption>
+        </figure>
+
+        <h3 id="s-dbs">3.2 Dynamic Beam Serving (DBS)</h3>
+        <p>DBS 把"算力 vs 收益"做成可调度的连续函数：</p>
+
+        <h4>① Dynamic Beam Width (DBW)</h4>
+        <p>固定 beam（如 512-512-512）在前期层是浪费 — 早期 beam 决定后期算力。DBW 改成 <strong>渐进增长</strong>：128-256-512，最终候选数不变，中间算力骤降。</p>
+
+        <h4>② Traffic-Aware Adaptive Beam Search (TABS)</h4>
+        <p>请求流量有强烈的峰谷周期。设 $Q_t$ 为时刻 $t$ 的 QPS，$B_{base}$ 为基础 beam 设定：</p>
+        <div class="formula-block">
+          $$
+          B_t = B_{base}\cdot f(Q_t, \mathcal{C}_{avail})
+          $$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$Q_t$：实时 QPS</li>
+            <li>$\mathcal{C}_{avail}$：当前可用算力余量</li>
+            <li>$f$：根据流量与算力余量的 beam 调度函数 — 低谷期放大 60% 榨干算力换收入；高峰期保持基线</li>
+          </ul>
+        </div>
+
+        <h3 id="s-other">3.3 其它优化</h3>
+        <ul>
+          <li><strong>Reco Result Cache</strong>：1 分钟内同用户重复请求复用结果（用户意图和广告池在短窗口内基本稳定）。</li>
+          <li><strong>Beam-Shared KV Cache</strong>：把 beam 沿序列维组织，多 beam 共享 encoder KV，KV 读复杂度从 $\mathcal{O}(B\cdot L)$ 降到 $\mathcal{O}(L)$。</li>
+          <li><strong>TopK Pre-Cut</strong>：每个 beam 先选 $k$ 个候选，再做全局 top-$k$ 聚合，提升 GPU 并行度。</li>
+          <li><strong>FP8 量化</strong>：把 FP32 → FP8，显存与算力双省。</li>
+        </ul>
+      </section>
+
+      <!-- ============ 4. 实验 ============ -->
+      <section class="section" id="exp">
+        <h2 class="section-title"><span class="icon">④</span>实验结果</h2>
+
+        <h3 id="exp-main">4.1 主表对比（Table 1）</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>配置</th><th>ΔRevenue vs DLRM</th><th>ΔQPS vs GR-Base</th></tr></thead>
+            <tbody>
+              <tr><td>DLRM (Base)</td><td>—</td><td>—</td></tr>
+              <tr><td>OneRec-V2 (GR-Base)</td><td>+1.68%</td><td>—</td></tr>
+              <tr><td>+ UA-SID</td><td>+1.92%</td><td>0%</td></tr>
+              <tr><td>+ VSL</td><td>+2.80%</td><td>−25%</td></tr>
+              <tr><td>+ VSL + DPO</td><td>+3.16%</td><td>−25%</td></tr>
+              <tr><td>+ VSL + GRPO</td><td>+3.21%</td><td>−25%</td></tr>
+              <tr><td>+ VSL + <strong>RSPO</strong></td><td><strong>+3.86%</strong></td><td>−25%</td></tr>
+              <tr><td>+ Unified VSL & RSPO (UVR)</td><td>+4.01%</td><td>−25%</td></tr>
+              <tr><td>+ UVR + DBS</td><td><strong>+4.32%</strong></td><td>+20%</td></tr>
+              <tr><td>+ UVR + DBS + DeepSeek-MTP</td><td>+3.98%</td><td>+117%</td></tr>
+              <tr style="background:#eff6ff;"><td><strong>GR4AD (+ UVR + DBS + LazyAR)</strong></td><td><strong>+4.28%</strong></td><td><strong>+117%</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-blue">
+          <p><strong>关键看点</strong>：</p>
+          <ul style="margin-top:6px;">
+            <li>RSPO &gt; GRPO &gt; DPO（list-wise &gt; group-wise &gt; pair-wise，符合广告 ranking 直觉）</li>
+            <li>LazyAR 把 QPS 翻倍同时只损失 0.04% revenue，<strong>显著优于 DeepSeek-MTP</strong>（同 QPS 下后者跌 0.34%）</li>
+            <li>每一层优化都正向叠加，最终 +4.28% revenue + 117% QPS</li>
+          </ul>
+        </div>
+
+        <h3 id="exp-scaling">4.2 Scaling Law</h3>
+        <figure>
+          <img src="https://arxiv.org/html/2602.22732v3/x5.png" alt="Figure 5: scaling laws"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+                 <b>Figure 5：Model size & Beam width 双 scaling law</b><br><br>
+                 模型 0.03B→0.32B：loss 单调下降，revenue +2.13% → +4.43%<br>
+                 Beam 128→1024：revenue +2.33% → +4.21%，但 QPS 200% → 30%
+               </div>`" />
+          <figcaption><strong>Figure 5（论文原图）：</strong>模型规模 + beam 宽度的双重 Scaling Law。</figcaption>
+        </figure>
+
+        <ul>
+          <li><strong>Model Scaling</strong>：0.03B → 0.32B，loss 单调下降（3.36 → 2.91），revenue 单调上升（+2.13% → +4.43%）。</li>
+          <li><strong>Inference Scaling</strong>：beam 128 → 1024，revenue +2.33% → +4.21%，但 QPS 跌到 30% — 典型的 inference-time scaling trade-off。</li>
+        </ul>
+
+        <h3 id="exp-uasid">4.3 UA-SID 质量（Table 2）</h3>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>Embedding 优化（R@1↑）</h4>
+            <ul style="font-size:13.5px;">
+              <li>QARM：0.541</li>
+              <li>Qwen3-VL-7B：0.769</li>
+              <li>+ IT + CL (UAE)：<strong>0.896</strong></li>
+            </ul>
+          </div>
+          <div class="mini-card">
+            <h4>量化优化（Col↓）</h4>
+            <ul style="font-size:13.5px;">
+              <li>RQ-Kmeans (4096³)：85.4%</li>
+              <li>+ MR (16384/4096/1024)：59.7%</li>
+              <li>+ MG + MR：<strong>18.3%</strong></li>
+            </ul>
+          </div>
+        </div>
+
+        <h3 id="exp-biz">4.4 业务指标</h3>
+        <div class="callout callout-green">
+          <ul>
+            <li>中小广告主投放量 <strong>+17.5%</strong>（受益于冷启覆盖与 SID 索引秒级更新）</li>
+            <li>广告转化率 <strong>+10.17%</strong>（更精准的兴趣建模）</li>
+            <li>低活用户转化率 <strong>+7.28%</strong>（content-based SID 的泛化能力）</li>
+            <li>系统级：500+ QPS / L20，&lt;100ms 延迟，<strong>平台、广告主、用户三方共赢</strong></li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ============ 5. 我的理解 ============ -->
+      <section class="section" id="thoughts">
+        <h2 class="section-title"><span class="icon">💭</span>我的理解</h2>
+
+        <h3 id="think-bright">5.1 亮点</h3>
+        <ol>
+          <li><strong>真·全栈 co-design</strong>：从 tokenization 到 serving 每一环都为广告业务量身改造，而不是仅靠"上更大模型"涨点。</li>
+          <li><strong>MGMR 思路非常工程化</strong>："语义层 + 业务 hash 层"在 SID 设计里把"看着像但本质不同"的广告解开，对碰撞率影响极大（85.4% → 18.3%）。</li>
+          <li><strong>LazyAR 是最有借鉴意义的架构创新</strong>：抓住了"早期 token 难学但成本低，后期 token 易学但成本高"这个推荐特有的 mismatch。<em>L=9, K=6 让 QPS 翻倍且几乎不掉点</em>，工业界其它 GR 系统可以直接套用。</li>
+          <li><strong>RSPO 的数学严谨性</strong>：被证明是 NDCG 上界，比 DPO/SimPO/GRPO 在 ranking 任务上有可证明的优势。</li>
+          <li><strong>Unified VSL & RSPO 的动态权重</strong>：用 rank discrepancy $A^{(i)}$ 自适应切换 SFT/RL 权重，比 HPT 的固定权重更灵活，<em>是在线学习场景下少数能落地的设计</em>。</li>
+        </ol>
+
+        <h3 id="think-flaw">5.2 不足 / 可探讨</h3>
+        <ul>
+          <li><strong>RSPO 公式复杂</strong>：$M_{ij}$、$C_{ij}$、$p_{ref}$、$\delta$ 都是细节，复现门槛高。</li>
+          <li><strong>LazyAR 的 K 选择仅经验</strong>（$K=2L/3$），缺乏理论分析。</li>
+          <li><strong>Reward Model 训练细节几乎没讲</strong>，但 RSPO 效果严重依赖 reward 质量。</li>
+          <li><strong>$A^{(i)}$ 计算需要 reward 全部已知</strong>，对完全冷启样本如何处理没明说。</li>
+          <li><strong>0.16B 略小</strong>：Scaling 上看 0.32B 还在涨（+4.43%），上线版本估计是被 serving 预算压回 0.16B。</li>
+        </ul>
+
+        <h3 id="think-takeaway">5.3 启发</h3>
+        <div class="callout callout-purple">
+          <ol>
+            <li>推荐 GR <strong>不必照搬 LLM RLHF</strong> — list-wise + ranking-aware 才是推荐的本分。</li>
+            <li>"解码成本随 beam 指数增长"是所有 GR 绕不开的问题，<strong>LazyAR / MTP 类的"早期共享 + 后期 AR"</strong>思路值得普及。</li>
+            <li>业务字段不要硬塞进语义 embedding，<strong>直接在 SID 末位 hash</strong> 反而干净，且对碰撞率有立竿见影的效果。</li>
+            <li>在线学习场景下 SFT/RL 必须同流，且需要<strong>自适应权重</strong>，否则两个目标会互相打架。</li>
+            <li>SID 索引秒级更新 vs embedding 索引分钟级更新，对<strong>冷启与中小广告主</strong>是巨大利好（+17.5%）。</li>
+          </ol>
+        </div>
+
+        <blockquote>
+          一句话总结：<strong>GR4AD 把"生成式推荐"从 LLM 移植回广告系统的工程闭环 — UA-SID 解决 token 化、LazyAR 解决服务、VSL+RSPO 解决目标对齐，是当前生产级 GR 的最完整范本之一。</strong>
+        </blockquote>
+      </section>
+
+    </main>
+  </div>
+
+  <footer>
+    <p>📚 <a href="../index.html">← 返回论文列表</a> · 解读基于 arXiv 2602.22732v3，仅供学习参考</p>
+  </footer>
+</div>
+
+<script>
+(function(){
+  var tocLinks = document.querySelectorAll('.toc-list a[href^="#"], .toc-sub a[href^="#"]');
+  if (!tocLinks.length) return;
+  var linkMap = {};
+  tocLinks.forEach(function(a){
+    var id = a.getAttribute('href').slice(1);
+    if (id) linkMap[id] = a;
+  });
+  var targets = Object.keys(linkMap).map(function(id){
+    return document.getElementById(id);
+  }).filter(Boolean);
+  if (!targets.length) return;
+  var activeId = null;
+  function setActive(id){
+    if (id === activeId) return;
+    activeId = id;
+    tocLinks.forEach(function(a){ a.classList.remove('active'); });
+    if (id && linkMap[id]){
+      linkMap[id].classList.add('active');
+      var toc = document.querySelector('.toc');
+      if (toc){
+        var li = linkMap[id];
+        var tocTop = toc.getBoundingClientRect().top;
+        var liTop  = li.getBoundingClientRect().top;
+        var offset = liTop - tocTop - toc.clientHeight / 2;
+        toc.scrollBy({ top: offset, behavior: 'smooth' });
+      }
+    }
+  }
+  var observer = new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      if (entry.isIntersecting){
+        setActive(entry.target.id);
+      }
+    });
+  }, { rootMargin: '-10% 0px -60% 0px', threshold: 0 });
+  targets.forEach(function(el){ observer.observe(el); });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,2047 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DeepSpeed 完全图解：ZeRO / 3D 并行 / Offload 从零讲清楚</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      // KaTeX render
+      if (typeof renderMathInElement !== 'undefined') {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '$', right: '$', display: false }
+          ],
+          throwOnError: false
+        });
+      }
+      // TOC scroll highlight
+      const tocAnchors = document.querySelectorAll('[id]');
+      const links = document.querySelectorAll('.toc-list a');
+      const obs = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+          if (e.isIntersecting) {
+            links.forEach(l => l.classList.remove('active'));
+            const a = document.querySelector('.toc-list a[href="#' + e.target.id + '"]');
+            if (a) a.classList.add('active');
+          }
+        });
+      }, { rootMargin: '-10% 0px -70% 0px' });
+      tocAnchors.forEach(el => obs.observe(el));
+    });
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}],throwOnError:false});"></script>
+  <style>
+    :root {
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #2563eb; --primary-soft: #eff6ff;
+      --accent: #7c3aed; --accent-soft: rgba(124,58,237,0.06);
+      --shadow: 0 10px 30px rgba(15,23,42,0.08); --radius: 18px; --max: 1300px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: linear-gradient(180deg,#f0f7ff 0%,var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      line-height: 1.85;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .page { max-width: var(--max); margin: 0 auto; padding: 32px 20px 80px; }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    .back-link:hover { color: var(--primary); text-decoration: none; }
+
+    /* ── Layout ── */
+    .layout { display: grid; grid-template-columns: 260px minmax(0,1fr); gap: 22px; align-items: start; }
+    .hero {
+      background: radial-gradient(circle at top right,rgba(37,99,235,0.14),transparent 34%),
+                  radial-gradient(circle at left bottom,rgba(124,58,237,0.08),transparent 28%), var(--card);
+      border: 1px solid rgba(37,99,235,0.18); border-radius: 24px;
+      box-shadow: var(--shadow); padding: 34px 34px 28px; margin-bottom: 22px;
+    }
+    .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; background: #eff6ff; color: #1d4ed8; font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+    h1 { margin: 0 0 10px; font-size: 30px; line-height: 1.25; letter-spacing: -0.02em; }
+    .subtitle { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.7; }
+    .meta-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-top: 24px; }
+    .meta-card { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 16px; padding: 14px 16px; }
+    .meta-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .meta-value { font-size: 13px; font-weight: 600; word-break: break-word; }
+
+    /* ── TOC ── */
+    .toc { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; max-height: calc(100vh - 40px); overflow-y: auto; }
+    .toc h2 { margin: 0 0 12px; font-size: 15px; }
+    .toc-list { list-style: none; margin: 0; padding: 0; }
+    .toc-list li { margin: 0; }
+    .toc-list a { display: block; padding: 5px 8px; border-radius: 8px; color: var(--muted); font-size: 13px; transition: all 0.15s; }
+    .toc-list a:hover { color: var(--primary); background: #eff6ff; text-decoration: none; }
+    .toc-list a.active { color: var(--primary); background: #eff6ff; font-weight: 600; border-left: 3px solid var(--primary); padding-left: 5px; }
+    .toc-sub { list-style: none; padding-left: 12px; margin: 2px 0; }
+    .toc-sub a { font-size: 12px; padding: 3px 8px; }
+
+    /* ── Content ── */
+    .content { display: flex; flex-direction: column; gap: 18px; }
+    .section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 26px 32px; }
+    .section-title { display: flex; align-items: center; gap: 12px; margin: 0 0 20px; font-size: 20px; font-weight: 700; }
+    .icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+    h3 { margin: 28px 0 12px; font-size: 17px; color: #111827; border-left: 3px solid #bfdbfe; padding-left: 10px; }
+    h4 { margin: 20px 0 8px; font-size: 15px; color: #374151; font-weight: 700; }
+    p { margin: 0 0 12px; }
+
+    /* ── Callouts ── */
+    .callout-blue   { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 14px; padding: 16px 18px; margin: 14px 0; }
+    .callout-amber  { background: #fffbeb; border: 1px solid #fde68a; border-radius: 14px; padding: 16px 18px; margin: 14px 0; }
+    .callout-green  { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 14px; padding: 16px 18px; margin: 14px 0; }
+    .callout-purple { background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 14px; padding: 16px 18px; margin: 14px 0; }
+    .callout-red    { background: #fef2f2; border: 1px solid #fecaca; border-radius: 14px; padding: 16px 18px; margin: 14px 0; }
+    .callout-cyan   { background: #ecfeff; border: 1px solid #a5f3fc; border-radius: 14px; padding: 16px 18px; margin: 14px 0; }
+
+    /* ── Example box ── */
+    .example-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-left: 4px solid #16a34a; border-radius: 12px; padding: 14px 18px; margin: 16px 0; }
+    .ex-title { font-weight: 700; color: #15803d; margin-bottom: 8px; font-size: 14px; }
+
+    /* ── Big concept ── */
+    .big-concept { background: linear-gradient(135deg,#eff6ff 0%,#faf5ff 100%); border: 2px solid #93c5fd; border-radius: 16px; padding: 20px 24px; margin: 20px 0; }
+    .big-concept-title { font-size: 17px; font-weight: 800; color: #1e40af; margin-bottom: 10px; }
+
+    /* ── Tables ── */
+    .table-wrap { overflow-x: auto; margin: 16px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th { background: #eff6ff; color: #1e40af; text-align: left; font-weight: 700; padding: 10px 14px; border-bottom: 2px solid #bfdbfe; }
+    td { padding: 10px 14px; border-bottom: 1px solid #eef2f7; vertical-align: top; }
+    tbody tr:nth-child(even) { background: #f8fbff; }
+
+    /* ── Code ── */
+    pre { background: #1e293b; color: #e2e8f0; border-radius: 12px; padding: 16px 20px; margin: 14px 0; overflow-x: auto; font-size: 13px; line-height: 1.75; }
+    pre code { background: none; border: none; color: inherit; padding: 0; }
+    code { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 6px; padding: 2px 7px; font-size: 13px; color: #2563eb; }
+
+    /* ── Formula vars ── */
+    .formula-vars { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px; padding: 10px 14px; margin: 8px 0 16px; font-size: 13px; }
+    .formula-vars .var-title { font-weight: 700; color: #9a3412; margin-bottom: 4px; }
+    .formula-vars ul { margin: 4px 0; padding-left: 22px; }
+
+    /* ── Two/Three col ── */
+    .two-col { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; margin: 14px 0; }
+    .three-col { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 14px; margin: 14px 0; }
+    .mini-card { border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; background: #fff; }
+    .mini-card h4 { margin-top: 0; font-size: 14px; }
+    .mini-card p, .mini-card li { font-size: 13px; }
+
+    /* ── Step box ── */
+    .step-box { display: flex; gap: 14px; margin: 10px 0; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+    .step-num { width: 28px; height: 28px; border-radius: 50%; background: #2563eb; color: #fff; font-weight: 800; font-size: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
+    .step-content { flex: 1; font-size: 14px; }
+
+    /* ── SVG diagrams ── */
+    .diagram-wrap { margin: 18px 0; overflow-x: auto; }
+    .diagram-wrap svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+    .diagram-caption { text-align: center; font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+    /* ── Misc ── */
+    ul, ol { padding-left: 24px; margin: 8px 0 12px; }
+    li { margin: 6px 0; }
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+    footer { margin-top: 32px; text-align: center; color: var(--muted); font-size: 13px; }
+
+    @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } .toc { position: static; } .meta-grid { grid-template-columns: repeat(2,1fr); } }
+    @media (max-width: 640px) { .page { padding: 18px 12px 56px; } .hero, .section { padding: 20px 18px; } h1 { font-size: 24px; } .two-col, .three-col, .meta-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div class="page">
+  <a class="back-link" href="../index.html">← 返回笔记列表</a>
+
+  <header class="hero">
+    <div class="eyebrow">📝 学习笔记 · LLM 训练框架 · 微软 Research</div>
+    <h1>DeepSpeed 完全图解：ZeRO / 3D 并行 / Offload 从零讲清楚</h1>
+    <p class="subtitle">微软开源的大模型训练 + 推理加速库。本文从「训练显存到底花在哪」开始，把 ZeRO-1/2/3、ZeRO-Offload、ZeRO-Infinity、3D Parallelism、混合精度、Gradient Checkpointing 一次讲透，每个概念都有 SVG 示意图 + 具体数字。</p>
+    <div class="meta-grid">
+      <div class="meta-card"><div class="meta-label">出品</div><div class="meta-value">Microsoft Research</div></div>
+      <div class="meta-card"><div class="meta-label">核心创新</div><div class="meta-value">ZeRO（Zero Redundancy Optimizer）</div></div>
+      <div class="meta-card"><div class="meta-label">代表论文</div><div class="meta-value">ZeRO (SC'20) · ZeRO-Offload · ZeRO-Infinity (SC'21)</div></div>
+      <div class="meta-card"><div class="meta-label">与谁集成</div><div class="meta-value">HuggingFace Trainer · LLaMA-Factory · Megatron-DeepSpeed</div></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="toc">
+      <h2>目录</h2>
+      <ul class="toc-list">
+        <li><a href="#why">§0 DeepSpeed 是什么</a></li>
+        <li><a href="#mem-budget">§1 训练显存花在哪儿</a>
+          <ul class="toc-sub">
+            <li><a href="#mem-16bytes">1.1 16 字节/参数法则</a></li>
+            <li><a href="#mem-activation">1.2 激活占用</a></li>
+          </ul>
+        </li>
+        <li><a href="#zero">§2 ZeRO：核心思想</a>
+          <ul class="toc-sub">
+            <li><a href="#zero1">2.1 ZeRO-1：切优化器状态</a></li>
+            <li><a href="#zero2">2.2 ZeRO-2：再切梯度</a></li>
+            <li><a href="#zero3">2.3 ZeRO-3：连参数也切</a></li>
+            <li><a href="#zero-comm">2.4 通信 vs 显存权衡</a></li>
+            <li><a href="#zero-compare">2.5 三档对比总表</a></li>
+          </ul>
+        </li>
+        <li><a href="#offload">§3 ZeRO-Offload：甩到 CPU</a></li>
+        <li><a href="#infinity">§4 ZeRO-Infinity：甩到 NVMe</a></li>
+        <li><a href="#3d">§5 3D 并行：DP × TP × PP</a>
+          <ul class="toc-sub">
+            <li><a href="#dp">5.1 数据并行 DP</a></li>
+            <li><a href="#tp">5.2 张量并行 TP</a></li>
+            <li><a href="#pp">5.3 流水线并行 PP</a></li>
+            <li><a href="#3d-combine">5.4 三维组合</a></li>
+          </ul>
+        </li>
+        <li><a href="#mixed-precision">§6 混合精度 FP16/BF16</a></li>
+        <li><a href="#gc">§7 Gradient Checkpointing</a></li>
+        <li><a href="#config">§8 实战配置文件详解</a></li>
+        <li><a href="#picks">§9 选型速查 &amp; 常见坑</a></li>
+        <li><a href="#qa">§10 Q&amp;A</a>
+          <ul class="toc-sub">
+            <li><a href="#qa-zero-vs-mp">ZeRO vs 模型并行</a></li>
+            <li><a href="#qa-why-stages">为什么分 Stage 1/2/3</a></li>
+            <li><a href="#qa-why-store-grad">梯度 G 为什么要全部存</a></li>
+            <li><a href="#qa-fp32-copy">FP32 副本的作用</a></li>
+          </ul>
+        </li>
+      </ul>
+    </aside>
+
+    <main class="content">
+
+      <!-- ══ §0 ══ -->
+      <section class="section" id="why">
+        <div class="section-title">
+          <div class="icon" style="background:#eff6ff;">🤔</div>
+          §0 DeepSpeed 是什么
+        </div>
+
+        <div class="big-concept">
+          <div class="big-concept-title">一句话定位</div>
+          <p style="margin:0;font-size:15px;">DeepSpeed 是<strong>微软在 PyTorch 之上的训练加速插件</strong>，不替换 PyTorch，只是在它之上叠一层「显存极限切割 + 通信调度」。最核心的能力是 <strong>ZeRO</strong>——让 N 张 GPU 合力存一个大模型，而不是每张卡傻傻地各存一份完整拷贝。</p>
+        </div>
+
+        <!-- 定位图 -->
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 820 180" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:820px;">
+            <defs>
+              <marker id="arr0" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#64748b"/>
+              </marker>
+            </defs>
+            <!-- Row labels -->
+            <text x="10" y="55" font-size="12" fill="#64748b" font-weight="600">你的代码</text>
+            <text x="10" y="115" font-size="12" fill="#64748b" font-weight="600">框架层</text>
+            <text x="10" y="165" font-size="12" fill="#64748b" font-weight="600">硬件层</text>
+
+            <!-- 你的代码 -->
+            <rect x="90" y="34" width="680" height="36" rx="10" fill="#dbeafe" stroke="#93c5fd" stroke-width="1.5"/>
+            <text x="430" y="57" text-anchor="middle" font-size="13" fill="#1e40af" font-weight="600">你的训练脚本 (train.py / HuggingFace Trainer / LLaMA-Factory)</text>
+
+            <!-- 框架层：DeepSpeed + PyTorch -->
+            <rect x="90" y="90" width="330" height="36" rx="10" fill="#ede9fe" stroke="#c4b5fd" stroke-width="1.5"/>
+            <text x="255" y="113" text-anchor="middle" font-size="13" fill="#5b21b6" font-weight="700">DeepSpeed（ZeRO / Offload / 通信调度）</text>
+
+            <rect x="440" y="90" width="330" height="36" rx="10" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
+            <text x="605" y="113" text-anchor="middle" font-size="13" fill="#166534" font-weight="700">PyTorch（自动微分 / 算子 / CUDA）</text>
+
+            <!-- 硬件层 -->
+            <rect x="90" y="146" width="680" height="28" rx="10" fill="#fef3c7" stroke="#fcd34d" stroke-width="1.5"/>
+            <text x="430" y="165" text-anchor="middle" font-size="12" fill="#92400e" font-weight="600">GPU × N  （通过 NCCL / NVLink / InfiniBand 互联）</text>
+
+            <!-- 箭头 -->
+            <line x1="430" y1="70" x2="430" y2="88" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr0)"/>
+            <line x1="255" y1="126" x2="255" y2="144" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr0)"/>
+            <line x1="605" y1="126" x2="605" y2="144" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr0)"/>
+          </svg>
+          <div class="diagram-caption">图 0-1：DeepSpeed 在训练栈中的位置——它在 PyTorch 和你代码之间，负责显存切割与通信</div>
+        </div>
+
+        <div class="three-col" style="margin-top:18px;">
+          <div class="mini-card" style="border-left:4px solid #2563eb;">
+            <h4 style="color:#1e40af;">💾 显存省到夸张</h4>
+            <p>80GB 卡本来只能装 7B 模型，开 ZeRO-3 + Offload 可训 70B。原理：把优化器状态/梯度/参数都切碎分到多卡，用完即丢。</p>
+          </div>
+          <div class="mini-card" style="border-left:4px solid #16a34a;">
+            <h4 style="color:#166534;">⚡ 训练速度更快</h4>
+            <p>通信调度与计算重叠（overlap comm）、Fused Optimizer、混合精度已内置，无需手写 CUDA。</p>
+          </div>
+          <div class="mini-card" style="border-left:4px solid #7c3aed;">
+            <h4 style="color:#6d28d9;">🚀 推理也支持</h4>
+            <p>DeepSpeed-Inference 提供 Tensor Parallelism、INT8 量化、KV Cache 优化、融合 Kernel。</p>
+          </div>
+        </div>
+
+        <div class="callout-amber" style="margin-top:18px;">
+          <strong>vs PyTorch 自带 DDP / FSDP：</strong>
+          <ul style="margin:8px 0 0;">
+            <li><strong>DDP</strong>：每卡完整复制一份模型，只切 batch，模型大就直接 OOM</li>
+            <li><strong>FSDP</strong>：PyTorch 官方 ZeRO-3 复刻版，2022 年出现，生态更原生但 Offload 到 CPU/NVMe 能力弱</li>
+            <li><strong>DeepSpeed</strong>：ZeRO 发明者，三档灵活切换，Offload 到 CPU + NVMe 是独有优势</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ══ §1 训练显存 ══ -->
+      <section class="section" id="mem-budget">
+        <div class="section-title">
+          <div class="icon" style="background:#fffbeb;">💾</div>
+          §1 训练显存到底花在哪儿
+        </div>
+
+        <p>要理解 ZeRO，先得把「训练一个模型，显存被谁吃了」算清楚。以 Adam 优化器 + 混合精度（FP16 前向 + FP32 优化器）训练为例：</p>
+
+        <h3 id="mem-16bytes">1.1 16 字节/参数法则</h3>
+
+        <!-- 显存分解 SVG 条形图 -->
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 820 260" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:820px;">
+            <defs>
+              <linearGradient id="gP" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#3b82f6"/>
+                <stop offset="100%" stop-color="#60a5fa"/>
+              </linearGradient>
+              <linearGradient id="gG" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#f59e0b"/>
+                <stop offset="100%" stop-color="#fbbf24"/>
+              </linearGradient>
+              <linearGradient id="gO1" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#ef4444"/>
+                <stop offset="100%" stop-color="#f87171"/>
+              </linearGradient>
+              <linearGradient id="gO2" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#dc2626"/>
+                <stop offset="100%" stop-color="#f87171"/>
+              </linearGradient>
+              <linearGradient id="gO3" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#b91c1c"/>
+                <stop offset="100%" stop-color="#ef4444"/>
+              </linearGradient>
+            </defs>
+
+            <!-- 标题 -->
+            <text x="30" y="22" font-size="13" font-weight="700" fill="#111827">每个参数的显存占用（Adam + FP16 混合精度）</text>
+            <text x="30" y="38" font-size="11" fill="#667085">总计 16 字节/参数 = 1B 参数 × 16 = 16 GB</text>
+
+            <!-- 整体条形（宽 640px = 16 字节） -->
+            <!-- 参数 P: 2/16 = 80px -->
+            <rect x="30" y="50" width="80" height="50" rx="6" fill="url(#gP)"/>
+            <text x="70" y="72" text-anchor="middle" font-size="12" fill="white" font-weight="700">参数 P</text>
+            <text x="70" y="88" text-anchor="middle" font-size="11" fill="white">FP16 · 2B</text>
+
+            <!-- 梯度 G: 2/16 = 80px -->
+            <rect x="114" y="50" width="80" height="50" rx="6" fill="url(#gG)"/>
+            <text x="154" y="72" text-anchor="middle" font-size="12" fill="white" font-weight="700">梯度 G</text>
+            <text x="154" y="88" text-anchor="middle" font-size="11" fill="white">FP16 · 2B</text>
+
+            <!-- 优化器 O: 12/16 = 480px (FP32 副本4 + m4 + v4) -->
+            <!-- FP32副本 4/16=160px -->
+            <rect x="198" y="50" width="160" height="50" rx="6" fill="url(#gO1)"/>
+            <text x="278" y="72" text-anchor="middle" font-size="12" fill="white" font-weight="700">FP32 参数副本</text>
+            <text x="278" y="88" text-anchor="middle" font-size="11" fill="white">FP32 · 4B</text>
+
+            <!-- Adam m 4/16=160px -->
+            <rect x="362" y="50" width="160" height="50" rx="6" fill="url(#gO2)"/>
+            <text x="442" y="72" text-anchor="middle" font-size="12" fill="white" font-weight="700">Adam 一阶动量 m</text>
+            <text x="442" y="88" text-anchor="middle" font-size="11" fill="white">FP32 · 4B</text>
+
+            <!-- Adam v 4/16=160px -->
+            <rect x="526" y="50" width="160" height="50" rx="6" fill="url(#gO3)"/>
+            <text x="606" y="72" text-anchor="middle" font-size="12" fill="white" font-weight="700">Adam 二阶动量 v</text>
+            <text x="606" y="88" text-anchor="middle" font-size="11" fill="white">FP32 · 4B</text>
+
+            <!-- 总括框 -->
+            <rect x="198" y="44" width="490" height="62" rx="8" fill="none" stroke="#dc2626" stroke-width="2" stroke-dasharray="6,3"/>
+            <text x="705" y="75" font-size="11" fill="#dc2626" font-weight="700">优化器状态 O</text>
+            <text x="705" y="88" font-size="11" fill="#dc2626">12 字节</text>
+
+            <!-- 标注箭头 -->
+            <line x1="70" y1="106" x2="70" y2="130" stroke="#3b82f6" stroke-width="1.5"/>
+            <text x="70" y="145" text-anchor="middle" font-size="12" fill="#1d4ed8" font-weight="600">2 字节</text>
+
+            <line x1="154" y1="106" x2="154" y2="130" stroke="#f59e0b" stroke-width="1.5"/>
+            <text x="154" y="145" text-anchor="middle" font-size="12" fill="#92400e" font-weight="600">2 字节</text>
+
+            <line x1="445" y1="106" x2="445" y2="130" stroke="#dc2626" stroke-width="1.5"/>
+            <text x="445" y="145" text-anchor="middle" font-size="12" fill="#991b1b" font-weight="600">12 字节（FP32 副本+m+v）</text>
+
+            <!-- 总计标注 -->
+            <rect x="30" y="158" width="656" height="28" rx="8" fill="#fef3c7" stroke="#fcd34d" stroke-width="1.5"/>
+            <text x="358" y="177" text-anchor="middle" font-size="13" fill="#92400e" font-weight="700">总计：2 + 2 + 12 = 16 字节 / 参数</text>
+
+            <!-- 实例 -->
+            <text x="30" y="210" font-size="12" fill="#374151" font-weight="600">实例换算：</text>
+            <rect x="30" y="218" width="180" height="28" rx="6" fill="#dbeafe" stroke="#93c5fd"/>
+            <text x="120" y="237" text-anchor="middle" font-size="12" fill="#1e40af" font-weight="600">1B 参数 → 16 GB</text>
+            <rect x="218" y="218" width="180" height="28" rx="6" fill="#dbeafe" stroke="#93c5fd"/>
+            <text x="308" y="237" text-anchor="middle" font-size="12" fill="#1e40af" font-weight="600">7B 参数 → 112 GB</text>
+            <rect x="406" y="218" width="180" height="28" rx="6" fill="#fee2e2" stroke="#fca5a5"/>
+            <text x="496" y="237" text-anchor="middle" font-size="12" fill="#991b1b" font-weight="600">70B 参数 → 1120 GB(!)</text>
+          </svg>
+          <div class="diagram-caption">图 1-1：Adam + FP16 混合精度训练的显存分解。优化器状态占大头（75%），是 ZeRO 重点切割对象。</div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>类别</th><th>内容</th><th>精度</th><th>每参数字节</th><th>1B 模型</th><th>7B 模型</th></tr></thead>
+            <tbody>
+              <tr><td><strong>参数 P</strong></td><td>模型权重</td><td>FP16</td><td>2</td><td>2 GB</td><td>14 GB</td></tr>
+              <tr><td><strong>梯度 G</strong></td><td>反向传播梯度</td><td>FP16</td><td>2</td><td>2 GB</td><td>14 GB</td></tr>
+              <tr><td><strong>优化器 O</strong></td><td>FP32 副本 + Adam m/v</td><td>FP32</td><td>4+4+4=12</td><td>12 GB</td><td>84 GB</td></tr>
+              <tr style="background:#fef3c7;"><td colspan="3"><strong>小计 P+G+O</strong></td><td><strong>16</strong></td><td><strong>16 GB</strong></td><td><strong>112 GB</strong></td></tr>
+              <tr><td>激活 A</td><td>前向中间张量</td><td>FP16</td><td>视 batch/seq 而定</td><td>~6 GB</td><td>~30 GB</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>1.1.1 用一个极简神经网络理解 P / G / O / 激活</h3>
+
+        <p>假设有一个只有 <strong>2 个参数</strong>的极简全连接网络（输入 x，中间一个权重 w₁，再一个权重 w₂，输出 ŷ），用 MSE loss 训练。这个例子虽然简单，但能把所有概念对应清楚。</p>
+
+        <!-- 极简网络示意图 -->
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 700 120" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:700px;">
+            <defs>
+              <marker id="arrNN" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#2563eb"/>
+              </marker>
+            </defs>
+            <!-- x -->
+            <circle cx="50" cy="60" r="22" fill="#dbeafe" stroke="#93c5fd" stroke-width="2"/>
+            <text x="50" y="65" text-anchor="middle" font-size="14" fill="#1e40af" font-weight="700">x</text>
+
+            <line x1="73" y1="60" x2="140" y2="60" stroke="#2563eb" stroke-width="2" marker-end="url(#arrNN)"/>
+            <text x="107" y="52" text-anchor="middle" font-size="12" fill="#7c3aed" font-weight="600">×w₁</text>
+
+            <!-- h = x·w₁ -->
+            <circle cx="175" cy="60" r="22" fill="#ede9fe" stroke="#c4b5fd" stroke-width="2"/>
+            <text x="175" y="58" text-anchor="middle" font-size="11" fill="#5b21b6" font-weight="700">h</text>
+            <text x="175" y="72" text-anchor="middle" font-size="10" fill="#5b21b6">x·w₁</text>
+
+            <line x1="198" y1="60" x2="265" y2="60" stroke="#2563eb" stroke-width="2" marker-end="url(#arrNN)"/>
+            <text x="232" y="52" text-anchor="middle" font-size="12" fill="#7c3aed" font-weight="600">×w₂</text>
+
+            <!-- ŷ = h·w₂ -->
+            <circle cx="300" cy="60" r="22" fill="#ede9fe" stroke="#c4b5fd" stroke-width="2"/>
+            <text x="300" y="58" text-anchor="middle" font-size="11" fill="#5b21b6" font-weight="700">ŷ</text>
+            <text x="300" y="72" text-anchor="middle" font-size="10" fill="#5b21b6">h·w₂</text>
+
+            <line x1="323" y1="60" x2="390" y2="60" stroke="#2563eb" stroke-width="2" marker-end="url(#arrNN)"/>
+
+            <!-- loss -->
+            <rect x="393" y="40" width="80" height="40" rx="10" fill="#fef3c7" stroke="#fbbf24" stroke-width="2"/>
+            <text x="433" y="57" text-anchor="middle" font-size="12" fill="#92400e" font-weight="700">Loss</text>
+            <text x="433" y="72" text-anchor="middle" font-size="10" fill="#92400e">(ŷ-y)²</text>
+
+            <!-- 标注 -->
+            <text x="50" y="100" text-anchor="middle" font-size="11" fill="#667085">输入</text>
+            <text x="175" y="100" text-anchor="middle" font-size="11" fill="#7c3aed" font-weight="600">激活值 h</text>
+            <text x="300" y="100" text-anchor="middle" font-size="11" fill="#7c3aed" font-weight="600">激活值 ŷ</text>
+            <text x="107" y="98" text-anchor="middle" font-size="11" fill="#1e40af" font-weight="600">参数 w₁</text>
+            <text x="232" y="98" text-anchor="middle" font-size="11" fill="#1e40af" font-weight="600">参数 w₂</text>
+
+            <!-- 参数框说明 -->
+            <rect x="500" y="10" width="190" height="100" rx="10" fill="#f8faff" stroke="#bfdbfe" stroke-width="1.5"/>
+            <text x="595" y="28" text-anchor="middle" font-size="11" fill="#1e40af" font-weight="700">这个网络的所有参数：</text>
+            <text x="515" y="46" font-size="11" fill="#374151">P = { w₁, w₂ }  ← 就 2 个数</text>
+            <text x="515" y="62" font-size="11" fill="#374151">前向输出的中间值：</text>
+            <text x="515" y="78" font-size="11" fill="#7c3aed">激活 = { h, ŷ }  ← 中间结果</text>
+            <text x="515" y="94" font-size="11" fill="#667085">（每次前向都要临时存下来）</text>
+          </svg>
+          <div class="diagram-caption">图 1-2：极简 2 参数网络。w₁ 和 w₂ 是参数（P），h 和 ŷ 是前向传播中的激活值（A）。</div>
+        </div>
+
+        <p>现在我们来逐一看，训练这个网络时 GPU 里存了什么：</p>
+
+        <div class="step-box">
+          <div class="step-num">P</div>
+          <div class="step-content">
+            <strong>参数（Parameters）= 模型的权重本身</strong><br>
+            就是 <code>w₁</code> 和 <code>w₂</code>。网络有多少连接就有多少参数。<br>
+            训练时用 FP16 存（2字节/个），推理时也需要，load 模型就是 load 这些数。<br>
+            <span style="color:#667085;font-size:13px;">→ 真实的 LLaMA-7B 有 70 亿个这样的数，FP16 存需要 <strong>14 GB</strong>。</span>
+          </div>
+        </div>
+
+        <div class="step-box">
+          <div class="step-num">A</div>
+          <div class="step-content">
+            <strong>激活值（Activations）= 前向传播时每一层的输出，临时存在显存里</strong><br>
+            前向计算时，先算 <code>h = x × w₁</code>，再算 <code>ŷ = h × w₂</code>。<br>
+            <code>h</code> 和 <code>ŷ</code> 这两个中间结果不能丢掉，因为反向传播要用它们来算梯度：<br>
+            <span style="background:#fef9c3;padding:2px 6px;border-radius:4px;font-size:13px;">∂Loss/∂w₂ 需要 h；∂Loss/∂w₁ 需要 ŷ 和 w₂</span><br><br>
+            <span style="color:#667085;font-size:13px;">→ 激活大小跟 <strong>batch size × seq len × 网络宽度</strong> 成正比，跟参数量无关。batch 越大、序列越长，激活越多。</span>
+          </div>
+        </div>
+
+        <div class="step-box">
+          <div class="step-num">G</div>
+          <div class="step-content">
+            <strong>梯度（Gradients）= 反向传播算出的"每个参数应该往哪个方向调"</strong><br>
+            链式法则从 Loss 反推：<br>
+            <span style="background:#fef9c3;padding:2px 6px;border-radius:4px;font-size:13px;">∂Loss/∂w₂ = 2(ŷ−y) × h　　∂Loss/∂w₁ = 2(ŷ−y) × w₂ × x</span><br><br>
+            每个参数对应一个梯度，所以梯度张量和参数张量<strong>形状完全相同</strong>，大小也一样（FP16，2字节/个）。<br>
+            <span style="color:#667085;font-size:13px;">→ 梯度是训练独有的，推理完全不需要。LLaMA-7B 的梯度也是 <strong>14 GB</strong>。</span>
+          </div>
+        </div>
+
+        <div class="step-box">
+          <div class="step-num">O</div>
+          <div class="step-content">
+            <strong>优化器状态（Optimizer States）= Adam 额外维护的三份"历史记录"</strong><br>
+            光有梯度还不够，Adam 不是直接用梯度更新权重，它还要额外存：<br>
+            <ul style="margin:6px 0;font-size:13px;">
+              <li><strong>FP32 主权重副本</strong>：因为 FP16 精度不够做精确更新（见§6），Adam 存了一份 FP32 版本的 w₁、w₂ 用于计算。更新完再 cast 回 FP16。</li>
+              <li><strong>一阶动量 m</strong>：每个参数历史梯度的指数移动平均，<code>m = β₁·m + (1−β₁)·g</code>。记录"这个参数最近一直在往哪个方向走"，让更新有惯性。</li>
+              <li><strong>二阶动量 v</strong>：每个参数历史梯度平方的移动平均，<code>v = β₂·v + (1−β₂)·g²</code>。用来自适应调整每个参数的学习率——历史梯度大的参数，步子迈小点。</li>
+            </ul>
+            这三份都是 FP32（4字节/个），每个参数对应三个数 → <strong>12 字节/参数</strong>。<br>
+            <span style="color:#667085;font-size:13px;">→ LLaMA-7B：7B × 12 = <strong>84 GB</strong>，是最大的一块，占总训练显存的 75%。</span>
+          </div>
+        </div>
+
+        <div class="callout-green">
+          <strong>总结对应关系：</strong>
+          <div class="table-wrap" style="margin-top:10px;">
+            <table>
+              <thead><tr><th>名称</th><th>是什么</th><th>何时存在</th><th>大小由什么决定</th></tr></thead>
+              <tbody>
+                <tr><td><strong>P（参数）</strong></td><td>模型权重 w₁, w₂ …</td><td>推理 + 训练都有</td><td>模型层数 × 宽度</td></tr>
+                <tr><td><strong>A（激活）</strong></td><td>每层前向的中间输出 h, ŷ …</td><td>前向时产生，反向后释放</td><td>batch × seq_len × 宽度</td></tr>
+                <tr><td><strong>G（梯度）</strong></td><td>∂Loss/∂w，与 P 同形状</td><td>仅训练，反向传播时</td><td>= 参数量（同 P）</td></tr>
+                <tr><td><strong>O（优化器状态）</strong></td><td>FP32主权重 + Adam m + Adam v</td><td>仅训练，全程驻留</td><td>= 3 × 参数量（FP32）</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p style="margin:8px 0 0;font-size:13px;">训练总显存 = P(2) + G(2) + O(12) + A(动态) = <strong>16字节/参数 + 激活</strong>。推理只需 P，所以训练比推理重 8 倍。</p>
+        </div>
+
+        <h3 id="mem-activation">1.2 激活（Activation）占用</h3>
+
+        <p>激活是前向传播时产生的中间张量（每层的 attention 矩阵、FFN 输出 …），反向时要用来算梯度，所以默认会全量保留在显存。它的大小跟 batch size × seq len × 模型宽度成正比，跟参数量无关：</p>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：LLaMA-7B 激活估算</div>
+          <ul style="margin:0;">
+            <li>32 层 Transformer，每层 hidden=4096，seq=2048，batch=4，FP16</li>
+            <li>每层激活约：2048 × 4096 × 4 × 2字节 ≈ <strong>67 MB/层</strong></li>
+            <li>32 层合计：~<strong>2 GB</strong>（Attention 中间矩阵还需额外 ~4 GB）</li>
+            <li>seq=8192 时线性扩大到 ~<strong>24 GB</strong>，单卡直接不够用 → 必须 Gradient Checkpointing</li>
+          </ul>
+        </div>
+
+        <div class="callout-purple">
+          <strong>总结：</strong>P+G+O 一共 16 字节/参数，是<b>固定开销</b>，跟 batch / seq 无关。激活是<b>动态开销</b>，随 batch × seq 增大而增大。ZeRO 主要解决前者，Gradient Checkpointing 主要解决后者。这两个工具<b>完全正交，可以同时开</b>。
+        </div>
+      </section>
+
+
+      <!-- ══ §2 ZeRO ══ -->
+      <section class="section" id="zero">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">⚡</div>
+          §2 ZeRO：核心思想
+        </div>
+
+        <div class="big-concept">
+          <div class="big-concept-title">ZeRO = Zero Redundancy Optimizer</div>
+          <p style="margin:0;font-size:15px;"><strong>「N 张 GPU 跑数据并行时，DDP 让每张卡都完整复制 P/G/O。ZeRO 把它切成 N 份分开存——需要哪段就临时 all-gather 凑回来，用完立刻扔掉。」</strong></p>
+        </div>
+
+        <!-- DDP vs ZeRO 总览图（重新设计：上下分区，每行一个 GPU，格子够宽） -->
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 860 440" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:860px;">
+            <defs>
+              <marker id="arrZ" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#94a3b8"/>
+              </marker>
+            </defs>
+
+            <!-- ══ 上半部分：DDP ══ -->
+            <rect x="0" y="0" width="860" height="200" rx="12" fill="#f8faff" stroke="#bfdbfe" stroke-width="1.5"/>
+            <text x="430" y="22" text-anchor="middle" font-size="13" font-weight="700" fill="#1e40af">❌ DDP（传统数据并行）：每张卡完整复制一份模型</text>
+            <text x="430" y="38" text-anchor="middle" font-size="11" fill="#667085">4 卡 × 16 GB = 64 GB 总占用，冗余 3 份</text>
+
+            <!-- 列标题 -->
+            <text x="80" y="56" text-anchor="middle" font-size="11" fill="#64748b" font-weight="600">GPU</text>
+            <text x="230" y="56" text-anchor="middle" font-size="11" fill="#1e40af" font-weight="600">参数 P（FP16, 2 GB）</text>
+            <text x="400" y="56" text-anchor="middle" font-size="11" fill="#92400e" font-weight="600">梯度 G（FP16, 2 GB）</text>
+            <text x="610" y="56" text-anchor="middle" font-size="11" fill="#991b1b" font-weight="600">优化器状态 O（FP32, 12 GB）</text>
+            <text x="810" y="56" text-anchor="middle" font-size="11" fill="#64748b" font-weight="600">合计</text>
+
+            <!-- GPU 0 行 -->
+            <rect x="10" y="64" width="140" height="32" rx="6" fill="#e0f2fe" stroke="#7dd3fc"/>
+            <text x="80" y="85" text-anchor="middle" font-size="12" fill="#0369a1" font-weight="600">GPU 0</text>
+            <rect x="155" y="64" width="150" height="32" rx="6" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="230" y="85" text-anchor="middle" font-size="11" fill="#1e40af" font-weight="600">P（完整）2 GB</text>
+            <rect x="310" y="64" width="180" height="32" rx="6" fill="#fde68a" stroke="#fbbf24"/>
+            <text x="400" y="85" text-anchor="middle" font-size="11" fill="#92400e" font-weight="600">G（完整）2 GB</text>
+            <rect x="495" y="64" width="300" height="32" rx="6" fill="#fca5a5" stroke="#f87171"/>
+            <text x="645" y="85" text-anchor="middle" font-size="11" fill="#991b1b" font-weight="600">O（FP32 副本 + m + v）12 GB</text>
+            <rect x="800" y="64" width="50" height="32" rx="6" fill="#fef3c7" stroke="#fbbf24"/>
+            <text x="825" y="85" text-anchor="middle" font-size="12" fill="#92400e" font-weight="700">16 GB</text>
+
+            <!-- GPU 1 行 -->
+            <rect x="10" y="104" width="140" height="32" rx="6" fill="#e0f2fe" stroke="#7dd3fc"/>
+            <text x="80" y="125" text-anchor="middle" font-size="12" fill="#0369a1" font-weight="600">GPU 1</text>
+            <rect x="155" y="104" width="150" height="32" rx="6" fill="#bfdbfe" stroke="#93c5fd" opacity="0.7"/>
+            <text x="230" y="125" text-anchor="middle" font-size="11" fill="#1e40af">P（完整）2 GB</text>
+            <rect x="310" y="104" width="180" height="32" rx="6" fill="#fde68a" stroke="#fbbf24" opacity="0.7"/>
+            <text x="400" y="125" text-anchor="middle" font-size="11" fill="#92400e">G（完整）2 GB</text>
+            <rect x="495" y="104" width="300" height="32" rx="6" fill="#fca5a5" stroke="#f87171" opacity="0.7"/>
+            <text x="645" y="125" text-anchor="middle" font-size="11" fill="#991b1b">O 12 GB</text>
+            <rect x="800" y="104" width="50" height="32" rx="6" fill="#fef3c7" stroke="#fbbf24" opacity="0.7"/>
+            <text x="825" y="125" text-anchor="middle" font-size="11" fill="#92400e">16 GB</text>
+
+            <!-- GPU 2/3 省略行 -->
+            <rect x="10" y="144" width="140" height="22" rx="6" fill="#e0f2fe" stroke="#7dd3fc" opacity="0.5"/>
+            <text x="80" y="159" text-anchor="middle" font-size="11" fill="#64748b">GPU 2 / 3 ……</text>
+            <text x="400" y="159" text-anchor="middle" font-size="11" fill="#64748b">（同样各占 16 GB，完整复制，纯冗余）</text>
+            <rect x="800" y="144" width="50" height="22" rx="6" fill="#fef3c7" stroke="#fbbf24" opacity="0.5"/>
+            <text x="825" y="159" text-anchor="middle" font-size="11" fill="#92400e">16 GB</text>
+
+            <text x="430" y="188" text-anchor="middle" font-size="12" fill="#dc2626" font-weight="700">总显存占用：4 × 16 GB = 64 GB（所有冗余都是重复存储，毫无必要）</text>
+
+            <!-- ══ 中间过渡箭头 ══ -->
+            <line x1="430" y1="205" x2="430" y2="230" stroke="#7c3aed" stroke-width="2.5" marker-end="url(#arrZ)"/>
+            <text x="460" y="222" font-size="12" fill="#7c3aed" font-weight="700">ZeRO-3：把 P/G/O 分别切成 N=4 份，每卡只存自己那段</text>
+
+            <!-- ══ 下半部分：ZeRO-3 ══ -->
+            <rect x="0" y="235" width="860" height="198" rx="12" fill="#f0fdf8" stroke="#6ee7b7" stroke-width="1.5"/>
+            <text x="430" y="256" text-anchor="middle" font-size="13" font-weight="700" fill="#166534">✅ ZeRO-3（分片存储）：每张卡只存 1/N，N=4</text>
+            <text x="430" y="272" text-anchor="middle" font-size="11" fill="#667085">每卡理论占用 16/4 = 4 GB，总共 16 GB（无冗余）</text>
+
+            <!-- 列标题 -->
+            <text x="80" y="290" text-anchor="middle" font-size="11" fill="#64748b" font-weight="600">GPU</text>
+            <text x="230" y="290" text-anchor="middle" font-size="11" fill="#1e40af" font-weight="600">参数 P 分片</text>
+            <text x="400" y="290" text-anchor="middle" font-size="11" fill="#92400e" font-weight="600">梯度 G 分片</text>
+            <text x="590" y="290" text-anchor="middle" font-size="11" fill="#991b1b" font-weight="600">优化器状态 O 分片</text>
+            <text x="790" y="290" text-anchor="middle" font-size="11" fill="#166534" font-weight="600">合计</text>
+
+            <!-- GPU 0 行 -->
+            <rect x="10" y="298" width="140" height="32" rx="6" fill="#d1fae5" stroke="#6ee7b7"/>
+            <text x="80" y="319" text-anchor="middle" font-size="12" fill="#065f46" font-weight="600">GPU 0</text>
+            <rect x="155" y="298" width="150" height="32" rx="6" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="230" y="319" text-anchor="middle" font-size="11" fill="#1e40af" font-weight="600">P[0/4]  0.5 GB</text>
+            <rect x="310" y="298" width="180" height="32" rx="6" fill="#fde68a" stroke="#fbbf24"/>
+            <text x="400" y="319" text-anchor="middle" font-size="11" fill="#92400e" font-weight="600">G[0/4]  0.5 GB</text>
+            <rect x="495" y="298" width="280" height="32" rx="6" fill="#fca5a5" stroke="#f87171"/>
+            <text x="635" y="319" text-anchor="middle" font-size="11" fill="#991b1b" font-weight="600">O[0/4]  3 GB</text>
+            <rect x="780" y="298" width="70" height="32" rx="6" fill="#d1fae5" stroke="#6ee7b7"/>
+            <text x="815" y="319" text-anchor="middle" font-size="12" fill="#166534" font-weight="700">4 GB</text>
+
+            <!-- GPU 1 行 -->
+            <rect x="10" y="338" width="140" height="32" rx="6" fill="#d1fae5" stroke="#6ee7b7"/>
+            <text x="80" y="359" text-anchor="middle" font-size="12" fill="#065f46" font-weight="600">GPU 1</text>
+            <rect x="155" y="338" width="150" height="32" rx="6" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="230" y="359" text-anchor="middle" font-size="11" fill="#1e40af" font-weight="600">P[1/4]  0.5 GB</text>
+            <rect x="310" y="338" width="180" height="32" rx="6" fill="#fde68a" stroke="#fbbf24"/>
+            <text x="400" y="359" text-anchor="middle" font-size="11" fill="#92400e" font-weight="600">G[1/4]  0.5 GB</text>
+            <rect x="495" y="338" width="280" height="32" rx="6" fill="#fca5a5" stroke="#f87171"/>
+            <text x="635" y="359" text-anchor="middle" font-size="11" fill="#991b1b" font-weight="600">O[1/4]  3 GB</text>
+            <rect x="780" y="338" width="70" height="32" rx="6" fill="#d1fae5" stroke="#6ee7b7"/>
+            <text x="815" y="359" text-anchor="middle" font-size="12" fill="#166534" font-weight="700">4 GB</text>
+
+            <!-- GPU 2/3 行 -->
+            <rect x="10" y="378" width="140" height="22" rx="6" fill="#d1fae5" stroke="#6ee7b7" opacity="0.6"/>
+            <text x="80" y="393" text-anchor="middle" font-size="11" fill="#065f46">GPU 2 / 3</text>
+            <text x="440" y="393" text-anchor="middle" font-size="11" fill="#667085">P[2/4] / G[2/4] / O[2/4]  同理，各 4 GB/卡</text>
+            <rect x="780" y="378" width="70" height="22" rx="6" fill="#d1fae5" stroke="#6ee7b7" opacity="0.6"/>
+            <text x="815" y="393" text-anchor="middle" font-size="11" fill="#166534">4 GB</text>
+
+            <text x="430" y="426" text-anchor="middle" font-size="12" fill="#166534" font-weight="700">总显存占用：4 × 4 GB = 16 GB（= 1 份模型，节省 75%）</text>
+          </svg>
+          <div class="diagram-caption">图 2-1：DDP vs ZeRO-3 存储对比（4 卡，1B 模型示例）。ZeRO-3 把 P/G/O 全部切成 N 份，每卡只持有 1/N，从 64 GB 降到 16 GB。</div>
+        </div>
+
+        <h3 id="zero1">2.1 ZeRO-1：只切优化器状态 O</h3>
+
+        <p>最保守的一档。只切「Adam 的 FP32 副本 + m + v」（共 12 字节/参数）。参数 P 和梯度 G 每张卡仍然完整持有。</p>
+
+        <!-- ZeRO-1 流程图 -->
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 780 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:780px;">
+            <defs>
+              <marker id="arr1" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#2563eb"/>
+              </marker>
+              <marker id="arr1g" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#16a34a"/>
+              </marker>
+            </defs>
+
+            <!-- 步骤标签 -->
+            <text x="30" y="16" font-size="12" font-weight="700" fill="#1e40af">ZeRO-1 训练一步的流程（4 卡）</text>
+
+            <!-- Step boxes -->
+            <!-- 前向 -->
+            <rect x="10" y="28" width="110" height="44" rx="8" fill="#dbeafe" stroke="#93c5fd" stroke-width="1.5"/>
+            <text x="65" y="49" text-anchor="middle" font-size="12" fill="#1e40af" font-weight="600">① 前向传播</text>
+            <text x="65" y="65" text-anchor="middle" font-size="11" fill="#1e40af">全量 P → loss</text>
+
+            <line x1="122" y1="50" x2="155" y2="50" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arr1)"/>
+
+            <!-- 反向 -->
+            <rect x="158" y="28" width="110" height="44" rx="8" fill="#dbeafe" stroke="#93c5fd" stroke-width="1.5"/>
+            <text x="213" y="49" text-anchor="middle" font-size="12" fill="#1e40af" font-weight="600">② 反向传播</text>
+            <text x="213" y="65" text-anchor="middle" font-size="11" fill="#1e40af">全量 G 计算</text>
+
+            <line x1="270" y1="50" x2="303" y2="50" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arr1)"/>
+
+            <!-- reduce-scatter -->
+            <rect x="306" y="28" width="130" height="44" rx="8" fill="#fef3c7" stroke="#fcd34d" stroke-width="1.5"/>
+            <text x="371" y="46" text-anchor="middle" font-size="11" fill="#92400e" font-weight="700">③ reduce-scatter G</text>
+            <text x="371" y="62" text-anchor="middle" font-size="11" fill="#92400e">每卡保留自己的 G 片段</text>
+
+            <line x1="438" y1="50" x2="471" y2="50" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arr1)"/>
+
+            <!-- Adam step on CPU -->
+            <rect x="474" y="28" width="130" height="44" rx="8" fill="#fca5a5" stroke="#f87171" stroke-width="1.5"/>
+            <text x="539" y="46" text-anchor="middle" font-size="11" fill="#991b1b" font-weight="700">④ Adam step</text>
+            <text x="539" y="62" text-anchor="middle" font-size="11" fill="#991b1b">只更新自己分片的 O</text>
+
+            <line x1="606" y1="50" x2="639" y2="50" stroke="#16a34a" stroke-width="1.5" marker-end="url(#arr1g)"/>
+
+            <!-- all-gather P -->
+            <rect x="642" y="28" width="130" height="44" rx="8" fill="#d1fae5" stroke="#6ee7b7" stroke-width="1.5"/>
+            <text x="707" y="46" text-anchor="middle" font-size="11" fill="#065f46" font-weight="700">⑤ all-gather P</text>
+            <text x="707" y="62" text-anchor="middle" font-size="11" fill="#065f46">更新后 P 聚回每张卡</text>
+
+            <!-- 通信量标注 -->
+            <text x="30" y="105" font-size="12" fill="#374151" font-weight="700">通信量对比（相对于 DDP）：</text>
+            <rect x="30" y="115" width="240" height="28" rx="6" fill="#eff6ff" stroke="#bfdbfe"/>
+            <text x="150" y="134" text-anchor="middle" font-size="12" fill="#1e40af">DDP：all-reduce G  ≈ 2Φ × 2 字节</text>
+            <rect x="280" y="115" width="400" height="28" rx="6" fill="#f0fdf4" stroke="#bbf7d0"/>
+            <text x="480" y="134" text-anchor="middle" font-size="12" fill="#166534" font-weight="600">ZeRO-1：reduce-scatter G（Φ×2）+ all-gather P（Φ×2）= 完全相同 ✓</text>
+          </svg>
+          <div class="diagram-caption">图 2-2：ZeRO-1 训练流程。通信量与 DDP 相同，但显存省 ~56%（优化器状态减为 1/N）。</div>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：1B 模型，4 卡 ZeRO-1 vs DDP</div>
+          <ul style="margin:0;">
+            <li>DDP 每卡：P(2) + G(2) + O(12) = <strong>16 GB</strong></li>
+            <li>ZeRO-1 每卡：P(2) + G(2) + O(12)/4 = 2+2+3 = <strong>7 GB</strong>（省 56%）</li>
+            <li>通信量：完全相同——reduce-scatter(G) + all-gather(P) 字节数 = DDP all-reduce(G)</li>
+          </ul>
+        </div>
+
+        <h3 id="zero2">2.2 ZeRO-2：再把梯度 G 也切了</h3>
+
+        <p>在 ZeRO-1 基础上，梯度也分片。每张卡反向后立刻 reduce-scatter，只保留自己负责的那段梯度，不再持有全量 G。</p>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：1B 模型，4 卡 ZeRO-2</div>
+          <ul style="margin:0;">
+            <li>每卡：P(2) + G(2)/4 + O(12)/4 = 2 + 0.5 + 3 = <strong>5.5 GB</strong></li>
+            <li>相比 DDP（16 GB）节省 <strong>66%</strong></li>
+            <li>通信量：仍与 DDP 相同</li>
+          </ul>
+        </div>
+
+        <h3 id="zero3">2.3 ZeRO-3：连参数 P 都切（最猛）</h3>
+
+        <p>P/G/O 全部分片，每张卡只持有 1/N 的模型权重。需要某层时 all-gather 凑回来，算完立刻释放。</p>
+
+        <!-- ZeRO-3 前向 all-gather 流程 -->
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 780 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:780px;">
+            <defs>
+              <marker id="arr3" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#7c3aed"/>
+              </marker>
+            </defs>
+
+            <text x="30" y="18" font-size="12" font-weight="700" fill="#5b21b6">ZeRO-3：前向时每层动态 all-gather 参数</text>
+
+            <!-- 模型层示意 -->
+            <!-- Layer 1 -->
+            <rect x="10" y="30" width="100" height="50" rx="8" fill="#ede9fe" stroke="#c4b5fd" stroke-width="1.5"/>
+            <text x="60" y="53" text-anchor="middle" font-size="12" fill="#5b21b6" font-weight="600">Layer 1</text>
+            <text x="60" y="68" text-anchor="middle" font-size="11" fill="#5b21b6">P[0] on GPU0</text>
+
+            <!-- all-gather 箭头 -->
+            <path d="M 112 55 C 130 40, 145 40, 155 55" stroke="#7c3aed" stroke-width="1.5" fill="none" marker-end="url(#arr3)"/>
+            <text x="133" y="36" text-anchor="middle" font-size="10" fill="#7c3aed">all-gather</text>
+            <text x="133" y="47" text-anchor="middle" font-size="10" fill="#7c3aed">4 卡凑出</text>
+            <text x="133" y="58" text-anchor="middle" font-size="10" fill="#7c3aed">完整 L1</text>
+
+            <!-- 临时完整 Layer 1 -->
+            <rect x="158" y="30" width="120" height="50" rx="8" fill="#d1fae5" stroke="#6ee7b7" stroke-width="2"/>
+            <text x="218" y="50" text-anchor="middle" font-size="11" fill="#065f46" font-weight="700">Layer 1（完整）</text>
+            <text x="218" y="65" text-anchor="middle" font-size="10" fill="#065f46">临时存在，算完即丢</text>
+
+            <!-- 前向算完 -->
+            <line x1="280" y1="55" x2="310" y2="55" stroke="#7c3aed" stroke-width="1.5" marker-end="url(#arr3)"/>
+            <text x="295" y="48" text-anchor="middle" font-size="10" fill="#7c3aed">前向</text>
+
+            <!-- 释放 -->
+            <rect x="313" y="30" width="90" height="50" rx="8" fill="#fef2f2" stroke="#fecaca" stroke-width="1.5"/>
+            <text x="358" y="50" text-anchor="middle" font-size="11" fill="#dc2626" font-weight="600">释放 Layer 1</text>
+            <text x="358" y="65" text-anchor="middle" font-size="10" fill="#dc2626">恢复为分片状态</text>
+
+            <!-- Layer 2 同理 -->
+            <line x1="405" y1="55" x2="428" y2="55" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,2"/>
+            <text x="416" y="48" text-anchor="middle" font-size="10" fill="#94a3b8">重复</text>
+
+            <rect x="430" y="30" width="100" height="50" rx="8" fill="#ede9fe" stroke="#c4b5fd" stroke-width="1.5"/>
+            <text x="480" y="53" text-anchor="middle" font-size="12" fill="#5b21b6" font-weight="600">Layer 2</text>
+            <text x="480" y="68" text-anchor="middle" font-size="11" fill="#5b21b6">再 all-gather …</text>
+
+            <text x="560" y="55" font-size="20" fill="#94a3b8">···</text>
+
+            <!-- 反向也需 all-gather -->
+            <text x="30" y="108" font-size="12" font-weight="700" fill="#374151">反向传播时：</text>
+            <rect x="30" y="118" width="680" height="28" rx="8" fill="#fff7ed" stroke="#fed7aa"/>
+            <text x="370" y="137" text-anchor="middle" font-size="12" fill="#9a3412">逆序再 all-gather 一遍各层参数，反向算完对应层立刻释放。总通信量 ≈ DDP 的 1.5×</text>
+
+            <!-- 代价 vs 收益 -->
+            <text x="30" y="170" font-size="12" font-weight="700" fill="#374151">核心权衡：</text>
+            <rect x="30" y="178" width="310" height="20" rx="6" fill="#d1fae5" stroke="#6ee7b7"/>
+            <text x="185" y="193" text-anchor="middle" font-size="11" fill="#065f46" font-weight="600">✅ 显存降到 16Φ/N（最省）</text>
+            <rect x="350" y="178" width="360" height="20" rx="6" fill="#fef2f2" stroke="#fecaca"/>
+            <text x="530" y="193" text-anchor="middle" font-size="11" fill="#dc2626" font-weight="600">❌ 通信量 ≈ 1.5× DDP，NVLink/IB 带宽是瓶颈</text>
+          </svg>
+          <div class="diagram-caption">图 2-3：ZeRO-3 每层前向/反向时动态 all-gather 参数，用完立刻释放，显存最省但通信最多。</div>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：13B 模型在 8 卡 A100-40G 上能否跑起来</div>
+          <ul style="margin:0;">
+            <li>DDP：13B × 16 = <strong>208 GB</strong> → 单卡装不下</li>
+            <li>ZeRO-2：13B × (2 + 2/8 + 12/8) ≈ <strong>15.6 GB/卡</strong> → 装得下！</li>
+            <li>ZeRO-3：13B × 16 / 8 = <strong>26 GB/卡</strong> → 装得下（注：ZeRO-2 理论上比 ZeRO-3 更适合这个场景，ZeRO-3 额外通信开销更大）</li>
+            <li>70B 模型 + 8 卡 ZeRO-3：70B×16/8 = <strong>140 GB/卡</strong> → 仍然装不下 → 需要 Offload 或更多卡</li>
+          </ul>
+        </div>
+
+        <h3 id="zero-comm">2.4 通信量分析：ZeRO 为什么没变慢多少</h3>
+
+        <!-- 通信量对比图 -->
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 760 120" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:760px;">
+            <text x="10" y="18" font-size="12" font-weight="700" fill="#1e40af">通信字节数对比（每训练步，Φ = 参数量）</text>
+            <!-- DDP -->
+            <rect x="10" y="30" width="200" height="36" rx="8" fill="#dbeafe" stroke="#93c5fd"/>
+            <text x="110" y="45" text-anchor="middle" font-size="12" fill="#1e40af" font-weight="600">DDP</text>
+            <text x="110" y="60" text-anchor="middle" font-size="11" fill="#1e40af">all-reduce(G) = 2Φ × 2B</text>
+
+            <!-- ZeRO-1/2 -->
+            <rect x="225" y="30" width="230" height="36" rx="8" fill="#d1fae5" stroke="#6ee7b7"/>
+            <text x="340" y="45" text-anchor="middle" font-size="12" fill="#065f46" font-weight="600">ZeRO-1 / ZeRO-2</text>
+            <text x="340" y="60" text-anchor="middle" font-size="11" fill="#065f46">reduce-scatter(G) + all-gather(P) = 2Φ × 2B <strong>（相同）</strong></text>
+
+            <!-- ZeRO-3 -->
+            <rect x="470" y="26" width="280" height="48" rx="8" fill="#fef3c7" stroke="#fcd34d"/>
+            <text x="610" y="43" text-anchor="middle" font-size="12" fill="#92400e" font-weight="600">ZeRO-3</text>
+            <text x="610" y="57" text-anchor="middle" font-size="11" fill="#92400e">all-gather(P)×2 + reduce-scatter(G)</text>
+            <text x="610" y="70" text-anchor="middle" font-size="11" fill="#92400e" font-weight="600">= 3Φ × 2B（是 DDP 的 1.5 倍）</text>
+
+            <text x="10" y="100" font-size="11" fill="#667085">结论：ZeRO-1/2 通信量与 DDP 完全相同，只有 ZeRO-3 有额外 50% 通信开销。</text>
+          </svg>
+          <div class="diagram-caption">图 2-4：各 ZeRO 档位通信量对比。ZeRO-1/2 免费降显存，ZeRO-3 以 1.5× 通信换最大显存节省。</div>
+        </div>
+
+        <h3 id="zero-compare">2.5 三档对比总表</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>档位</th><th>切 O</th><th>切 G</th><th>切 P</th><th>每卡显存（N 卡）</th><th>额外通信</th><th>适用场景</th></tr></thead>
+            <tbody>
+              <tr><td><strong>DDP</strong></td><td>✗</td><td>✗</td><td>✗</td><td>16Φ 字节</td><td>— baseline</td><td>小模型 (&lt;3B)</td></tr>
+              <tr><td><strong>ZeRO-1</strong></td><td>✅</td><td>✗</td><td>✗</td><td>(2+2)Φ + 12Φ/N</td><td>= DDP（无额外）</td><td>1~3B 模型</td></tr>
+              <tr><td><strong>ZeRO-2</strong></td><td>✅</td><td>✅</td><td>✗</td><td>2Φ + 14Φ/N</td><td>= DDP（无额外）</td><td>3~13B 微调</td></tr>
+              <tr style="background:#fef9c3;"><td><strong>ZeRO-3</strong></td><td>✅</td><td>✅</td><td>✅</td><td>16Φ/N</td><td>×1.5 DDP</td><td>13B+ 大模型</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout-green">
+          <strong>实操建议：</strong>从 ZeRO-2 开始尝试，OOM 才升 ZeRO-3。能不 Offload 就不 Offload（见 §3）。
+        </div>
+      </section>
+
+
+      <!-- ══ §3 Offload ══ -->
+      <section class="section" id="offload">
+        <div class="section-title">
+          <div class="icon" style="background:#fef2f2;">📦</div>
+          §3 ZeRO-Offload：把状态甩到 CPU 内存
+        </div>
+
+        <p>ZeRO-3 还不够？还是 OOM？那就接着甩——<strong>把优化器状态、梯度，甚至参数本身，从 GPU HBM 搬到 CPU RAM</strong>。这就是 ZeRO-Offload（2021）。</p>
+
+        <!-- 存储层次 + Offload 示意图 -->
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 780 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:780px;">
+            <defs>
+              <marker id="arrO" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#64748b"/>
+              </marker>
+              <marker id="arrOR" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#dc2626"/>
+              </marker>
+            </defs>
+
+            <!-- 三层存储 -->
+            <!-- GPU HBM -->
+            <rect x="10" y="20" width="200" height="80" rx="10" fill="#dbeafe" stroke="#93c5fd" stroke-width="2"/>
+            <text x="110" y="42" text-anchor="middle" font-size="13" fill="#1e40af" font-weight="700">GPU HBM</text>
+            <text x="110" y="58" text-anchor="middle" font-size="11" fill="#1e40af">40 ~ 80 GB / 卡</text>
+            <text x="110" y="72" text-anchor="middle" font-size="11" fill="#1e40af">带宽 ~2 TB/s</text>
+            <text x="110" y="86" text-anchor="middle" font-size="11" fill="#3b82f6">P（前向时）+ 激活</text>
+
+            <!-- 箭头 -->
+            <line x1="212" y1="60" x2="258" y2="60" stroke="#64748b" stroke-width="2" marker-end="url(#arrO)"/>
+            <line x1="258" y1="60" x2="212" y2="60" stroke="#dc2626" stroke-width="2" marker-end="url(#arrOR)"/>
+            <text x="235" y="50" text-anchor="middle" font-size="10" fill="#166534">all-gather</text>
+            <text x="235" y="75" text-anchor="middle" font-size="10" fill="#dc2626">Offload</text>
+            <text x="235" y="86" text-anchor="middle" font-size="10" fill="#94a3b8">PCIe ~32GB/s</text>
+
+            <!-- CPU RAM -->
+            <rect x="262" y="20" width="220" height="80" rx="10" fill="#fef3c7" stroke="#fcd34d" stroke-width="2"/>
+            <text x="372" y="42" text-anchor="middle" font-size="13" fill="#92400e" font-weight="700">CPU RAM</text>
+            <text x="372" y="58" text-anchor="middle" font-size="11" fill="#92400e">256 GB ~ 1 TB</text>
+            <text x="372" y="72" text-anchor="middle" font-size="11" fill="#92400e">带宽 ~100 GB/s</text>
+            <text x="372" y="86" text-anchor="middle" font-size="11" fill="#b45309">O（FP32 副本+m+v）+ G</text>
+
+            <!-- 箭头 -->
+            <line x1="484" y1="60" x2="530" y2="60" stroke="#64748b" stroke-width="2" marker-end="url(#arrO)"/>
+            <line x1="530" y1="60" x2="484" y2="60" stroke="#dc2626" stroke-width="2" marker-end="url(#arrOR)"/>
+            <text x="507" y="50" text-anchor="middle" font-size="10" fill="#166534">prefetch</text>
+            <text x="507" y="75" text-anchor="middle" font-size="10" fill="#dc2626">Offload</text>
+            <text x="507" y="86" text-anchor="middle" font-size="10" fill="#94a3b8">DRAM ~50GB/s</text>
+
+            <!-- NVMe SSD -->
+            <rect x="534" y="20" width="236" height="80" rx="10" fill="#f0fdf4" stroke="#86efac" stroke-width="2"/>
+            <text x="652" y="42" text-anchor="middle" font-size="13" fill="#166534" font-weight="700">NVMe SSD</text>
+            <text x="652" y="58" text-anchor="middle" font-size="11" fill="#166534">10+ TB</text>
+            <text x="652" y="72" text-anchor="middle" font-size="11" fill="#166534">带宽 ~7 GB/s</text>
+            <text x="652" y="86" text-anchor="middle" font-size="11" fill="#16a34a">ZeRO-Infinity：O + G + P</text>
+
+            <!-- Adam on CPU 说明 -->
+            <rect x="262" y="118" width="220" height="36" rx="8" fill="#fffbeb" stroke="#fbbf24" stroke-width="1.5"/>
+            <text x="372" y="133" text-anchor="middle" font-size="11" fill="#92400e" font-weight="600">✓ Adam step 也在 CPU 上跑</text>
+            <text x="372" y="149" text-anchor="middle" font-size="11" fill="#92400e">CPU 多核执行 FP32 更新</text>
+
+            <!-- 延迟说明 -->
+            <rect x="10" y="160" width="760" height="30" rx="8" fill="#fef2f2" stroke="#fecaca"/>
+            <text x="390" y="179" text-anchor="middle" font-size="12" fill="#991b1b" font-weight="600">瓶颈：PCIe 带宽只有 32 GB/s vs HBM 2 TB/s，每次 Offload 都会让训练吞吐量下降 2~5×</text>
+          </svg>
+          <div class="diagram-caption">图 3-1：ZeRO-Offload 存储层次。GPU HBM 只放前向参数和激活；O/G 住 CPU RAM；Adam step 也在 CPU 执行。ZeRO-Infinity 再进一步把状态甩到 NVMe SSD。</div>
+        </div>
+
+        <div class="two-col">
+          <div class="mini-card" style="border-left:4px solid #16a34a;">
+            <h4 style="color:#166534;">✅ 能 Offload 什么</h4>
+            <ul>
+              <li><strong>offload_optimizer</strong>：FP32 副本 + Adam m/v → CPU RAM（最常用）</li>
+              <li><strong>offload_param</strong>：模型参数 P → CPU RAM（配合 ZeRO-3）</li>
+              <li><strong>ZeRO-Infinity</strong>：P/G/O 全甩 NVMe</li>
+            </ul>
+          </div>
+          <div class="mini-card" style="border-left:4px solid #dc2626;">
+            <h4 style="color:#dc2626;">❌ 代价</h4>
+            <ul>
+              <li>PCIe 带宽只有 ~32 GB/s（GPU HBM 是 ~2 TB/s，差 60×）</li>
+              <li>训练速度通常降 2~5×（取决于模型层大小和通信调度）</li>
+              <li>offload_param 时每层前向都要 CPU→GPU 搬参数，速度最慢</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：单张 RTX 4090 (24 GB) 训 LLaMA-7B</div>
+          <ul style="margin:0;">
+            <li>不开 Offload：7B × 16 = 112 GB → 完全 OOM，想都别想</li>
+            <li>ZeRO-3 + offload_optimizer（不 offload 参数）：P(14GB) + 激活(~4GB) ≈ 18 GB → 单卡能跑</li>
+            <li>ZeRO-3 + offload_optimizer + offload_param：进一步压到 ~8 GB → 可以跑更长 seq</li>
+            <li>代价：吞吐量约为 8×A100 方案的 1/10，但能跑通 🎉</li>
+          </ul>
+        </div>
+
+        <pre>// ds_config.json 关键 Offload 字段
+"zero_optimization": {
+  "stage": 3,
+  "offload_optimizer": {
+    "device": "cpu",
+    "pin_memory": true    // pin_memory=true 让 CPU 到 GPU 传输更快
+  },
+  "offload_param": {
+    "device": "cpu",      // 只在 OOM 时才加这个！
+    "pin_memory": true
+  }
+}</pre>
+      </section>
+
+      <!-- ══ §4 Infinity ══ -->
+      <section class="section" id="infinity">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">♾️</div>
+          §4 ZeRO-Infinity：把状态再甩到 NVMe 硬盘
+        </div>
+
+        <p>ZeRO-Infinity（SC'21）把同样的思路推到极致：<strong>P/G/O 全部可以 offload 到本地 NVMe SSD</strong>，同时设计了 bandwidth-centric partitioning（以带宽为中心的分片）来最大化 NVMe 读写吞吐。</p>
+
+        <div class="callout-cyan">
+          <strong>理论极限：</strong>一台 8×A100 服务器（640 GB GPU HBM + 2 TB CPU RAM + 10 TB NVMe SSD），理论上可以训练 <strong>1 万亿参数（1T）</strong>级别的模型。
+        </div>
+
+        <div class="callout-amber">
+          <strong>实战中：</strong>NVMe 带宽只有 ~7 GB/s（PCIe 4.0 × 4），每 step 需要大量 IO，训练速度极慢（分钟级 / step）。主要用在「我只需要跑通一次验证概念」或「超大参数量推理」的场景，生产环境大规模预训练还是首选多机 + ZeRO-3 不 Offload。
+        </div>
+      </section>
+
+      <!-- ══ §5 3D 并行 ══ -->
+      <section class="section" id="3d">
+        <div class="section-title">
+          <div class="icon" style="background:#ecfeff;">🧊</div>
+          §5 3D 并行：DP × TP × PP
+        </div>
+
+        <div class="callout-purple" style="margin-bottom:18px;">
+          <strong>为什么 DeepSpeed 文章要讲 3D 并行？</strong><br>
+          ZeRO 本质上是对<strong>数据并行（DP）维度</strong>的优化——它解决的是"每张卡都完整复制一份模型状态"的冗余问题。但当模型规模继续增大，<strong>单层本身就装不下一张卡</strong>时，光靠 ZeRO 就不够了，必须引入 TP（张量并行）把矩阵切开、PP（流水线并行）把层分到不同机器上。DeepSpeed 通过与 Megatron-LM 联合，把这三个维度<strong>全部集成在一起</strong>——ZeRO 负责 DP 维度的显存，TP/PP 负责"单层/单机装不下"的问题，三者互补而非替代。
+        </div>
+        <p>ZeRO 是「数据并行里的优化版」——多张卡处理不同 batch，但模型的每一层都在这 N 张卡里某张完整地算完。当模型大到单层都装不下时，光靠 ZeRO 还不够，需要<strong>三种并行同时上</strong>。</p>
+
+        <h3 id="dp">5.1 数据并行（DP）— ZeRO 所在的维度</h3>
+
+        <!-- DP 示意 -->
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 700 120" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:700px;">
+            <text x="10" y="18" font-size="12" font-weight="700" fill="#1e40af">数据并行 DP：每卡处理不同 batch，定期同步梯度</text>
+            <!-- 4 个 GPU，每个有完整模型 -->
+            <rect x="10" y="28" width="130" height="56" rx="8" fill="#dbeafe" stroke="#93c5fd" stroke-width="1.5"/>
+            <text x="75" y="50" text-anchor="middle" font-size="12" fill="#1e40af" font-weight="600">GPU 0</text>
+            <text x="75" y="66" text-anchor="middle" font-size="11" fill="#1e40af">完整模型</text>
+            <text x="75" y="80" text-anchor="middle" font-size="11" fill="#3b82f6">Batch [0,1,2,3]</text>
+
+            <rect x="155" y="28" width="130" height="56" rx="8" fill="#dbeafe" stroke="#93c5fd" stroke-width="1.5"/>
+            <text x="220" y="50" text-anchor="middle" font-size="12" fill="#1e40af" font-weight="600">GPU 1</text>
+            <text x="220" y="66" text-anchor="middle" font-size="11" fill="#1e40af">完整模型</text>
+            <text x="220" y="80" text-anchor="middle" font-size="11" fill="#3b82f6">Batch [4,5,6,7]</text>
+
+            <rect x="300" y="28" width="130" height="56" rx="8" fill="#dbeafe" stroke="#93c5fd" stroke-width="1.5"/>
+            <text x="365" y="50" text-anchor="middle" font-size="12" fill="#1e40af" font-weight="600">GPU 2</text>
+            <text x="365" y="66" text-anchor="middle" font-size="11" fill="#1e40af">完整模型</text>
+            <text x="365" y="80" text-anchor="middle" font-size="11" fill="#3b82f6">Batch [8,9,10,11]</text>
+
+            <rect x="445" y="28" width="130" height="56" rx="8" fill="#dbeafe" stroke="#93c5fd" stroke-width="1.5"/>
+            <text x="510" y="50" text-anchor="middle" font-size="12" fill="#1e40af" font-weight="600">GPU 3</text>
+            <text x="510" y="66" text-anchor="middle" font-size="11" fill="#1e40af">完整模型</text>
+            <text x="510" y="80" text-anchor="middle" font-size="11" fill="#3b82f6">Batch [12,13,14,15]</text>
+
+            <!-- all-reduce 箭头 -->
+            <text x="600" y="55" font-size="12" fill="#374151">all-reduce</text>
+            <text x="600" y="70" font-size="12" fill="#374151">梯度 G</text>
+          </svg>
+          <div class="diagram-caption">图 5-1：数据并行 DP。每卡复制完整模型，处理不同 mini-batch，反向后 all-reduce 梯度同步。</div>
+        </div>
+
+        <h3 id="tp">5.2 张量并行（TP / Megatron Style）</h3>
+
+        <p>把<strong>同一层的权重矩阵切到多卡</strong>上分别计算，再通信合并结果。由 Megatron-LM 提出，节点内（NVLink）效率最高。</p>
+
+        <!-- TP 示意：Linear 矩阵分列（垂直布局，方块够宽） -->
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 820 340" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:820px;">
+            <defs>
+              <marker id="arrTP" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#7c3aed"/>
+              </marker>
+              <marker id="arrTPR" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#065f46"/>
+              </marker>
+            </defs>
+
+            <!-- 标题 -->
+            <text x="10" y="18" font-size="13" font-weight="700" fill="#5b21b6">张量并行 TP：把一个 Linear(4096 → 4096) 层按列切到 4 张卡</text>
+
+            <!-- 输入 X（左侧，垂直居中对齐到 4 个 GPU） -->
+            <rect x="10" y="36" width="110" height="240" rx="10" fill="#e0f2fe" stroke="#7dd3fc" stroke-width="2"/>
+            <text x="65" y="140" text-anchor="middle" font-size="13" fill="#0369a1" font-weight="700">输入 X</text>
+            <text x="65" y="160" text-anchor="middle" font-size="12" fill="#0369a1">Batch × 4096</text>
+            <text x="65" y="178" text-anchor="middle" font-size="11" fill="#0369a1">广播到每张卡</text>
+            <text x="65" y="194" text-anchor="middle" font-size="11" fill="#0369a1">（完全相同）</text>
+
+            <!-- 广播箭头（从 X 指向每个 GPU） -->
+            <line x1="122" y1="80"  x2="195" y2="80"  stroke="#7c3aed" stroke-width="1.5" marker-end="url(#arrTP)"/>
+            <line x1="122" y1="145" x2="195" y2="145" stroke="#7c3aed" stroke-width="1.5" marker-end="url(#arrTP)"/>
+            <line x1="122" y1="210" x2="195" y2="210" stroke="#7c3aed" stroke-width="1.5" marker-end="url(#arrTP)"/>
+            <line x1="122" y1="275" x2="195" y2="275" stroke="#7c3aed" stroke-width="1.5" marker-end="url(#arrTP)"/>
+            <text x="158" y="30" text-anchor="middle" font-size="10" fill="#7c3aed">广播</text>
+
+            <!-- GPU 0 -->
+            <rect x="198" y="56" width="220" height="50" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="2"/>
+            <text x="308" y="78" text-anchor="middle" font-size="12" fill="#5b21b6" font-weight="700">GPU 0</text>
+            <text x="308" y="96" text-anchor="middle" font-size="11" fill="#5b21b6">权重 W[:, 0 : 1024]  →  输出 Y[:, 0 : 1024]</text>
+
+            <!-- GPU 1 -->
+            <rect x="198" y="121" width="220" height="50" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="2"/>
+            <text x="308" y="143" text-anchor="middle" font-size="12" fill="#5b21b6" font-weight="700">GPU 1</text>
+            <text x="308" y="161" text-anchor="middle" font-size="11" fill="#5b21b6">权重 W[:, 1024 : 2048]  →  Y[:, 1024 : 2048]</text>
+
+            <!-- GPU 2 -->
+            <rect x="198" y="186" width="220" height="50" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="2"/>
+            <text x="308" y="208" text-anchor="middle" font-size="12" fill="#5b21b6" font-weight="700">GPU 2</text>
+            <text x="308" y="226" text-anchor="middle" font-size="11" fill="#5b21b6">权重 W[:, 2048 : 3072]  →  Y[:, 2048 : 3072]</text>
+
+            <!-- GPU 3 -->
+            <rect x="198" y="251" width="220" height="50" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="2"/>
+            <text x="308" y="273" text-anchor="middle" font-size="12" fill="#5b21b6" font-weight="700">GPU 3</text>
+            <text x="308" y="291" text-anchor="middle" font-size="11" fill="#5b21b6">权重 W[:, 3072 : 4096]  →  Y[:, 3072 : 4096]</text>
+
+            <!-- all-reduce 箭头 -->
+            <line x1="420" y1="80"  x2="490" y2="156" stroke="#065f46" stroke-width="1.5" marker-end="url(#arrTPR)"/>
+            <line x1="420" y1="146" x2="490" y2="156" stroke="#065f46" stroke-width="1.5" marker-end="url(#arrTPR)"/>
+            <line x1="420" y1="211" x2="490" y2="156" stroke="#065f46" stroke-width="1.5" marker-end="url(#arrTPR)"/>
+            <line x1="420" y1="276" x2="490" y2="156" stroke="#065f46" stroke-width="1.5" marker-end="url(#arrTPR)"/>
+            <text x="445" y="108" text-anchor="middle" font-size="11" fill="#065f46" font-weight="600">all-reduce</text>
+            <text x="445" y="122" text-anchor="middle" font-size="10" fill="#065f46">（拼接 4 段输出）</text>
+
+            <!-- 输出 Y -->
+            <rect x="492" y="100" width="150" height="115" rx="10" fill="#d1fae5" stroke="#6ee7b7" stroke-width="2"/>
+            <text x="567" y="148" text-anchor="middle" font-size="13" fill="#065f46" font-weight="700">输出 Y</text>
+            <text x="567" y="168" text-anchor="middle" font-size="12" fill="#065f46">Batch × 4096</text>
+            <text x="567" y="186" text-anchor="middle" font-size="11" fill="#065f46">完整合并结果</text>
+
+            <!-- 关键特性说明 -->
+            <rect x="658" y="36" width="154" height="240" rx="10" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+            <text x="735" y="60" text-anchor="middle" font-size="12" fill="#5b21b6" font-weight="700">TP 特点</text>
+            <text x="668" y="82" font-size="11" fill="#374151">每卡存 1/4 参数</text>
+            <text x="668" y="100" font-size="11" fill="#374151">每卡算 1/4 算量</text>
+            <text x="668" y="122" font-size="11" fill="#166534">✓ NVLink 高速</text>
+            <text x="668" y="140" font-size="11" fill="#166534">✓ 节点内最优</text>
+            <text x="668" y="162" font-size="11" fill="#dc2626">✗ 跨节点慢</text>
+            <text x="668" y="180" font-size="11" fill="#dc2626">  （勿用）</text>
+            <text x="668" y="202" font-size="11" fill="#374151">适合同机 8 卡</text>
+            <text x="668" y="220" font-size="11" fill="#374151">（30B～100B）</text>
+
+            <!-- 底部注释 -->
+            <rect x="10" y="316" width="800" height="22" rx="6" fill="#fffbeb" stroke="#fbbf24" stroke-width="1.5"/>
+            <text x="410" y="331" text-anchor="middle" font-size="11" fill="#92400e" font-weight="600">注意：每张卡上的权重 W 宽度不同（1/4 列），但输入 X 完整广播到每卡；最终 all-reduce 把 4 段输出拼合成完整 Y。</text>
+          </svg>
+          <div class="diagram-caption">图 5-2：张量并行 TP（4 卡）。Linear 层权重按列分到 4 卡，每卡各自计算 1/4 输出，最后 all-reduce 合并为完整输出 Y。</div>
+        </div>
+
+        <h3 id="pp">5.3 流水线并行（PP）</h3>
+
+        <p>把<strong>不同 Transformer 层</strong>放到不同 GPU 上，前向像工厂流水线一样推进。</p>
+
+        <!-- PP 流水线示意 -->
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 720 180" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:720px;">
+            <defs>
+              <marker id="arrPP" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#0369a1"/>
+              </marker>
+            </defs>
+            <text x="10" y="18" font-size="12" font-weight="700" fill="#0369a1">流水线并行 PP：32 层模型 → 4 卡各放 8 层</text>
+
+            <!-- 4 个 stage -->
+            <rect x="10" y="28" width="140" height="56" rx="8" fill="#dbeafe" stroke="#93c5fd" stroke-width="1.5"/>
+            <text x="80" y="50" text-anchor="middle" font-size="12" fill="#1e40af" font-weight="600">GPU 0</text>
+            <text x="80" y="66" text-anchor="middle" font-size="11" fill="#1e40af">Layer 1~8</text>
+            <text x="80" y="80" text-anchor="middle" font-size="11" fill="#3b82f6">Stage 0</text>
+
+            <line x1="152" y1="56" x2="178" y2="56" stroke="#0369a1" stroke-width="2" marker-end="url(#arrPP)"/>
+            <text x="165" y="48" text-anchor="middle" font-size="10" fill="#0369a1">激活</text>
+
+            <rect x="180" y="28" width="140" height="56" rx="8" fill="#dbeafe" stroke="#93c5fd" stroke-width="1.5"/>
+            <text x="250" y="50" text-anchor="middle" font-size="12" fill="#1e40af" font-weight="600">GPU 1</text>
+            <text x="250" y="66" text-anchor="middle" font-size="11" fill="#1e40af">Layer 9~16</text>
+            <text x="250" y="80" text-anchor="middle" font-size="11" fill="#3b82f6">Stage 1</text>
+
+            <line x1="322" y1="56" x2="348" y2="56" stroke="#0369a1" stroke-width="2" marker-end="url(#arrPP)"/>
+
+            <rect x="350" y="28" width="140" height="56" rx="8" fill="#dbeafe" stroke="#93c5fd" stroke-width="1.5"/>
+            <text x="420" y="50" text-anchor="middle" font-size="12" fill="#1e40af" font-weight="600">GPU 2</text>
+            <text x="420" y="66" text-anchor="middle" font-size="11" fill="#1e40af">Layer 17~24</text>
+            <text x="420" y="80" text-anchor="middle" font-size="11" fill="#3b82f6">Stage 2</text>
+
+            <line x1="492" y1="56" x2="518" y2="56" stroke="#0369a1" stroke-width="2" marker-end="url(#arrPP)"/>
+
+            <rect x="520" y="28" width="140" height="56" rx="8" fill="#dbeafe" stroke="#93c5fd" stroke-width="1.5"/>
+            <text x="590" y="50" text-anchor="middle" font-size="12" fill="#1e40af" font-weight="600">GPU 3</text>
+            <text x="590" y="66" text-anchor="middle" font-size="11" fill="#1e40af">Layer 25~32</text>
+            <text x="590" y="80" text-anchor="middle" font-size="11" fill="#3b82f6">Stage 3</text>
+
+            <!-- Micro-batch 说明 -->
+            <text x="10" y="108" font-size="12" fill="#374151" font-weight="700">关键概念：Micro-batch（1F1B 调度）</text>
+            <rect x="10" y="116" width="700" height="52" rx="8" fill="#fffbeb" stroke="#fcd34d" stroke-width="1.5"/>
+            <text x="20" y="132" font-size="11" fill="#92400e">PP 最大问题是「流水线 Bubble」：当 Stage 0 算 batch N+1 时，Stage 3 还在等。</text>
+            <text x="20" y="148" font-size="11" fill="#92400e">解决方案：把大 batch 拆成多个 micro-batch，1F1B 调度（先前向再反向，交替推进），</text>
+            <text x="20" y="163" font-size="11" fill="#92400e">把 bubble 比例从 (N-1)/N 压低到 (pp_stages-1)/(pp_stages × micro_batches) ≈ 5~10%。</text>
+          </svg>
+          <div class="diagram-caption">图 5-3：流水线并行 PP。32 层模型按层分到 4 卡；相邻 Stage 之间通过激活张量传递。</div>
+        </div>
+
+        <h3 id="3d-combine">5.4 三维组合：DP × TP × PP</h3>
+
+        <!-- 3D 并行全景图 -->
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 760 280" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:760px;">
+            <text x="10" y="18" font-size="13" font-weight="700" fill="#111827">3D 并行示意（TP=2, PP=2, DP=2，总 8 卡）</text>
+
+            <!-- 维度说明 -->
+            <text x="10" y="36" font-size="11" fill="#1e40af" font-weight="600">◀── DP（数据并行）──▶：不同 batch，梯度 all-reduce</text>
+            <text x="10" y="52" font-size="11" fill="#7c3aed" font-weight="600">◀── TP（张量并行）──▶：同层矩阵切列，节点内 NVLink</text>
+            <text x="10" y="68" font-size="11" fill="#0891b2" font-weight="600">◀── PP（流水线并行）──▶：不同层放不同卡</text>
+
+            <!-- 8 块 GPU 3D 布局 -->
+            <!-- Row 1 (DP group 0) -->
+            <rect x="30" y="82" width="100" height="60" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+            <text x="80" y="106" text-anchor="middle" font-size="11" fill="#1e40af" font-weight="600">GPU 0</text>
+            <text x="80" y="122" text-anchor="middle" font-size="10" fill="#1e40af">DP0,TP0,PP0</text>
+            <text x="80" y="136" text-anchor="middle" font-size="10" fill="#1e40af">L1~8 / 左半W</text>
+
+            <rect x="160" y="82" width="100" height="60" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="2"/>
+            <text x="210" y="106" text-anchor="middle" font-size="11" fill="#5b21b6" font-weight="600">GPU 1</text>
+            <text x="210" y="122" text-anchor="middle" font-size="10" fill="#5b21b6">DP0,TP1,PP0</text>
+            <text x="210" y="136" text-anchor="middle" font-size="10" fill="#5b21b6">L1~8 / 右半W</text>
+
+            <rect x="300" y="82" width="100" height="60" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+            <text x="350" y="106" text-anchor="middle" font-size="11" fill="#1e40af" font-weight="600">GPU 2</text>
+            <text x="350" y="122" text-anchor="middle" font-size="10" fill="#1e40af">DP0,TP0,PP1</text>
+            <text x="350" y="136" text-anchor="middle" font-size="10" fill="#1e40af">L9~16 / 左半W</text>
+
+            <rect x="430" y="82" width="100" height="60" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="2"/>
+            <text x="480" y="106" text-anchor="middle" font-size="11" fill="#5b21b6" font-weight="600">GPU 3</text>
+            <text x="480" y="122" text-anchor="middle" font-size="10" fill="#5b21b6">DP0,TP1,PP1</text>
+            <text x="480" y="136" text-anchor="middle" font-size="10" fill="#5b21b6">L9~16 / 右半W</text>
+
+            <!-- Row 2 (DP group 1) -->
+            <rect x="30" y="162" width="100" height="60" rx="8" fill="#bfdbfe" stroke="#2563eb" stroke-width="2" fill-opacity="0.6"/>
+            <text x="80" y="186" text-anchor="middle" font-size="11" fill="#1e40af" font-weight="600">GPU 4</text>
+            <text x="80" y="202" text-anchor="middle" font-size="10" fill="#1e40af">DP1,TP0,PP0</text>
+            <text x="80" y="216" text-anchor="middle" font-size="10" fill="#1e40af">L1~8 / 左半W</text>
+
+            <rect x="160" y="162" width="100" height="60" rx="8" fill="#c4b5fd" stroke="#7c3aed" stroke-width="2" fill-opacity="0.6"/>
+            <text x="210" y="186" text-anchor="middle" font-size="11" fill="#5b21b6" font-weight="600">GPU 5</text>
+            <text x="210" y="202" text-anchor="middle" font-size="10" fill="#5b21b6">DP1,TP1,PP0</text>
+            <text x="210" y="216" text-anchor="middle" font-size="10" fill="#5b21b6">L1~8 / 右半W</text>
+
+            <rect x="300" y="162" width="100" height="60" rx="8" fill="#bfdbfe" stroke="#2563eb" stroke-width="2" fill-opacity="0.6"/>
+            <text x="350" y="186" text-anchor="middle" font-size="11" fill="#1e40af" font-weight="600">GPU 6</text>
+            <text x="350" y="202" text-anchor="middle" font-size="10" fill="#1e40af">DP1,TP0,PP1</text>
+            <text x="350" y="216" text-anchor="middle" font-size="10" fill="#1e40af">L9~16 / 左半W</text>
+
+            <rect x="430" y="162" width="100" height="60" rx="8" fill="#c4b5fd" stroke="#7c3aed" stroke-width="2" fill-opacity="0.6"/>
+            <text x="480" y="186" text-anchor="middle" font-size="11" fill="#5b21b6" font-weight="600">GPU 7</text>
+            <text x="480" y="202" text-anchor="middle" font-size="10" fill="#5b21b6">DP1,TP1,PP1</text>
+            <text x="480" y="216" text-anchor="middle" font-size="10" fill="#5b21b6">L9~16 / 右半W</text>
+
+            <!-- 维度标注线 -->
+            <line x1="548" y1="82" x2="548" y2="225" stroke="#0891b2" stroke-width="1.5" stroke-dasharray="4,3"/>
+            <text x="556" y="150" font-size="11" fill="#0891b2" font-weight="600">PP</text>
+            <text x="556" y="163" font-size="11" fill="#0891b2">Stage</text>
+            <text x="556" y="176" font-size="11" fill="#0891b2">边界</text>
+
+            <line x1="30" y1="155" x2="535" y2="155" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="4,3"/>
+            <text x="560" y="155" font-size="11" fill="#2563eb" font-weight="600">DP</text>
+            <text x="560" y="168" font-size="11" fill="#2563eb">组边界</text>
+
+            <!-- BLOOM 实例 -->
+            <rect x="30" y="240" width="700" height="32" rx="8" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
+            <text x="380" y="255" text-anchor="middle" font-size="12" fill="#065f46" font-weight="600">BLOOM-176B 实例：384 卡 A100，TP=4 + PP=12 + DP=8（4×12×8=384）</text>
+            <text x="380" y="268" text-anchor="middle" font-size="11" fill="#166534">TP 在节点内（NVLink 高速），PP 跨节点（IB），DP 最外层做 ZeRO-1</text>
+          </svg>
+          <div class="diagram-caption">图 5-4：3D 并行三维分解（TP=2, PP=2, DP=2, 共 8 卡示例）。TP 在节点内靠 NVLink；PP 跨节点靠 InfiniBand；DP 最外层叠 ZeRO 降显存。</div>
+        </div>
+
+        <div class="callout-purple">
+          <strong>选型直觉：</strong>
+          <ul style="margin:8px 0 0;">
+            <li>模型 &lt;10B：纯 DP + ZeRO-2 就够</li>
+            <li>10B~30B：DP + ZeRO-3（+可选 TP=2 节点内）</li>
+            <li>30B~100B：TP=8（节点内）+ DP（节点间）</li>
+            <li>100B+：TP + PP + DP 三者同时，DeepSpeed + Megatron 联合方案</li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：BLOOM-176B 训练配置</div>
+          <ul style="margin:0;">
+            <li>总 GPU：384 张 A100-80G（48 节点 × 8 卡）</li>
+            <li>TP=4：节点内 8 卡中 4 卡用于矩阵切分（NVLink 高速通信）</li>
+            <li>PP=12：48 节点 / 4 = 12 流水线 stage，每个 stage 处理 ~7 层</li>
+            <li>DP=8：剩余的维度做数据并行 + ZeRO-1</li>
+            <li>4 × 12 × 8 = 384 ✓，总 batch = 2048 × micro-batch</li>
+          </ul>
+        </div>
+      </section>
+
+
+      <!-- ══ §6 混合精度 ══ -->
+      <section class="section" id="mixed-precision">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">🎯</div>
+          §6 混合精度训练（FP16 / BF16）
+        </div>
+
+        <div class="big-concept">
+          <div class="big-concept-title">核心思想：用半精度算，用全精度存</div>
+          <p style="margin:0;font-size:14px;">训练时前向/反向传播用 16 位浮点（速度快、显存省），但优化器更新参数时用 32 位浮点（精度高、不丢信息）。两种精度各取所长，合称「混合精度」。</p>
+        </div>
+
+        <h3>6.1 浮点数格式基础：指数 vs 尾数</h3>
+        <p>要理解 FP16 和 BF16 的区别，必须先搞清楚浮点数的两个核心字段：</p>
+        <div class="two-col">
+          <div class="mini-card" style="border-left:4px solid #f59e0b;">
+            <h4 style="color:#92400e;">📐 指数（Exponent）—— 决定「范围」</h4>
+            <p style="font-size:13px;">控制数字能表示多大或多小。指数位越多，能覆盖的数值范围越宽。<br>
+            类比：科学计数法里的 10<sup>N</sup>，指数位就是 N 能取多大的范围。</p>
+            <p style="font-size:13px;color:#dc2626;"><strong>范围不足 → 溢出（Overflow / Underflow）</strong>，数字变成 ±inf 或 0，训练直接崩。</p>
+          </div>
+          <div class="mini-card" style="border-left:4px solid #16a34a;">
+            <h4 style="color:#166534;">🔬 尾数（Mantissa）—— 决定「精度」</h4>
+            <p style="font-size:13px;">控制数字能精确到多少位小数。尾数位越多，能区分的相邻数值越细。<br>
+            类比：科学计数法里 1.xxxxx 中小数点后的位数。</p>
+            <p style="font-size:13px;color:#666;"><strong>精度不足 → 舍入误差</strong>，计算结果有偏差，但只要不是系统性的就通常可以接受。</p>
+          </div>
+        </div>
+
+        <h3>6.2 三种格式的位布局对比</h3>
+
+        <!-- 位布局对比图：FP32 / FP16 / BF16 -->
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 800 230" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:800px;">
+            <text x="10" y="18" font-size="13" font-weight="700" fill="#111827">FP32 / FP16 / BF16 位布局对比（总位数不同，但 BF16 和 FP16 均为 16 bit）</text>
+
+            <!-- 图例 -->
+            <rect x="580" y="6" width="14" height="12" rx="3" fill="#fee2e2" stroke="#fca5a5"/>
+            <text x="598" y="17" font-size="10" fill="#374151">符号 S (1位)</text>
+            <rect x="580" y="22" width="14" height="12" rx="3" fill="#fef3c7" stroke="#fbbf24"/>
+            <text x="598" y="33" font-size="10" fill="#374151">指数 E</text>
+            <rect x="580" y="38" width="14" height="12" rx="3" fill="#d1fae5" stroke="#6ee7b7"/>
+            <text x="598" y="49" font-size="10" fill="#374151">尾数 M</text>
+
+            <!-- ── FP32 ── -->
+            <text x="10" y="50" font-size="12" fill="#374151" font-weight="700">FP32</text>
+            <text x="10" y="62" font-size="10" fill="#667085">（32 位）</text>
+            <!-- S:1 -->
+            <rect x="80" y="42" width="16" height="26" rx="3" fill="#fee2e2" stroke="#fca5a5"/>
+            <text x="88" y="59" text-anchor="middle" font-size="9" fill="#991b1b" font-weight="700">S</text>
+            <!-- E:8 = 8×16=128px -->
+            <rect x="98" y="42" width="128" height="26" rx="3" fill="#fef3c7" stroke="#fbbf24"/>
+            <text x="162" y="59" text-anchor="middle" font-size="10" fill="#92400e" font-weight="700">指数 8 位  →  范围 ~±3.4×10³⁸</text>
+            <!-- M:23 = 23×16=368px 太宽，压缩比例 = 560/32 ≈ 17.5px/bit -->
+            <!-- S:1×17.5=17, E:8×17.5=140, M:23×17.5=402 总=560 -->
+            <rect x="228" y="42" width="352" height="26" rx="3" fill="#d1fae5" stroke="#6ee7b7"/>
+            <text x="404" y="59" text-anchor="middle" font-size="10" fill="#065f46" font-weight="700">尾数 23 位  →  十进制约 7 位有效数字</text>
+
+            <!-- ── FP16 ── （16位，按比例缩放：每位 560/32=17.5px，总 16位=280px） -->
+            <text x="10" y="102" font-size="12" fill="#1e40af" font-weight="700">FP16</text>
+            <text x="10" y="114" font-size="10" fill="#667085">（16 位）</text>
+            <!-- S:1×17.5 -->
+            <rect x="80" y="92" width="18" height="26" rx="3" fill="#fee2e2" stroke="#fca5a5"/>
+            <text x="89" y="109" text-anchor="middle" font-size="9" fill="#991b1b" font-weight="700">S</text>
+            <!-- E:5×17.5=87.5 -->
+            <rect x="100" y="92" width="88" height="26" rx="3" fill="#fef3c7" stroke="#fbbf24"/>
+            <text x="144" y="105" text-anchor="middle" font-size="10" fill="#92400e" font-weight="700">指数 5 位</text>
+            <text x="144" y="116" text-anchor="middle" font-size="9" fill="#dc2626">范围 ≈ ±65504 ⚠️</text>
+            <!-- M:10×17.5=175 -->
+            <rect x="190" y="92" width="175" height="26" rx="3" fill="#d1fae5" stroke="#6ee7b7"/>
+            <text x="277" y="105" text-anchor="middle" font-size="10" fill="#065f46" font-weight="700">尾数 10 位</text>
+            <text x="277" y="116" text-anchor="middle" font-size="9" fill="#065f46">十进制约 3 位有效数字</text>
+            <!-- 对比说明：范围缩小了多少 -->
+            <rect x="375" y="92" width="205" height="26" rx="6" fill="#fef2f2" stroke="#fecaca"/>
+            <text x="477" y="105" text-anchor="middle" font-size="10" fill="#dc2626" font-weight="700">⚠️ 指数范围比 FP32 小 10^30 倍！</text>
+            <text x="477" y="116" text-anchor="middle" font-size="9" fill="#dc2626">梯度稍大就溢出，需 Loss Scaling</text>
+
+            <!-- ── BF16 ── -->
+            <text x="10" y="152" font-size="12" fill="#7c3aed" font-weight="700">BF16</text>
+            <text x="10" y="164" font-size="10" fill="#667085">（16 位）</text>
+            <!-- S:1×17.5 -->
+            <rect x="80" y="142" width="18" height="26" rx="3" fill="#fee2e2" stroke="#fca5a5"/>
+            <text x="89" y="159" text-anchor="middle" font-size="9" fill="#991b1b" font-weight="700">S</text>
+            <!-- E:8×17.5=140 —— 与FP32相同 -->
+            <rect x="100" y="142" width="140" height="26" rx="3" fill="#fef3c7" stroke="#fbbf24" stroke-width="2"/>
+            <text x="170" y="155" text-anchor="middle" font-size="10" fill="#92400e" font-weight="700">指数 8 位（= FP32！）</text>
+            <text x="170" y="166" text-anchor="middle" font-size="9" fill="#166534">范围 ~±3.4×10³⁸ ✅</text>
+            <!-- M:7×17.5=122.5 -->
+            <rect x="242" y="142" width="123" height="26" rx="3" fill="#e0e7ff" stroke="#a5b4fc"/>
+            <text x="303" y="155" text-anchor="middle" font-size="10" fill="#3730a3" font-weight="700">尾数 7 位</text>
+            <text x="303" y="166" text-anchor="middle" font-size="9" fill="#5b21b6">精度略低于FP16</text>
+            <!-- 对比说明 -->
+            <rect x="375" y="142" width="205" height="26" rx="6" fill="#f0fdf4" stroke="#86efac"/>
+            <text x="477" y="155" text-anchor="middle" font-size="10" fill="#065f46" font-weight="700">✅ 范围与 FP32 相同，不溢出</text>
+            <text x="477" y="166" text-anchor="middle" font-size="9" fill="#065f46">无需 Loss Scaling，训练更稳定</text>
+
+            <!-- 底部总结 -->
+            <rect x="80" y="186" width="500" height="36" rx="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+            <text x="330" y="200" text-anchor="middle" font-size="11" fill="#1e40af" font-weight="700">BF16 = 把 FP32 的前 16 位截断（保留指数 8 位，尾数只剩 7 位）</text>
+            <text x="330" y="215" text-anchor="middle" font-size="11" fill="#1e40af">FP16 = 重新设计，指数缩到 5 位换来更多尾数位（10 位）</text>
+          </svg>
+          <div class="diagram-caption">图 6-1：FP32 / FP16 / BF16 位布局对比。BF16 与 FP32 指数位数相同，只是尾数更短；FP16 则指数很小但尾数更多。</div>
+        </div>
+
+        <h3>6.3 FP16 vs BF16：核心差距在哪里？</h3>
+
+        <div class="callout-amber">
+          <strong>一句话核心：</strong>FP16 的指数只有 5 位，能表示的最大数约是 65504，而神经网络训练时梯度或激活很容易超过这个范围，导致溢出（NaN/Inf）。BF16 保留了和 FP32 相同的 8 位指数，范围完全一致，不会溢出。
+        </div>
+
+        <p><strong>具体问题一：FP16 的溢出 / 下溢</strong></p>
+        <div class="example-box">
+          <div class="ex-title">💡 为什么 FP16 容易溢出？</div>
+          <ul style="margin:0;">
+            <li>FP16 能表示的最大正数 ≈ <strong>65504</strong>，最小正数 ≈ <strong>6×10⁻⁸</strong></li>
+            <li>FP32 能表示的最大正数 ≈ <strong>3.4×10³⁸</strong>，小好几十个数量级</li>
+            <li>训练大模型时，某些层的激活值可能 >65504（Overflow），变成 +inf</li>
+            <li>梯度经过多层反向后可能非常小（&lt;6×10⁻⁸），变成 0（Underflow），权重停止更新</li>
+            <li>这两种情况都会让训练直接崩掉，表现为 loss 变成 NaN</li>
+          </ul>
+        </div>
+
+        <p><strong>具体问题二：BF16 的精度代价</strong></p>
+        <div class="example-box">
+          <div class="ex-title">💡 BF16 精度低会有影响吗？</div>
+          <ul style="margin:0;">
+            <li>BF16 尾数只有 7 位，十进制约 2~3 位有效数字；FP16 尾数 10 位，约 3~4 位</li>
+            <li>FP32 尾数 23 位，约 7 位有效数字</li>
+            <li>在大模型训练中，<strong>单步计算的舍入误差影响很小</strong>，经过大量 step 后统计上会被平均掉</li>
+            <li>实践证明：用 BF16 训练的收敛曲线与 FP32 几乎一致（GPT-3、LLaMA 均如此）</li>
+            <li>而 FP16 溢出导致的 NaN 则是<strong>灾难性</strong>的，一旦出现训练就废了</li>
+          </ul>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>格式</th><th>总位数</th><th>指数位</th><th>尾数位</th><th>数值范围</th><th>十进制精度</th><th>主要问题</th><th>适用 GPU</th></tr></thead>
+            <tbody>
+              <tr><td><strong>FP32</strong></td><td>32</td><td>8</td><td>23</td><td>~±3.4×10³⁸</td><td>~7 位</td><td>—（基准）</td><td>所有 GPU</td></tr>
+              <tr><td><strong>FP16</strong></td><td>16</td><td>5</td><td>10</td><td>~±65504</td><td>~3-4 位</td><td>⚠️ 容易溢出，需 Loss Scaling</td><td>V100、RTX 3090/4090</td></tr>
+              <tr style="background:#f5f3ff;"><td><strong>BF16</strong></td><td>16</td><td>8</td><td>7</td><td>~±3.4×10³⁸</td><td>~2-3 位</td><td>精度略低（可接受）</td><td>A100、H100、TPU</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>6.4 为什么需要「混合」精度？直接全用 FP16 不行吗？</h3>
+
+        <p>不行，原因是 <strong>Adam 优化器的更新步长极小</strong>：</p>
+        <div class="callout-red">
+          <p style="margin:0;">典型 LR = 1e-4，权重更新量 = LR × 梯度 ≈ <strong>1e-5 ~ 1e-7</strong>。<br>
+          FP16 在数值 ~1.0 附近，相邻两个可表示的数之间间隔约 <strong>1e-3</strong>（精度为 10⁻³ 量级）。<br>
+          1e-7 的更新量对 FP16 来说<strong>完全无法区分</strong>，直接被舍入为 0，权重永远不更新，等于训练失效。</p>
+        </div>
+
+        <p>所以必须在优化器里保留一份 FP32 主权重来做精确更新，这就是「混合」的含义：</p>
+
+        <!-- 混合精度流程图 -->
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 780 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:780px;">
+            <defs>
+              <marker id="arrMP" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#2563eb"/>
+              </marker>
+              <marker id="arrMP2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#dc2626"/>
+              </marker>
+            </defs>
+
+            <text x="10" y="18" font-size="12" font-weight="700" fill="#111827">混合精度训练一步的流程</text>
+
+            <!-- FP32 master weights -->
+            <rect x="10" y="30" width="120" height="60" rx="8" fill="#fee2e2" stroke="#fca5a5" stroke-width="1.5"/>
+            <text x="70" y="50" text-anchor="middle" font-size="12" fill="#991b1b" font-weight="600">FP32 主权重</text>
+            <text x="70" y="64" text-anchor="middle" font-size="11" fill="#991b1b">存在优化器里</text>
+            <text x="70" y="78" text-anchor="middle" font-size="11" fill="#991b1b">精确更新用</text>
+
+            <!-- cast down -->
+            <line x1="132" y1="60" x2="165" y2="60" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrMP)"/>
+            <text x="148" y="52" text-anchor="middle" font-size="10" fill="#2563eb">cast↓</text>
+            <text x="148" y="64" text-anchor="middle" font-size="10" fill="#2563eb">FP16/BF16</text>
+
+            <!-- FP16 副本 -->
+            <rect x="168" y="30" width="110" height="60" rx="8" fill="#dbeafe" stroke="#93c5fd" stroke-width="1.5"/>
+            <text x="223" y="50" text-anchor="middle" font-size="12" fill="#1e40af" font-weight="600">半精度权重</text>
+            <text x="223" y="64" text-anchor="middle" font-size="11" fill="#1e40af">FP16 或 BF16</text>
+            <text x="223" y="78" text-anchor="middle" font-size="11" fill="#1e40af">前向/反向用</text>
+
+            <!-- 前向 -->
+            <line x1="280" y1="60" x2="313" y2="60" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrMP)"/>
+
+            <rect x="316" y="30" width="90" height="60" rx="8" fill="#d1fae5" stroke="#6ee7b7" stroke-width="1.5"/>
+            <text x="361" y="50" text-anchor="middle" font-size="12" fill="#065f46" font-weight="600">前向传播</text>
+            <text x="361" y="64" text-anchor="middle" font-size="11" fill="#065f46">半精度算</text>
+            <text x="361" y="78" text-anchor="middle" font-size="11" fill="#065f46">Tensor Core ⚡</text>
+
+            <!-- 反向 -->
+            <line x1="408" y1="60" x2="441" y2="60" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrMP)"/>
+
+            <rect x="444" y="30" width="90" height="60" rx="8" fill="#d1fae5" stroke="#6ee7b7" stroke-width="1.5"/>
+            <text x="489" y="50" text-anchor="middle" font-size="12" fill="#065f46" font-weight="600">反向传播</text>
+            <text x="489" y="64" text-anchor="middle" font-size="11" fill="#065f46">半精度梯度</text>
+            <text x="489" y="78" text-anchor="middle" font-size="11" fill="#065f46">FP16需×scale</text>
+
+            <!-- 梯度 cast up -->
+            <line x1="536" y1="60" x2="569" y2="60" stroke="#dc2626" stroke-width="1.5" marker-end="url(#arrMP2)"/>
+            <text x="552" y="52" text-anchor="middle" font-size="10" fill="#dc2626">cast↑</text>
+            <text x="552" y="64" text-anchor="middle" font-size="10" fill="#dc2626">FP32</text>
+
+            <!-- FP32 梯度 + Adam -->
+            <rect x="572" y="30" width="120" height="60" rx="8" fill="#fee2e2" stroke="#fca5a5" stroke-width="1.5"/>
+            <text x="632" y="50" text-anchor="middle" font-size="12" fill="#991b1b" font-weight="600">FP32 Adam step</text>
+            <text x="632" y="64" text-anchor="middle" font-size="11" fill="#991b1b">精确更新主权重</text>
+            <text x="632" y="78" text-anchor="middle" font-size="11" fill="#991b1b">m/v 也是 FP32</text>
+
+            <!-- 回到主权重循环 -->
+            <path d="M 632 92 Q 632 135 70 135 Q 70 92 70 92" stroke="#94a3b8" stroke-width="1.5" fill="none" stroke-dasharray="4,3" marker-end="url(#arrMP)"/>
+            <text x="350" y="152" text-anchor="middle" font-size="11" fill="#667085">更新后 FP32 主权重 → 下一步再 cast 为半精度</text>
+
+            <!-- Loss Scaling 说明 -->
+            <rect x="10" y="166" width="760" height="26" rx="8" fill="#fffbeb" stroke="#fbbf24" stroke-width="1.5"/>
+            <text x="390" y="183" text-anchor="middle" font-size="11" fill="#92400e"><tspan font-weight="700">Loss Scaling（仅 FP16 需要，BF16 不需要）：</tspan> 把 loss × 大倍数（如 65536）再反向，避免梯度下溢为 0；Adam step 前再除回来。</text>
+          </svg>
+          <div class="diagram-caption">图 6-2：混合精度训练流程。半精度负责速度，FP32 主权重负责精确更新，两者各司其职。</div>
+        </div>
+
+        <h3>6.5 Loss Scaling：专门解决 FP16 梯度下溢的工程手段</h3>
+
+        <div class="callout-purple">
+          <strong>问题：</strong>FP16 能表示的最小正数约 6×10⁻⁸，而反向传播中深层梯度经常 &lt;10⁻⁸，直接变成 0（下溢），这层的权重就永远不更新了。<br><br>
+          <strong>解法：</strong>在计算 loss 后、反向传播前，把 loss 乘以一个大倍数 S（如 65536），这样梯度也等比放大 S 倍，不会下溢。Adam step 之前再除以 S 还原回正确值。<br><br>
+          <strong>动态 Loss Scaling：</strong>DeepSpeed 会自动调整 S。如果本 step 梯度出现 inf/NaN，S 减半并跳过本 step；连续若干 step 没问题，S 再翻倍。完全自动，不用手动设置。
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 BF16 为什么不需要 Loss Scaling？</div>
+          <p style="margin:0;">BF16 指数位与 FP32 相同，能覆盖同样的数值范围（~±3.4×10³⁸）。无论梯度多小，都不会下溢到 0。BF16 的问题是精度低（尾数只有 7 位），但这种<strong>精度损失是均匀的、统计中性的</strong>，不会导致系统性的梯度消失，大模型实践中完全可以接受。</p>
+        </div>
+
+        <h3>6.6 实际选型建议</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>场景</th><th>推荐精度</th><th>原因</th></tr></thead>
+            <tbody>
+              <tr><td>A100 / H100 训练</td><td><strong>BF16</strong></td><td>硬件原生支持，范围=FP32，无需 Loss Scaling，稳定</td></tr>
+              <tr><td>V100 / RTX 3090 / 4090</td><td><strong>FP16</strong></td><td>这些 GPU 不支持 BF16，只能用 FP16 + 动态 Loss Scaling</td></tr>
+              <tr><td>推理（Inference）</td><td><strong>FP16 或 INT8/INT4</strong></td><td>推理不用更新权重，不怕精度损失，越省越快</td></tr>
+              <tr><td>调试 / 精度敏感任务</td><td><strong>FP32</strong></td><td>确保数值正确性，速度慢但精度有保证</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <pre>// ds_config.json 精度配置（A100/H100 用 BF16）
+"bf16": { "enabled": true  },
+"fp16": { "enabled": false }
+
+// 旧 GPU（V100/3090）用 FP16 + 动态 Loss Scaling
+"fp16": {
+  "enabled": true,
+  "loss_scale": 0,              // 0 = 动态自适应
+  "initial_scale_power": 16,   // 初始 S = 2^16 = 65536
+  "loss_scale_window": 1000    // 连续 1000 step 无 overflow 则 S 翻倍
+}</pre>
+
+        <div class="callout-green">
+          <strong>总结一句话：</strong>FP16 和 BF16 都是 16 位，但设计取舍相反。FP16 更精确但容易溢出（需要 Loss Scaling 兜底）；BF16 范围更宽几乎不溢出但精度略低（实践中可忽略）。有 A100/H100 就用 BF16，没有就用 FP16，大模型训练标准已逐渐迁移到 BF16。
+        </div>
+      </section>
+
+      <!-- ══ §7 Gradient Checkpointing ══ -->
+      <section class="section" id="gc">
+        <div class="section-title">
+          <div class="icon" style="background:#fef3c7;">🔁</div>
+          §7 Gradient Checkpointing：用算力换显存
+        </div>
+
+        <p>ZeRO 切的是 P/G/O，但<strong>激活（activations）</strong>没碰。激活是前向中所有中间张量，反向时要用，默认全量保留。Gradient Checkpointing 的思路很暴力：</p>
+
+        <!-- 对比图 -->
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 760 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:760px;">
+            <defs>
+              <marker id="arrGC" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#2563eb"/>
+              </marker>
+            </defs>
+            <text x="10" y="18" font-size="12" font-weight="700" fill="#111827">有 vs 无 Gradient Checkpointing（6 层 Transformer，ckpt 每 2 层）</text>
+
+            <!-- ── 上方：不开 GC ── -->
+            <text x="10" y="38" font-size="11" fill="#dc2626" font-weight="600">❌ 不开 GC（标准训练）：所有激活保留到反向</text>
+
+            <!-- 6 个 layer，每个都存激活 -->
+            <rect x="10" y="46" width="68" height="36" rx="6" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="44" y="60" text-anchor="middle" font-size="10" fill="#1e40af">L1 激活 ✓</text>
+            <rect x="84" y="46" width="68" height="36" rx="6" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="118" y="60" text-anchor="middle" font-size="10" fill="#1e40af">L2 激活 ✓</text>
+            <rect x="158" y="46" width="68" height="36" rx="6" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="192" y="60" text-anchor="middle" font-size="10" fill="#1e40af">L3 激活 ✓</text>
+            <rect x="232" y="46" width="68" height="36" rx="6" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="266" y="60" text-anchor="middle" font-size="10" fill="#1e40af">L4 激活 ✓</text>
+            <rect x="306" y="46" width="68" height="36" rx="6" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="340" y="60" text-anchor="middle" font-size="10" fill="#1e40af">L5 激活 ✓</text>
+            <rect x="380" y="46" width="68" height="36" rx="6" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="414" y="60" text-anchor="middle" font-size="10" fill="#1e40af">L6 激活 ✓</text>
+
+            <rect x="464" y="46" width="140" height="36" rx="6" fill="#fef2f2" stroke="#fecaca"/>
+            <text x="534" y="60" text-anchor="middle" font-size="11" fill="#dc2626" font-weight="600">显存：6 份激活</text>
+            <text x="534" y="74" text-anchor="middle" font-size="10" fill="#dc2626">全部同时占用</text>
+
+            <!-- ── 下方：开 GC ── -->
+            <text x="10" y="108" font-size="11" fill="#16a34a" font-weight="600">✅ 开 GC（每 2 层设一个 checkpoint）：只存边界，反向时重算</text>
+
+            <!-- 只有 L0/L2/L4/L6 设 checkpoint（绿色），L1/L3/L5 丢掉（灰色） -->
+            <rect x="10" y="116" width="68" height="36" rx="6" fill="#dcfce7" stroke="#86efac" stroke-width="2"/>
+            <text x="44" y="130" text-anchor="middle" font-size="10" fill="#166534" font-weight="600">L1 ckpt ✓</text>
+            <text x="44" y="144" text-anchor="middle" font-size="9" fill="#166534">保留</text>
+
+            <rect x="84" y="116" width="68" height="36" rx="6" fill="#f1f5f9" stroke="#e2e8f0"/>
+            <text x="118" y="130" text-anchor="middle" font-size="10" fill="#94a3b8">L2 丢掉</text>
+            <text x="118" y="144" text-anchor="middle" font-size="9" fill="#94a3b8">反向重算</text>
+
+            <rect x="158" y="116" width="68" height="36" rx="6" fill="#dcfce7" stroke="#86efac" stroke-width="2"/>
+            <text x="192" y="130" text-anchor="middle" font-size="10" fill="#166534" font-weight="600">L3 ckpt ✓</text>
+            <text x="192" y="144" text-anchor="middle" font-size="9" fill="#166534">保留</text>
+
+            <rect x="232" y="116" width="68" height="36" rx="6" fill="#f1f5f9" stroke="#e2e8f0"/>
+            <text x="266" y="130" text-anchor="middle" font-size="10" fill="#94a3b8">L4 丢掉</text>
+            <text x="266" y="144" text-anchor="middle" font-size="9" fill="#94a3b8">反向重算</text>
+
+            <rect x="306" y="116" width="68" height="36" rx="6" fill="#dcfce7" stroke="#86efac" stroke-width="2"/>
+            <text x="340" y="130" text-anchor="middle" font-size="10" fill="#166534" font-weight="600">L5 ckpt ✓</text>
+            <text x="340" y="144" text-anchor="middle" font-size="9" fill="#166534">保留</text>
+
+            <rect x="380" y="116" width="68" height="36" rx="6" fill="#f1f5f9" stroke="#e2e8f0"/>
+            <text x="414" y="130" text-anchor="middle" font-size="10" fill="#94a3b8">L6 丢掉</text>
+            <text x="414" y="144" text-anchor="middle" font-size="9" fill="#94a3b8">反向重算</text>
+
+            <rect x="464" y="116" width="140" height="36" rx="6" fill="#d1fae5" stroke="#6ee7b7"/>
+            <text x="534" y="130" text-anchor="middle" font-size="11" fill="#065f46" font-weight="600">显存：3 份激活</text>
+            <text x="534" y="144" text-anchor="middle" font-size="10" fill="#065f46">省 50%，多算 33%</text>
+
+            <!-- 权衡总结 -->
+            <rect x="10" y="166" width="730" height="28" rx="8" fill="#fffbeb" stroke="#fcd34d" stroke-width="1.5"/>
+            <text x="375" y="179" text-anchor="middle" font-size="12" fill="#92400e" font-weight="600">权衡：激活显存减少 √(层数) 倍，代价是反向需要重算一遍前向（约 +33% 计算量）</text>
+            <text x="375" y="191" text-anchor="middle" font-size="11" fill="#92400e">长序列（&gt;4K）必开；短序列可不开；与 ZeRO 完全正交可同时使用</text>
+          </svg>
+          <div class="diagram-caption">图 7-1：Gradient Checkpointing 原理对比。只在每 N 层边界保存激活（checkpoint），丢掉中间层；反向时从 checkpoint 重新前向计算。</div>
+        </div>
+
+        <pre># HuggingFace Trainer / LLaMA-Factory 一行开启
+model.gradient_checkpointing_enable()
+# 或在 TrainingArguments 里
+gradient_checkpointing=True</pre>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：LLaMA-7B 不同 seq_len 下的激活显存对比</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>seq_len</th><th>batch=4</th><th>不开 GC</th><th>开 GC</th><th>速度代价</th></tr></thead>
+              <tbody>
+                <tr><td>2048</td><td>4</td><td>~8 GB</td><td>~2 GB</td><td>-25% throughput</td></tr>
+                <tr><td>4096</td><td>4</td><td>~24 GB</td><td>~6 GB</td><td>-30% throughput</td></tr>
+                <tr><td>8192</td><td>4</td><td>~80 GB（OOM）</td><td>~18 GB</td><td>-33% throughput</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ §8 实战配置 ══ -->
+      <section class="section" id="config">
+        <div class="section-title">
+          <div class="icon" style="background:#eff6ff;">📋</div>
+          §8 实战：ZeRO-3 + Offload 配置文件详解
+        </div>
+
+        <p>下面是一份<strong>通用 ZeRO-3 + offload optimizer 配置</strong>，适用于 LLaMA-7B/13B 等大模型，配合 HuggingFace Trainer / LLaMA-Factory 直接使用。</p>
+
+        <pre>{
+  // ── Batch 大小（写 "auto" 让 Trainer 自动填入）──
+  "train_batch_size": "auto",
+  "gradient_accumulation_steps": "auto",
+  "gradient_clipping": 1.0,         // 梯度裁剪，防止 NaN
+
+  // ── 精度（A100/H100 用 BF16，V100 用 FP16）──
+  "bf16": { "enabled": true  },
+  "fp16": { "enabled": false },
+
+  // ── ZeRO 核心配置 ──
+  "zero_optimization": {
+    "stage": 3,                     // ZeRO 档位：1/2/3
+    "overlap_comm": true,           // 通信与计算重叠，提速 10~20%
+    "contiguous_gradients": true,   // 梯度内存连续，减碎片
+    "reduce_bucket_size": 5e8,      // 每桶梯度 ~500MB，太大通信延迟增大
+
+    // ZeRO-3 参数分片细节
+    "stage3_prefetch_bucket_size": 5e8,      // 提前 gather 下一层参数（流水线）
+    "stage3_param_persistence_threshold": 1e6, // 小于 1M 参数的层不分片（节省通信）
+    "stage3_max_live_parameters": 1e9,
+    "stage3_max_reuse_distance": 1e9,
+    "stage3_gather_16bit_weights_on_model_save": true, // ⚠️ 必须开！否则 ckpt 只存 1/N
+
+    // ── CPU Offload ──
+    "offload_optimizer": {
+      "device": "cpu",          // 优化器状态（FP32副本+m+v）移到 CPU
+      "pin_memory": true        // pin_memory 提升 PCIe 传输速度
+    }
+    // "offload_param": { "device": "cpu", "pin_memory": true }
+    // ↑ 仅在极端 OOM 时才加，会大幅降低训练速度
+  },
+
+  // ── 优化器（"auto" = 让 Trainer 接管）──
+  "optimizer": {
+    "type": "AdamW",
+    "params": { "lr": "auto", "betas": "auto", "eps": "auto", "weight_decay": "auto" }
+  },
+
+  // ── 学习率调度 ──
+  "scheduler": {
+    "type": "WarmupDecayLR",
+    "params": {
+      "total_num_steps": "auto", "warmup_num_steps": "auto",
+      "warmup_min_lr": "auto",   "warmup_max_lr": "auto"
+    }
+  }
+}</pre>
+
+        <h3>启动命令</h3>
+        <pre># 通过 HuggingFace Trainer
+deepspeed train.py \
+  --deepspeed ds_config.json \
+  --model_name_or_path meta-llama/Llama-3-8B \
+  --per_device_train_batch_size 2 \
+  --learning_rate 2e-5 ...
+
+# 通过 LLaMA-Factory（直接用预设模板）
+llamafactory-cli train \
+  examples/train_full/llama3_full_sft_ds3.yaml
+
+# torchrun 多节点
+torchrun --nproc_per_node=8 --nnodes=4 \
+  --master_addr=... --master_port=29500 \
+  train.py --deepspeed ds_config.json ...</pre>
+      </section>
+
+
+      <!-- ══ §9 选型 + 常见坑 ══ -->
+      <section class="section" id="picks">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">✅</div>
+          §9 选型速查 &amp; 常见坑
+        </div>
+
+        <h3>场景 × 配置速查表</h3>
+        <!-- 决策树 SVG -->
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:760px;">
+            <defs>
+              <marker id="arrD" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#2563eb"/>
+              </marker>
+            </defs>
+            <text x="10" y="16" font-size="12" font-weight="700" fill="#111827">DeepSpeed 配置决策树</text>
+
+            <!-- 起点 -->
+            <rect x="290" y="24" width="180" height="36" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+            <text x="380" y="46" text-anchor="middle" font-size="12" fill="#1e40af" font-weight="600">开始训练</text>
+
+            <!-- 问题 1 -->
+            <line x1="380" y1="60" x2="380" y2="80" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrD)"/>
+            <rect x="250" y="80" width="260" height="36" rx="10" fill="#fffbeb" stroke="#fbbf24" stroke-width="2"/>
+            <text x="380" y="98" text-anchor="middle" font-size="12" fill="#92400e" font-weight="600">Q1: 模型参数量是多少？</text>
+
+            <!-- &lt; 3B 分支 -->
+            <line x1="250" y1="98" x2="110" y2="98" stroke="#2563eb" stroke-width="1.5"/>
+            <line x1="110" y1="98" x2="110" y2="150" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrD)"/>
+            <text x="180" y="92" text-anchor="middle" font-size="11" fill="#667085">&lt;3B</text>
+            <rect x="30" y="150" width="160" height="40" rx="10" fill="#d1fae5" stroke="#6ee7b7" stroke-width="1.5"/>
+            <text x="110" y="166" text-anchor="middle" font-size="11" fill="#065f46" font-weight="700">ZeRO-2</text>
+            <text x="110" y="181" text-anchor="middle" font-size="10" fill="#065f46">BF16，不 Offload</text>
+
+            <!-- 3B~30B 分支 -->
+            <line x1="380" y1="116" x2="380" y2="150" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrD)"/>
+            <text x="388" y="136" font-size="11" fill="#667085">3B~30B</text>
+            <rect x="270" y="150" width="220" height="36" rx="10" fill="#fffbeb" stroke="#fcd34d" stroke-width="2"/>
+            <text x="380" y="166" text-anchor="middle" font-size="12" fill="#92400e" font-weight="600">Q2: 卡数 × 卡内存够用？</text>
+
+            <!-- 够用 -->
+            <line x1="270" y1="168" x2="180" y2="168" stroke="#2563eb" stroke-width="1.5"/>
+            <line x1="180" y1="168" x2="180" y2="210" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrD)"/>
+            <text x="225" y="162" text-anchor="middle" font-size="11" fill="#667085">够用</text>
+            <rect x="110" y="210" width="160" height="40" rx="10" fill="#d1fae5" stroke="#6ee7b7" stroke-width="1.5"/>
+            <text x="190" y="226" text-anchor="middle" font-size="11" fill="#065f46" font-weight="700">ZeRO-3</text>
+            <text x="190" y="241" text-anchor="middle" font-size="10" fill="#065f46">BF16，不 Offload</text>
+
+            <!-- OOM -->
+            <line x1="380" y1="186" x2="380" y2="210" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrD)"/>
+            <text x="388" y="201" font-size="11" fill="#667085">OOM</text>
+            <rect x="270" y="210" width="220" height="40" rx="10" fill="#fee2e2" stroke="#fca5a5" stroke-width="1.5"/>
+            <text x="380" y="226" text-anchor="middle" font-size="11" fill="#dc2626" font-weight="700">ZeRO-3 + offload_optimizer</text>
+            <text x="380" y="241" text-anchor="middle" font-size="10" fill="#dc2626">CPU Offload，速度下降 2~3×</text>
+
+            <!-- &gt;30B 分支 -->
+            <line x1="510" y1="98" x2="640" y2="98" stroke="#2563eb" stroke-width="1.5"/>
+            <line x1="640" y1="98" x2="640" y2="150" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrD)"/>
+            <text x="575" y="92" text-anchor="middle" font-size="11" fill="#667085">&gt;30B</text>
+            <rect x="540" y="150" width="200" height="40" rx="10" fill="#ede9fe" stroke="#c4b5fd" stroke-width="2"/>
+            <text x="640" y="166" text-anchor="middle" font-size="11" fill="#5b21b6" font-weight="700">3D 并行</text>
+            <text x="640" y="181" text-anchor="middle" font-size="10" fill="#5b21b6">TP + PP + ZeRO，Megatron-DS</text>
+
+            <!-- 极限 OOM 分支 -->
+            <line x1="380" y1="250" x2="380" y2="270" stroke="#dc2626" stroke-width="1.5" marker-end="url(#arrD)"/>
+            <text x="388" y="264" font-size="11" fill="#667085">还 OOM？</text>
+            <rect x="260" y="270" width="240" height="26" rx="8" fill="#fef2f2" stroke="#fecaca"/>
+            <text x="380" y="288" text-anchor="middle" font-size="11" fill="#dc2626" font-weight="600">+ offload_param 或 ZeRO-Infinity (NVMe)</text>
+          </svg>
+          <div class="diagram-caption">图 9-1：DeepSpeed 配置选型决策树。从模型大小开始，逐层往下找最合适的配置。</div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>场景</th><th>模型</th><th>显卡</th><th>推荐配置</th><th>备注</th></tr></thead>
+            <tbody>
+              <tr><td>消费级单卡 LoRA 微调</td><td>7B</td><td>RTX 4090 (24G)</td><td>ZeRO-2，BF16，不 Offload</td><td>LoRA 减少可训参数，显存友好</td></tr>
+              <tr><td>消费级单卡全参微调</td><td>7B</td><td>RTX 4090 (24G)</td><td>ZeRO-3 + offload_optimizer</td><td>速度慢 3×，但能跑通</td></tr>
+              <tr><td>单机 8 卡微调</td><td>13B/30B</td><td>8×A100-80G</td><td>ZeRO-3，BF16，不 Offload</td><td>8 卡 ZeRO-3：13B 只占 26GB/卡</td></tr>
+              <tr><td>单机 8 卡极限</td><td>70B Full SFT</td><td>8×A100-80G</td><td>ZeRO-3 + offload_optimizer + GC</td><td>70B×16/8=140GB，必须 Offload</td></tr>
+              <tr><td>多机预训练</td><td>100B+</td><td>32+ 卡</td><td>TP=8 + PP=N + DP×ZeRO-1</td><td>Megatron-DeepSpeed 联合方案</td></tr>
+              <tr><td>RLHF / GRPO</td><td>7B Actor+Ref+Reward</td><td>8×A100</td><td>ZeRO-3 + Hybrid Engine</td><td>DS-Chat 专门优化 RLHF 场景</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>7 个常见坑</h3>
+        <div class="callout-red">
+          <ul style="margin:0;line-height:2;">
+            <li><strong>⚠️ 坑 1：Save 只存了 1/N 参数</strong><br>ZeRO-3 下必须设 <code>"stage3_gather_16bit_weights_on_model_save": true</code>，否则 checkpoint 残缺不全，load 会 shape mismatch。</li>
+            <li><strong>⚠️ 坑 2：offload_param 让训练慢 10×</strong><br>CPU RAM offload 参数会让每层前向都要 PCIe 搬运，极慢。先只开 offload_optimizer，再视情况开 offload_param。</li>
+            <li><strong>⚠️ 坑 3：BF16 出 NaN</strong><br>检查 gradient_clipping（建议 1.0），以及 LR 是否太大（比如 lr=1e-3 对 7B 全参太高）。</li>
+            <li><strong>⚠️ 坑 4：多机速度惨不忍睹</strong><br>检查 NCCL 是否走 InfiniBand（<code>export NCCL_IB_DISABLE=0</code>），走 TCP Ethernet 会让 ZeRO-3 通信成为极限瓶颈。</li>
+            <li><strong>⚠️ 坑 5：Resume 换 GPU 数失败</strong><br>DS checkpoint 按 GPU 切片存储，恢复时 world_size 必须与保存时一致。换卡数须先用 <code>zero_to_fp32.py</code> 合并权重。</li>
+            <li><strong>⚠️ 坑 6："auto" 字段没生效</strong><br>"auto" 只有配合 HuggingFace Trainer 才会自动注入。裸用 DeepSpeed Engine (<code>deepspeed.initialize</code>) 时要写实际数值。</li>
+            <li><strong>⚠️ 坑 7：ZeRO-3 + TP 同时用</strong><br>ZeRO-3 和 Tensor Parallel 不能直接叠加（ZeRO-3 切 world，TP 也切 world，会冲突）。正确做法是用 Megatron-DeepSpeed 的 ZeRO-1 + TP 组合。</li>
+          </ul>
+        </div>
+
+        <h3>一句话总结</h3>
+        <div class="big-concept">
+          <p style="margin:0;font-size:15px;">DeepSpeed 的本质是<strong>「把训练显存切到极致」</strong>。从 ZeRO-1/2/3 三档逐级激进，再到 Offload 把状态甩到 CPU/NVMe，最后到 3D 并行把整个集群的显存打通——这一整条路径，都是同一个动机：<strong>让你能在「同样的硬件预算」下训出更大的模型</strong>。理解了「训练显存被谁吃了」（16 字节/参数法则），再回头看这些配置，就只是「在哪一刀切下去」的工程选择。</p>
+        </div>
+      </section>
+
+      <!-- ══ §10 Q&A ══ -->
+      <section class="section" id="qa">
+        <div class="section-title">
+          <div class="icon" style="background:#f5f3ff;">💬</div>
+          §10 Q&amp;A
+        </div>
+
+        <h3 id="qa-zero-vs-mp">Q1：ZeRO 跟模型并行有啥区别？也是一个模型拆成几份放不同机器吗？</h3>
+
+        <p>虽然都是「拆开放不同机器」，但<strong>拆的东西不一样</strong>，更关键的是<strong>计算方式不一样</strong>。</p>
+
+        <div class="two-col">
+          <div class="mini-card" style="border-left:4px solid #7c3aed;">
+            <h4 style="color:#5b21b6;">模型并行（Model Parallelism）</h4>
+            <pre style="font-size:12px;margin:8px 0;">Layer 1,2,3 → GPU 0
+Layer 4,5,6 → GPU 1
+Layer 7,8,9 → GPU 2</pre>
+            <ul style="font-size:13px;">
+              <li>拆的是<strong>模型结构本身（层）</strong></li>
+              <li>每个 GPU 只负责前向/反向传播的<strong>一部分</strong></li>
+              <li>数据需要在 GPU 之间<strong>串行流动</strong>（GPU0 算完传给 GPU1）</li>
+              <li>典型问题：<strong>流水线气泡</strong>，某些 GPU 在等待时是空闲的</li>
+            </ul>
+          </div>
+          <div class="mini-card" style="border-left:4px solid #2563eb;">
+            <h4 style="color:#1e40af;">ZeRO（Zero Redundancy Optimizer）</h4>
+            <pre style="font-size:12px;margin:8px 0;">全部 GPU 都跑完整的前向+反向
+但 optimizer states / gradients / params
+分片存储</pre>
+            <ul style="font-size:13px;">
+              <li>拆的是<strong>训练状态（参数、梯度、优化器状态）</strong>，不是层</li>
+              <li>每个 GPU 仍然<strong>参与完整的计算</strong>，只是存的东西更少</li>
+              <li>本质是<strong>数据并行的升级版</strong>，通过通信换内存</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>维度</th><th>模型并行</th><th>ZeRO</th></tr></thead>
+            <tbody>
+              <tr><td>拆什么</td><td>模型层 / 权重</td><td>训练状态（参数/梯度/优化器）</td></tr>
+              <tr><td>计算方式</td><td>各 GPU 算不同层</td><td>各 GPU 算完整前向反向</td></tr>
+              <tr><td>通信模式</td><td>层间激活值传递</td><td>AllGather / ReduceScatter</td></tr>
+              <tr><td>适用场景</td><td>单层太大放不下</td><td>整体状态太大放不下</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout-blue">
+          <strong>一句话区分：</strong>ZeRO 拆的是「存储」，所有 GPU 仍参与完整计算；模型并行拆的是「计算图」，每个 GPU 只算一部分层。前者是数据并行的优化，后者是模型结构上的切割。
+        </div>
+
+        <h3 id="qa-why-stages">Q2：为什么 ZeRO 要分 Stage 1/2/3，而不是直接全部拆了（Stage 3）更好呢？</h3>
+
+        <p>先看三个 Stage 各自切了什么：</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Stage</th><th>切了什么</th><th>额外通信</th><th>显存节省（相对 DDP）</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Stage 1</strong></td><td>Optimizer States（最大头，占 ~12 bytes/param）</td><td>= DDP（无额外）</td><td>~56%</td></tr>
+              <tr><td><strong>Stage 2</strong></td><td>Optimizer States + Gradients</td><td>= DDP（无额外）</td><td>~66%</td></tr>
+              <tr style="background:#fef9c3;"><td><strong>Stage 3</strong></td><td>Optimizer States + Gradients + Parameters（权重本身）</td><td>×1.5 DDP</td><td>75%（最大）</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p><strong>Stage 3 的代价</strong>不可忽视：</p>
+
+        <div class="callout-red">
+          <ul style="margin:0;line-height:2;">
+            <li><strong>① 通信量大幅增加</strong><br>每次前向传播，某个 GPU 需要某个参数时，必须先从其他 GPU <strong>AllGather</strong> 过来，用完再丢掉。反向传播也一样。Stage 1/2 只在 optimizer step 时通信；Stage 3 是<strong>每一层的前向和反向都要通信</strong>，通信次数成倍增加（约 1.5× DDP）。</li>
+            <li><strong>② 实现更复杂，调试困难</strong><br>参数被分散在不同 GPU，框架需要在运行时动态拼装，对自定义层、非标准模型不友好。</li>
+            <li><strong>③ 小模型反而更慢</strong><br>如果模型能放得下，Stage 3 的通信开销会让速度比 Stage 0（普通数据并行）还慢。</li>
+          </ul>
+        </div>
+
+        <div class="big-concept">
+          <div class="big-concept-title">为什么分阶段——性价比递进</div>
+          <p style="margin:0;font-size:14px;">三个 Stage 的内存节省是递进的，但通信开销也是递进的：</p>
+          <ul style="margin:8px 0 0;font-size:14px;">
+            <li><strong>内存压力小</strong> → Stage 1（只解决优化器状态冗余，通信与 DDP 相同，速度无损失）</li>
+            <li><strong>内存压力中</strong> → Stage 2（再加上梯度，适中的权衡，通信仍与 DDP 相同）</li>
+            <li><strong>内存实在不够</strong> → Stage 3（拼了，用 1.5× 通信换最大显存节省）</li>
+          </ul>
+          <p style="margin:8px 0 0;font-size:14px;"><strong>实际用法：能用 Stage 1/2 跑的就别用 Stage 3</strong>，因为 Stage 3 的吞吐量可能比 Stage 1/2 低 20~40%。只有在模型实在放不下（比如几百 B 参数的大模型）时，才迫不得已用 Stage 3。</p>
+        </div>
+
+        <h3 id="qa-why-store-grad">Q3：梯度 G 为什么要全部存下来，不能算完一层立刻覆盖掉吗？</h3>
+
+        <p>表面上看"算完一层梯度就用掉然后覆盖"是合理的，但这里有一个关键时序问题。</p>
+
+        <div class="callout-blue">
+          <strong>多卡训练时，梯度在被用之前必须先做 AllReduce 求平均。</strong><br>
+          各卡处理不同 batch，各自算出的梯度是不一样的。必须先把所有卡的梯度汇总求平均，才能得到"全局梯度"用于更新参数。
+        </div>
+
+        <p>你说的"边算边发、覆盖内存"是 DDP 的 bucket AllReduce 优化，确实是可行的——反向传播期间，每算完一层就立刻把这层梯度发出去做 AllReduce，同时继续算前面层的梯度。</p>
+
+        <p><strong>但 AllReduce 的结果（平均后的梯度）必须写回显存，一直驻留到 Optimizer Step 用完为止：</strong></p>
+
+        <div class="step-box">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <strong>反向传播阶段</strong>：算出各层梯度，立刻 AllReduce → 得到全局平均梯度，<strong>写回梯度 buffer</strong>
+          </div>
+        </div>
+        <div class="step-box">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <strong>Optimizer Step 阶段</strong>：遍历所有参数，逐个读取梯度 buffer 里的值，执行 Adam 更新：<code>m = β₁·m + (1−β₁)·g</code>，<code>w = w - lr·m/√v</code>
+          </div>
+        </div>
+        <div class="step-box">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <strong>Optimizer Step 完成后</strong>：这一层的梯度才真正没用了，可以释放
+          </div>
+        </div>
+
+        <p>关键在于 <strong>Step 1 和 Step 2 是串行的两个阶段</strong>，Step 1 全部完成后 Step 2 才开始。所以在 Step 2 进行期间，<strong>所有层的"平均后梯度"必须同时在显存里</strong>，等 optimizer 按参数顺序逐一消费完才能释放。</p>
+
+        <div class="callout-green">
+          <strong>一句话总结：</strong>可以边反向边通信，但 AllReduce 返回的结果必须存着，等 Optimizer Step 全部用完才能清空。这段时间里所有层的梯度都在显存里，这就是 G 的显存占用。ZeRO-2 就是通过把这些梯度分片到各卡来节省这部分开销。
+        </div>
+
+        <h3 id="qa-fp32-copy">Q4：混合精度里 FP32 副本是干什么的？既然 FP16 精度不够，为什么不直接全用 FP32，还要多存一份 FP16 不是更浪费？</h3>
+
+        <p>先澄清一个常见误解：<strong>FP32 副本不是用来做前向/反向计算的，它只在 Optimizer Step 的最后一步用。</strong></p>
+
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 720 90" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:720px;">
+            <defs>
+              <marker id="arrFP" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#2563eb"/>
+              </marker>
+            </defs>
+            <rect x="10" y="20" width="110" height="50" rx="8" fill="#fee2e2" stroke="#fca5a5" stroke-width="1.5"/>
+            <text x="65" y="42" text-anchor="middle" font-size="11" fill="#991b1b" font-weight="700">FP32 主权重</text>
+            <text x="65" y="57" text-anchor="middle" font-size="10" fill="#991b1b">只做 Adam 更新</text>
+
+            <line x1="122" y1="45" x2="155" y2="45" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrFP)"/>
+            <text x="138" y="38" text-anchor="middle" font-size="9" fill="#2563eb">cast↓FP16</text>
+
+            <rect x="158" y="20" width="110" height="50" rx="8" fill="#dbeafe" stroke="#93c5fd" stroke-width="1.5"/>
+            <text x="213" y="42" text-anchor="middle" font-size="11" fill="#1e40af" font-weight="700">FP16 权重</text>
+            <text x="213" y="57" text-anchor="middle" font-size="10" fill="#1e40af">前向 + 反向用</text>
+
+            <line x1="270" y1="45" x2="303" y2="45" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrFP)"/>
+
+            <rect x="306" y="20" width="100" height="50" rx="8" fill="#d1fae5" stroke="#6ee7b7" stroke-width="1.5"/>
+            <text x="356" y="42" text-anchor="middle" font-size="11" fill="#065f46" font-weight="700">前向传播</text>
+            <text x="356" y="57" text-anchor="middle" font-size="10" fill="#065f46">FP16 矩阵乘</text>
+
+            <line x1="408" y1="45" x2="441" y2="45" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrFP)"/>
+
+            <rect x="444" y="20" width="100" height="50" rx="8" fill="#d1fae5" stroke="#6ee7b7" stroke-width="1.5"/>
+            <text x="494" y="42" text-anchor="middle" font-size="11" fill="#065f46" font-weight="700">反向传播</text>
+            <text x="494" y="57" text-anchor="middle" font-size="10" fill="#065f46">FP16 矩阵乘</text>
+
+            <line x1="546" y1="45" x2="579" y2="45" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrFP)"/>
+            <text x="563" y="38" text-anchor="middle" font-size="9" fill="#2563eb">cast↑FP32</text>
+
+            <rect x="582" y="20" width="128" height="50" rx="8" fill="#fee2e2" stroke="#fca5a5" stroke-width="1.5"/>
+            <text x="646" y="40" text-anchor="middle" font-size="11" fill="#991b1b" font-weight="700">Adam Step</text>
+            <text x="646" y="55" text-anchor="middle" font-size="10" fill="#991b1b">FP32 更新主权重</text>
+          </svg>
+          <div class="diagram-caption">FP16 负责前向+反向（速度），FP32 主权重只在最后 Adam 更新时用（精度）。</div>
+        </div>
+
+        <p><strong>FP32 副本解决的问题：</strong>更新步长太小被 FP16 舍入成 0。</p>
+
+        <div class="example-box">
+          <div class="ex-title">💡 为什么更新量会被舍入成 0？</div>
+          <p style="margin:0 0 6px;">Adam 更新权重时，更新量 = lr × m/√v，典型值约 <code>1e-5 ~ 1e-7</code>。</p>
+          <p style="margin:0 0 6px;">FP16 在数值 ~1.0 附近，相邻两个可表示的数之间间隔约 <code>1e-3</code>（精度粒度）。</p>
+          <p style="margin:0;"><code>w_new = w_old + 1e-6</code> —— 这个 <code>1e-6</code> 比 FP16 的精度粒度 <code>1e-3</code> 小 1000 倍，直接被舍入成 0，权重永远不变，训练失效。</p>
+        </div>
+
+        <p><strong>那为什么不全用 FP32，反而还要多存一份 FP16？</strong></p>
+
+        <div class="callout-amber">
+          <strong>核心原因：Tensor Core 只能加速 FP16/BF16 矩阵乘法。</strong><br><br>
+          A100 GPU 上：
+          <ul style="margin:6px 0 0;">
+            <li>FP16 矩阵乘吞吐：<strong>312 TFLOPS</strong></li>
+            <li>FP32 矩阵乘吞吐：<strong>19.5 TFLOPS</strong>（慢 16×）</li>
+          </ul>
+          训练 95% 的时间都在前向+反向的矩阵乘法上。全用 FP32 就完全用不上 Tensor Core，相当于把 GPU 的主要算力浪费掉。<br><br>
+          所以那份额外的 FP16 参数副本（14 GB）是「购买 Tensor Core 加速」的票价——换来的是前向+反向 16× 的速度提升。拿 14 GB 换这个，非常划算。
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>方案</th><th>参数存储</th><th>前向+反向速度</th><th>更新精度</th><th>实际可行性</th></tr></thead>
+            <tbody>
+              <tr><td>全 FP32</td><td>28 GB（7B 模型）</td><td>慢 16×，用不上 Tensor Core</td><td>✅ 足够</td><td>显存翻倍、速度极慢</td></tr>
+              <tr style="background:#f0fdf4;"><td><strong>混合精度（FP16 + FP32 副本）</strong></td><td>14 GB FP16 + 28 GB FP32 = 42 GB</td><td>✅ 快 16×</td><td>✅ 足够（FP32 更新）</td><td>业界标准做法</td></tr>
+              <tr><td>全 FP16</td><td>14 GB</td><td>✅ 快 16×</td><td>❌ 更新量被舍入 0</td><td>训练会失效</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <footer>
+        <a href="../index.html">← 返回笔记列表</a>
+      </footer>
+
+    </main>
+  </div>
+</div>
+</body>
+</html>

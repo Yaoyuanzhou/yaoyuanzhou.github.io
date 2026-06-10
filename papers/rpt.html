@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reinforcement Pre-Training (RPT) — 论文解读</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false }
+          ],
+          throwOnError: false
+        });
+      }
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #2563eb; --primary-soft: #eff6ff;
+      --accent: #7c3aed; --accent-soft: rgba(124,58,237,0.06);
+      --shadow: 0 10px 30px rgba(15,23,42,0.08); --radius: 18px; --max: 1300px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: linear-gradient(180deg,#f8fbff 0%,var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      line-height: 1.8;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .page { max-width: var(--max); margin: 0 auto; padding: 32px 20px 80px; }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    .back-link:hover { color: var(--primary); text-decoration: none; }
+    .hero {
+      background: radial-gradient(circle at top right,rgba(37,99,235,0.14),transparent 30%),
+                  radial-gradient(circle at left bottom,rgba(124,58,237,0.10),transparent 24%), var(--card);
+      border: 1px solid rgba(37,99,235,0.08); border-radius: 24px;
+      box-shadow: var(--shadow); padding: 34px 34px 28px; margin-bottom: 22px;
+    }
+    .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--primary-soft); color: var(--primary); font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+    h1 { font-size: 34px; line-height: 1.25; letter-spacing: -0.02em; margin-bottom: 10px; }
+    .subtitle { color: var(--muted); font-size: 16px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-top: 24px; }
+    .meta-card { background: #fbfdff; border: 1px solid #e7eefb; border-radius: 16px; padding: 14px 16px; }
+    .meta-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .meta-value { font-size: 14px; font-weight: 600; word-break: break-word; }
+    .layout { display: grid; grid-template-columns: 260px minmax(0,1fr); gap: 22px; align-items: start; }
+    .toc { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; }
+    .toc h2 { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+    .toc-list { list-style: none; }
+    .toc-list li { margin: 7px 0; }
+    .toc-list a { font-size: 13.5px; color: var(--muted); }
+    .toc-list a:hover { color: var(--primary); text-decoration: none; }
+    .toc-list a.active{color:var(--primary);background:#eff6ff;font-weight:600;border-left:3px solid var(--primary);padding-left:5px;}
+    .toc-sub { padding-left: 14px; margin-top: 4px; }
+    .toc-sub li { margin: 4px 0; }
+    .toc-sub a { font-size: 12.5px; }
+    .content { display: flex; flex-direction: column; gap: 20px; }
+    .section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 28px 30px; }
+    .section-title { font-size: 22px; font-weight: 800; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 2px solid #f0f4ff; display: flex; align-items: center; gap: 10px; }
+    .section-title .icon { width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+    h3 { font-size: 18px; font-weight: 700; margin: 26px 0 12px; color: #111827; }
+    h4 { font-size: 15px; font-weight: 700; margin: 20px 0 10px; color: #1d4ed8; }
+    p { margin-bottom: 12px; }
+    p:last-child { margin-bottom: 0; }
+    ul, ol { padding-left: 22px; }
+    li { margin-bottom: 8px; }
+    .callout { border-radius: 14px; padding: 14px 18px; margin: 16px 0; font-size: 14.5px; }
+    .callout-blue { background: linear-gradient(180deg,rgba(37,99,235,0.08),rgba(37,99,235,0.04)); border: 1px solid rgba(37,99,235,0.16); }
+    .callout-blue strong { color: #1d4ed8; }
+    .callout-amber { background: #fffbeb; border: 1px solid #fde68a; }
+    .callout-amber strong { color: #92400e; }
+    .callout-green { background: #f0fdf4; border: 1px solid #86efac; }
+    .callout-green strong { color: #166534; }
+    .callout-purple { background: var(--accent-soft); border: 1px solid rgba(124,58,237,0.18); }
+    .callout-purple strong { color: #6d28d9; }
+    .note { background: #f8faff; border: 1px dashed #cbd5e1; border-radius: 12px; padding: 12px 16px; color: #475467; font-size: 13.5px; margin: 12px 0; }
+    .example-box { background: #f0fdf4; border: 1px solid #86efac; border-radius: 14px; padding: 16px 20px; margin: 16px 0; }
+    .example-box .ex-title { font-size: 12px; font-weight: 700; color: #166534; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+    .example-box p { margin-bottom: 8px; font-size: 14px; color: #166534; }
+    .example-box p:last-child { margin-bottom: 0; }
+    blockquote { margin: 16px 0; padding: 14px 18px; border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 0 12px 12px 0; color: #3f3f46; font-size: 14.5px; }
+    .paper-info { background: #fafbff; border-left: 4px solid var(--primary); border-radius: 12px; padding: 14px 16px; margin: 16px 0; color: #334155; font-size: 14px; }
+    .paper-info p { margin: 5px 0; }
+    figure { margin: 22px 0; background: #fbfdff; border: 1px solid #e8edf5; border-radius: 16px; padding: 14px; }
+    figure img { width: 100%; display: block; border-radius: 12px; background: #fff; }
+    figcaption { margin-top: 10px; font-size: 13.5px; color: var(--muted); line-height: 1.6; }
+    .fig-placeholder { padding: 36px 24px; text-align: center; background: #f8faff; border-radius: 12px; color: #94a3b8; font-size: 14px; border: 2px dashed #e2e8f0; line-height: 1.9; }
+    .formula-block { background: #fafbff; border: 1px solid #e8edf5; border-radius: 14px; padding: 16px 20px; margin: 14px 0; overflow-x: auto; }
+    .formula-vars { background: #f8f9fe; border: 1px solid #e0e7ff; border-radius: 12px; padding: 12px 16px; margin-top: -6px; margin-bottom: 14px; }
+    .formula-vars .var-title { font-size: 12px; font-weight: 700; color: #4338ca; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+    .formula-vars ul { padding-left: 18px; }
+    .formula-vars li { font-size: 13.5px; color: #374151; margin-bottom: 5px; }
+    .step-list { list-style: none; padding: 0; }
+    .step { display: flex; gap: 14px; margin-bottom: 16px; }
+    .step-num { width: 30px; height: 30px; border-radius: 50%; background: var(--primary); color: #fff; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0; }
+    .mini-card { background: #f8faff; border: 1px solid #e8edf5; border-radius: 12px; padding: 14px 16px; }
+    .mini-card h4 { margin-top: 0; }
+    .flow-diagram { display: flex; flex-direction: column; gap: 8px; margin: 16px 0; }
+    .flow-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .flow-box { background: #eff6ff; border: 1.5px solid #93c5fd; border-radius: 10px; padding: 8px 14px; font-size: 13px; font-weight: 600; color: #1d4ed8; white-space: nowrap; }
+    .flow-box.green { background: #f0fdf4; border-color: #86efac; color: #166534; }
+    .flow-box.purple { background: var(--accent-soft); border-color: rgba(124,58,237,0.3); color: #6d28d9; }
+    .flow-arrow { color: #94a3b8; font-size: 16px; }
+    .table-wrap { overflow-x: auto; margin: 14px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    thead th { background: #f0f4ff; padding: 10px 12px; text-align: left; font-weight: 700; color: #1e40af; border-bottom: 2px solid #c7d2fe; }
+    tbody td { padding: 9px 12px; border-bottom: 1px solid var(--line); }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: #f8faff; }
+    footer { text-align: center; margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+    @media (max-width: 768px) {
+      .layout { grid-template-columns: 1fr; }
+      .toc { position: static; }
+      .meta-grid { grid-template-columns: 1fr 1fr; }
+      .two-col { grid-template-columns: 1fr; }
+      h1 { font-size: 26px; }
+    }
+  </style>
+</style>
+</head>
+<body>
+<div class="page">
+  <a href="../index.html" class="back-link">← 返回论文列表</a>
+
+  <div class="hero">
+    <div class="eyebrow">📄 论文解读 · RL 预训练 · arXiv 2506.08007</div>
+    <h1>Reinforcement Pre-Training (RPT)</h1>
+    <p class="subtitle">将 Next-Token Prediction 重构为 Reasoning Task，用 RL + 可验证奖励实现通用预训练</p>
+    <div class="meta-grid">
+      <div class="meta-card"><div class="meta-label">作者</div><div class="meta-value">Qingxiu Dong, Li Dong et al. · Microsoft Research + PKU + THU</div></div>
+      <div class="meta-card"><div class="meta-label">来源</div><div class="meta-value">arXiv 2506.08007 · 2025</div></div>
+      <div class="meta-card"><div class="meta-label">场景</div><div class="meta-value">LLM 预训练 · Next-Token Reasoning</div></div>
+      <div class="meta-card"><div class="meta-label">核心命题</div><div class="meta-value">能否将 RL 从后训练搬到预训练阶段，利用海量无标注文本实现通用 RL 预训练？</div></div>
+    </div>
+  </div>
+
+  <div class="layout">
+    <aside class="toc">
+      <h2>目录</h2>
+      <ul class="toc-list">
+        <li><a href="#sec-bg">一、背景与动机</a>
+          <ul class="toc-sub">
+            <li><a href="#sec-bg-problem">问题背景</a></li>
+            <li><a href="#sec-bg-motivation">研究动机</a></li>
+            <li><a href="#sec-bg-related">相关工作</a></li>
+          </ul>
+        </li>
+        <li><a href="#sec-method">二、方法详解</a>
+          <ul class="toc-sub">
+            <li><a href="#sec-method-overview">整体框架</a></li>
+            <li><a href="#sec-method-ntr">Next-Token Reasoning 任务</a></li>
+            <li><a href="#sec-method-rl">RL 训练流程</a></li>
+            <li><a href="#sec-method-reward">Prefix Matching Reward</a></li>
+            <li><a href="#sec-method-filter">基于熵的数据过滤</a></li>
+            <li><a href="#sec-method-setup">训练设置</a></li>
+          </ul>
+        </li>
+        <li><a href="#sec-exp">三、实验结果与理解</a>
+          <ul class="toc-sub">
+            <li><a href="#sec-exp-lm">语言建模</a></li>
+            <li><a href="#sec-exp-scaling">Scaling Properties</a></li>
+            <li><a href="#sec-exp-rft">RL Fine-Tuning</a></li>
+            <li><a href="#sec-exp-zeroshot">Zero-Shot 性能</a></li>
+            <li><a href="#sec-exp-pattern">推理模式分析</a></li>
+            <li><a href="#sec-exp-understanding">我的理解</a></li>
+          </ul>
+        </li>
+      </ul>
+    </aside>
+    <div class="content">
+
+  <figure>
+    <img src="https://arxiv.org/html/2506.08007v1/x1.png" alt="Figure 1: RPT cherry-on-top cake metaphor"
+         onerror="this.onerror=null;this.style.display='none'" />
+    <figcaption><strong>Figure 1（论文原图）：</strong>RPT 范式示意图。将 next-token prediction 重构为 reasoning task，利用 RL + 可验证奖励实现通用预训练。图中借用 LeCun 的 cherry-on-top cake 比喻：传统 RL 是蛋糕上的樱桃（后训练），而 RPT 把 RL reasoning 嵌入蛋糕本身（预训练阶段）。</figcaption>
+  </figure>
+
+  <h3 id="sec-bg-motivation" style="font-size:17px;margin-bottom:10px">研究动机</h3>
+  <p>
+    作者的核心洞察是：<b>预训练语料中的每个 token 都自带一个可验证的答案——它自己</b>。传统 NTP 只要求模型直接输出概率分布，模型可以靠浅层统计关联"记住"下一个 token，而不真正理解为什么它应该出现。RPT 要求模型在输出预测之前<b>先展开推理过程</b>，通过 RL 优化推理路径，迫使模型从"死记硬背"转向"深度理解"。
+  </p>
+  <p>
+    这样做的好处有四个：
+  </p>
+  <div class="step-list">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div><b>可扩展 + 通用</b>：利用与 NTP 相同的海量无标注文本数据，无需额外标注</div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div><b>抗 reward hacking</b>：使用规则化的正确性奖励（下一个 token 是否匹配），而非学习型 reward model</div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div><b>促进深度理解</b>：鼓励推理模式而非浅层记忆，模型学会探索和验证假设</div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div><b>训练时推理缩放</b>：每个 token 的预测都分配更多"思考"计算量，类似 inference-time scaling 但在训练时发生</div>
+    </div>
+  </div>
+
+  <h3 id="sec-bg-related" style="font-size:17px;margin-bottom:10px">相关工作</h3>
+  <div class="two-col">
+    <div class="mini-card">
+      <b>RLHF</b> [Ouyang et al., 2022]<br>
+      依赖人类偏好数据 + 学习型 reward model，容易被 hacking，难以大规模应用
+    </div>
+    <div class="mini-card">
+      <b>RLVR</b> [Lambert et al., 2025]<br>
+      使用可验证奖励，但受限于标注数据稀缺，只能用于领域微调
+    </div>
+    <div class="mini-card">
+      <b>Quiet-STaR</b> [Zelikman et al., 2024]<br>
+      最相关的工作：鼓励 LLM 为 next-token prediction 生成 helpful rationales。但 helpfulness-based reward 容易被 hacking（模型在 rationale 中重复目标 token）
+    </div>
+    <div class="mini-card">
+      <b>DeepSeek-R1 / OpenAI o1</b><br>
+      用 RLVR 增强推理能力，但仅限于后训练阶段，未触及预训练范式本身
+    </div>
+  </div>
+
+  <div class="callout-purple">
+    <b>RPT vs Quiet-STaR 的核心区别</b>：Quiet-STaR 使用 helpfulness-based reward（容易被 hacking——模型会在 rationale 里重复目标 token 作为 shortcut），而 RPT 使用<b>next-token 预测正确性</b>作为 rule-based reward，从根本上避免 reward hacking。
+  </div>
+</section>
+
+<!-- ==================== Section 2: Method ==================== -->
+<section class="section" id="sec-method">
+  <div class="section-title"><span class="icon"></span>二、方法详解</div>
+
+  <h3 id="sec-method-overview" style="font-size:17px;margin-bottom:10px">整体框架</h3>
+  <p>
+    RPT 的核心思想可以用一句话概括：<b>将预训练语料中的每一个 next-token prediction 位置，重构为一个需要推理才能解决的"问题"——上下文是题目，下一个 token 是答案，而模型在给出答案之前必须先写一段 chain-of-thought 推理过程。</b>
+  </p>
+  <p>
+    整体流程如下：
+  </p>
+
+  <div class="flow-diagram">
+    <div class="flow-row">
+      <div class="flow-box">预训练语料<br>提取 context x&lt;t</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box">LLM 生成 G 条<br>reasoning trajectories</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box">提取 \\boxed{} 中的<br>prediction y_it</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box">Prefix Matching<br>Reward r_it</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box">GRPO<br>RL Update</div>
+    </div>
+  </div>
+
+  <figure>
+    <img src="https://arxiv.org/html/2506.08007v1/x2.png" alt="Figure 2: Standard NTP vs Next-Token Reasoning"
+         onerror="this.onerror=null;this.style.display='none'" />
+    <figcaption><strong>Figure 2（论文原图）：</strong>标准 NTP 与 Next-Token Reasoning 的对比。标准 NTP 直接输出概率分布预测下一个 token，而 Next-Token Reasoning 要求模型在预测前先展开推理过程。</figcaption>
+  </figure>
+
+  <div class="example-box">
+    <div class="ex-title">💡 举例：Standard NTP vs Next-Token Reasoning</div>
+    <p>
+      假设预训练语料中有一段物理文本：<code>"Electric force grows with charge"</code>，后续文本为 <code>"size and decreases with distance squared."</code>
+    </p>
+    <p>
+      <b>标准 NTP</b>：给定上下文 <code>"Electric force grows with charge"</code>，模型直接输出下一个 token 的概率分布，选取 argmax = <code>"size"</code>。模型可能只是记住 "charge" 后面常接 "size" 这个统计模式，并不理解为什么。
+    </p>
+    <p>
+      <b>Next-Token Reasoning (RPT)</b>：给定同样的上下文，模型先展开思考：<br>
+      <i>"Let's think about what would logically come next in a text about electric force... Since the context mentions 'grows with charge', the next part is likely going to describe what else the force depends on... Alternatively, it could be 'magnitude' or 'amount'... Common phrases after 'grows with' include 'size', 'magnitude'... Wait, given Coulomb's Law, the force also depends on distance... So the most probable answer is <b>\\boxed{size}</b>"</i>
+    </p>
+    <p>
+      这种推理过程迫使模型从<b>语义理解</b>而非<b>统计模式匹配</b>来预测 token。
+    </p>
+  </div>
+
+  <!-- ===== 3.2 Next-Token Reasoning Task ===== -->
+  <h3 id="sec-method-ntr" style="font-size:17px;margin-bottom:10px">Next-Token Reasoning 任务定义</h3>
+  <p>
+    给定预训练语料中的输入序列 $x_0 \cdots x_T$，对于每个位置 $t \in \{1, \ldots, T\}$：
+  </p>
+  <ul>
+    <li>前缀 $x_{&lt;t}$ 被视为<b>上下文（context）</b></li>
+    <li>$x_t$ 是<b>真实下一个 token（ground-truth）</b></li>
+    <li>模型 $\pi_\theta$ 需要先生成一段 chain-of-thought 推理序列 $c_t$，再给出预测 $y_t$</li>
+    <li>完整输出 $o_t = (c_t, y_t)$，其中 $o_t \sim \pi_\theta(\cdot | x_{&lt;t})$</li>
+  </ul>
+
+  <div class="callout-blue">
+    <b>关键洞察</b>：Next-Token Reasoning 将预训练语料重构为一个<b>海量的推理问题集</b>——每个 token 位置都是一道题，答案就是那个 token 本身。这使得 RL 可以<b>无需外部标注</b>就获得可验证的奖励信号，从而将 RL 从领域微调扩展到通用预训练。
+  </div>
+
+  <div class="example-box">
+    <div class="ex-title">💡 举例：Next-Token Reasoning 的输入输出结构</div>
+    <p>
+      假设预训练语料中有一段数学解答文本：<br>
+      <code>"Thus $2^A = (2^a)^2(2^3) = "</code> <br>下一个真实 token 是 <code>"9"</code>。
+    </p>
+    <p>
+      <b>RPT 的任务</b>：给定上下文 <code>"Thus $2^A = (2^a)^2(2^3) = "</code>，模型需要：<br>
+      1) 先生成推理过程 $c_t$：分析指数运算、回忆 $2^3 = 8$、推导 $A = 2a + 3$ 等<br>
+      2) 再给出预测 $y_t$：<code>\\boxed{9}</code><br>
+      3) 如果 $y_t$ 匹配真实 token $x_t = \text{"9"}$，则获得正奖励。
+    </p>
+  </div>
+
+  <!-- ===== 3.3 RL Training ===== -->
+  <h3 id="sec-method-rl" style="font-size:17px;margin-bottom:10px">RL 训练流程</h3>
+  <p>
+    RPT 使用<b>on-policy RL</b>训练模型进行 next-token reasoning。核心流程如 Figure 3 所示：
+  </p>
+
+  <figure>
+    <img src="https://arxiv.org/html/2506.08007v1/x3.png" alt="Figure 3: RPT training illustration"
+         onerror="this.onerror=null;this.style.display='none'" />
+    <figcaption><strong>Figure 3（论文原图）：</strong>RPT 训练流程。给定上下文，LLM 生成 G 条推理轨迹，每条包含推理过程和最终预测。正确预测获得 reward=1，错误获得 reward=0。用 GRPO 算法更新模型。</figcaption>
+  </figure>
+
+  <div class="step-list">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div><b>采样上下文</b>：从预训练语料中选取一个 token 位置 $t$，提取前缀 $x_{&lt;t}$ 作为 context</div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div><b>On-policy rollout</b>：让模型 $\pi_\theta$ 对 context $x_{&lt;t}$ 生成 $G$ 条响应（thinking trajectories），第 $i$ 条为 $o_t^i = (c_t^i, y_t^i)$</div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div><b>提取预测</b>：从每条响应中提取最后一个 <code>\\boxed{}</code> 内的内容作为预测 $y_t^i$</div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div><b>计算 reward</b>：用 prefix matching reward 验证 $y_t^i$ 是否匹配 ground-truth $x_{\geq t}$</div>
+    </div>
+    <div class="step">
+      <div class="step-num">5</div>
+      <div><b>GRPO 更新</b>：基于 reward 信号用 GRPO 算法更新模型参数</div>
+    </div>
+  </div>
+
+  <div class="example-box">
+    <div class="ex-title">💡 举例：RPT 训练的一个 Rollout 组</div>
+    <p>
+      假设上下文是 <code>"Electric force grows with charge"</code>，真实后续是 <code>"size and decreases..."</code>，$G=8$。
+    </p>
+    <p>
+      模型生成 8 条推理轨迹，其中：<br>
+      - Trajectory 1：推理后预测 <code>\\boxed{size}</code> → 与 ground-truth 匹配 → <b>$r_1 = 1$</b><br>
+      - Trajectory 2：推理后预测 <code>\\boxed{magnitude}</code> → 不匹配 → <b>$r_2 = 0$</b><br>
+      - Trajectory 3：推理后预测 <code>\\boxed{size}</code> → 匹配 → <b>$r_3 = 1$</b><br>
+      - ... 其他轨迹同理<br>
+      GRPO 会提高 $r=1$ 轨迹的概率、降低 $r=0$ 轨迹的概率，使模型逐渐学会更好的推理路径。
+    </p>
+  </div>
+
+  <!-- ===== 3.4 Reward ===== -->
+  <h3 id="sec-method-reward" style="font-size:17px;margin-bottom:10px">Prefix Matching Reward</h3>
+  <p>
+    Reward 设计是 RPT 的关键创新之一。论文提出了 <b>prefix matching reward</b>，而非简单的 first-token matching，目的是支持多 token 预测和 out-of-vocabulary token 的情况。
+  </p>
+
+  <div class="formula-block">
+    $$r_t^i = \begin{cases} 1 & \text{if } \bar{y}_t^i = \bar{x}_{\geq t}[1:l] \text{ and } l \in L_{gt} \\ 0 & \text{otherwise} \end{cases}$$
+    <div class="formula-vars">
+      <div class="var-title">符号说明</div>
+      <ul>
+        <li>$r_t^i$：第 $i$ 条 rollout 对位置 $t$ 的 reward</li>
+        <li>$\bar{y}_t^i$：预测序列 $y_t^i$ 的<b>字节序列</b>（byte sequence）</li>
+        <li>$\bar{x}_{\geq t}$：真实续写序列 $x_{\geq t}$ 的<b>字节序列</b></li>
+        <li>$l$：预测 $\bar{y}_t^i$ 的字节长度</li>
+        <li>$L_{gt}$：ground-truth 中各 token 边界对应的<b>累积字节长度集合</b>（valid boundaries）</li>
+        <li>$\bar{x}_{\geq t}[1:l]$：真实续写字节序列的前 $l$ 个字节</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout-green">
+    <b>为什么用 prefix matching 而非 first-token matching？</b><br>
+    1) 预测可能跨越多个 token（如预测一个完整单词而非单个 token）<br>
+    2) 某些 token 可能是 out-of-vocabulary 的，在 byte 层面验证更鲁棒<br>
+    3) 需要检查预测长度 $l$ 是否落在 $L_{gt}$ 的有效边界上，确保 byte prefix 对齐到完整的 token 边界
+  </div>
+
+  <div class="example-box">
+    <div class="ex-title">💡 举例：Prefix Matching Reward 的计算</div>
+    <p>
+      假设真实续写为 <code>"size and decreases"</code>，对应的 token 为 <code>["size", " and", " decreases"]</code>。<br>
+      假设字节长度分别为 4、5、11，则 $L_{gt} = \{4, 9, 20\}$（累积字节边界）。
+    </p>
+    <p>
+      - 预测 $y_t^i = \text{"size"}$ → $\bar{y} = \text{"size"}$, $l=4$, $4 \in L_{gt}$, $\bar{x}_{\geq t}[1:4] = \text{"size"}$ → <b>$r = 1$</b><br>
+      - 预测 $y_t^i = \text{"size and"}$ → $\bar{y} = \text{"size and"}$, $l=9$, $9 \in L_{gt}$, $\bar{x}_{\geq t}[1:9] = \text{"size and"}$ → <b>$r = 1$</b><br>
+      - 预测 $y_t^i = \text{"magnitude"}$ → 不匹配 → <b>$r = 0$</b><br>
+      - 预测 $y_t^i = \text{"siz"}$ → $l=3$, $3 \notin L_{gt}$（不在有效边界上）→ <b>$r = 0$</b>
+    </p>
+  </div>
+
+  <p>
+    论文还在 Appendix A 中讨论了几种替代 reward 设计：
+  </p>
+  <div class="two-col">
+    <div class="mini-card">
+      <b>First-token matching</b><br>
+      只看预测的第一个 token 是否匹配 ground-truth，忽略后续 token。简单但可能遗漏多 token 预测的正确情况。
+    </div>
+    <div class="mini-card">
+      <b>Dense reward</b><br>
+      正确预测 → reward=1；错误预测 → reward = $P(y_t^i | x_{&lt;t}; \theta)$（模型给错误 token 的概率）。提供更密的信号，但可能引入偏差。
+    </div>
+  </div>
+  <p>
+    实验表明这些替代设计与 prefix matching reward 性能相近，说明 RPT 框架对 reward 设计<b>相对鲁棒</b>，核心收益来自 next-token reasoning 范式本身而非特定 reward 形式。
+  </p>
+
+  <!-- ===== RPT Objective ===== -->
+  <h4 style="font-size:15px;margin-bottom:10px">RPT 目标函数</h4>
+  <div class="formula-block">
+    $$J_{RPT}(\theta) = \mathbb{E}_{(x_{&lt;t}, x_{\geq t}) \sim \mathcal{D}, \{o_t^i\}_{i=1}^G \sim \pi_\theta(\cdot | x_{&lt;t})} \left[ r_t^i \right]$$
+    <div class="formula-vars">
+      <div class="var-title">符号说明</div>
+      <ul>
+        <li>$\mathcal{D}$：预训练语料中所有 $\{x_{&lt;t}\}_{t=1}^T$ 的集合</li>
+        <li>$\pi_\theta(\cdot | x_{&lt;t})$：模型在给定前缀下的策略分布</li>
+        <li>$G$：每个 context 采样的 rollout 数</li>
+        <li>$r_t^i$：如上定义的 prefix matching reward</li>
+      </ul>
+    </div>
+  </div>
+
+  <p>
+    与传统 NTP 目标和 RLVR 目标对比：
+  </p>
+  <div class="formula-block">
+    $$J_{NTP}(\theta) = \sum_{t=1}^{T} \log P(x_t | x_0, x_1, \ldots, x_{t-1}; \theta)$$
+    <div class="formula-vars">
+      <div class="var-title">符号说明</div>
+      <ul>
+        <li>$J_{NTP}$：标准 next-token prediction 目标（最大化 log 概率）</li>
+        <li>$x_0 \cdots x_T$：训练语料中的输入序列</li>
+        <li>$\theta$：语言模型参数</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="formula-block">
+    $$J_{RLVR}(\theta) = \mathbb{E}_{(q,a) \sim \mathcal{D}, o \sim \pi_\theta(\cdot | q)} [r(o, a)]$$
+    <div class="formula-vars">
+      <div class="var-title">符号说明</div>
+      <ul>
+        <li>$\mathcal{D}$：标注的问答对数据集 $\{(q, a)\}$</li>
+        <li>$\pi_\theta(\cdot | q)$：模型在给定问题下的策略</li>
+        <li>$r(o, a)$：验证器 $V$ 对输出 $o$ 和答案 $a$ 计算的可验证 reward</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ===== 3.5 Data Filtering ===== -->
+  <h3 id="sec-method-filter" style="font-size:17px;margin-bottom:10px">基于熵的数据过滤</h3>
+  <p>
+    不是所有 token 都需要推理。很多 token（如常见标点、高频词）即使不经推理也容易预测，对这些 token 做 RL 训练效率低下。论文使用<b>熵过滤</b>策略来选择性地训练更具挑战性的 token 位置。
+  </p>
+
+  <div class="step-list">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div><b>Proxy model 计算熵</b>：用 DeepSeek-R1-Distill-Qwen-1.5B 作为小型代理模型，对每个 token 位置计算 top-16 next tokens 的熵</div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div><b>设定阈值过滤</b>：低熵位置（容易预测的 token）被过滤掉，优先训练高熵位置（需要更多推理的 token）</div>
+    </div>
+  </div>
+
+  <div class="example-box">
+    <div class="ex-title">💡 举例：熵过滤的效果</div>
+    <p>
+      假设一段数学解答：<code>"Therefore, the answer is $\boxed{42}$."</code>
+    </p>
+    <p>
+      - Token <code>"Therefore,"</code> 前面的上下文非常明确 → proxy model 的 top-16 熵很低（约 0.2） → <b>被过滤掉</b><br>
+      - Token <code>"42"</code> 前面的推理步骤需要深入理解 → 熵很高（约 2.0） → <b>保留训练</b>
+    </p>
+    <p>
+      这样 RPT 训练只聚焦于"真正需要思考"的位置，大幅提升训练效率。
+    </p>
+  </div>
+
+  <!-- ===== 3.6 Setup ===== -->
+  <h3 id="sec-method-setup" style="font-size:17px;margin-bottom:10px">训练设置</h3>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>参数</th><th>值</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>Base model</td><td>DeepSeek-R1-Distill-Qwen-14B</td><td>具有基本推理能力的蒸馏模型</td></tr>
+        <tr><td>预训练数据</td><td>OmniMATH (4,428 道竞赛级数学题)</td><td>竞赛级数学问题和解答</td></tr>
+        <tr><td>RL 算法</td><td>GRPO</td><td>Group Relative Policy Optimization</td></tr>
+        <tr><td>Batch size</td><td>256</td><td>每批 256 个 question</td></tr>
+        <tr><td>Rollout 数 $G$</td><td>8</td><td>每个 question 采样 8 条响应</td></tr>
+        <tr><td>Sampling temperature</td><td>0.8</td><td>rollout 时的采样温度</td></tr>
+        <tr><td>Learning rate</td><td>$1 \times 10^{-6}$</td><td>极低学习率</td></tr>
+        <tr><td>KL penalty</td><td>0</td><td>零 KL 惩罚</td></tr>
+        <tr><td>训练长度</td><td>8k</td><td>8k token 训练长度</td></tr>
+        <tr><td>训练步数</td><td>1,000</td><td>主实验训练 1000 步</td></tr>
+        <tr><td>动态采样</td><td>从 500 步开始</td><td>提升训练效率</td></tr>
+        <tr><td>熵损失系数</td><td>0</td><td>遵循 exact on-policy RL 设置</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout-blue">
+    <b>预测提取方式</b>：从每条响应中，直接提取最后一个 <code>\\boxed{}</code> 内的完整序列作为模型对 next-token 的预测。特殊 token <code>&#96;&#96;</code> 用于分隔推理和预测部分。
+  </div>
+
+  <div class="note">
+    <b>Prompt template</b>：主实验使用 v0 版 prompt，要求模型预测 context 后的下一个 token 并将答案放入 <code>\\boxed{}</code>。论文在 Appendix D 中测试了 7 种 prompt 变体，发现更好的 prompt（如 v6）可以显著提升初始性能（Pass@8 从 8.5% 到 19%），但主实验使用的是最基础的 v0 版。
+  </div>
+</section>
+
+<!-- ==================== Section 3: Experiments ==================== -->
+<section class="section" id="sec-exp">
+  <div class="section-title"><span class="icon"></span>三、实验结果与理解</div>
+
+  <h3 id="sec-exp-lm" style="font-size:17px;margin-bottom:10px">语言建模性能</h3>
+  <p>
+    在 OmniMATH 的 200 样本验证集上，按 entropy 阈值将 token 位置分为 Easy（entropy &gt; 0.5）、Medium（&gt; 1.0）、Hard（&gt; 1.5）三个难度等级。
+  </p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>方法</th><th>Easy</th><th>Medium</th><th>Hard</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td colspan="4" style="background:var(--primary-soft);font-weight:700">Standard next-token prediction</td></tr>
+        <tr><td>Qwen2.5-14B</td><td>41.90</td><td>30.03</td><td>20.65</td><td>原始基座模型</td></tr>
+        <tr><td>R1-Distill-Qwen-14B</td><td>41.60</td><td>29.46</td><td>20.43</td><td>蒸馏推理模型，标准 NTP 模式</td></tr>
+        <tr><td colspan="4" style="background:var(--primary-soft);font-weight:700">Next-token reasoning</td></tr>
+        <tr><td>R1-Distill-Qwen-14B</td><td>3.31</td><td>1.66</td><td>1.41</td><td>推理模式但未经 RPT 训练，性能极差</td></tr>
+        <tr><td style="font-weight:700;color:var(--primary)">RPT-14B</td><td style="font-weight:700;color:var(--primary)">45.11</td><td style="font-weight:700;color:var(--primary)">33.56</td><td style="font-weight:700;color:var(--primary)">23.75</td><td style="font-weight:700">RPT 训练后，全面提升</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout-green">
+    <b>关键发现</b>：<br>
+    1) RPT-14B 在所有难度等级上都<b>显著超越</b>标准 NTP 基线，尤其在 Hard 难度提升 +3.32pp<br>
+    2) 未经 RPT 训练的模型在 reasoning 模式下表现<b>极差</b>（Easy 仅 3.31%），说明 next-token reasoning 需要专门的 RL 训练才能发挥作用<br>
+    3) RPT-14B 的性能甚至<b>匹配 R1-Distill-Qwen-32B</b>（一个两倍大的模型），暗示 RPT 是一种高效的 scaling 方式
+  </div>
+
+  <figure>
+    <img src="https://arxiv.org/html/2506.08007v1/x4.png" alt="Figure 4: Average next-token prediction accuracy"
+         onerror="this.onerror=null;this.style.display='none'" />
+    <figcaption><strong>Figure 4（论文原图）：</strong>不同模型大小的 NTP Accuracy 对比。RPT-14B 接近 R1-Distill-Qwen-32B 的表现。</figcaption>
+  </figure>
+
+  <h3 id="sec-exp-scaling" style="font-size:17px;margin-bottom:10px">Scaling Properties</h3>
+  <p>
+    论文分析了 RPT 的 scaling 行为，使用幂律模型拟合训练计算量 $C$ 与 next-token prediction accuracy $P(C)$ 的关系：
+  </p>
+
+  <div class="formula-block">
+    $$P(C) = A C^{\alpha} + P^*$$
+    <div class="formula-vars">
+      <div class="var-title">符号说明</div>
+      <ul>
+        <li>$P(C)$：在验证集上的 next-token prediction accuracy</li>
+        <li>$C$：训练计算量（FLOPs）</li>
+        <li>$P^*$$：不可达上限（asymptotic accuracy ceiling）</li>
+        <li>$A$：缩放系数</li>
+        <li>$\alpha$：幂律指数</li>
+      </ul>
+    </div>
+  </div>
+
+  <figure>
+    <img src="https://arxiv.org/html/2506.08007v1/x5.png" alt="Figure 5: Scaling curves for RPT"
+         onerror="this.onerror=null;this.style.display='none'" />
+    <figcaption><strong>Figure 5（论文原图）：</strong>RPT 的 scaling 曲线。Easy/Medium/Hard 三个难度等级下，accuracy 随训练计算量持续提升，$R^2$ 值分别为 0.995、0.997、0.989。</figcaption>
+  </figure>
+
+  <div class="callout-blue">
+    <b>关键结论</b>：RPT 的 scaling curves 表现出<b>高度规律性</b>——增加计算量就稳定提升性能，拟合 $R^2$ 值在三个难度等级上都超过 0.98。这与传统 NTP 的幂律 scaling 行为一致，暗示 RPT 是一种可持续的 scaling 策略。
+  </div>
+
+  <h3 id="sec-exp-rft" style="font-size:17px;margin-bottom:10px">Reinforcement Fine-Tuning</h3>
+  <p>
+    测试 RPT 预训练的模型是否能更好地作为后续 RLVR 微调的起点。使用 Skywork-OR1 数据集（256 训练样本、200 测试样本），PPO 微调 15 个 epoch。
+  </p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>模型</th><th>Before RL</th><th>After RL</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>R1-Distill-Qwen-14B</td><td>51.2</td><td>52.7</td><td>+1.5pp</td></tr>
+        <tr><td>+ Continual NTP training</td><td>10.7</td><td>13.0</td><td>NTP 训练摧毁推理能力</td></tr>
+        <tr><td style="font-weight:700;color:var(--primary)">RPT-14B</td><td style="font-weight:700;color:var(--primary)">56.3</td><td style="font-weight:700;color:var(--primary)">58.3</td><td style="font-weight:700">+2.0pp，更高起点 + 更大提升</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout-amber">
+    <b>重要发现</b>：<br>
+    1) <b>Continual NTP training 摧毁推理能力</b>：用标准 NTP 目标在同一数据上继续训练，推理能力从 51.2% 暴跌至 10.7%。这说明 NTP 目标与 RL 目标存在<b>根本冲突</b><br>
+    2) RPT-14B 的 RL 起点（56.3%）显著高于 baseline（51.2%），说明 RPT 预训练建立了<b>更强的推理基础</b><br>
+    3) RPT-14B 在 RL 微调后的最终性能（58.3%）也更高，体现了<b>更好的 pretrain-then-finetune 协同</b>
+  </div>
+
+  <h3 id="sec-exp-zeroshot" style="font-size:17px;margin-bottom:10px">Zero-Shot 性能</h3>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>模型</th><th>SuperGPQA</th><th>MMLU-Pro</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td colspan="4" style="background:var(--primary-soft);font-weight:700">Standard next-token prediction mode</td></tr>
+        <tr><td>R1-Distill-Qwen-14B</td><td>32.0</td><td>48.4</td><td>基线</td></tr>
+        <tr><td>R1-Distill-Qwen-32B</td><td>37.2</td><td>56.5</td><td>两倍大模型</td></tr>
+        <tr><td colspan="4" style="background:var(--primary-soft);font-weight:700">Reasoning mode</td></tr>
+        <tr><td>R1-Distill-Qwen-14B</td><td>36.1</td><td>68.9</td><td>推理模式基线</td></tr>
+        <tr><td style="font-weight:700;color:var(--primary)">RPT-14B</td><td style="font-weight:700;color:var(--primary)">39.0</td><td style="font-weight:700;color:var(--primary)">71.1</td><td style="font-weight:700">RPT 训练后全面领先</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout-green">
+    <b>关键结论</b>：<br>
+    1) RPT-14B 在 reasoning mode 下<b>全面超越</b> R1-Distill-Qwen-14B<br>
+    2) RPT-14B 甚至<b>超越</b>两倍大的 R1-Distill-Qwen-32B（NTP mode）：SuperGPQA +1.8pp, MMLU-Pro +14.6pp<br>
+    3) 在数学相关学科（MMLU-Pro 的 Math）RPT-14B 达到 91.5%，远超基线的 36.5%/86.0%
+  </div>
+
+  <h3 id="sec-exp-pattern" style="font-size:17px;margin-bottom:10px">推理模式分析</h3>
+
+  <figure>
+    <img src="https://arxiv.org/html/2506.08007v1/x6.png" alt="Figure 6: Reasoning pattern statistics"
+         onerror="this.onerror=null;this.style.display='none'" />
+    <figcaption><strong>Figure 6（论文原图）：</strong>推理模式统计对比。RPT-14B 的 hypothesis 模式比 problem solving 高 161.8%，deduction 高 26.2%，而 breakdown 更低。</figcaption>
+  </figure>
+
+  <div class="callout-purple">
+    <b>核心发现</b>：Next-Token Reasoning 与 Problem Solving 的推理模式<b>本质不同</b>。RPT 更依赖<b>假设生成与验证</b>（hypothesis）和<b>逻辑推断</b>（deduction），而 Problem Solving 更依赖<b>问题分解</b>（breakdown）。这说明 next-token reasoning 激发的是一种<b>推断式</b>而非<b>结构化解题式</b>的推理过程。
+  </div>
+
+  <blockquote>
+    <b>RPT-14B 的真实推理案例（Table 4）</b>：<br>
+    <i>"Okay, I need to figure out what the next token... Let's think about what would logically come next in a text about calculating vector magnitude. The flow so far is introducing the topic, explaining the formulas... the next part is likely going to be... Alternatively, it could be... Common phrases after 'we can go over some' could be 'examples,' 'steps,' 'methods'... But perhaps, given the user started a new section... Wait, perhaps in the original, the next part was an example... Alternatively, perhaps the next line is a new section."</i><br><br>
+    这个案例展示了模型的多层推理：语义分析 → 关键短语识别 → 多候选 brainstorming → 结构线索反思 → 逐 token 细节检查。这远不止简单的模式匹配。
+  </blockquote>
+
+  <h3 id="sec-exp-understanding" style="font-size:17px;margin-bottom:10px">我的理解</h3>
+
+  <div class="two-col">
+    <div class="mini-card" style="border-left:4px solid #16a34a">
+      <b style="color:#16a34a">✅ 亮点</b>
+      <ol style="padding-left:16px;margin:8px 0">
+        <li><b>范式创新</b>：首次将 RL 从后训练搬到预训练，打通了 NTP ↔ RL 的范式鸿沟</li>
+        <li><b>Reward 天然可验证</b>：ground-truth token 就是答案，无需外部标注，彻底解决 RLVR 的数据稀缺问题</li>
+        <li><b>抗 hacking</b>：rule-based reward 比 learned reward model 更鲁棒</li>
+        <li><b>Scaling 规律</b>：幂律 scaling curves 暗示可持续扩展</li>
+        <li><b>推理模式不同</b>：hypothesis + deduction 的推理模式揭示了 next-token reasoning 的独特性</li>
+      </ol>
+    </div>
+    <div class="mini-card" style="border-left:4px solid #dc2626">
+      <b style="color:#dc2626">❌ 不足</b>
+      <ol style="padding-left:16px;margin:8px 0">
+        <li><b>数据局限</b>：仅用 OmniMATH（数学竞赛题），未验证在通用网页文本上的效果</li>
+        <li><b>模型起点</b>：从 R1-Distill（已有推理能力）开始，而非标准 base model，未验证从零启动的效果</li>
+        <li><b>训练成本</b>：每个 token 位置生成 G=8 条完整推理轨迹，训练开销远大于标准 NTP</li>
+        <li><b>推理效率</b>：推理时每个 token 都要经过思考过程，延迟大幅增加</li>
+        <li><b>Prompt 依赖</b>：v0 prompt 性能较差，更好的 prompt（v6 Pass@8=19%）说明工程优化空间大</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="callout-amber">
+    <b>可迁移启发</b>：<br>
+    1) <b>预训练 × RL 的融合思路</b>：不仅推荐/搜索领域，任何有"可验证信号"的预训练场景都可以借鉴 RPT 思路<br>
+    2) <b>熵过滤策略</b>：只对"难预测"的位置投入 RL 训练，这个思路可以迁移到任何有难度分层的训练场景<br>
+    3) <b>Continual NTP 摧毁推理</b>的发现值得关注——如果模型已经学会推理，继续用 NTP 目标训练会退化，说明<b>训练目标与期望行为必须对齐</b><br>
+    4) <b>推理 ≠ 解题</b>：next-token reasoning 的 hypothesis/deduction 模式与 problem-solving 的 breakdown 模式本质不同，这对理解"推理能力"的本质有启发
+  </div>
+  </div>
+  </div>
+  <footer>
+    论文解读 · Reinforcement Pre-Training · 2025 · Microsoft Research
+  </footer>
+</div>
+</body>
+</html>

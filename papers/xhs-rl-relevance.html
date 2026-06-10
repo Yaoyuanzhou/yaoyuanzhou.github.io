@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>小红书 RL 搜索相关性 论文解读</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false }
+          ],
+          throwOnError: false
+        });
+      }
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #2563eb; --primary-soft: #eff6ff;
+      --accent: #7c3aed; --accent-soft: rgba(124,58,237,0.06);
+      --shadow: 0 10px 30px rgba(15,23,42,0.08); --radius: 18px; --max: 1300px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: linear-gradient(180deg,#f8fbff 0%,var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      line-height: 1.8;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .page { max-width: var(--max); margin: 0 auto; padding: 32px 20px 80px; }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    .back-link:hover { color: var(--primary); text-decoration: none; }
+    .hero {
+      background: radial-gradient(circle at top right,rgba(37,99,235,0.14),transparent 30%),
+                  radial-gradient(circle at left bottom,rgba(124,58,237,0.10),transparent 24%), var(--card);
+      border: 1px solid rgba(37,99,235,0.08); border-radius: 24px;
+      box-shadow: var(--shadow); padding: 34px 34px 28px; margin-bottom: 22px;
+    }
+    .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--primary-soft); color: var(--primary); font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+    h1 { font-size: 34px; line-height: 1.25; letter-spacing: -0.02em; margin-bottom: 10px; }
+    .subtitle { color: var(--muted); font-size: 16px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-top: 24px; }
+    .meta-card { background: #fbfdff; border: 1px solid #e7eefb; border-radius: 16px; padding: 14px 16px; }
+    .meta-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .meta-value { font-size: 14px; font-weight: 600; word-break: break-word; }
+    .layout { display: grid; grid-template-columns: 260px minmax(0,1fr); gap: 22px; align-items: start; }
+    .toc { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; }
+    .toc h2 { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+    .toc-list { list-style: none; }
+    .toc-list li { margin: 7px 0; }
+    .toc-list a { font-size: 13.5px; color: var(--muted); }
+    .toc-list a:hover { color: var(--primary); text-decoration: none; }
+    .toc-list a.active{color:var(--primary);background:#eff6ff;font-weight:600;border-left:3px solid var(--primary);padding-left:5px;}
+    .toc-sub { padding-left: 14px; margin-top: 4px; }
+    .toc-sub li { margin: 4px 0; }
+    .toc-sub a { font-size: 12.5px; }
+    .content { display: flex; flex-direction: column; gap: 20px; min-width: 0; overflow-wrap: break-word; }
+    .section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 28px 30px; }
+    .section-title { font-size: 22px; font-weight: 800; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 2px solid #f0f4ff; display: flex; align-items: center; gap: 10px; }
+    .section-title .icon { width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+    h3 { font-size: 18px; font-weight: 700; margin: 26px 0 12px; color: #111827; }
+    h4 { font-size: 15px; font-weight: 700; margin: 20px 0 10px; color: #1d4ed8; }
+    p { margin-bottom: 12px; }
+    p:last-child { margin-bottom: 0; }
+    ul, ol { padding-left: 22px; }
+    li { margin-bottom: 8px; }
+    .callout { border-radius: 14px; padding: 14px 18px; margin: 16px 0; font-size: 14.5px; }
+    .callout-blue { background: linear-gradient(180deg,rgba(37,99,235,0.08),rgba(37,99,235,0.04)); border: 1px solid rgba(37,99,235,0.16); }
+    .callout-blue strong { color: #1d4ed8; }
+    .callout-amber { background: #fffbeb; border: 1px solid #fde68a; }
+    .callout-amber strong { color: #92400e; }
+    .callout-green { background: #f0fdf4; border: 1px solid #86efac; }
+    .callout-green strong { color: #166534; }
+    .callout-purple { background: var(--accent-soft); border: 1px solid rgba(124,58,237,0.18); }
+    .callout-purple strong { color: #6d28d9; }
+    .note { background: #f8faff; border: 1px dashed #cbd5e1; border-radius: 12px; padding: 12px 16px; color: #475467; font-size: 13.5px; margin: 12px 0; }
+    .example-box { background: #f0fdf4; border: 1px solid #86efac; border-radius: 14px; padding: 16px 20px; margin: 16px 0; }
+    .example-box .ex-title { font-size: 12px; font-weight: 700; color: #166534; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+    .example-box p { margin-bottom: 8px; font-size: 14px; color: #166534; }
+    .example-box p:last-child { margin-bottom: 0; }
+    blockquote { margin: 16px 0; padding: 14px 18px; border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 0 12px 12px 0; color: #3f3f46; font-size: 14.5px; }
+    .paper-info { background: #fafbff; border-left: 4px solid var(--primary); border-radius: 12px; padding: 14px 16px; margin: 16px 0; color: #334155; font-size: 14px; }
+    .paper-info p { margin: 5px 0; }
+    figure { margin: 22px 0; background: #fbfdff; border: 1px solid #e8edf5; border-radius: 16px; padding: 14px; }
+    figure img { width: 100%; max-width: 100%; height: auto; display: block; border-radius: 12px; background: #fff; }
+    figcaption { margin-top: 10px; font-size: 13.5px; color: var(--muted); line-height: 1.6; overflow-wrap: break-word; }
+    .fig-placeholder { padding: 36px 24px; text-align: center; background: #f8faff; border-radius: 12px; color: #94a3b8; font-size: 14px; border: 2px dashed #e2e8f0; line-height: 1.9; }
+    .formula-block { background: #fafbff; border: 1px solid #e8edf5; border-radius: 14px; padding: 16px 20px; margin: 14px 0; overflow-x: auto; }
+    .formula-vars { background: #f0f7ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 12px 16px; margin: 6px 0 16px; font-size: 13.5px; color: #374151; }
+    .formula-vars .var-title { font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+    .formula-vars ul { margin: 0; padding-left: 18px; }
+    .formula-vars li { margin: 5px 0; }
+    .katex-display { overflow-x: auto; overflow-y: hidden; padding: 6px 0; }
+    .table-wrap { overflow-x: auto; margin: 16px 0; }
+    table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 12px; font-size: 13.5px; }
+    thead th { background: #f3f6fb; color: #334155; font-weight: 700; border-bottom: 2px solid var(--line); text-align: left; padding: 12px 14px; }
+    td { padding: 11px 14px; border-bottom: 1px solid #eef2f7; vertical-align: top; }
+    tbody tr:nth-child(even) { background: #fafcff; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; }
+    .badge-green { background: #dcfce7; color: #166534; }
+    .badge-red { background: #fee2e2; color: #991b1b; }
+    .badge-blue { background: #dbeafe; color: #1e40af; }
+    .badge-gray { background: #f3f4f6; color: #374151; }
+    .badge-yellow { background: #fef9c3; color: #854d0e; }
+    .badge-purple { background: #ede9fe; color: #6d28d9; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+    .mini-card { border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; background: #fff; }
+    .mini-card h4 { margin-top: 0; font-size: 14px; }
+    .step-list { display: flex; flex-direction: column; gap: 14px; margin: 16px 0; }
+    .step { display: flex; gap: 14px; background: #fafbff; border: 1px solid #e8edf5; border-radius: 14px; padding: 14px 16px; }
+    .step-num { width: 28px; height: 28px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; flex-shrink: 0; margin-top: 2px; }
+    .step-body { flex: 1; }
+    .step-body strong { display: block; margin-bottom: 4px; font-size: 14.5px; color: #111; }
+    .step-body p { font-size: 13.5px; color: #374151; margin: 0; }
+    .flow-diagram { background: #f8faff; border: 1px solid #dbeafe; border-radius: 16px; padding: 24px; margin: 20px 0; overflow-x: auto; }
+    .flow-row { display: flex; align-items: center; gap: 0; flex-wrap: nowrap; justify-content: center; min-width: max-content; }
+    .flow-box { background: #fff; border: 1.5px solid #93c5fd; border-radius: 12px; padding: 10px 16px; text-align: center; font-size: 13px; min-width: 110px; }
+    .flow-box .fb-title { font-weight: 700; color: #1e40af; margin-bottom: 3px; }
+    .flow-box .fb-desc { font-size: 11.5px; color: var(--muted); }
+    .flow-box.stage1 { border-color: #a78bfa; background: #f5f3ff; }
+    .flow-box.stage1 .fb-title { color: #6d28d9; }
+    .flow-box.stage2 { border-color: #6ee7b7; background: #f0fdf4; }
+    .flow-box.stage2 .fb-title { color: #065f46; }
+    .flow-box.out { border-color: #fca5a5; background: #fff1f2; }
+    .flow-box.out .fb-title { color: #991b1b; }
+    .flow-arrow { font-size: 20px; color: #93c5fd; padding: 0 8px; flex-shrink: 0; }
+    .footer { margin-top: 18px; color: var(--muted); font-size: 13px; text-align: center; }
+    @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } .toc { position: static; } .meta-grid, .two-col { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 640px) { .page { padding: 18px 12px 56px; } .hero, .section { padding: 20px 18px; } h1 { font-size: 26px; } .meta-grid, .two-col { grid-template-columns: 1fr; } th, td { padding: 10px; } }
+  </style>
+</head>
+<body>
+<div class="page">
+  <a class="back-link" href="../index.html">← 返回论文列表</a>
+
+  <header class="hero">
+    <div class="eyebrow">📄 论文解读 · Search Relevance × RL × LLM</div>
+    <h1>用强化学习优化生成式搜索相关性：小红书的 SAM+GRPO 工业级方案</h1>
+    <p class="subtitle">Optimizing Generative Ranking Relevance via Reinforcement Learning in Xiaohongshu Search</p>
+    <div class="meta-grid">
+      <div class="meta-card"><div class="meta-label">作者</div><div class="meta-value">Zeng, Jing, Chen, Li et al. · 小红书 + 北京邮电大学</div></div>
+      <div class="meta-card"><div class="meta-label">发表</div><div class="meta-value">KDD 2026 · arXiv 2512.00968</div></div>
+      <div class="meta-card"><div class="meta-label">场景</div><div class="meta-value">小红书搜索的相关性排序（工业级）</div></div>
+      <div class="meta-card"><div class="meta-label">核心命题</div><div class="meta-value">过程监督 RL 比 SFT 更高效地训练搜索相关性推理</div></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="toc">
+      <h2>📋 目录</h2>
+      <ul class="toc-list">
+        <li><a href="#summary">一句话总结</a></li>
+        <li><a href="#background">背景与动机</a>
+          <ul class="toc-sub">
+            <li><a href="#bg-problem">传统黑盒模型的三重限制</a></li>
+            <li><a href="#bg-sft">为什么 SFT + CoT 反而更差？</a></li>
+            <li><a href="#bg-math">数学推理 vs 搜索相关性</a></li>
+          </ul>
+        </li>
+        <li><a href="#method">方法详解</a>
+          <ul class="toc-sub">
+            <li><a href="#method-overview">整体训练流水线</a></li>
+            <li><a href="#method-prompt">三步推理 Prompt 设计</a></li>
+            <li><a href="#method-sft">蒸馏 SFT 预热</a></li>
+            <li><a href="#method-rl">GRPO + SAM 过程监督 RL</a></li>
+            <li><a href="#method-sam">SAM 机制深度解析</a></li>
+            <li><a href="#method-deploy">线上部署：知识蒸馏</a></li>
+          </ul>
+        </li>
+        <li><a href="#exp">实验结果</a>
+          <ul class="toc-sub">
+            <li><a href="#exp-setup">实验设置</a></li>
+            <li><a href="#exp-main">主实验：ProcessRL 最强</a></li>
+            <li><a href="#exp-efficiency">数据效率分析</a></li>
+            <li><a href="#exp-dynamics">SFT vs RL 行为变化</a></li>
+            <li><a href="#exp-online">线上 A/B 测试</a></li>
+          </ul>
+        </li>
+        <li><a href="#discussion">讨论与局限</a></li>
+        <li><a href="#insight">个人理解与延伸</a></li>
+      </ul>
+    </aside>
+
+    <main class="content">
+
+      <!-- ═══ 一句话总结 ═══ -->
+      <section class="section" id="summary">
+        <div class="section-title"><span class="icon" style="background:#dbeafe">💡</span>一句话总结</div>
+        <p><strong>小红书搜索团队将相关性评估建模为多步推理任务，设计了一套"行业规则引导 + 过程监督 RL"的训练范式。核心发现是：SFT 加入多步推理反而大幅变差，但用 SAM（Stepwise Advantage Masking）+ GRPO 的过程监督 RL 不仅恢复还超过了纯标签 SFT，且数据效率极高（200K 样本超过 SFT 1M 样本）。在线部署蒸馏为 0.1B BERT，CES 提升 0.72%，DCG 0/1 降低 0.36%。</strong></p>
+        <div class="paper-info">
+          <p>📄 <strong>原文：</strong><a href="https://arxiv.org/abs/2512.00968" target="_blank">https://arxiv.org/abs/2512.00968</a></p>
+          <p>🏷️ <strong>会议：</strong>KDD 2026 (32nd ACM SIGKDD Conference)</p>
+          <p>🔗 <strong>基础模型：</strong>Qwen2.5-32B-Instruct → RedOne（小红书领域模型）</p>
+        </div>
+        <div class="callout callout-blue">
+          <strong>三句话核心贡献：</strong><br>
+          ① 将小红书搜索相关性建模为 CoT 推理任务，把平台多年积累的专家规则纳入 prompt 作为伪公理；<br>
+          ② 提出 <strong>SAM</strong>（Stepwise Advantage Masking），用规则验证器实现零成本步骤级信用分配；<br>
+          ③ 发现 <strong>SFT + 推理反而有害</strong>，但过程监督 RL 能逆转此趋势，数据效率远超纯监督方法。
+        </div>
+      </section>
+
+      <!-- ═══ 背景与动机 ═══ -->
+      <section class="section" id="background">
+        <div class="section-title"><span class="icon" style="background:#fef9c3">🔍</span>背景与动机</div>
+
+        <h3 id="bg-problem">传统黑盒模型的三重限制</h3>
+        <p>搜索相关性是搜索引擎最基础的能力——判断用户查询（query）和内容笔记（note）是否相关。小红书搜索每天处理数亿次查询，传统方案用一个标量判别模型（如 BERT）输出"相关/不相关"概率，有三个根本问题：</p>
+        <div class="step-list">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <strong>不可解释（Black Box）</strong>
+              <p>模型输出一个分数，但无法解释为什么。出了 bad case 很难诊断是哪里出错，迭代依赖盲猜。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <strong>知识容量有限</strong>
+              <p>小模型难以理解复杂语义关系。比如"多肉植物冬天怎么浇水"，传统模型可能只匹配关键词，无法理解"冬天→休眠期→少浇水"的推理链。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <strong>开放域搜索的歧义性</strong>
+              <p>小红书的 query 和 note 都是非结构化文本，存在大量模糊场景。通用自由推理无法处理这些歧义，需要领域特定的规则引导。</p>
+            </div>
+          </div>
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2512.00968v2/x1.png" alt="Figure 1: 推理 vs 不推理的相关性对比"
+               onerror="this.onerror=null;this.parentElement.innerHTML='<div class=fig-placeholder><b>Figure 1: 推理增强的相关性评估示例</b><br><br>查询：植物为什么需要光来生长<br>不推理模型：0分（不相关）——无法建立联系<br>推理模型：2分（部分相关）——通过光合作用原理推导出必要性</div>'" />
+          <figcaption><strong>Figure 1（论文原图）：</strong>显式推理增强了相关性的可解释性和效果。查询"植物为什么需要光来生长"，推理模型通过光合作用原理推导出笔记部分回答了该问题（2分），而不推理模型无法建立这种连接（0分）。</figcaption>
+        </figure>
+
+        <h3 id="bg-sft">为什么 SFT + CoT 推理反而更差？</h3>
+        <p>自 DeepSeek-R1 成功后，直觉上"加多步推理 + SFT 微调"应该更好。但论文的实验结果给出了一个<strong>非常反直觉的发现</strong>：</p>
+        <blockquote>SFT-Label（200K 纯标签数据，无推理）：2-ACC 90.26 / 5-ACC 78.64<br>SFT-Reasoning-v1（150K CoT 数据）：2-ACC 80.10 / 5-ACC 59.44<br>SFT-Reasoning-v2（500K CoT 数据）：2-ACC 83.04 / 5-ACC 63.06<br>→ SFT + 推理在所有指标上都<strong>大幅变差</strong>，即使数据量多了 2.5 倍。</blockquote>
+        <p>原因：SFT 的 teacher-forcing 训练只优化"逐词预测"的似然度，不区分哪些推理步骤对、哪些错。模型学会了推理的<strong>格式</strong>，但学不会推理的<strong>质量</strong>。推理链引入了更多错误点，而 SFT 无法有效纠正。</p>
+        <div class="callout callout-amber">
+          <strong>关键洞察：</strong>这打破了 GRM 研究界的隐含假设——"多步推理自然会提升排序质量"。实际上，没有合适优化的推理反而<strong>有害</strong>。这就是需要 RL 介入的根本原因。
+        </div>
+
+        <h3 id="bg-math">数学推理 vs 搜索相关性：本质差异</h3>
+        <p>论文指出了为什么 DeepSeek-R1 在数学上的成功不能直接复制到相关性：</p>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>🧮 数学/代码任务</h4>
+            <p><strong>客观</strong>，受通用公理和形式逻辑约束。LLM 预训练已学到基础知识，RL 只需在已有知识上自由探索。</p>
+          </div>
+          <div class="mini-card">
+            <h4>🔍 搜索相关性任务</h4>
+            <p><strong>主观</strong>且<strong>领域特定</strong>。相关性标准与平台业务语境和用户生态紧密耦合。没有领域引导，模型无法通过无约束探索推断出正确的相关性标准。</p>
+          </div>
+        </div>
+        <p>这就是论文选择两条关键路径的原因：<strong>（1）将平台积累的专家规则注入 prompt</strong>，提供"伪公理"作为推理的先验知识；<strong>（2）用过程监督 RL</strong> 确保模型每一步推理都正确内化这些规则。</p>
+      </section>
+
+      <!-- ═══ 方法详解 ═══ -->
+      <section class="section" id="method">
+        <div class="section-title"><span class="icon" style="background:#f0fdf4">🧪</span>方法详解</div>
+
+        <h3 id="method-overview">整体训练流水线</h3>
+        <p>整个方法分为四个阶段：</p>
+        <div class="flow-diagram">
+          <div class="flow-row">
+            <div class="flow-box stage1">
+              <div class="fb-title">① Prompt 设计</div>
+              <div class="fb-desc">行业规则 → 三步推理</div>
+            </div>
+            <span class="flow-arrow">→</span>
+            <div class="flow-box">
+              <div class="fb-title">② SFT 预热</div>
+              <div class="fb-desc">DeepSeek-R1 蒸馏<br/>+ Rejection Sampling</div>
+            </div>
+            <span class="flow-arrow">→</span>
+            <div class="flow-box stage2">
+              <div class="fb-title">③ SAM+GRPO RL</div>
+              <div class="fb-desc">步骤级信用分配<br/>强化学习优化</div>
+            </div>
+            <span class="flow-arrow">→</span>
+            <div class="flow-box out">
+              <div class="fb-title">④ 蒸馏上线</div>
+              <div class="fb-desc">32B → 0.1B BERT<br/>P95 ~20ms</div>
+            </div>
+          </div>
+        </div>
+        <p>任务定义：对每个 query-note 对 $(q, n)$，预测相关性标签 $y \in \{-1, 0, 1, 2, 3\}$，分别对应"强烈不相关、不相关、弱相关、部分相关、完美相关"。</p>
+
+        <h3 id="method-prompt">Criteria-Augmented Prompt：三步推理</h3>
+        <p>论文将小红书搜索团队<strong>多年积累的相关性评估标准</strong>直接编码到 prompt 中。这些规则包含通用原则（查询分析、分类匹配、关键词匹配、内容占比分析等）和专门处理边缘情况的细则。</p>
+        <div class="step-list">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <strong>Step 1：通用语义分析（General Semantic Analysis）</strong>
+              <p>模型对 query 和 note 进行高层语义比较：查询意图分析、分类体系匹配、关键词匹配、内容占比分析等。输出<strong>初步相关性分数</strong>（宏观角度）。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <strong>Step 2：规则上界分析（Rule-based Upper Bound Analysis）</strong>
+              <p>根据专门规则，判断当前场景下的<strong>相关性上界</strong>。如"比较类查询，笔记只覆盖一个对比项 → 最多 1 分"。多条规则触发时取最严格限制。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <strong>Step 3：最终反思与判断（Final Reflection and Judgment）</strong>
+              <p>综合前两步输出——初始相关性估计 + 上界约束——进行最终判断。$\hat{l}$ 必须满足"语义合理"且"不超规则约束"。</p>
+            </div>
+          </div>
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2512.00968v2/x3.png" alt="Figure 3: 规则增强 prompt 原型"
+               onerror="this.onerror=null;this.parentElement.innerHTML='<div class=fig-placeholder><b>Figure 3: Criteria-Augmented Prompt 原型</b><br><br>三步推理 prompt 结构：Step 1 语义分析 → Step 2 规则上界 → Step 3 最终判断<br>每步以 boxed 分数输出中间结果</div>'" />
+          <figcaption><strong>Figure 3（论文原图）：</strong>规则增强 prompt 原型。注意每步末尾的 <code>\boxed{}</code> 格式——这是后续 SAM 进行步骤级验证的基础设施。</figcaption>
+        </figure>
+
+        <div class="callout callout-purple">
+          <strong>设计亮点：</strong>Step 1 和 Step 2 都输出分数但角色不同——Step 1 是"语义上有多相关"，Step 2 是"规则允许最高几分"。最终 = min(Step1, Step2)。很像人类评估员：先凭感觉给分，再用检查清单校准。
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：比较类查询 + 信息不完整规则</div>
+          <p>搜索 <strong>"iPhone 15 vs 华为 Mate 60 哪个好"</strong>，笔记只详细对比了 iPhone 15，对华为只提了一句"也不错"。</p>
+          <p><strong>Step 1（语义分析）：</strong>笔记涉及 query 中的 iPhone 15 → 可能给 2 分</p>
+          <p><strong>Step 2（规则上界）：</strong>触发"Incomplete comparison information"规则 → 上界 1 分</p>
+          <p><strong>Step 3（最终判断）：</strong>min(2, 1) = <strong>1 分</strong>。降级原因是笔记没有完整覆盖比较需求。</p>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：内容占比规则</div>
+          <p>搜索 <strong>"北京烤鸭做法"</strong>，笔记是 3000 字长文，只有一个 200 字段落提了基本做法（其余是各地烤鸭历史对比）。</p>
+          <p><strong>Step 1（语义分析）：</strong>笔记确实包含"做法"内容 → 可能给 3 分</p>
+          <p><strong>Step 2（规则上界）：</strong>触发"相关内容占比过低"规则（&lt;10%） → 上界 1-2 分</p>
+          <p><strong>Step 3（最终判断）：</strong><strong>1-2 分</strong>。语义匹配但用户点进去会发现大部分内容与需求无关。</p>
+        </div>
+
+        <h3 id="method-sft">蒸馏 SFT 预热（Warm-up）</h3>
+        <p>直接冷启动做 RL 会导致模型不遵循三步指令，所以先 SFT 预热：</p>
+        <div class="step-list">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <strong>生成 CoT 数据</strong>
+              <p>DeepSeek-R1 作教师，对 50K queries × 20 notes = 1M 样本生成三步推理轨迹。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <strong>Rejection Sampling + 分布恢复</strong>
+              <p>只保留最终预测与人工标注一致的轨迹，重采样恢复原始标签分布。最终 500K 条有效轨迹。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <strong>NLL 训练</strong>
+              <p>标准 SFT，让模型学会三步推理的格式和基本思维模式。</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="formula-block">
+          $$
+          \mathcal{L}_{\text{distill}}(\theta) = -\sum_{(p,q,n,\hat{\mathbf{o}}) \in \mathcal{D}'_{\text{distill}}} \sum_{t=1}^{T} \log \pi_{\theta}(\hat{o}_t \mid p, q, n, \hat{o}_{1},\ldots,\hat{o}_{t-1})
+          $$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\mathcal{D}'_{\text{distill}}$：rejection sampling 过滤后的蒸馏数据集（500K）</li>
+            <li>$(p, q, n, \hat{\mathbf{o}})$：prompt、query、note 和 DeepSeek-R1 生成的参考推理轨迹</li>
+            <li>$\hat{o}_t$：推理轨迹中第 $t$ 个 token，$\pi_{\theta}$：待训练模型</li>
+          </ul>
+        </div>
+
+        <h3 id="method-rl">过程监督 RL：GRPO + SAM</h3>
+        <p>这是论文最核心的创新部分。</p>
+        <h4>为什么选 GRPO？</h4>
+        <p>GRPO 是 PPO 的变体，不需要学习价值函数，而是在<strong>组内</strong>标准化奖励。对每个 prompt 采样 $G=8$ 条回复，用组的均值和标准差估计优势。在可验证任务（数学推理 + 本文的相关性）上比 PPO 更稳定高效。</p>
+
+        <div class="formula-block">
+          $$
+          \max_{\pi_{\theta}} \mathbb{E}_{(p,q,n,l) \sim \mathcal{D}, \mathbf{o} \sim \pi_{\theta}(\cdot \mid p,q,n)}\big[\mathcal{R}(\mathbf{o}, l) - \beta \;\mathbb{D}_{\mathrm{KL}}(\pi_{\theta} \| \pi_{\mathrm{ref}})\big]
+          $$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\pi_{\theta}$：当前策略模型（GRM），$\pi_{\text{ref}}$：RL 前的参考模型</li>
+            <li>$\mathcal{R}(\mathbf{o}, l)$：奖励函数——预测正确 = 1，否则 = 0</li>
+            <li>$\beta = 10^{-3}$：KL 惩罚系数，防止策略变化过大</li>
+          </ul>
+        </div>
+
+        <p>GRPO 的优势函数通过组内标准化计算：</p>
+        <div class="formula-block">
+          $$
+          \hat{A}_{i,t} = \frac{r_i - \mathrm{mean}(\mathbf{R})}{\mathrm{std}(\mathbf{R})}
+          $$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\mathbf{R} = \{r_1, \ldots, r_G\}$：同一 prompt 的 $G=8$ 条回复的奖励集合</li>
+            <li>$r_i$：第 $i$ 条回复的奖励（0 或 1）</li>
+            <li>$\mathrm{mean}(\mathbf{R}), \mathrm{std}(\mathbf{R})$：组内均值和标准差</li>
+          </ul>
+        </div>
+
+        <h3 id="method-sam">SAM 机制深度解析</h3>
+        <p>SAM（Stepwise Advantage Masking）是本文最巧妙的创新。它解决的核心问题是：</p>
+        <blockquote>GRPO 的优势函数是 trajectory-level 的——如果一条推理链最终对了，<strong>所有 token 都得到正优势信号</strong>，包括那些推理错误的中间步骤。这导致"虚假奖励传播"，强化了错误的推理模式。</blockquote>
+
+        <figure>
+          <img src="https://arxiv.org/html/2512.00968v2/x2.png" alt="Figure 2: SAM 机制示意图"
+               onerror="this.onerror=null;this.parentElement.innerHTML='<div class=fig-placeholder><b>Figure 2: SAM 机制示意图</b><br><br>每步输出 boxed 分数，规则验证器对比金标签得到 (c1,c2,c3)<br>最终答案对：只强化正确步骤<br>最终答案错：只惩罚错误步骤<br>零额外成本的过程监督</div>'" />
+          <figcaption><strong>Figure 2（论文原图）：</strong>SAM 核心逻辑。每条推理链生成 $G$ 条回复，每步 boxed 分数与金标签对比得到 $(c_1, c_2, c_3)$。最终答案对只强化正确步骤、最终答案错只惩罚错误步骤。关键：<strong>零额外推理成本</strong>的过程监督。</figcaption>
+        </figure>
+
+        <h4>步骤级正确性判定（零成本）</h4>
+        <p>利用 prompt 中的 <code>\boxed{}</code> 格式在零额外成本下提取每步中间分数：</p>
+        <div class="step-list">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <strong>提取中间分数</strong>
+              <p>从推理链 <code>\boxed{}</code> 输出中提取 $(s_1, s_2, s_3)$，$s_3$ = 最终预测 $\hat{l}$。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <strong>规则验证器判定</strong>
+              <p>$c_i = \text{True}$ 当且仅当 $s_i = l$（金标签）。不需要学习——纯数值匹配。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <strong>构造 Advantage Mask</strong>
+              <p>根据 $(c_1, c_2, c_3)$ 和最终结果一致性，决定每个 token 是否参与梯度更新。</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="formula-block">
+          $$
+          m_t = \begin{cases}
+          1, & \text{if } \hat{l} = l \land \text{step}(o_t) = i \land c_i = \text{True}, \\[4pt]
+          1, & \text{if } \hat{l} \neq l \land \text{step}(o_t) = i \land c_i = \text{False}, \\[4pt]
+          0, & \text{otherwise}.
+          \end{cases}
+          $$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$m_t$：token $t$ 的 advantage mask（0 = 屏蔽梯度，1 = 允许通过）</li>
+            <li>$\hat{l}$：模型最终预测（$s_3$），$l$：金标签</li>
+            <li>$\text{step}(o_t)$：token $o_t$ 所属步骤索引（1/2/3），由 boxed token 位置确定</li>
+            <li>$c_i$：第 $i$ 步是否正确（$s_i = l$）</li>
+          </ul>
+        </div>
+
+        <div class="callout callout-green">
+          <strong>SAM 两条核心规则：</strong><br>
+          ① <strong>最终正确 → 只强化正确步骤</strong>（屏蔽错误步骤，避免强化偶然猜对的推理）<br>
+          ② <strong>最终错误 → 只惩罚错误步骤</strong>（保护正确步骤，避免打击有效推理片段）<br>
+          <strong>效果：</strong>防止"一荣俱荣、一损俱损"的粗粒度信用分配，每一步得失都能被精确追踪。
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：SAM 如何纠正训练</div>
+          <p><strong>场景：</strong>金标签 $l = 2$（部分相关）。模型生成推理链：</p>
+          <p>Step 1（语义分析）：$\boxed{1}$，错了 → $c_1 = \text{False}$</p>
+          <p>Step 2（规则上界）：$\boxed{2}$，对了 → $c_2 = \text{True}$</p>
+          <p>Step 3（最终判断）：$\boxed{2}$，对了 → $c_3 = \text{True}$，且 $\hat{l}=l$</p>
+          <p><strong>没有 SAM：</strong>GRPO 对整个推理链所有 token 施加正优势 → <strong>Step 1 的错误推理也被强化了</strong>（模型学会"语义不对但靠后续弥补"）。</p>
+          <p><strong>有 SAM：</strong>Step 1 的 token 被 mask（$m_t=0$），只有 Step 2 和 Step 3 得到正信号 → <strong>模型学会每一步都要正确</strong>。</p>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：avg@k 难度过滤策略</div>
+          <p>论文引入了巧妙的训练数据过滤——对每个样本用初始策略采样 $k=64$ 次推理，计算正确率 $\text{avg@64}$：</p>
+          <p>• $\text{avg@64} > 0.97$（5 类）→ <strong>丢弃</strong>（太简单，RL 无梯度信号）</p>
+          <p>• $\text{avg@64} < 0.04$（2 类）→ <strong>丢弃</strong>（太极端，可能是标注错误，破坏训练稳定性）</p>
+          <p><strong>效果：</strong>去除两端极端后，保留有信息量但非平凡的样本，RL 更高效。</p>
+        </div>
+
+        <h3 id="method-deploy">线上部署：知识蒸馏</h3>
+        <p>32B 生成式模型不可能直接上线。论文策略：</p>
+        <div class="step-list">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <strong>教师标注 → 学生蒸馏</strong>
+              <p>32B RL 模型对百万级 query-note 生成标注，<strong>只保留最终分数</strong>（不保留推理链），蒸馏到 0.1B BERT 5 分类器。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <strong>在线推理性能</strong>
+              <p>P95 延迟约 20ms，成功率近 100%。关键妥协：<strong>推理过程只用于训练，上线保留推理"成果"（更好的决策边界），不保留推理"过程"</strong>。</p>
+            </div>
+          </div>
+        </div>
+        <div class="callout callout-amber">
+          <strong>蒸馏 gap：</strong>学生模型 2-ACC 90.65 / 5-ACC 79.22，超过 SFT-Label 基线（90.26/78.64），但与教师模型（92.45/81.23）仍有明显差距，论文也承认蒸馏策略还有很大提升空间。
+        </div>
+      </section>
+
+      <!-- ═══ 实验结果 ═══ -->
+      <section class="section" id="exp">
+        <div class="section-title"><span class="icon" style="background:#ffedd5">📊</span>实验结果</div>
+
+        <h3 id="exp-setup">实验设置</h3>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>🏷️ 数据集</h4>
+            <p><strong>RANDOM（15K）：</strong>随机采样 query，reflect 自然分布</p>
+            <p><strong>LONGTAIL（15K）：</strong>日 PV &lt; 5 的长尾 query，更挑战</p>
+          </div>
+          <div class="mini-card">
+            <h4>📐 指标</h4>
+            <p><strong>2-ACC：</strong>不相关(-1/0) vs 相关(1/2/3) 二分类准确率</p>
+            <p><strong>5-ACC：</strong>5 分类准确率 | <strong>Macro F1 / Weighted F1</strong></p>
+          </div>
+        </div>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>🧠 基座模型</h4>
+            <p>Qwen2.5-32B-Instruct → RedOne（小红书领域模型）</p>
+            <p>训练硬件：SFT 16×H800，RL 40×H800</p>
+          </div>
+          <div class="mini-card">
+            <h4>🔬 对比方法</h4>
+            <p>SFT-Label / SFT-Reasoning-v1/v2 / PPO / OutcomeRL（GRPO）/ ProcessRL（SAM+GRPO）</p>
+          </div>
+        </div>
+
+        <h3 id="exp-main">主实验：ProcessRL 为什么最强</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Model</th><th>Data</th><th>RANDOM 2-ACC</th><th>RANDOM 5-ACC</th><th>RANDOM Macro F1</th><th>LONGTAIL 2-ACC</th><th>LONGTAIL 5-ACC</th><th>LONGTAIL Macro F1</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>SFT-Label</td><td>200k</td><td>90.26</td><td>78.64</td><td>65.66</td><td>89.11</td><td>77.66</td><td>63.24</td></tr>
+              <tr><td>SFT-Reasoning-v1</td><td>150k</td><td><span class="badge badge-red">80.10</span></td><td><span class="badge badge-red">59.44</span></td><td><span class="badge badge-red">47.52</span></td><td><span class="badge badge-red">77.50</span></td><td><span class="badge badge-red">59.22</span></td><td><span class="badge badge-red">47.45</span></td></tr>
+              <tr><td>SFT-Reasoning-v2</td><td>500k</td><td>83.04</td><td>63.06</td><td>51.76</td><td>81.15</td><td>63.55</td><td>50.64</td></tr>
+              <tr><td>PPO-Reasoning</td><td>150k+50k</td><td>91.56</td><td>78.81</td><td>70.04</td><td>89.70</td><td>74.96</td><td>63.74</td></tr>
+              <tr><td>OutcomeRL-Reasoning</td><td>150k+50k</td><td>92.09</td><td>80.90</td><td>72.46</td><td>89.62</td><td>77.03</td><td>65.08</td></tr>
+              <tr style="background:#f0fdf4;font-weight:600"><td>ProcessRL-Reasoning</td><td>150k+50k</td><td><strong>92.45</strong></td><td><strong>81.23</strong></td><td><strong>73.55</strong></td><td><strong>90.04</strong></td><td><strong>77.72</strong></td><td><strong>66.39</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>论文围绕两个研究问题组织分析：</p>
+
+        <h4>RQ1：推理对 SFT 是帮助还是伤害？</h4>
+        <p>纯标签 SFT（200K）已经在 RANDOM 达到 78.64 5-ACC。但 SFT-Reasoning-v1（150K CoT）暴跌到 59.44，即使 SFT-Reasoning-v2 扩充到 500K 也只恢复到 63.06。这表明<strong>多步推理在 SFT 框架下反而引入更多优化难度和错误模式</strong>。</p>
+
+        <h4>RQ2：过程监督 RL 真的能提升推理吗？</h4>
+        <p>三个 RL 变体使用相同的数据、prompt 和奖励，差异仅在于信用分配方式：</p>
+        <ul>
+          <li><strong>PPO：</strong>78.81 5-ACC，依赖价值函数估计引入偏差，性能接近纯标签方案</li>
+          <li><strong>OutcomeRL（GRPO）：</strong>80.90 5-ACC，去掉价值头、组内标准化后更稳定，但统一分配优势</li>
+          <li><strong>ProcessRL（SAM+GRPO）：</strong>81.23 5-ACC + 73.55 Macro F1，<strong>两个基准上所有指标全面碾压</strong></li>
+        </ul>
+        <p>关键提升来自 Macro F1（+1.09pp over OutcomeRL），意味着 SAM 对小类（label -1, 1 等稀有情况）的改善尤为显著。</p>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：为什么 Macro F1 提升最重要？</div>
+          <p>Label -1（强烈不相关）和 Label 1（弱相关）是低频标签（各占 2-7%）。传统模型可能把大部分样本预测为 0（不相关）或 3（完美相关），对低频类几乎不学习。</p>
+          <p>SAM 的过程监督对每一步做精确纠偏，模型在低频类上学得更仔细。Label -1 的 F1 从 47.57 → 71.46（+23.89pp），效果极其显著。</p>
+        </div>
+
+        <h3 id="exp-efficiency">数据效率分析</h3>
+
+        <figure>
+          <img src="https://arxiv.org/html/2512.00968v2/x4.png" alt="Figure 4: 数据效率分析"
+               onerror="this.onerror=null;this.parentElement.innerHTML='<div class=fig-placeholder><b>Figure 4: 数据效率分析</b><br><br>SFT-Label 超过 500K 后趋于饱和<br>ProcessRL 仅用 150K SFT + 50K RL 超过 SFT-Label 1M<br>差距约 0.5-1.0pp (5-ACC)</div>'" />
+          <figcaption><strong>Figure 4（论文原图）：</strong>数据效率对比。SFT-Label 从 100K→1M 的 5-ACC 从 77.06 提升到 80.88，500K 后接近饱和。ProcessRL 仅用 200K 总量（150K SFT + 50K RL）达到 81.23，超过 SFT 1M 的效果。</figcaption>
+        </figure>
+
+        <div class="callout callout-green">
+          <strong>数据效率结论：</strong>ProcessRL 仅用 200K 总量达到 81.23 5-ACC，超过 SFT-Label 用 1M 数据训练的 80.88。这表明过程监督 RL 利用了逐步推理来获得更好的泛化能力，而非依赖大量标注数据的刻板模式匹配。对工业界来说，<strong>标注成本降低 5 倍</strong>是巨大的商业价值。
+        </div>
+
+        <h3 id="exp-dynamics">SFT vs RL：模型行为变化</h3>
+        <p>论文通过细粒度分类指标分析了为什么 RL 更好：</p>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>🔍 2-类视角</h4>
+            <p>"不相关"类 precision 82.67 → <strong>90.31</strong>：更谨慎地判断不相关</p>
+            <p>"相关"类 recall 86.70 → <strong>93.45</strong>：更积极地发现可能相关的内容</p>
+            <p>→ 显著减少了 SFT 的 under-recall 问题</p>
+          </div>
+          <div class="mini-card">
+            <h4>🎯 5-类视角</h4>
+            <p>Label -1 F1：47.57 → <strong>71.46</strong>（+23.89pp！）</p>
+            <p>Label 1 F1：47.87 → <strong>55.55</strong>（+7.68pp）</p>
+            <p>低频类的 precision 和 recall 同时提升 → <strong>边界优化而非简单映射</strong></p>
+          </div>
+        </div>
+        <p>这些数据说明 RL 不是简单地记忆输入-输出映射，而是通过优化推理过程本身来细化决策边界。</p>
+
+        <h3 id="exp-online">线上 A/B 测试</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Model</th><th>ΔCES ↑</th><th>ΔDCG 0/1 ↓</th></tr></thead>
+            <tbody>
+              <tr><td>Baseline</td><td>0</td><td>0</td></tr>
+              <tr style="background:#f0fdf4;font-weight:600"><td>Ours</td><td>+0.72%</td><td>-0.36%</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">指标说明</div>
+          <ul>
+            <li><strong>CES：</strong>综合互动指标（点赞、收藏、评论、分享、关注），↑ 表示用户参与度提升</li>
+            <li><strong>DCG 0/1：</strong>人工评估前 8 条结果中不相关结果数，2K 随机 query，↓ 表示排序质量提升</li>
+            <li>实验组和对照组各 5% 流量，连续观测 7 天，p &lt; 0.05</li>
+          </ul>
+        </div>
+        <p>学生模型在线 P95 延迟约 20ms，成功率近 100%。CES +0.72% 和 DCG 0/1 -0.36% 均具有统计显著性。</p>
+      </section>
+
+      <!-- ═══ 讨论与局限 ═══ -->
+      <section class="section" id="discussion">
+        <div class="section-title"><span class="icon" style="background:#fce7f3">⚠️</span>讨论与局限</div>
+
+        <h4>过联想（Over-Association）和推理错误</h4>
+        <p>论文识别了一个关键失败模式——<strong>overthinking</strong>。在处理涉及影视角色等模糊查询时，模型可能利用内部世界知识进行"联想推理"，有时能碰对，但也产生假阳性。例如查询"剧A"但笔记讲的是"剧B的角色C"，而演员D同时是剧A的主演，模型可能错误关联。未来计划引入推理置信度建模和拒绝机制。</p>
+
+        <h4>规则过拟合问题</h4>
+        <p>论文的长期目标是"一次训练，业务方通过修改 prompt 动态调整规则"（Relevance LLM 概念）。但实验发现<strong>当前 RL 模型过拟合到了训练时的固定规则集</strong>——推理时修改规则，模型仍按照训练时学到的旧规则推理。未来需要引入动态规则变化训练来提高泛化性。</p>
+
+        <h4>SAM 的通用性</h4>
+        <p>SAM 当前依赖精确数值匹配（$s_i = l$）进行步骤验证，这在相关性任务中可以工作，但在更通用的推理任务（如开放式问答）中不可行。论文提出未来可以将 SAM 与 LLM-as-Verifier 结合，用 LLM 替代规则验证器，实现更灵活通用的步骤级信用分配。</p>
+      </section>
+
+      <!-- ═══ 个人理解与延伸 ═══ -->
+      <section class="section" id="insight">
+        <div class="section-title"><span class="icon" style="background:#e0e7ff">🧠</span>个人理解与延伸</div>
+
+        <h3>这篇论文最出彩的是什么</h3>
+        <div class="step-list">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <strong>反直觉的发现 + 优雅的解法</strong>
+              <p>"SFT+推理反而变差"是一个反直觉的结论，但论文用扎实的实验数据支撑了这个观点，然后给出了 SAM 这个低成本高收益的解法。这是一个完整的"发现问题→分析原因→提出方案→验证效果"闭环。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <strong>工业落地的坦诚</strong>
+              <p>很多论文只讲方法的优势，本文坦诚地讨论了蒸馏 gap（学生 vs 教师差距大）、规则过拟合、overthinking 等问题，这种诚实在工业论文中很难得。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <strong>SAM 的巧妙性</strong>
+              <p>用一个 prompt 设计（<code>\boxed{}</code>）+ 规则验证器，就实现了零成本的步骤级过程监督。对比需要昂贵人工标注（如 Let's Verify Step by Step）或蒙特卡洛估计（VinePPO）的方法，SAM 是真正的工业级过程监督。</p>
+            </div>
+          </div>
+        </div>
+
+        <h3>一些值得思考的问题</h3>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>🤔 推理只用于训练，上线不保留</h4>
+            <p>这引出一个哲学问题：如果推理过程不用于上线，那它到底带来了什么？答案可能是：<strong>推理过程改变了模型的内部表征和决策边界</strong>，蒸馏时这种"更优的决策能力"传递给了学生模型，即使学生模型不做推理。</p>
+          </div>
+          <div class="mini-card">
+            <h4>🤔 规则系统如何维护？</h4>
+            <p>论文利用小红书多年积累的专家规则，但这些规则本身需要持续维护。如果业务逻辑变了（比如新类型内容出现），规则如何更新？模型能不能自适应？这是工业系统长期面临的挑战。</p>
+          </div>
+        </div>
+
+        <h3>对推荐/搜索相关性的启示</h3>
+        <div class="callout callout-purple">
+          <strong>三句话启发：</strong><br>
+          ① <strong>RL >> SFT 做推理任务</strong>——这和"RL generalizes, SFT memorizes"的最新研究结论一致；<br>
+          ② <strong>过程监督 > 结果监督</strong>——在可验证步骤的场景中，细粒度信用分配带来显著提升；<br>
+          ③ <strong>工业规则是最好的"领域知识注入"方式</strong>——比自动生成的规则可靠得多。
+        </div>
+
+        <div class="note">
+          <strong>与 OneRec 等生成式排序的区别：</strong>OneRec 等 GRM 直接生成下一个 item 的 ID，本文的 GRM 是用于<strong>相关性评估</strong>（打标签），不直接生成推荐结果。两者的共性是都用 RL 优化生成式模型，但任务不同：本文是"判断相关性"，OneRec 是"生成推荐序列"。
+        </div>
+
+        <div class="note">
+          <strong>SAM 是否可以泛化？</strong>Sam 的关键前提是：<strong>能在中间步骤得到可验证的信号</strong>（本文用 <code>\boxed{}</code> 和精确数值匹配）。对于不满足这个条件的一般推理任务，需要 LLM-as-Verifier 替代规则验证器——这是论文讨论中提到的未来方向，也与 CAPO（xie2025capo）等最新工作呼应。
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <footer class="footer">📄 论文解读完成 · 2025-05-15 · <a href="https://arxiv.org/abs/2512.00968" target="_blank">arXiv 2512.00968</a></footer>
+
+</div>
+</body>
+</html>

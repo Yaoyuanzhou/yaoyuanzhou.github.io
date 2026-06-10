@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LLM4Rec 综述论文解读</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false }
+          ],
+          throwOnError: false
+        });
+      }
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #2563eb; --primary-soft: #eff6ff;
+      --accent: #7c3aed; --accent-soft: rgba(124,58,237,0.06);
+      --shadow: 0 10px 30px rgba(15,23,42,0.08); --radius: 18px; --max: 1300px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: linear-gradient(180deg,#f8fbff 0%,var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      line-height: 1.8;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .page { max-width: var(--max); margin: 0 auto; padding: 32px 20px 80px; }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    .back-link:hover { color: var(--primary); text-decoration: none; }
+    .hero {
+      background: radial-gradient(circle at top right,rgba(37,99,235,0.14),transparent 30%),
+                  radial-gradient(circle at left bottom,rgba(124,58,237,0.10),transparent 24%), var(--card);
+      border: 1px solid rgba(37,99,235,0.08); border-radius: 24px;
+      box-shadow: var(--shadow); padding: 34px 34px 28px; margin-bottom: 22px;
+    }
+    .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--primary-soft); color: var(--primary); font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+    h1 { font-size: 34px; line-height: 1.25; letter-spacing: -0.02em; margin-bottom: 10px; }
+    .subtitle { color: var(--muted); font-size: 16px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-top: 24px; }
+    .meta-card { background: #fbfdff; border: 1px solid #e7eefb; border-radius: 16px; padding: 14px 16px; }
+    .meta-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .meta-value { font-size: 14px; font-weight: 600; word-break: break-word; }
+    .layout { display: grid; grid-template-columns: 260px minmax(0,1fr); gap: 22px; align-items: start; }
+    .toc { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; max-height: calc(100vh - 40px); overflow-y: auto; }
+    .toc h2 { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+    .toc-list { list-style: none; }
+    .toc-list li { margin: 7px 0; }
+    .toc-list a { font-size: 13.5px; color: var(--muted); display: block; padding: 4px 8px; border-radius: 6px; border-left: 3px solid transparent; transition: all 0.15s ease; }
+    .toc-list a:hover { color: var(--primary); text-decoration: none; background: #f8faff; }
+    .toc-list a.active { color: var(--primary); background: var(--primary-soft); font-weight: 600; border-left-color: var(--primary); }
+    .toc-sub { padding-left: 14px; margin-top: 4px; }
+    .toc-sub li { margin: 4px 0; }
+    .toc-sub a { font-size: 12.5px; }
+    .content { display: flex; flex-direction: column; gap: 20px; }
+    .section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 28px 30px; }
+    .section-title { font-size: 22px; font-weight: 800; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 2px solid #f0f4ff; display: flex; align-items: center; gap: 10px; }
+    .section-title .icon { width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+    h3 { font-size: 18px; font-weight: 700; margin: 26px 0 12px; color: #111827; }
+    h4 { font-size: 15px; font-weight: 700; margin: 20px 0 10px; color: #1d4ed8; }
+    p { margin-bottom: 12px; }
+    p:last-child { margin-bottom: 0; }
+    ul, ol { padding-left: 22px; }
+    li { margin-bottom: 8px; }
+    .callout { border-radius: 14px; padding: 14px 18px; margin: 16px 0; font-size: 14.5px; }
+    .callout-blue { background: linear-gradient(180deg,rgba(37,99,235,0.08),rgba(37,99,235,0.04)); border: 1px solid rgba(37,99,235,0.16); }
+    .callout-blue strong { color: #1d4ed8; }
+    .callout-amber { background: #fffbeb; border: 1px solid #fde68a; }
+    .callout-amber strong { color: #92400e; }
+    .callout-green { background: #f0fdf4; border: 1px solid #86efac; }
+    .callout-green strong { color: #166534; }
+    .callout-purple { background: var(--accent-soft); border: 1px solid rgba(124,58,237,0.18); }
+    .callout-purple strong { color: #6d28d9; }
+    .callout-red { background: #fef2f2; border: 1px solid #fecdd3; }
+    .callout-red strong { color: #991b1b; }
+    .note { background: #f8faff; border: 1px dashed #cbd5e1; border-radius: 12px; padding: 12px 16px; color: #475467; font-size: 13.5px; margin: 12px 0; }
+    .example-box { background: #f0fdf4; border: 1px solid #86efac; border-radius: 14px; padding: 16px 20px; margin: 16px 0; }
+    .example-box .ex-title { font-size: 12px; font-weight: 700; color: #166534; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+    .example-box p { margin-bottom: 8px; font-size: 14px; color: #166534; }
+    .example-box p:last-child { margin-bottom: 0; }
+    blockquote { margin: 16px 0; padding: 14px 18px; border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 0 12px 12px 0; color: #3f3f46; font-size: 14.5px; }
+    .paper-info { background: #fafbff; border-left: 4px solid var(--primary); border-radius: 12px; padding: 14px 16px; margin: 16px 0; color: #334155; font-size: 14px; }
+    .paper-info p { margin: 5px 0; }
+    figure { margin: 22px 0; background: #fbfdff; border: 1px solid #e8edf5; border-radius: 16px; padding: 14px; }
+    figure img { max-width: 100%; max-height: 420px; object-fit: contain; display: block; margin: 0 auto; border-radius: 12px; background: #fff; }
+    figcaption { margin-top: 10px; font-size: 13.5px; color: var(--muted); line-height: 1.6; text-align: center; }
+    .fig-placeholder { padding: 36px 24px; text-align: center; background: #f8faff; border-radius: 12px; color: #94a3b8; font-size: 14px; border: 2px dashed #e2e8f0; line-height: 1.9; }
+    .formula-block { background: #fafbff; border: 1px solid #e8edf5; border-radius: 14px; padding: 16px 20px; margin: 14px 0; overflow-x: auto; }
+    .formula-vars { background: #f0f7ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 12px 16px; margin: 6px 0 16px; font-size: 13.5px; color: #374151; }
+    .formula-vars .var-title { font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+    .formula-vars ul { margin: 0; padding-left: 18px; }
+    .formula-vars li { margin: 5px 0; }
+    .katex-display { overflow-x: auto; overflow-y: hidden; padding: 6px 0; }
+    .table-wrap { overflow-x: auto; margin: 16px 0; }
+    table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 12px; font-size: 13.5px; }
+    thead th { background: #f3f6fb; color: #334155; font-weight: 700; border-bottom: 2px solid var(--line); text-align: left; padding: 12px 14px; }
+    td { padding: 11px 14px; border-bottom: 1px solid #eef2f7; vertical-align: top; }
+    tbody tr:nth-child(even) { background: #fafcff; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; }
+    .badge-green { background: #dcfce7; color: #166534; }
+    .badge-red { background: #fee2e2; color: #991b1b; }
+    .badge-blue { background: #dbeafe; color: #1e40af; }
+    .badge-amber { background: #fef9c3; color: #854d0e; }
+    .badge-purple { background: #f3e8ff; color: #6b21a8; }
+    .badge-gray { background: #f3f4f6; color: #374151; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+    .mini-card { border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; background: #fff; }
+    .mini-card h4 { margin-top: 0; font-size: 14px; }
+    .two-fig { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 18px 0; }
+    .two-fig figure { margin: 0; }
+    /* ── Step-list 时间线样式（支持主题色变体）─────────── */
+    .step-list { counter-reset: step; position: relative; margin: 20px 0; padding: 22px 22px 22px 26px; background: linear-gradient(180deg,#fbfdff 0%,#f8faff 100%); border: 1px solid #e8edf5; border-radius: 16px; --sl-color: var(--primary); --sl-accent: var(--accent); --sl-bg-edge: #fbfdff; }
+    .step-list::before { content: ''; position: absolute; left: 38px; top: 28px; bottom: 28px; width: 2px; background: linear-gradient(180deg, var(--sl-color) 0%, var(--sl-accent) 100%); border-radius: 2px; }
+    .step { counter-increment: step; position: relative; padding: 0 0 22px 36px; }
+    .step:last-child { padding-bottom: 0; }
+    .step::before { content: counter(step); position: absolute; left: 0; top: -2px; width: 26px; height: 26px; border-radius: 50%; background: #fff; border: 2px solid var(--sl-color); color: var(--sl-color); font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center; z-index: 1; box-shadow: 0 0 0 4px var(--sl-bg-edge); }
+    .step-num { display: none; }
+    .step-body strong { display: block; margin: 0 0 6px; font-size: 15.5px; color: #111; font-weight: 700; letter-spacing: -0.005em; }
+    .step-body strong::before { content: none; }
+    .step-body p { font-size: 14px; color: #475467; margin: 0; line-height: 1.75; }
+
+    /* 主题色变体：紫色 / 琥珀 / 翠绿 / 玫红 / 青色 */
+    .step-list.theme-purple { background: linear-gradient(180deg,#fbf9ff 0%,#f6f1ff 100%); border-color: #ece4ff; --sl-color: #7c3aed; --sl-accent: #2563eb; --sl-bg-edge: #fbf9ff; }
+    .step-list.theme-amber  { background: linear-gradient(180deg,#fffcf5 0%,#fff7e8 100%); border-color: #fae8b8; --sl-color: #d97706; --sl-accent: #b45309; --sl-bg-edge: #fffcf5; }
+    .step-list.theme-green  { background: linear-gradient(180deg,#f7fef9 0%,#ecfdf2 100%); border-color: #c7ecd0; --sl-color: #059669; --sl-accent: #047857; --sl-bg-edge: #f7fef9; }
+    .step-list.theme-rose   { background: linear-gradient(180deg,#fff8f8 0%,#fff0f1 100%); border-color: #fbd5d8; --sl-color: #e11d48; --sl-accent: #be185d; --sl-bg-edge: #fff8f8; }
+    .step-list.theme-cyan   { background: linear-gradient(180deg,#f5feff 0%,#e7f9fb 100%); border-color: #bee5ec; --sl-color: #0891b2; --sl-accent: #0e7490; --sl-bg-edge: #f5feff; }
+    .flow-diagram { background: #f8faff; border: 1px solid #dbeafe; border-radius: 16px; padding: 24px; margin: 20px 0; overflow-x: auto; }
+    .flow-row { display: flex; align-items: center; gap: 0; flex-wrap: nowrap; justify-content: center; min-width: max-content; }
+    .flow-box { background: #fff; border: 1.5px solid #93c5fd; border-radius: 12px; padding: 10px 16px; text-align: center; font-size: 13px; min-width: 110px; }
+    .flow-box .fb-title { font-weight: 700; color: #1e40af; margin-bottom: 3px; }
+    .flow-box .fb-desc { font-size: 11.5px; color: var(--muted); }
+    .flow-box.stage1 { border-color: #a78bfa; background: #f5f3ff; }
+    .flow-box.stage1 .fb-title { color: #6d28d9; }
+    .flow-box.stage2 { border-color: #6ee7b7; background: #f0fdf4; }
+    .flow-box.stage2 .fb-title { color: #065f46; }
+    .flow-box.out { border-color: #fca5a5; background: #fff1f2; }
+    .flow-box.out .fb-title { color: #991b1b; }
+    .flow-arrow { font-size: 20px; color: #93c5fd; padding: 0 8px; flex-shrink: 0; }
+    .stat-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; margin: 18px 0; }
+    .stat-card { background: #fbfdff; border: 1px solid #e7eefb; border-radius: 16px; padding: 18px 20px; text-align: center; }
+    .stat-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+    .stat-value { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 4px; }
+    .stat-desc { font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+    .sc-blue .stat-value { color: var(--primary); }
+    .sc-purple .stat-value { color: var(--accent); }
+    .sc-green .stat-value { color: #059669; }
+    .sc-amber .stat-value { color: #d97706; }
+    @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } .toc { position: static; } .meta-grid, .two-col, .stat-grid, .two-fig { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 640px) { .page { padding: 18px 12px 56px; } .hero, .section { padding: 20px 18px; } h1 { font-size: 26px; } .meta-grid, .two-col, .stat-grid, .two-fig { grid-template-columns: 1fr; } th, td { padding: 10px; } figure img { max-height: 260px; } }
+  </style>
+</head>
+<body>
+<div class="page">
+  <a class="back-link" href="../index.html">← 返回论文列表</a>
+
+  <header class="hero">
+    <div class="eyebrow">📄 综述论文解读 · LLM × 推荐系统</div>
+    <h1>用 LLM 系统性破解推荐系统的九大顽疾</h1>
+    <p class="subtitle">A Comprehensive Review on Harnessing Large Language Models to Overcome Recommender System Challenges</p>
+    <div class="meta-grid">
+      <div class="meta-card"><div class="meta-label">作者</div><div class="meta-value">Rahul Raja, Anshaj Vats, Arpita Vats, Anirban Majumder</div></div>
+      <div class="meta-card"><div class="meta-label">机构</div><div class="meta-value">LinkedIn / CMU / Stanford / Meta / Amazon / Boston University</div></div>
+      <div class="meta-card"><div class="meta-label">发表</div><div class="meta-value">2025 · arXiv:2507.21117 (v2, Oct 2025)</div></div>
+      <div class="meta-card"><div class="meta-label">核心命题</div><div class="meta-value">LLM 不是辅助模块，而是"基础使能层"——重塑推荐系统设计空间</div></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="toc">
+      <h2>📋 目录</h2>
+      <ul class="toc-list">
+        <li><a href="#summary">一句话总结</a></li>
+        <li><a href="#background">研究背景</a>
+          <ul class="toc-sub">
+            <li><a href="#bg-pipeline">经典推荐流水线</a></li>
+            <li><a href="#bg-pain">五大顽疾</a></li>
+            <li><a href="#bg-llm">为何 LLM 是答案</a></li>
+          </ul>
+        </li>
+        <li><a href="#evolution">推荐系统架构演进</a>
+          <ul class="toc-sub">
+            <li><a href="#ev-traditional">传统方法</a></li>
+            <li><a href="#ev-content">内容与混合</a></li>
+            <li><a href="#ev-dl">深度学习</a></li>
+            <li><a href="#ev-seq">序列模型</a></li>
+            <li><a href="#ev-graph">图神经网络</a></li>
+            <li><a href="#ev-retrieve">大规模召回</a></li>
+          </ul>
+        </li>
+        <li><a href="#pipeline">三阶段流水线</a></li>
+        <li><a href="#data">数据层挑战</a>
+          <ul class="toc-sub">
+            <li><a href="#data-cold">冷启动</a></li>
+            <li><a href="#data-sparse">数据稀疏</a></li>
+            <li><a href="#data-noise">含噪反馈</a></li>
+            <li><a href="#data-time">时序漂移</a></li>
+            <li><a href="#data-multi">多模态融合</a></li>
+          </ul>
+        </li>
+        <li><a href="#model">建模与算法</a>
+          <ul class="toc-sub">
+            <li><a href="#model-pg">个性化 vs 泛化</a></li>
+            <li><a href="#model-scale">可扩展性</a></li>
+            <li><a href="#model-tail">长尾建模</a></li>
+          </ul>
+        </li>
+        <li><a href="#eval">评估与实验</a>
+          <ul class="toc-sub">
+            <li><a href="#eval-gap">线上线下不一致</a></li>
+            <li><a href="#eval-sparse">转化标签稀疏</a></li>
+            <li><a href="#eval-longterm">短期 vs 长期价值</a></li>
+          </ul>
+        </li>
+        <li><a href="#privacy">隐私、安全与合规</a></li>
+        <li><a href="#limits">局限与开放问题</a></li>
+        <li><a href="#takeaways">实践启示</a></li>
+      </ul>
+    </aside>
+
+    <main class="content">
+
+      <!-- ═══ 一句话总结 ═══ -->
+      <section class="section" id="summary">
+        <div class="section-title"><span class="icon" style="background:#dbeafe">💡</span>一句话总结</div>
+        <div class="callout-blue callout">
+          <strong>这是一份 2025 年的 LLM4Rec 综述</strong>，作者来自 LinkedIn / Meta / Amazon / CMU / Stanford 等工业一线。它<strong>不是简单罗列论文</strong>，而是把推荐系统的<strong>所有顽疾按"数据 → 建模 → 评估 → 隐私"四类</strong>分层归类，对每一个子问题给出<strong>具体的 LLM 解法（含公式、prompt 模板和真实工业案例）</strong>。读完你会得到一张完整的 <em>"挑战 × LLM 方案"对照表</em>，知道在你自己的系统里该把 LLM 插在哪个环节、用哪种方式插。
+        </div>
+
+        <div class="stat-grid">
+          <div class="stat-card sc-blue">
+            <div class="stat-label">挑战类别</div>
+            <div class="stat-value">4 大类</div>
+            <div class="stat-desc">数据 / 建模 / 评估 / 隐私</div>
+          </div>
+          <div class="stat-card sc-purple">
+            <div class="stat-label">子问题</div>
+            <div class="stat-value">12 个</div>
+            <div class="stat-desc">从冷启动到合规审计</div>
+          </div>
+          <div class="stat-card sc-green">
+            <div class="stat-label">LLM 技术</div>
+            <div class="stat-value">40+ 种</div>
+            <div class="stat-desc">RAG / Prompt / MoE / Distill ...</div>
+          </div>
+          <div class="stat-card sc-amber">
+            <div class="stat-label">论文规模</div>
+            <div class="stat-value">290+ 引用</div>
+            <div class="stat-desc">覆盖 2017–2025 主要工作</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══ 研究背景 ═══ -->
+      <section class="section" id="background">
+        <div class="section-title"><span class="icon" style="background:#fef3c7">🔍</span>研究背景</div>
+
+        <h3 id="bg-pipeline">经典推荐流水线</h3>
+        <p>过去十年，工业级推荐系统几乎都采用<strong>模块化多阶段架构</strong>：</p>
+
+        <div class="flow-diagram">
+          <div class="flow-row">
+            <div class="flow-box">
+              <div class="fb-title">用户行为</div>
+              <div class="fb-desc">点击 / 观看 / 购买</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box stage1">
+              <div class="fb-title">召回</div>
+              <div class="fb-desc">Two-Tower / ANN</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box stage1">
+              <div class="fb-title">粗排</div>
+              <div class="fb-desc">DNN / GBDT</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box stage2">
+              <div class="fb-title">精排</div>
+              <div class="fb-desc">多任务 DNN</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box stage2">
+              <div class="fb-title">重排</div>
+              <div class="fb-desc">多样性 / 公平性</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box out">
+              <div class="fb-title">展示</div>
+            </div>
+          </div>
+        </div>
+
+        <p>每个阶段独立训练、独立优化，特征靠人工工程。这套架构在很多场景下确实管用，但有<strong>难以根治的顽疾</strong>。</p>
+
+        <h3 id="bg-pain">五大顽疾</h3>
+        <ul>
+          <li><strong>冷启动</strong>：新用户/新物品没有交互历史，CF 系数找不到，embedding 无法初始化</li>
+          <li><strong>数据稀疏</strong>：交互矩阵 99%+ 是空的，模型只能记住高频物品</li>
+          <li><strong>个性化深度不足</strong>：模型只看 ID 和统计特征，不懂用户真正的意图</li>
+          <li><strong>语义理解缺失</strong>：物品描述、评论、图片里有海量信号，传统模型用不上</li>
+          <li><strong>长尾覆盖差</strong>：80% 的物品是冷门，但传统模型对它们几乎无能为力</li>
+        </ul>
+
+        <h3 id="bg-llm">为何 LLM 是答案</h3>
+        <p>LLM 提供了一种<strong>统一的、语言原生的</strong>机制：可以跨任务、跨域、跨模态泛化，能 zero-shot/few-shot 推理，能从外部知识与上下文中推断关联——这恰好对应了上面五大顽疾的解药。</p>
+
+        <div class="callout-purple callout">
+          <strong>论文的核心主张：</strong>LLM 不再是推荐系统的"附属模块"或"特征生成器"，而是<strong>底层的使能层</strong>——它让推荐系统第一次能"理解"用户和物品，而不是只能"统计"它们。
+        </div>
+      </section>
+
+      <!-- ═══ 推荐系统架构演进 ═══ -->
+      <section class="section" id="evolution">
+        <div class="section-title"><span class="icon" style="background:#ede9fe">📜</span>推荐系统架构演进</div>
+
+        <p>在进入 LLM 解法之前，论文用 §2 系统梳理了过去二十年推荐系统架构的演进——这部分本身就是一个很好的速成教材。</p>
+
+        <h3 id="ev-traditional">传统方法：启发式 / CF / 矩阵分解</h3>
+
+        <h4>启发式（Heuristic）</h4>
+        <p>最古老的方法。基于全局统计：</p>
+        <div class="formula-block">
+          $$s_i = \text{count}(i) = \sum_{u \in \mathcal{U}} \mathbb{I}(i \in I_u)$$
+        </div>
+        <p>即给每个物品按"被多少用户交互过"打分，热度高的排前面。<strong>共现规则</strong>则是"买了 A 的人也买 B"：</p>
+        <div class="formula-block">
+          $$\text{sim}(i,j) = \frac{\text{count}(i,j)}{\sqrt{\text{count}(i) \cdot \text{count}(j)}}$$
+        </div>
+        <p>简单、可解释、上线快，但<strong>没有任何个性化</strong>。所有人看到的都一样。</p>
+
+        <h4>协同过滤（Collaborative Filtering）</h4>
+        <p>核心假设——<strong>同好原则（homophily）</strong>：行为相似的用户，未来偏好也相似。User-based CF 的预测公式：</p>
+        <div class="formula-block">
+          $$\hat{r}_{u,i} = \frac{\sum_{v \in \mathcal{N}_k(u)} \text{sim}(u,v) \cdot r_{v,i}}{\sum_{v \in \mathcal{N}_k(u)} |\text{sim}(u,v)|}$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\mathcal{N}_k(u)$ — 与用户 $u$ 最相似的 $k$ 个邻居</li>
+            <li>$\text{sim}(u,v)$ — 用户相似度，常用余弦或 Pearson</li>
+            <li>$r_{v,i}$ — 邻居 $v$ 对物品 $i$ 的评分</li>
+          </ul>
+        </div>
+
+        <div class="two-fig">
+          <figure>
+            <img src="https://ar5iv.labs.arxiv.org/html/2507.21117/assets/CB.png"
+                 alt="Figure 1(i): Content-Based"
+                 onerror="this.onerror=null;this.style.display='none';this.parentElement.querySelector('.fig-fallback').style.display='block'" />
+            <div class="fig-fallback fig-placeholder" style="display:none">
+              <b>Figure 1(i)：Content-Based</b><br/>基于电影属性（类型/演员）的相似度推荐
+            </div>
+            <figcaption><strong>Figure 1(i)：</strong>内容过滤——按电影属性相似度推荐</figcaption>
+          </figure>
+          <figure>
+            <img src="https://ar5iv.labs.arxiv.org/html/2507.21117/assets/CF.png"
+                 alt="Figure 1(ii): Collaborative Filtering"
+                 onerror="this.onerror=null;this.style.display='none';this.parentElement.querySelector('.fig-fallback').style.display='block'" />
+            <div class="fig-fallback fig-placeholder" style="display:none">
+              <b>Figure 1(ii)：User-based CF</b><br/>找口味相似的用户，推荐他们喜欢的东西
+            </div>
+            <figcaption><strong>Figure 1(ii)：</strong>协同过滤——找相似口味的用户做推荐</figcaption>
+          </figure>
+        </div>
+
+        <h4>矩阵分解（Matrix Factorization）</h4>
+        <p>把稀疏的评分矩阵 $R \in \mathbb{R}^{m \times n}$ 分解成两个低秩矩阵的乘积：</p>
+        <div class="formula-block">
+          $$R \approx \hat{R} = UV^\top, \quad U \in \mathbb{R}^{m \times k}, V \in \mathbb{R}^{n \times k}$$
+        </div>
+        <p>优化目标：</p>
+        <div class="formula-block">
+          $$\min_{U,V} \sum_{(u,i) \in \mathcal{K}} (r_{u,i} - \mathbf{u}_u^\top \mathbf{v}_i)^2 + \lambda (\|\mathbf{u}_u\|^2 + \|\mathbf{v}_i\|^2)$$
+        </div>
+        <p>SVD++ 进一步引入隐式反馈，把"用户点过的其他物品"也作为信号：</p>
+        <div class="formula-block">
+          $$\hat{r}_{u,i} = \mu + b_u + b_i + \left(\mathbf{u}_u + \sum_{j \in \mathcal{I}_u} \frac{y_j}{\sqrt{|\mathcal{I}_u|}}\right)^\top \mathbf{v}_i$$
+        </div>
+        <p>MF 是 Netflix Prize 的赢家，至今仍是工业级推荐的基线。</p>
+
+        <h3 id="ev-content">内容过滤与混合模型</h3>
+
+        <h4>内容过滤（CBF）</h4>
+        <p>用物品属性（类型、标签、描述、图像）构造特征向量 $\mathbf{x}_i$，与用户画像 $\mathbf{u}$ 计算余弦相似度：</p>
+        <div class="formula-block">
+          $$\hat{r}_{u,i} = \text{sim}_\text{cosine}(\mathbf{u}, \mathbf{x}_i) = \frac{\mathbf{u}^\top \mathbf{x}_i}{\|\mathbf{u}\| \cdot \|\mathbf{x}_i\|}$$
+        </div>
+        <p>能解决"新物品冷启动"（只要有属性就能推），但对<strong>新颖性</strong>不友好——总是推相似的东西。</p>
+
+        <h4>LightFM / DeepFM</h4>
+        <p><strong>LightFM</strong>把协同信号和内容特征统一到一个潜空间：</p>
+        <div class="formula-block">
+          $$\hat{r}_{u,i} = \mathbf{u}_u^\top \mathbf{v}_i + \mathbf{u}_u^\top \mathbf{f}_i + \mathbf{f}_u^\top \mathbf{v}_i$$
+        </div>
+        <p><strong>DeepFM</strong>则用 FM 层学低阶交互、DNN 层学高阶交互，在大规模工业系统里广泛使用。</p>
+
+        <h3 id="ev-dl">深度学习架构：NCF / Wide & Deep</h3>
+
+        <p><strong>NCF</strong> 把 MF 的内积换成 MLP，能学非线性的用户-物品交互：</p>
+        <div class="formula-block">
+          $$\hat{r}_{u,i} = \phi(\mathbf{u}_u, \mathbf{v}_i) = \text{MLP}([\mathbf{u}_u; \mathbf{v}_i])$$
+        </div>
+
+        <figure>
+          <img src="https://ar5iv.labs.arxiv.org/html/2507.21117/assets/ncf.png"
+               alt="Figure 2: NCF Architecture"
+               onerror="this.onerror=null;this.style.display='none';this.parentElement.querySelector('.fig-fallback').style.display='block'" />
+          <div class="fig-fallback fig-placeholder" style="display:none">
+            <b>Figure 2：NCF 架构</b><br/>One-hot 用户/物品 → embedding → 神经层 → 评分预测
+          </div>
+          <figcaption><strong>Figure 2：</strong>Neural Collaborative Filtering 架构。one-hot 输入经 embedding 层后，由 MLP 学习非线性交互。</figcaption>
+        </figure>
+
+        <p><strong>Wide & Deep</strong>（Google Play）则用"宽线性 + 深网络"的双塔结构同时捕捉记忆（memorization）和泛化（generalization）：</p>
+        <div class="formula-block">
+          $$\hat{y} = \sigma(\mathbf{w}^\top \mathbf{x} + \mathbf{a}^\top f_\text{deep}(\mathbf{x}))$$
+        </div>
+
+        <h3 id="ev-seq">序列模型：GRU4Rec / SASRec / BERT4Rec / TiSASRec</h3>
+
+        <p>用户行为本质是<strong>时间序列</strong>——上一个看的视频会影响下一个想看的。这类模型的演化路径：</p>
+
+        <div class="step-list">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <strong>GRU4Rec（2016）</strong>
+              <p>首次把 RNN 用于会话推荐。隐状态 $h_t = \text{GRU}(x_t, h_{t-1})$，预测下一个物品 $\hat{y}_{t+1} = \text{softmax}(W h_t + b)$。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <strong>SASRec（2018）</strong>
+              <p>用单向自注意力代替 RNN：$\mathbf{H} = \text{SelfAttention}(\mathbf{X} + \mathbf{P})$，长程依赖建模能力大幅提升。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <strong>BERT4Rec（2019）</strong>
+              <p>引入 BERT 的双向注意力 + masked item prediction，能同时利用过去和未来的上下文。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-body">
+              <strong>TiSASRec（2020）</strong>
+              <p>在注意力权重里显式加入<strong>绝对时间</strong>和<strong>相对时间</strong>：$\text{Attention} = \text{softmax}\left(\frac{QK^\top + T_\text{abs} + T_\text{rel}}{\sqrt{d_k}}\right) V$。</p>
+            </div>
+          </div>
+        </div>
+
+        <h3 id="ev-graph">图神经网络：NGCF / LightGCN / PinSage</h3>
+
+        <p>把用户-物品交互看成<strong>二分图</strong> $\mathcal{G} = (\mathcal{U} \cup \mathcal{I}, \mathcal{E})$，用 GCN 做消息传递：</p>
+        <div class="formula-block">
+          $$\mathbf{e}_v^{(k)} = \sum_{u \in \mathcal{N}(v)} \frac{1}{\sqrt{|\mathcal{N}(v)||\mathcal{N}(u)|}} \cdot \mathbf{e}_u^{(k-1)}$$
+        </div>
+        <p>NGCF 加非线性激活，LightGCN 把非线性去掉、只保留邻居加权聚合（反而效果更好），PinSage 把这套搬到 Pinterest 的百亿节点图上。</p>
+
+        <figure>
+          <img src="https://ar5iv.labs.arxiv.org/html/2507.21117/assets/graph.png"
+               alt="Figure 3: Graph-based recommender"
+               onerror="this.onerror=null;this.style.display='none';this.parentElement.querySelector('.fig-fallback').style.display='block'" />
+          <div class="fig-fallback fig-placeholder" style="display:none">
+            <b>Figure 3：异构图推荐系统</b><br/>社交关系图 + 用户-物品交互图 + 领域知识图
+          </div>
+          <figcaption><strong>Figure 3：</strong>异构图推荐——融合社交关系、交互行为、物品知识图谱三个视图。</figcaption>
+        </figure>
+
+        <h3 id="ev-retrieve">大规模召回：Two-Tower / YouTube DNN / DLRM</h3>
+
+        <p>工业系统物品池规模常达<strong>百万到十亿</strong>，召回阶段必须做到亚毫秒级。<strong>双塔（Two-Tower）</strong>是事实标准：</p>
+        <div class="formula-block">
+          $$\mathbf{e}_u = f_\theta(u), \quad \mathbf{e}_i = g_\phi(i), \quad s(u,i) = \langle \mathbf{e}_u, \mathbf{e}_i \rangle$$
+        </div>
+        <p>关键优势是<strong>物品塔可预计算</strong>，配合 ANN 索引（HNSW、PQ）能实现亚线性检索。YouTube DNN 用采样 softmax，DLRM（Meta）则用 embedding lookup + interaction layer。</p>
+
+        <figure>
+          <img src="https://ar5iv.labs.arxiv.org/html/2507.21117/assets/two_tower.png"
+               alt="Figure 4: Two-tower architecture"
+               onerror="this.onerror=null;this.style.display='none';this.parentElement.querySelector('.fig-fallback').style.display='block'" />
+          <div class="fig-fallback fig-placeholder" style="display:none">
+            <b>Figure 4：双塔架构</b><br/>用户塔 + 物品塔，独立 embedding 后做 ANN 召回
+          </div>
+          <figcaption><strong>Figure 4：</strong>双塔架构 + Pairwise 模型组成的混合排序系统。</figcaption>
+        </figure>
+      </section>
+
+      <!-- ═══ 三阶段流水线 ═══ -->
+      <section class="section" id="pipeline">
+        <div class="section-title"><span class="icon" style="background:#dcfce7">🔗</span>三阶段流水线</div>
+
+        <p>论文 §3 把现代推荐系统抽象成<strong>三个核心阶段</strong>。理解它们对后续 LLM 的"插入位置"至关重要。</p>
+
+        <div class="step-list theme-green">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <strong>召回（Candidate Generation）</strong>
+              <p>从百万物品中拉出几百到几千的候选集。<strong>优化目标是 recall 而非 precision</strong>。常用 ANN、双塔、图随机游走、heuristic 过滤等。形式化：$\mathcal{C}(u) = \{i \in \mathcal{I} \mid \text{sim}(f_u, f_i) \geq \tau\}$。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <strong>精排（Scoring & Ranking）</strong>
+              <p>对候选集打分排序。模型更大、特征更多，用 DNN / Transformer / GBDT。在多任务学习中：$h = \text{Encoder}_\theta(\phi_u, \phi_i, \psi_{u,i})$，然后多头预测 $\hat{y}_\text{click}, \hat{y}_\text{dwell}, \hat{y}_\text{engage}$，损失加权 $\mathcal{L} = \lambda_1 \mathcal{L}_\text{click} + \lambda_2 \mathcal{L}_\text{dwell} + \lambda_3 \mathcal{L}_\text{engage}$。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <strong>重排（Post-Ranking & Calibration）</strong>
+              <p>在已排序列表上做最终调整：多样性、新鲜度、公平性、疲劳控制等。常用 DPP、submodular optimization、contextual bandit。形式化：$s'(u, i_j) = g(s(u, i_j), \delta(i_j), \gamma(i_j))$，$\delta$ 是多样性因子，$\gamma$ 是新鲜度因子。</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout-blue callout">
+          <strong>LLM 可以插在任何一个阶段：</strong>召回阶段用 LLM 做语义检索，精排阶段用 LLM 做语言原生 rerank，重排阶段用 LLM 做多样性 / 解释性。论文 §4 就是按这三个阶段 × 四类挑战展开的。
+        </div>
+      </section>
+
+      <!-- ═══ 数据层挑战 ═══ -->
+      <section class="section" id="data">
+        <div class="section-title"><span class="icon" style="background:#fef3c7">📊</span>数据层挑战（§4.1）</div>
+
+        <p>所有推荐系统的痛苦，归根到底都是<strong>数据的痛苦</strong>。这一节是整篇综述最核心、最实用的部分。</p>
+
+        <h3 id="data-cold">冷启动问题</h3>
+
+        <p>新用户/新物品没交互历史，传统 CF 的 embedding 直接不存在：</p>
+
+        <div class="formula-block">
+          $$\hat{r}_{u'i} = \mathbf{p}_{u'}^\top \mathbf{q}_i \quad \text{或} \quad \hat{r}_{ui'} = \mathbf{p}_u^\top \mathbf{q}_{i'}$$
+        </div>
+        <p>其中 $\mathbf{p}_{u'}, \mathbf{q}_{i'}$ 要么未定义、要么是随机初始化的垃圾向量，预测毫无意义。</p>
+
+        <div class="callout-amber callout">
+          <strong>问题严重性：</strong>大型平台每天有上千新用户和新物品进入系统。Schein 2002、Park & Tuzhilin 2006 等早期研究已表明这是推荐系统的"持久瓶颈"——但 LLM 把它<strong>根本性地</strong>改变了：因为 LLM 不需要交互历史，只要有<strong>文本/元数据</strong>就能做出推断。
+        </div>
+
+        <p>论文列出了<strong>九种 LLM 解决方案</strong>，每种对应一个具体的工业落地：</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>方案</th><th>核心思路</th><th>典型系统</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>① Content-Conditioned Generation</strong></td><td>把物品标题/描述/评论喂给 LLM，让它直接生成推荐列表</td><td>GenRec, GPTRec, PromptRec, JD.com, Pinterest</td></tr>
+              <tr><td><strong>② Retrieval-Augmented Generation</strong></td><td>先检索相关支撑集 $R(x_u)$，再由解码器生成 $P(i \mid x_u) = \text{Decoder}_\text{LLM}(x_u, R(x_u))$</td><td>Amazon Alexa RecRAG, OpenAI plugin RecSys</td></tr>
+              <tr><td><strong>③ Zero-Shot Personalization</strong></td><td>用指令微调模型直接解析自然语言偏好</td><td>Spotify 对话助手, TikTok 偏好助手</td></tr>
+              <tr><td><strong>④ Representation Bootstrapping</strong></td><td>用 LLM 编码器把新用户/物品从元数据生成 embedding：$q_{i'} = f_\text{LLM}(x_{i'})$</td><td>各类 LLM-as-encoder 方案</td></tr>
+              <tr><td><strong>⑤ Language-Native Dialogue</strong></td><td>对话式实时获取偏好，维护信念状态 $b_u^{t+1} = f_\text{update}(b_u^t, a_t, r_t)$</td><td>DialogRec</td></tr>
+              <tr><td><strong>⑥ Prompt-Based Conditioning</strong></td><td>把推荐重构为语言建模任务</td><td>PROMO, OpenAI plugin RecSys</td></tr>
+              <tr><td><strong>⑦ Multimodal Embedding Synthesis</strong></td><td>跨模态融合（Flamingo 风格门控）：$q_i = \gamma_i^\top [f_\text{text}; f_\text{img}; f_\text{meta}]$</td><td>Amazon 多模态 RecSys</td></tr>
+              <tr><td><strong>⑧ Meta-Learning for Fast Adaptation</strong></td><td>MAML 风格少样本适应：$\theta^* = \theta - \alpha \nabla_\theta \mathcal{L}_{T_u}(f_\theta)$</td><td>MeLU, Meta-LLMRec</td></tr>
+              <tr><td><strong>⑨ Cross-Domain Transfer</strong></td><td>共享语言表示跨域迁移：$P_{D_B}(i \mid x_u) \approx \text{LLM}(x_u^{D_A}, x_i^{D_B})$</td><td>PromptRec, CrossAligner, LLM4CDSR</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="two-fig">
+          <figure>
+            <img src="https://ar5iv.labs.arxiv.org/html/2507.21117/assets/repr-boot.png"
+                 alt="Representation Bootstrapping"
+                 onerror="this.onerror=null;this.style.display='none';this.parentElement.querySelector('.fig-fallback').style.display='block'" />
+            <div class="fig-fallback fig-placeholder" style="display:none">
+              <b>Representation Bootstrapping</b><br/>LLM 把新用户/物品的文本编码到共享 embedding 空间
+            </div>
+            <figcaption><strong>表征启动：</strong>用 LLM 把新用户/物品的文本编码到共享 embedding 空间，立刻可用于召回/排序。</figcaption>
+          </figure>
+          <figure>
+            <img src="https://ar5iv.labs.arxiv.org/html/2507.21117/assets/LLM4CDSR.png"
+                 alt="LLM4CDSR"
+                 onerror="this.onerror=null;this.style.display='none';this.parentElement.querySelector('.fig-fallback').style.display='block'" />
+            <div class="fig-fallback fig-placeholder" style="display:none">
+              <b>LLM4CDSR：跨域序列推荐</b><br/>层次化用户画像 + 三路自注意力 + 适配器对齐局部/全局表示
+            </div>
+            <figcaption><strong>LLM4CDSR：</strong>跨域序列推荐——层次化用户画像 + 三路自注意力 + 适配器对齐 LLM 表示。</figcaption>
+          </figure>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：电商新品冷启动</div>
+          <p>假设你在 Amazon 上线了一个新品："Bose QuietComfort 45 头戴式蓝牙降噪耳机"，0 交互数据。</p>
+          <p><strong>传统做法</strong>：embedding 是随机的，要等到积累几百次点击/购买才能稳定。这期间它几乎不会被推给任何人，陷入"曝光太少→交互更少"的死循环。</p>
+          <p><strong>LLM 做法 ①（Content-Conditioned Generation）</strong>：把标题、描述、规格、评论 prompt 给 LLM："这个商品适合喜欢哪种音乐场景的用户？"LLM 立刻输出"通勤族、远程办公者、音质爱好者"，这就是它的<strong>语义画像</strong>。</p>
+          <p><strong>LLM 做法 ④（Representation Bootstrapping）</strong>：直接用 LLM encoder（比如 Sentence-BERT）把描述编码成 embedding，与现有物品 embedding 落入同一空间，立即可被双塔召回。</p>
+        </div>
+
+        <h3 id="data-sparse">数据稀疏</h3>
+
+        <p>交互矩阵的稀疏度通常 &gt;99%：</p>
+        <div class="formula-block">
+          $$\text{Sparsity} = 1 - \frac{\|\mathbf{R}_\text{obs}\|_0}{|\mathcal{U}| \cdot |\mathcal{I}|}$$
+        </div>
+
+        <p>传统 CF 在稀疏矩阵上只能学到"高频物品"的好表示，长尾物品的 embedding 噪声极大。LLM 的解法：</p>
+
+        <ul>
+          <li><strong>Text-Driven Generalization</strong>：完全不依赖交互矩阵，靠 LLM 对文本的理解做 zero/few-shot 打分</li>
+          <li><strong>Semantic Matching via Embedding</strong>：$\hat{r}_{ui} = \hat{p}_u^\top \hat{q}_i$，其中 $\hat{p}_u, \hat{q}_i$ 都由 LLM 编码生成（可以叠加知识图谱增强）</li>
+        </ul>
+
+        <figure>
+          <img src="https://ar5iv.labs.arxiv.org/html/2507.21117/assets/semantic-matching.png"
+               alt="LLM Semantic Matching"
+               onerror="this.onerror=null;this.style.display='none';this.parentElement.querySelector('.fig-fallback').style.display='block'" />
+          <div class="fig-fallback fig-placeholder" style="display:none">
+            <b>LLM 语义匹配</b><br/>LLM 编码用户/物品元数据 → 点积 → 冷启动评分
+          </div>
+          <figcaption><strong>LLM 语义匹配：</strong>用 LLM 把元数据编码成共享空间向量，点积即可得到冷启动场景下的推荐分。</figcaption>
+        </figure>
+
+        <h3 id="data-noise">含噪隐式反馈</h3>
+
+        <p>用户的点击/观看不等于真正喜欢——可能误点、可能因为前几个广告关掉了页面。建模为：</p>
+        <div class="formula-block">
+          $$P(o_{ui} = 1 \mid r^*_{ui} = 1) < 1, \quad P(o_{ui} = 1 \mid r^*_{ui} = 0) > 0$$
+        </div>
+        <p>其中 $o_{ui}$ 是观察到的点击、$r^*_{ui}$ 是真实偏好。LLM 的解法非常巧妙——<strong>用语言指令把上下文喂进去，让它"读懂"用户的真实意图</strong>：</p>
+
+        <div class="formula-block">
+          $$\tilde{r}_{ui} = \text{sigmoid}\left(\text{LLM}(x_i, c_u)\right)$$
+        </div>
+        <p>得到一个软去噪标签，替换原本的 0/1 标签做训练。</p>
+
+        <p>具体技术：</p>
+        <ul>
+          <li><strong>Context-aware Prompt Interpretation</strong>："用户在第 8 位停留 2 秒后点击——这是真喜欢还是误触？"</li>
+          <li><strong>Counterfactual Feedback Generation</strong>：$\hat{r}_{ui}^\text{cf} = \text{LLM}(\text{Counterfactual Prompt})$，估计 $P(r^*_{ui} \mid \text{do}(x_i^\text{pos} = 1))$</li>
+          <li><strong>Pseudo-Session Simulation</strong>：用 LLM 模拟会话用于预训练（SAM, LLM4RecSim）</li>
+          <li><strong>Explanation-enhanced Supervision</strong>：GPT4Rec 让模型同时输出推荐和解释，解释作为额外监督</li>
+        </ul>
+
+        <h3 id="data-time">时序漂移</h3>
+
+        <p>用户兴趣不是静止的——上个月喜欢运动、这个月迷上音乐、下个月可能转战时尚。建模为：</p>
+        <div class="formula-block">
+          $$p_u^{(t)} = f(p_u^{(t-1)}, \Delta t, x_u^{(t)})$$
+        </div>
+
+        <figure>
+          <img src="https://ar5iv.labs.arxiv.org/html/2507.21117/assets/temporal-drift.png"
+               alt="Temporal Drift"
+               onerror="this.onerror=null;this.style.display='none';this.parentElement.querySelector('.fig-fallback').style.display='block'" />
+          <div class="fig-fallback fig-placeholder" style="display:none">
+            <b>时序漂移</b><br/>用户偏好从运动 → 音乐 → 时尚的演化轨迹
+          </div>
+          <figcaption><strong>时序漂移：</strong>用户偏好随时间演化——过去→现在→未来。模型必须能动态适配。</figcaption>
+        </figure>
+
+        <p>LLM 的解法分两路：</p>
+
+        <h4>① Prompt-based 时序适配</h4>
+        <p>不需要改模型，只需精心设计 prompt：</p>
+        <ul>
+          <li><strong>Recency 提示</strong>："基于用户最近 7 天的行为推荐"</li>
+          <li><strong>长短期拆分</strong>："长期兴趣是 X，但本周明显在看 Y，请推荐符合 Y 的"</li>
+          <li><strong>会话感知 slate prompt</strong>：把当前会话作为强上下文</li>
+          <li><strong>Few-shot drift 泛化</strong>：给几个"兴趣切换"的样例</li>
+          <li><strong>历史摘要</strong>：用 LLM 把嘈杂的长历史压缩成稳定画像</li>
+        </ul>
+
+        <h4>② 结构与混合 LLM 集成</h4>
+        <p>把 LLM 作为参数更新器：</p>
+        <div class="formula-block">
+          $$p_u^{(t)} = \text{MLP}\left(p_u^{(t-1)} \,\|\, \text{LLM}(x_u^{(t)})\right)$$
+        </div>
+        <p>或者把 LLM 的输出当作 Transformer 的输入：$h_t = \text{Transformer}([x_1, \ldots, \text{LLM}(x_t)])$。</p>
+
+        <h3 id="data-multi">多模态融合</h3>
+
+        <p>真实物品有<strong>文本（标题、评论）、图像（封面、商品图）、元数据（类别、价格）、行为（点击序列）</strong>多种模态。融合公式：</p>
+        <div class="formula-block">
+          $$q_i = f_\text{text}(x^\text{text}) + f_\text{img}(x^\text{img}) + f_\text{meta}(x^\text{meta}) + f_\text{behav}(x^\text{behav})$$
+        </div>
+
+        <p>五种 LLM 解法：</p>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>① Modal-Aware Weighting</h4>
+            <p style="font-size:13.5px;color:#6b7280;margin:0">用自注意力动态加权不同模态。当文本充分时弱化图像权重，反之亦然。</p>
+          </div>
+          <div class="mini-card">
+            <h4>② Unified Representation</h4>
+            <p style="font-size:13.5px;color:#6b7280;margin:0">把所有模态序列化成一个 prompt：<code>q_i = g_pool(LLM(Prompt_i))</code>。UniModalRec, UnifiedIO, InstructRecLM 都是这条路。</p>
+          </div>
+          <div class="mini-card">
+            <h4>③ Cross-Modal Alignment</h4>
+            <p style="font-size:13.5px;color:#6b7280;margin:0">用 CLIP / ALIGN / PaLI 等预训练对齐图文。CoCa-2Rec, OmniFM 是典型推荐落地。</p>
+          </div>
+          <div class="mini-card">
+            <h4>④ Multimodal Imputation</h4>
+            <p style="font-size:13.5px;color:#6b7280;margin:0">缺失模态用生成补全：<code>p(x^miss | x^obs) = Π p(w_t | w_&lt;t, x^obs)</code>。</p>
+          </div>
+        </div>
+
+        <div class="mini-card">
+          <h4>⑤ Semantic Fusion via Templates</h4>
+          <p style="font-size:13.5px;color:#6b7280;margin:0">用 <code>[TITLE]/[IMAGE]/[META]/[REVIEW]</code> 这种结构化标签把多模态信息塞进 prompt。CM3, PromptFusionRec 等。</p>
+        </div>
+      </section>
+
+      <!-- ═══ 建模与算法 ═══ -->
+      <section class="section" id="model">
+        <div class="section-title"><span class="icon" style="background:#ede9fe">🧠</span>建模与算法（§4.2）</div>
+
+        <h3 id="model-pg">个性化 vs 泛化</h3>
+
+        <p>个性化太强会过拟合（$\mathcal{L}_\text{overfit} = \sum_u \sum_i (\hat{r}_{ui} - r_{ui})^2$ 在训练集小但泛化差），泛化太强又千人一面。LLM 提供了四种平衡策略：</p>
+
+        <figure>
+          <img src="https://ar5iv.labs.arxiv.org/html/2507.21117/assets/pers-gen.png"
+               alt="Personalization vs Generalization"
+               onerror="this.onerror=null;this.style.display='none';this.parentElement.querySelector('.fig-fallback').style.display='block'" />
+          <div class="fig-fallback fig-placeholder" style="display:none">
+            <b>四种 LLM 个性化策略</b><br/>指令泛化 / Prompt 个性化 / 行为多样性 / 多任务 Prompt
+          </div>
+          <figcaption><strong>四种 LLM 策略：</strong>Instruction-Tuned Generalization、Prompt-Tuned Personalization、Behavioral Diversity、Multitask Prompting。</figcaption>
+        </figure>
+
+        <div class="step-list theme-purple">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <strong>Instruction-Tuned Generalization</strong>
+              <p>FLAN-T5、InstructGPT、T0 在海量任务上指令微调，能 zero-shot 泛化到新场景。当冷启动或跨域时优先选它。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <strong>Prompt-Tuned Personalization</strong>
+              <p>PROMO、PEPLER——只学少量 soft prompt token，针对个人/场景做精细化适配，不动主体参数。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <strong>Behavioral Diversity via Generative Modeling</strong>
+              <p>Spotify 心情歌单、JD/Alibaba 的多样化策略——让 LLM 主动生成"用户可能也喜欢的不同类别"。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-body">
+              <strong>Multitask Prompting</strong>
+              <p>RecDSS 等系统在一个 prompt 里同时要求 LLM 做"推荐 + 解释 + 教学 + 转化预测"，共享底座参数。</p>
+            </div>
+          </div>
+        </div>
+
+        <h3 id="model-scale">可扩展性：LLM 太大怎么办</h3>
+
+        <p>工业推荐系统的核心约束是<strong>延迟</strong>——召回 + 精排必须在 100ms 内完成。把一个 7B 模型直接接进精排链路是不可能的。论文给出四种方案：</p>
+
+        <div class="formula-block">
+          $$\tau = \sum_l C_l \cdot d_l \quad \text{（每层计算成本 } \times \text{ 深度）}$$
+        </div>
+
+        <div class="step-list theme-purple">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <strong>LLM-Based Distillation（蒸馏）</strong>
+              <p>训练一个小模型逼近大 LLM 的输出分布：$\mathcal{L}_\text{distill} = \sum \text{KL}(p_\text{LLM} \,\|\, p_\text{student})$。TikTok、Amazon、Alibaba 都在用，能保留指令跟随和跨域推理能力。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <strong>Prompt-Efficient Inference</strong>
+              <p>LoRA + Prompt Tuning，只在少量参数上做微调——TikTok SAM、Meta InstructRec 都是这条路。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <strong>Two-Stage Hybrid Pipelines</strong>
+              <p>先用快模型做召回 $\mathcal{C}(u) = \text{Top-k}(g_\text{fast}(u, \mathcal{I}))$，再用 LLM 只对 $\mathcal{C}(u)$ rerank。YouTube、Amazon Alexa、OpenAI plugin 都是这套。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-body">
+              <strong>Sparse Activation（MoE）</strong>
+              <p>GLaM、Switch-LLM、V-MoE、M6-T、GopherMoE——每次只激活一小部分专家：$\tau_\text{sparse} \approx \sum \rho_l \cdot C_l, \rho_l < 1$，理论上能做到"参数多 10×、计算只多 1.5×"。</p>
+            </div>
+          </div>
+        </div>
+
+        <h3 id="model-tail">长尾建模</h3>
+
+        <p>典型推荐系统的曝光分布严重偏头部：</p>
+        <div class="formula-block">
+          $$R(i) = \lambda \cdot \text{Rel}(i, u) + (1 - \lambda) \cdot \log(1 + \text{Pop}(i))$$
+        </div>
+
+        <p>长尾物品的相关度信号几乎全靠 popularity 项。LLM 五种解法：</p>
+
+        <ul>
+          <li><strong>Content-Enriched Generation</strong>：GenRec / LLMRec 用物品描述补全长尾的语义</li>
+          <li><strong>Retrieval-Augmented Tail Expansion</strong>：RAG + 长尾召回（PromptRec, Llama4Rec 互相增强 + 自适应聚合）</li>
+          <li><strong>Tail-Aware Few-Shot Prompting</strong>：InstructGPT / FLAN-T5 用少样本展示长尾物品的优势场景</li>
+          <li><strong>Multimodal Tail Representation</strong>：Spotify 神经内容召回、Meta 跨模态底座</li>
+          <li><strong>Pseudo-Interaction Simulation</strong>：用 LLM 生成"假但合理"的长尾交互来扩展训练数据</li>
+        </ul>
+
+        <figure>
+          <img src="https://ar5iv.labs.arxiv.org/html/2507.21117/assets/Llama4Rec.png"
+               alt="Llama4Rec"
+               onerror="this.onerror=null;this.style.display='none';this.parentElement.querySelector('.fig-fallback').style.display='block'" />
+          <div class="fig-fallback fig-placeholder" style="display:none">
+            <b>Llama4Rec 架构</b><br/>互相增强 + 自适应聚合两大组件
+          </div>
+          <figcaption><strong>Llama4Rec：</strong>用 LLM 和推荐器互相增强（推荐器为 LLM 提供协同信号、LLM 为推荐器提供语义），再做自适应聚合。</figcaption>
+        </figure>
+      </section>
+
+      <!-- ═══ 评估与实验 ═══ -->
+      <section class="section" id="eval">
+        <div class="section-title"><span class="icon" style="background:#fef3c7">📈</span>评估与实验（§4.3）</div>
+
+        <h3 id="eval-gap">线上线下不一致（Offline-Online Gap）</h3>
+
+        <p>这是工业推荐系统永恒的痛——离线 NDCG 涨了 5%，A/B 测试 CTR 反而跌了 0.5%。形式化：</p>
+        <div class="formula-block">
+          $$\Delta = |\text{Offline}(M) - \text{Online}(M)|$$
+        </div>
+
+        <figure>
+          <img src="https://ar5iv.labs.arxiv.org/html/2507.21117/assets/offline-online-2.png"
+               alt="Offline-Online Metric Divergence"
+               onerror="this.onerror=null;this.style.display='none';this.parentElement.querySelector('.fig-fallback').style.display='block'" />
+          <div class="fig-fallback fig-placeholder" style="display:none">
+            <b>线上线下指标差异</b><br/>左：离线 NDCG / Recall@K / MAP；右：在线 CTR / ARPU / 留存
+          </div>
+          <figcaption><strong>线上线下指标的鸿沟：</strong>离线指标（NDCG / Recall@K / MAP）与在线指标（CTR / ARPU / 留存）经常不一致。</figcaption>
+        </figure>
+
+        <p>LLM 提供五种弥合手段：</p>
+
+        <ul>
+          <li><strong>Counterfactual Evaluation via Prompt-Based Simulators</strong>：LLMRecSim 让 LLM 扮演用户做反事实模拟，得到 $\hat{y}_{ui}^\text{cf} \in [0, 1]$，比 IPS 估计方差更低</li>
+          <li><strong>Generative Relevance Scoring</strong>：$\tilde{r}_{ui}^\text{LLM} = \text{sigmoid}(\text{LLM}(x_i, c_u, \text{"How relevant?"}))$，混合指标 $\alpha \cdot \text{Recall@K} + (1 - \alpha) \cdot \mathbb{E}[\tilde{r}_{ui}^\text{LLM}]$</li>
+          <li><strong>Behavior-Level Satisfaction Estimation</strong>：把多事件 trace 喂给 LLM，输出 $\hat{s}_u \in [0, 1]$</li>
+          <li><strong>Interactive User Simulation</strong>：Agentic LLM 一步步模拟用户决策</li>
+          <li><strong>Evaluation Metric Generation</strong>：GPTMetrics, EvalTemplate, LLMJudge——让 LLM 当评判员做 pairwise slate 比较 $P(L_A \succ L_B)$</li>
+        </ul>
+
+        <h3 id="eval-sparse">转化标签稀疏</h3>
+
+        <p>正样本极少（0.1–1%）：$|Y^+| / |Y| \ll 1$。LLM 五种增强：</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>策略</th><th>公式 / 做法</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Proxy Signal Augmentation</strong></td><td>$\hat{y}_{ui}^\text{soft} = \sigma(\text{LLM}(x_u, x_i))$ 作为辅助标签</td></tr>
+              <tr><td><strong>Instruction-Tuned Imputation</strong></td><td>temperature scaling 校准</td></tr>
+              <tr><td><strong>Generative Multi-Task Learning</strong></td><td>$\mathcal{L}_\text{total} = \lambda_1 \mathcal{L}_\text{purchase} + \lambda_2 \mathcal{L}_\text{review} + \lambda_3 \mathcal{L}_\text{click}$</td></tr>
+              <tr><td><strong>Counterfactual Label Reasoning</strong></td><td>LLM 推理 uplift score $\hat{y}_{ui}^\text{cf}$</td></tr>
+              <tr><td><strong>Language-Guided Reweighting</strong></td><td>$\mathcal{L} = \sum w_{ui} \cdot \text{BCE}(y_{ui}, \hat{y}_{ui})$，权重由 LLM 给出</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="eval-longterm">短期 vs 长期价值</h3>
+
+        <p>推荐系统最常见的滑坡：为 CTR 优化导致 clickbait 横行，长期留存暴跌。本质是优化目标 $J(\pi) = \mathbb{E}_\pi[\sum \gamma^t R_t]$ 里 $\gamma$ 太小。LLM 五招：</p>
+
+        <div class="step-list theme-amber">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <strong>LLM-Based Proxy Reward Estimation</strong>
+              <p>用 RLHF 训出的 reward model 估计长期效用，超越点击/dwell time 这些短期信号。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <strong>Counterfactual Dialogue for Future Intent</strong>
+              <p>主动对话："你下个月计划做什么？"得到 $u_\text{long} = f_\text{LLM}(\text{user\_reply})$。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <strong>Multi-Horizon Simulation via Generative Rollouts</strong>
+              <p>SimRec、UserGPT-Sim：$J_\text{sim} = \sum \gamma^t \hat{R}_t$，与 A/B 实测相关性 0.82–0.87。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-body">
+              <strong>Preference Drift Detection via Summarization</strong>
+              <p>$u_\text{stable} = \text{LLM}(S_u)$（StableRec, TempRec-Memory），减少 churn ~6%。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">5</div>
+            <div class="step-body">
+              <strong>Multi-Objective RL with LLM-Guided Reward Decomposition</strong>
+              <p>$R_t = \sum \beta_i \cdot R_t^{(i)}$，其中 $R_t^{(i)} = \text{LLM}(x_t^{(i)})$。$J(\pi) = \mathbb{E}[\sum \gamma^t \sum \beta_i R_t^{(i)}]$。让 LLM 把"满意度"拆分成多个子目标。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══ 隐私 ═══ -->
+      <section class="section" id="privacy">
+        <div class="section-title"><span class="icon" style="background:#fee2e2">🔒</span>隐私、安全与合规（§4.4）</div>
+
+        <p>LLM 的引入也带来全新的隐私挑战——但同时它也提供了一些前所未有的解决方案。</p>
+
+        <h3>用户数据敏感性</h3>
+        <ul>
+          <li><strong>Token Attribution & Prompt Fingerprinting</strong>：审计 LLM 输出到底用了哪些用户 token</li>
+          <li><strong>Federated Prompting + Local DP</strong>：本地差分隐私的联邦 prompt 学习</li>
+          <li><strong>Synthetic User Generation</strong>：用 LLM 生成合成用户做训练，避免使用真实数据</li>
+          <li><strong>Zero/Few-shot Personalization without Long-term Retention</strong>：不存历史，每次请求即时推断</li>
+        </ul>
+
+        <h3>法规合规（GDPR / CCPA / DMA）</h3>
+        <ul>
+          <li><strong>Ephemeral Prompt-Level Personalization</strong>：临时用、用完即弃</li>
+          <li><strong>Synthetic User Traces</strong>：合成用户轨迹替代真实日志</li>
+          <li><strong>Constraint-Aware Instruction Tuning</strong>：在指令里硬约束"不输出 PII"</li>
+          <li><strong>Audit Logs + Token-Level Attribution</strong>：流式日志重放 + token 归因</li>
+          <li>典型实践：Spotify, Zalando</li>
+        </ul>
+
+        <h3>差分隐私 + 联邦学习</h3>
+        <ul>
+          <li><strong>Gradient-Sanitized Fine-Tuning</strong>：梯度裁剪 + 噪声注入</li>
+          <li><strong>Federated Prompting</strong>：设备端 prompt 精炼，原始数据不出端</li>
+          <li><strong>Differentially Private RAG</strong>：DP-RAG 保证检索集不泄露</li>
+          <li>参考实现：Google Gboard（FL）、Apple（DP）、联邦 MF + DP</li>
+        </ul>
+
+        <h3>数据治理</h3>
+        <div class="callout-purple callout">
+          <strong>关键公式 — Data Minimization：</strong>$Q(\text{Rec}) \approx Q_\text{LLM}(\text{Rec} \mid \text{anonymized data})$。也就是：用脱敏数据让 LLM 给出近似一样的推荐质量。<br/>
+          <strong>合成数据 DP 保证：</strong>$\Pr[\text{LLM} \to D_\text{synth} \mid x \in D] \approx \Pr[\text{LLM} \to D_\text{synth} \mid x \notin D]$（合成数据看不出某个真实用户是否在原数据集里）。
+        </div>
+      </section>
+
+      <!-- ═══ 局限 ═══ -->
+      <section class="section" id="limits">
+        <div class="section-title"><span class="icon" style="background:#fee2e2">⚠️</span>局限与开放问题（§5）</div>
+
+        <p>论文 §5 列出了 LLM 在推荐系统里九个还没解决的工程难题——这是综述最有价值的部分之一，因为它具体到了数字。</p>
+
+        <div class="step-list theme-rose">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <strong>延迟与吞吐瓶颈</strong>
+              <p>自回归解码违反推荐 100ms SLA。即使 4-bit 量化的 7B 模型在 A100 上也要 &gt;35ms。Flash-Attention v3、KV-cache fusion 能带来 1.7–2.3× 加速；层级路由（dense → sparse MoE）降低长尾延迟 28%；端侧 NPU + speculative decoding 再省 ~40ms。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <strong>运营成本与资源占用</strong>
+              <p>模型翻倍 → 计算成本 4×、碳排放 3×。MoE + LoRA 能减 60–80% 平均算力，token 级缓存再减 15–25%；云上 LLM 推理价 ~$0.03/1k tokens。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <strong>幻觉与语义偏移</strong>
+              <p>LLM 可能推荐根本不存在的商品。检索 grounding + 约束解码 + 事实核查器能减少幻觉 25–40%；负样本增强 + 对比拒答可在广告目录上降到 &lt;4%。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-body">
+              <strong>Prompt 敏感性与可复现性</strong>
+              <p>"recommend" → "suggest" 这种词汇微调能让 NDCG 偏移 &gt;10%。Prompt 血缘图 + canary token + 对比差异测试有效，但会产生 ~5 GB/天的 lineage 日志。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">5</div>
+            <div class="step-body">
+              <strong>表征漂移与 embedding 不兼容</strong>
+              <p>RLHF 一次更新就让所有缓存 embedding 失效。Embedding 版本管理 + 向后兼容投影头能保持 cosine &gt;0.85，但增加 2–3ms 延迟。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">6</div>
+            <div class="step-body">
+              <strong>评估缺口</strong>
+              <p>NDCG / MAP / Recall@K 都漏掉了语义保真度；LLM-as-judge 与人工评分相关性 &lt;0.35；人工每条解释 $0.42。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">7</div>
+            <div class="step-body">
+              <strong>隐私、合规与安全风险</strong>
+              <p>记忆化与对抗注入是新威胁。DP 微调、联邦 prompt、SMPC / SGX 各增加 10–20% 延迟；最新提取攻击在 DP 噪声下仍有 18% 成功率。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">8</div>
+            <div class="step-body">
+              <strong>调试与可观测性缺失</strong>
+              <p>没有 token 级遥测——上线后出问题难定位。Lineage 日志 ~2 GB/天/百万请求；安全 dashboard 离线召回 92%，但线上因 paraphrase 漂移只能召回 71%。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">9</div>
+            <div class="step-body">
+              <strong>架构整合开销</strong>
+              <p>异步 reranker、RAG 栈、prompt store 把 MTTR 提高 1.4×；多租户隔离、GPU 调度都还是开放问题。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══ 实践启示 ═══ -->
+      <section class="section" id="takeaways">
+        <div class="section-title"><span class="icon" style="background:#dcfce7">🚀</span>实践启示</div>
+
+        <p>读完整篇综述，你应该带走的几条核心 takeaway：</p>
+
+        <div class="callout-blue callout">
+          <strong>LLM 不是要替代经典推荐流水线，而是要插进去做增强。</strong>关键是<strong>插对位置、用对方式</strong>——召回阶段用 LLM 做语义召回 / RAG，精排阶段用蒸馏后的小模型，重排阶段用 LLM 做多样性和可解释性。
+        </div>
+
+        <h3>不同场景的优先级建议</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>你的痛点</th><th>优先尝试</th><th>难度</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>新用户冷启动</td><td>Content-Conditioned Generation 或 Representation Bootstrapping</td><td><span class="badge badge-green">低</span></td></tr>
+              <tr><td>新物品冷启动</td><td>LLM 编码物品描述 → 共享 embedding 空间</td><td><span class="badge badge-green">低</span></td></tr>
+              <tr><td>长尾物品曝光不足</td><td>Retrieval-Augmented Tail Expansion + 多模态表征</td><td><span class="badge badge-amber">中</span></td></tr>
+              <tr><td>用户兴趣漂移快</td><td>Prompt 化长短期拆分 + LLM 摘要历史</td><td><span class="badge badge-amber">中</span></td></tr>
+              <tr><td>线下涨线上不涨</td><td>LLM 反事实模拟器 + Generative Relevance Scoring</td><td><span class="badge badge-red">高</span></td></tr>
+              <tr><td>CTR 高但留存差</td><td>RLHF reward model + 多目标 LLM 拆分</td><td><span class="badge badge-red">高</span></td></tr>
+              <tr><td>合规审计压力</td><td>合成数据 + Ephemeral 个性化 + Token Attribution</td><td><span class="badge badge-amber">中</span></td></tr>
+              <tr><td>对话式推荐需求</td><td>Language-Native Dialogue + 信念状态更新</td><td><span class="badge badge-red">高</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>工业落地的"三原则"</h3>
+
+        <div class="step-list theme-cyan">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <strong>不要在精排链路里直接接 LLM</strong>
+              <p>延迟会爆炸。必须走"两阶段混合"——快模型召回 + LLM rerank 小集合。或者把 LLM 蒸馏到小模型。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <strong>不要相信线下评估</strong>
+              <p>LLM 改动后离线指标常常严重虚高。用 LLM-as-judge、Counterfactual Simulator、Behavior-Level Satisfaction Score 三件套配合传统 NDCG。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <strong>建立 Prompt 版本管理</strong>
+              <p>Prompt 微调可能带来 &gt;10% 指标偏移。把 prompt 当成代码版本管理：prompt store + lineage log + canary token + 对比差异测试。</p>
+            </div>
+          </div>
+        </div>
+
+        <h3>论文未来方向</h3>
+        <ul>
+          <li>表达力 vs 效率的权衡——MoE、量化、蒸馏的边界</li>
+          <li>鲁棒的 prompt 设计 + caching 策略</li>
+          <li>低延迟推理：distilled / quantized 模型的极限</li>
+          <li>Prompt 版本与可审计性的标准化协议</li>
+          <li>新的评估范式：定性用户建模 + 反事实模拟 + LLM 评判</li>
+          <li>幻觉、表征漂移、prompt 注入的系统级防御</li>
+          <li>GDPR/CCPA 合规、可解释性保证</li>
+        </ul>
+
+        <div class="callout-purple callout">
+          <strong>结语：</strong>这篇综述把 LLM 在推荐系统中的角色从"加分项"提升到"基础设施"。读完它，你应该能在自己的推荐架构图上清楚画出："我要在哪个位置、用哪种方式、为了解决哪个具体问题，把 LLM 接入"——而不是被各种新名词淹没。
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<script>
+(function(){
+  // TOC 滚动高亮：使用 IntersectionObserver 监听所有带 id 的 section/h3
+  var tocLinks = document.querySelectorAll('.toc-list a[href^="#"], .toc-sub a[href^="#"]');
+  if (!tocLinks.length) return;
+
+  var linkMap = {};
+  tocLinks.forEach(function(a){
+    var id = a.getAttribute('href').slice(1);
+    if (id) linkMap[id] = a;
+  });
+
+  var targets = Object.keys(linkMap).map(function(id){
+    return document.getElementById(id);
+  }).filter(Boolean);
+
+  if (!targets.length) return;
+
+  var activeId = null;
+
+  function setActive(id){
+    if (id === activeId) return;
+    activeId = id;
+    tocLinks.forEach(function(a){ a.classList.remove('active'); });
+    if (id && linkMap[id]){
+      linkMap[id].classList.add('active');
+      var toc = document.querySelector('.toc');
+      if (toc){
+        var li = linkMap[id];
+        var tocTop = toc.getBoundingClientRect().top;
+        var liTop  = li.getBoundingClientRect().top;
+        var offset = liTop - tocTop - toc.clientHeight / 2;
+        toc.scrollBy({ top: offset, behavior: 'smooth' });
+      }
+    }
+  }
+
+  var observer = new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      if (entry.isIntersecting){
+        setActive(entry.target.id);
+      }
+    });
+  }, { rootMargin: '-10% 0px -60% 0px', threshold: 0 });
+
+  targets.forEach(function(el){ observer.observe(el); });
+})();
+</script>
+</body>
+</html>

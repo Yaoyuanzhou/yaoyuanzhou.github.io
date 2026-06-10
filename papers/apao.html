@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>APAO 论文解读 — 训练与 Beam Search 推理对齐</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false }
+          ],
+          throwOnError: false
+        });
+      }
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #2563eb; --primary-soft: #eff6ff;
+      --accent: #7c3aed; --accent-soft: rgba(124,58,237,0.06);
+      --shadow: 0 10px 30px rgba(15,23,42,0.08); --radius: 18px; --max: 1300px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: linear-gradient(180deg,#f8fbff 0%,var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      line-height: 1.8;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .page { max-width: var(--max); margin: 0 auto; padding: 32px 20px 80px; }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    .back-link:hover { color: var(--primary); text-decoration: none; }
+    .hero {
+      background: radial-gradient(circle at top right,rgba(37,99,235,0.14),transparent 30%),
+                  radial-gradient(circle at left bottom,rgba(124,58,237,0.10),transparent 24%), var(--card);
+      border: 1px solid rgba(37,99,235,0.08); border-radius: 24px;
+      box-shadow: var(--shadow); padding: 34px 34px 28px; margin-bottom: 22px;
+    }
+    .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--primary-soft); color: var(--primary); font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+    h1 { font-size: 32px; line-height: 1.25; letter-spacing: -0.02em; margin-bottom: 10px; }
+    .subtitle { color: var(--muted); font-size: 16px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-top: 24px; }
+    .meta-card { background: #fbfdff; border: 1px solid #e7eefb; border-radius: 16px; padding: 14px 16px; }
+    .meta-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .meta-value { font-size: 14px; font-weight: 600; word-break: break-word; }
+    .layout { display: grid; grid-template-columns: 260px minmax(0,1fr); gap: 22px; align-items: start; }
+    .toc { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; }
+    .toc h2 { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+    .toc-list { list-style: none; }
+    .toc-list li { margin: 7px 0; }
+    .toc-list a { font-size: 13.5px; color: var(--muted); }
+    .toc-list a:hover { color: var(--primary); }
+    .toc-list a.active, .toc-sub a.active { color: var(--primary); background: #eff6ff; font-weight: 600; border-left: 3px solid var(--primary); padding-left: 6px; display: inline-block; border-radius: 4px; }
+    .toc-sub { padding-left: 14px; margin-top: 4px; }
+    .toc-sub li { margin: 4px 0; }
+    .toc-sub a { font-size: 12.5px; }
+    .content { display: flex; flex-direction: column; gap: 20px; }
+    .section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 28px 30px; }
+    .section-title { font-size: 22px; font-weight: 800; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 2px solid #f0f4ff; display: flex; align-items: center; gap: 10px; }
+    .section-title .icon { width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; background: var(--primary-soft); color: var(--primary); }
+    h3 { font-size: 18px; font-weight: 700; margin: 26px 0 12px; color: #111827; }
+    h4 { font-size: 15px; font-weight: 700; margin: 20px 0 10px; color: #1d4ed8; }
+    p { margin-bottom: 12px; }
+    ul, ol { padding-left: 22px; }
+    li { margin-bottom: 6px; }
+    .callout { border-radius: 14px; padding: 14px 18px; margin: 16px 0; font-size: 14.5px; }
+    .callout-blue { background: linear-gradient(180deg,rgba(37,99,235,0.08),rgba(37,99,235,0.04)); border: 1px solid rgba(37,99,235,0.16); }
+    .callout-blue strong { color: #1d4ed8; }
+    .callout-amber { background: #fffbeb; border: 1px solid #fde68a; }
+    .callout-amber strong { color: #92400e; }
+    .callout-green { background: #f0fdf4; border: 1px solid #86efac; }
+    .callout-green strong { color: #166534; }
+    .callout-purple { background: var(--accent-soft); border: 1px solid rgba(124,58,237,0.18); }
+    .callout-purple strong { color: #6d28d9; }
+    .note { background: #f8faff; border: 1px dashed #cbd5e1; border-radius: 12px; padding: 12px 16px; color: #475467; font-size: 13.5px; margin: 12px 0; }
+    .example-box { background: #f0fdf4; border: 1px solid #86efac; border-radius: 14px; padding: 16px 20px; margin: 16px 0; }
+    .example-box .ex-title { font-size: 12px; font-weight: 700; color: #166534; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
+    .example-box p { margin-bottom: 8px; font-size: 14px; color: #14532d; }
+    .example-box p:last-child { margin-bottom: 0; }
+    blockquote { margin: 16px 0; padding: 14px 18px; border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 0 12px 12px 0; color: #3f3f46; font-size: 14.5px; }
+    .paper-info { background: #fafbff; border-left: 4px solid var(--primary); border-radius: 12px; padding: 14px 16px; margin: 16px 0; color: #334155; font-size: 14px; }
+    .paper-info p { margin: 5px 0; }
+    figure { margin: 22px 0; background: #fbfdff; border: 1px solid #e8edf5; border-radius: 16px; padding: 14px; }
+    figure img { width: 100%; display: block; border-radius: 12px; background: #fff; }
+    figcaption { margin-top: 10px; font-size: 13.5px; color: var(--muted); line-height: 1.6; }
+    .fig-placeholder { padding: 36px 24px; text-align: center; background: #f8faff; border-radius: 12px; color: #94a3b8; font-size: 14px; border: 2px dashed #e2e8f0; line-height: 1.9; }
+    .formula-block { background: #fafbff; border: 1px solid #e8edf5; border-radius: 14px; padding: 16px 20px; margin: 14px 0; overflow-x: auto; }
+    .formula-vars { background: #f0f7ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 12px 16px; margin: 6px 0 16px; font-size: 13.5px; color: #374151; }
+    .formula-vars .var-title { font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+    .formula-vars ul { margin: 0; padding-left: 18px; }
+    .formula-vars li { margin: 5px 0; }
+    .katex-display { overflow-x: auto; overflow-y: hidden; padding: 6px 0; }
+    .table-wrap { overflow-x: auto; margin: 16px 0; }
+    table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 12px; font-size: 13.5px; }
+    thead th { background: #f3f6fb; color: #334155; font-weight: 700; border-bottom: 2px solid var(--line); text-align: left; padding: 10px 12px; }
+    td { padding: 9px 12px; border-bottom: 1px solid #eef2f7; vertical-align: top; }
+    tbody tr:nth-child(even) { background: #fafcff; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+    .mini-card { border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; background: #fff; }
+    .mini-card h4 { margin-top: 0; font-size: 14px; }
+    .step-list { display: flex; flex-direction: column; gap: 10px; margin: 14px 0; }
+    .step { background: #fafbff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: flex; gap: 12px; align-items: flex-start; }
+    .step-num { flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
+    footer { margin-top: 30px; text-align: center; color: var(--muted); font-size: 13px; }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .toc { position: static; }
+      .meta-grid { grid-template-columns: repeat(2,1fr); }
+      .two-col { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+  <a class="back-link" href="../index.html">← 返回论文列表</a>
+
+  <header class="hero">
+    <span class="eyebrow">📄 生成式推荐 · 训练-推理对齐</span>
+    <h1>APAO：把 Beam Search 的"剪枝压力"提前灌进训练里</h1>
+    <p class="subtitle">Adaptive Prefix-Aware Optimization for Generative Recommendation（KDD'26）</p>
+    <div class="meta-grid">
+      <div class="meta-card"><div class="meta-label">作者</div><div class="meta-value">Yuanqing Yu, Yifan Wang, Weizhi Ma, Zhiqiang Guo, Min Zhang</div></div>
+      <div class="meta-card"><div class="meta-label">机构</div><div class="meta-value">清华大学 DCST / AIR · 鹊承实验室</div></div>
+      <div class="meta-card"><div class="meta-label">来源</div><div class="meta-value">arXiv:2603.02730v3 · KDD 2026</div></div>
+      <div class="meta-card"><div class="meta-label">核心命题</div><div class="meta-value">生成式推荐 token-level CE 损失与 beam search 推理之间存在 prefix-level 不一致；用 prefix-aware + adaptive worst-prefix 损失对齐</div></div>
+    </div>
+    <div class="paper-info" style="margin-top:18px;">
+      <p>📎 <strong>论文链接</strong>：<a href="https://arxiv.org/abs/2603.02730" target="_blank">arxiv.org/abs/2603.02730</a></p>
+      <p>💻 <strong>代码</strong>：<a href="https://github.com/yuyq18/APAO" target="_blank">github.com/yuyq18/APAO</a></p>
+      <p>🚀 <strong>工业落地</strong>：微信公众号平台，pCTR <strong>+0.9%</strong>，图文 CTR +0.706%</p>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="toc">
+      <h2>📋 目录</h2>
+      <ul class="toc-list">
+        <li><a href="#tldr">⚡ TL;DR</a></li>
+        <li><a href="#bg">1. 背景与动机</a>
+          <ul class="toc-sub">
+            <li><a href="#bg-gr">1.1 什么是生成式推荐</a></li>
+            <li><a href="#bg-beam">1.2 为何用 Beam Search</a></li>
+            <li><a href="#bg-conflict">1.3 不一致的本质矛盾</a></li>
+          </ul>
+        </li>
+        <li><a href="#inconsistency">2. 训练-推理不一致</a>
+          <ul class="toc-sub">
+            <li><a href="#full-ranking">2.1 全空间排序视角</a></li>
+            <li><a href="#beam-view">2.2 Beam Search 视角</a></li>
+          </ul>
+        </li>
+        <li><a href="#method">3. APAO 方法详解</a>
+          <ul class="toc-sub">
+            <li><a href="#prefix-loss">3.1 Prefix-aware Optimization</a></li>
+            <li><a href="#pointwise">3.2 Pointwise 版本</a></li>
+            <li><a href="#pairwise">3.3 Pairwise 版本</a></li>
+            <li><a href="#adaptive">3.4 自适应 worst-prefix</a></li>
+            <li><a href="#theory">3.5 理论分析</a></li>
+          </ul>
+        </li>
+        <li><a href="#exp">4. 实验结果</a>
+          <ul class="toc-sub">
+            <li><a href="#exp-setup">4.1 数据集与 Backbone</a></li>
+            <li><a href="#exp-main">4.2 主表对比</a></li>
+            <li><a href="#exp-ablation">4.3 消融</a></li>
+            <li><a href="#exp-prefix">4.4 Prefix 级 Recall</a></li>
+            <li><a href="#exp-eff">4.5 训练效率</a></li>
+            <li><a href="#exp-deploy">4.6 工业落地</a></li>
+          </ul>
+        </li>
+        <li><a href="#thoughts">5. 我的理解</a>
+          <ul class="toc-sub">
+            <li><a href="#think-story">5.1 论文叙事亮点</a></li>
+            <li><a href="#think-diff">5.2 与已有工作差异</a></li>
+            <li><a href="#think-future">5.3 延伸与不足</a></li>
+            <li><a href="#think-ks">5.4 对快手的启发</a></li>
+            <li><a href="#think-summary">5.5 一句话总结</a></li>
+          </ul>
+        </li>
+      </ul>
+    </aside>
+
+    <main class="content">
+
+      <!-- ============ TL;DR ============ -->
+      <section class="section" id="tldr">
+        <h2 class="section-title"><span class="icon">⚡</span>TL;DR</h2>
+        <div class="callout callout-blue">
+          <strong>一句话总结：</strong>生成式推荐用 CE 训练 + beam search 推理，但 CE 假设"前缀永远正确"，而 beam search 会因为前缀分数低就早早把候选项剪掉。APAO 在训练阶段把"每一个前缀都必须存活"的约束显式建模为<strong>前缀级 loss</strong>，再用<strong>自适应权重</strong>把训练精力倾斜到当下最薄弱的那个前缀，从而把训练目标真正对齐到推理过程，在 4 个公开数据集 + 微信公众号线上 A/B 都拿到稳定收益。
+        </div>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>核心痛点</h4>
+            <p style="font-size:13.5px;color:#475467;">CE 优化的是 token 平均似然，可以让早期 token "差一点"被后期 token "补回来"；但 beam search 是<strong>步步剪枝</strong>，早期前缀掉出 Top-K 就<strong>永远丢了</strong>。</p>
+          </div>
+          <div class="mini-card">
+            <h4>核心思路</h4>
+            <p style="font-size:13.5px;color:#475467;">把"每个前缀长度 m 上的排名约束"显式写成一个 loss，组合多个 m 的 loss，并按"<strong>哪个前缀此刻最菜</strong>"动态调权（指数加权 mirror descent）。</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 1. 背景 ============ -->
+      <section class="section" id="bg">
+        <h2 class="section-title"><span class="icon">📚</span>1. 背景与动机</h2>
+
+        <h3 id="bg-gr">1.1 什么是生成式推荐（GR）</h3>
+        <p>传统判别式推荐对每个 item 学一个 ID embedding，给定用户历史，模型直接打分→排序。<strong>生成式推荐</strong>（Generative Recommendation, GR）的玩法不一样：</p>
+        <ul>
+          <li>先用 <strong>RQ-VAE</strong> / RQ-K-means 这类向量量化方法，把每个 item 切成 T 个离散的 semantic ID token（如 4 层 codebook，每个 item 表示为 4 个 token）。</li>
+          <li>把用户行为序列看成一个 token 序列，训练一个 Transformer（TIGER 是 encoder-decoder，Llama 是 decoder-only），让它<strong>自回归地预测下一个 item 的 4 个 token</strong>。</li>
+          <li>推理时用 <strong>beam search</strong> 把 Top-K 个高分 token 序列解出来，每个序列对应一个 item。</li>
+        </ul>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：一个具体的生成流程</div>
+          <p>假设用户历史是 [运动鞋, 篮球, 护腕]，每个 item 已 tokenize 为 4 个 SID，比如 "运动鞋 = (3,7,12,5)"。把所有历史 item 的 token 拼接给模型，模型自回归生成下一个 item 的 4 个 token。</p>
+          <p>第 1 步：在词表 V 中给所有 candidate token 打分，beam=20 表示保留前 20 个候选前缀。第 2 步：每个前缀再扩展，又只保留前 20 个累积分数最高的"前缀+新 token"组合。直到第 4 步生成完整 item。</p>
+          <p>关键点：<strong>每一步都会"砍掉"分数不够的前缀</strong>，即使这个前缀对应的目标 item 整体很合适。</p>
+        </div>
+
+        <h3 id="bg-beam">1.2 为什么不直接 Full Item Sorting？</h3>
+        <p>理想方案是对整个 item 库 Y 中的每个 item 都算一个总 log-probability，再排 Top-K。但当 |Y| 上百万、上亿时，这个全空间打分代价爆炸。Beam search 用<strong>"步步取 Top-K 前缀"</strong>近似全空间排序，把复杂度从 O(|Y|) 降到 O(K·|V|·T)，是生成式推荐能落地的关键。</p>
+
+        <figure>
+          <img src="https://arxiv.org/html/2603.02730v3/Figs/apao-intro.png" alt="Figure 1: Analysis of Beam Search"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'><b>Figure 1: Beam Search 分析</b><br><br>(a) Beam search 推理流程示意：每步保留 Top-K 前缀<br>(b) 效率对比：Beam Search 比 Full Sorting 快几个数量级<br>(c) Global Top-20 留存率：APAO（绿色）显著优于 baseline（黄色）</div>`" />
+          <figcaption><strong>Figure 1（论文原图）：</strong>(a) Beam search 流程；(b) 推理耗时对比；(c) 黄色 baseline 中有大量 Global Top-20 item 在中途被剪掉，APAO（绿色）把它们留下来了——这正是论文要解决的问题。</figcaption>
+        </figure>
+
+        <h3 id="bg-conflict">1.3 训练-推理不一致的本质矛盾</h3>
+        <div class="callout callout-amber">
+          <strong>关键观察：</strong>训练阶段用 <em>teacher forcing</em>——每步喂的都是 ground-truth 前缀；模型从未被"惩罚"过"我的某个前缀掉出 Top-K"。但推理阶段，模型必须自己活下来，前缀掉一次就没了。
+        </div>
+      </section>
+
+      <!-- ============ 2. 不一致分析 ============ -->
+      <section class="section" id="inconsistency">
+        <h2 class="section-title"><span class="icon">🔍</span>2. 训练-推理不一致的形式化</h2>
+
+        <h3 id="full-ranking">2.1 全空间排序视角（理想）</h3>
+        <p>对于目标 item y，定义总分：</p>
+        <div class="formula-block">
+        $$
+        S(y \mid x) = \sum_{t=1}^{T} \log P(y^t \mid y^1,\ldots,y^{t-1}, x)
+        $$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$y$：目标 item，被 tokenize 为 $T$ 个 token $\{y^1, \ldots, y^T\}$</li>
+            <li>$y^1,\ldots,y^{t-1}$：前 $t-1$ 个 token 构成的前缀</li>
+            <li>$x$：用户历史 token 序列</li>
+            <li>$P(y^t \mid y^1,\ldots,y^{t-1},x)$：模型给出的条件概率</li>
+          </ul>
+        </div>
+        <p>Recall@K 的成功条件（Full-Sorting）：</p>
+        <div class="formula-block">
+        $$
+        \mathbb{I}_{\text{Full}}(y) = \mathbb{I}\bigl(\mathrm{rank}_{\mathcal{Y}}(S(y|x)) \le K\bigr)
+        $$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\mathrm{rank}_\mathcal{Y}(\cdot)$：在整个 item 库 $\mathcal{Y}$ 中的排名</li>
+            <li>$\mathbb{I}$：指示函数（条件成立为 1）</li>
+          </ul>
+        </div>
+        <p><strong>关键：只看最终总分。</strong>中间某步概率低没关系，只要后面的 token 补回来就行。</p>
+
+        <h3 id="beam-view">2.2 Beam Search 视角（真实推理）</h3>
+        <p>Beam search 的"成功条件"是一连串<strong>逐步排名约束的"且"</strong>：</p>
+        <div class="formula-block">
+        $$
+        \mathbb{I}_{\text{Beam}}(y) = \prod_{t=1}^{T} \mathbb{I}\bigl(\mathrm{rank}_t(S_t(y^{1:t})) \le K\bigr)
+        $$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$S_t(y^{1:t}) = \sum_{j=1}^{t} \log P(y^j \mid y^1,\ldots,y^{j-1}, x)$：长度为 $t$ 的前缀的累积分</li>
+            <li>$\mathrm{rank}_t(\cdot)$：第 $t$ 步在 beam 候选中的排名</li>
+            <li>连乘 $\prod_{t=1}^{T}$：任何一步排名 $> K$，整个 item 就被"判死刑"</li>
+          </ul>
+        </div>
+
+        <div class="callout callout-purple">
+          <strong>本质冲突：</strong>CE loss 优化的是 <em>token-level 平均似然</em>（允许早晚 token 互相补偿）；beam search 要求<em>每一步都进 Top-K</em>，对中间失败<strong>零容忍</strong>。Teacher forcing 训出来的模型从来没"练过"在弱前缀上的鲁棒性。
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：CE vs Beam Search 的偏好差异</div>
+          <p>假设两个候选 item 的逐 token log-prob 如下（target item 是 A）：</p>
+          <p>· Item A：[<strong>-3.0</strong>, -0.5, -0.5, -0.5] → 总分 -4.5</p>
+          <p>· Item B：[-1.0, -1.5, -1.5, -1.5] → 总分 -5.5</p>
+          <p>👉 <strong>Full Sorting</strong>：A 排第一（总分更高），完美。</p>
+          <p>👉 <strong>Beam Search</strong> (K=3，假设第 1 个 token A 的 -3.0 排第 10)：A 在第一步就被剪掉，永远拿不回来。最终 B 反而被推荐了！</p>
+          <p>CE loss 看不到这种问题——它觉得 A 的总和最优就好。APAO 通过 prefix-aware loss 提醒模型："第一个 token 也不能太差！"</p>
+        </div>
+      </section>
+
+      <!-- ============ 3. 方法 ============ -->
+      <section class="section" id="method">
+        <h2 class="section-title"><span class="icon">🛠️</span>3. APAO 方法详解</h2>
+
+        <h3 id="prefix-loss">3.1 整体框架：Prefix-aware Optimization</h3>
+        <p>核心思路非常直接：除了在完整 item 上算 CE，额外把"每个前缀长度 m 上的 loss"也加进去，并各自配一个权重 $w_m$：</p>
+
+        <div class="formula-block">
+        $$
+        \mathcal{L}_{\text{unified}} = \mathcal{L}_{\text{CE}} + \beta \sum_{m=1}^{T} w_m \mathcal{L}_m
+        $$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\mathcal{L}_{\text{CE}}$：标准 token-level cross-entropy</li>
+            <li>$\mathcal{L}_m$：长度为 $m$ 的前缀上的 prefix-aware loss（pointwise 或 pairwise）</li>
+            <li>$w_m \ge 0$：第 $m$ 个前缀的权重（动态学习，见 3.4）</li>
+            <li>$\beta \ge 0$：控制 prefix loss 整体强度的超参，论文实验在 0.1–0.4 之间最佳</li>
+            <li>$T$：每个 item 的 token 数量（论文里是 4）</li>
+          </ul>
+        </div>
+
+        <div class="callout callout-blue">
+          <strong>One-stage 训练：</strong>不同于 S-DPO 那种 SFT→DPO 的两阶段流程，APAO 把 CE 和 prefix loss<em>同时</em>优化，更简洁、训练更快、效果更稳。
+        </div>
+
+        <h3 id="pointwise">3.2 Pointwise 版本（Lpoint）</h3>
+        <p>最自然的写法：把 CE 套到前 m 个 token 上，让模型对"前 m 步"的 ground-truth token 概率最大化：</p>
+        <div class="formula-block">
+        $$
+        \mathcal{L}_{\text{point}}(m) = -\frac{1}{m} \sum_{t=1}^{m} \log \frac{\exp(z^t_{i, y^t_i})}{\sum_{j \in V} \exp(z^t_{i,j})},
+        \quad m \in \{1,\ldots,T\}
+        $$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$z^t_{i,v} = f_\theta(v \mid y_i^1,\ldots,y_i^{t-1}, x)$：第 $t$ 步赋给词表中 token $v$ 的 logit</li>
+            <li>$y^t_i$：目标 item 的第 $t$ 个 ground-truth token</li>
+            <li>$V$：token 词表</li>
+            <li>$1/m$：长度归一化，避免长前缀权重过大</li>
+          </ul>
+        </div>
+        <p><strong>直觉：</strong>它和 CE 共享同样的 logits，没有任何额外 forward，所以 pointwise 几乎不增加训练成本。本质上是给"不同前缀长度"分配不同的训练 emphasis。</p>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：Pointwise 在干嘛</div>
+          <p>假设目标 item 的 4 个 SID = [3, 7, 12, 5]。</p>
+          <p>· $\mathcal{L}_{\text{CE}}$：让模型对 (3→7→12→5) 这个完整序列的平均似然最大。</p>
+          <p>· $\mathcal{L}_{\text{point}}(1)$：单独再算一次"给定 user history，第 1 个 token 选 3 的 log-prob"，强化第一步。</p>
+          <p>· $\mathcal{L}_{\text{point}}(2)$：算前两步 (3,7) 的平均 log-prob。</p>
+          <p>四个 $\mathcal{L}_{\text{point}}$ 加权求和。<strong>本质上就是给"前缀越短"的位置更多关注机会</strong>，让早期 token 别拖后腿。</p>
+        </div>
+
+        <h3 id="pairwise">3.3 Pairwise 版本（Lpair）</h3>
+        <p>Pointwise 只学绝对概率，不直接学"正样本前缀 vs 负样本前缀"的相对排名。Pairwise 把这件事补上：</p>
+        <div class="formula-block">
+        $$
+        \mathcal{L}_{\text{pair}}(m) = -\log \sigma \!\left( -\log \sum_{j \in \mathcal{N}} \exp\bigl(S^m_{j,-} - S^m_{i,+}\bigr) \right),
+        \quad m \in \{1,\ldots,T\}
+        $$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$S^m_{i,+} = \sum_{t=1}^{m} s^t_i$：正样本前缀的累积 log-prob</li>
+            <li>$S^m_{j,-}$：从语料库随机采的负样本 item 截到长度 $m$ 的前缀累积分</li>
+            <li>$\mathcal{N}$：负样本集合（论文中固定 100 个）</li>
+            <li>$\sigma$：sigmoid 函数</li>
+          </ul>
+        </div>
+        <p><strong>形式上像 S-DPO</strong>，但有本质区别：S-DPO 只在<em>完整 item</em>层面对比，APAO 在<em>每个前缀长度</em>都对比一次。这意味着模型被强迫："在每一个 beam 步上，正样本前缀的分都要高过 100 个负样本前缀"。</p>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：Pairwise 的训练信号</div>
+          <p>正样本 item 是 [3,7,12,5]，随机抽 100 个负样本，比如 [9,2,3,8]、[14,7,5,1] ……</p>
+          <p>· m=1 时比较：正样本第一个 token "3" 的 logit 要大于 100 个负样本第一个 token 的 logit。</p>
+          <p>· m=2 时比较：累积分 (logp(3)+logp(7|3)) 要大于 (logp(9)+logp(2|9)) 等所有负样本前两个 token 的累积分。</p>
+          <p>· …直到 m=4。</p>
+          <p>这正是 beam search 在每一步要做的事——APAO 把它<strong>提前"演练"</strong>了。</p>
+        </div>
+
+        <h3 id="adaptive">3.4 Adaptive Worst-prefix Optimization</h3>
+        <p>问题：T 个前缀的权重 $w_m$ 怎么定？手工调参组合爆炸，均匀加权又不够智能。</p>
+        <p>论文观察到：<strong>beam search 的整体成功率被"最薄弱的那个前缀"卡住</strong>（一处掉链子就全完）。所以训练时应该<strong>聚焦当前最薄弱的前缀</strong>。最朴素是 Hard-Max：</p>
+        <div class="formula-block">
+        $$
+        \mathcal{L}_{\text{worst}} = \max_{m \in \{1,\ldots,T\}} \mathcal{L}_m
+        $$
+        </div>
+        <p>但 mini-batch 上的 worst 抖动很大，训练会不稳。论文借鉴 Piratla et al. (ICLR 2022) 的做法，引入<strong>软权重 + KL 平滑</strong>：</p>
+        <div class="formula-block">
+        $$
+        w^{(\tau+1)} = \arg\max_{w \in \triangle^T} \sum_m w_m \mathcal{L}_m^{(\tau+1)} - \frac{1}{\eta} \mathrm{KL}(w \,\|\, w^{(\tau)})
+        $$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\triangle^T$：T 维概率单纯形（$w_m \ge 0, \sum w_m = 1$）</li>
+            <li>$\eta$：步长超参，越小权重变化越平滑（论文范围 5e-6 到 1e-4）</li>
+            <li>$\tau$：训练步索引</li>
+            <li>$\mathrm{KL}(w \| w^{(\tau)})$：与上一步权重的 KL 散度，起平滑作用</li>
+          </ul>
+        </div>
+        <p>由 KKT 条件可得<strong>闭式解</strong>（指数加权 / mirror descent）：</p>
+        <div class="formula-block">
+        $$
+        w^{(\tau+1)}_m = \frac{w^{(\tau)}_m \cdot \exp(\eta \mathcal{L}_m)}{\sum_{j=1}^{T} w^{(\tau)}_j \cdot \exp(\eta \mathcal{L}_j)}
+        $$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>哪个前缀 loss 大，下一步它的权重就指数地大</li>
+            <li>$\eta$ 起到温度作用：$\eta$ 越大，"聚焦最差前缀"越激进；$\eta$ 越小越接近均匀</li>
+            <li>每步只是一次 softmax 更新，几乎零额外开销</li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：Adaptive Weighting 动态过程</div>
+          <p>初始 $w = [0.25, 0.25, 0.25, 0.25]$。某步算出 $\mathcal{L} = [2.1, 0.8, 0.5, 0.4]$（说明第 1 个前缀最菜）。</p>
+          <p>经过指数更新后，$w$ 大概变成 $[0.55, 0.20, 0.13, 0.12]$——下一轮训练会把 55% 的精力放在第 1 个前缀上。</p>
+          <p>随着第 1 个前缀被练好，它的 loss 下降，权重会被重新分配到下一个最薄弱的位置。<strong>这就像专项补课：哪个最差就先补哪个，补完换下一个</strong>。</p>
+        </div>
+
+        <h3 id="theory">3.5 理论分析</h3>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>(1) 下界保证</h4>
+            <p style="font-size:13.5px;">论文证明（Appendix B）：优化 prefix-aware loss 等价于优化 beam search 下 ranking 指标的一个 <strong>lower bound</strong>，所以是 ranking 的合理代理目标。</p>
+          </div>
+          <div class="mini-card">
+            <h4>(2) 时间复杂度</h4>
+            <p style="font-size:13.5px;">Pointwise 版本与 CE 同阶 $O(B T (d^2 + |V|d))$，因为前缀 loss 复用了已有 logits，<strong>不增加 forward</strong>。Pairwise 版本与 S-DPO 同阶，但因省掉 reference model 推理，<strong>反而比 S-DPO 更快</strong>（见表 4）。</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 4. 实验 ============ -->
+      <section class="section" id="exp">
+        <h2 class="section-title"><span class="icon">🧪</span>4. 实验结果</h2>
+
+        <h3 id="exp-setup">4.1 数据集和 Backbone</h3>
+        <ul>
+          <li><strong>数据集</strong>：Office、Grocery、Beauty、Yelp（用户/物品规模从 5K 到 30K）。</li>
+          <li><strong>Backbone</strong>：TIGER（encoder-decoder，~0.01B）+ Llama（decoder-only，~0.01B）。</li>
+          <li><strong>Tokenizer</strong>：Llama-3.1-8B-Instruct 出 embedding + 4 层 RQ-K-means 量化。</li>
+          <li><strong>推理</strong>：beam size 20；评测 Recall@10/20 与 NDCG@10/20。</li>
+        </ul>
+
+        <h3 id="exp-main">4.2 主表：APAO 全面打赢 CE / MSL / DPO / DMPO / S-DPO</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Backbone</th><th>方法</th><th>Beauty R@10</th><th>Beauty N@10</th><th>Yelp R@10</th><th>Yelp N@10</th></tr>
+            </thead>
+            <tbody>
+              <tr><td rowspan="3">TIGER</td><td>CE (baseline)</td><td>0.0611</td><td>0.0318</td><td>0.0384</td><td>0.0201</td></tr>
+              <tr><td>CE→S-DPO</td><td>0.0606</td><td>0.0310</td><td>0.0389</td><td>0.0202</td></tr>
+              <tr style="background:#f0fdf4;"><td><strong>APAO-Pairwise</strong></td><td><strong>0.0639</strong> (+4.6%)</td><td><strong>0.0339</strong> (+6.6%)</td><td><strong>0.0412</strong> (+5.9%)</td><td><strong>0.0218</strong> (+5.8%)</td></tr>
+              <tr><td rowspan="3">Llama</td><td>CE (baseline)</td><td>0.0516</td><td>0.0274</td><td>0.0267</td><td>0.0141</td></tr>
+              <tr><td>CE→S-DPO</td><td>0.0480</td><td>0.0262</td><td>0.0262</td><td>0.0138</td></tr>
+              <tr style="background:#f0fdf4;"><td><strong>APAO-Pointwise</strong></td><td><strong>0.0564</strong> (+9.3%)</td><td><strong>0.0300</strong> (+9.5%)</td><td><strong>0.0289</strong> (+8.2%)</td><td><strong>0.0152</strong> (+7.8%)</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p style="font-size:13.5px;color:#475467;">数据来自论文 Table 1。在 Llama 上 APAO 涨幅尤其大（最高 13.39%），说明 decoder-only 架构对训练-推理不一致更敏感，prefix-aware 收益更显著。</p>
+
+        <h3 id="exp-ablation">4.3 消融：每个模块都有用，早期前缀最关键</h3>
+        <figure>
+          <img src="https://arxiv.org/html/2603.02730v3/x1.png" alt="Figure 2: Ablation"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'><b>Figure 2</b>: Ablation 分析<br>(a) 移除 Adaptive-W / Lprefix / LCE 都会掉点<br>(b) 移除 Prefix 0（最早前缀）下降最明显</div>`" />
+          <figcaption><strong>Figure 2（论文原图）：</strong>(a) 去掉自适应权重或任一 loss 都掉点；(b) 移除 Prefix 0（第一个 token 的监督）下降最严重，验证"早期前缀最关键"的直觉。</figcaption>
+        </figure>
+
+        <h3 id="exp-prefix">4.4 Prefix 级 Recall：beam 越走越后，APAO 涨得越多</h3>
+        <figure>
+          <img src="https://arxiv.org/html/2603.02730v3/x5.png" alt="Figure 7: Prefix-level Recall"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'><b>Figure 7</b>: Prefix-level Recall@20<br>Office: Prefix 0/1/2/3 分别 +3.78% / +7.25% / +12.95% / +15.58%<br>Beauty: +0.76% / +2.53% / +4.91% / +8.44%</div>`" />
+          <figcaption><strong>Figure 7（论文原图）：</strong>把每一步的 beam 候选拉出来看 Recall@20。越靠后的前缀（Prefix 3 = 完整 item）APAO 相对 baseline 的提升越大——说明它<strong>真的在防止"中途被剪掉"</strong>。</figcaption>
+        </figure>
+
+        <h3 id="exp-eff">4.5 训练效率：Pointwise 与 CE 同等开销，Pairwise 比 S-DPO 更快</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>类型</th><th>方法</th><th>Office (s/epoch)</th><th>Beauty</th><th>Yelp</th></tr></thead>
+            <tbody>
+              <tr><td rowspan="2">Pointwise</td><td>CE</td><td>15 / 45 epoch</td><td>53 / 74</td><td>66 / 123</td></tr>
+              <tr style="background:#f0fdf4;"><td>APAO</td><td>15 / 45</td><td>54 / 83</td><td>79 / 165</td></tr>
+              <tr><td rowspan="2">Pairwise</td><td>S-DPO</td><td>199 / 93</td><td>693 / 109</td><td>1175 / 159</td></tr>
+              <tr style="background:#f0fdf4;"><td>APAO</td><td><strong>163 / 58</strong></td><td><strong>637 / 119</strong></td><td><strong>946 / 144</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p style="font-size:13.5px;color:#475467;">数据来自 Table 4。Pairwise APAO 不需要 reference model 的额外 forward，所以总训练时间显著少于 S-DPO。</p>
+
+        <h3 id="exp-deploy">4.6 工业落地</h3>
+        <div class="callout callout-green">
+          <strong>线上 A/B（微信公众号平台）：</strong>APAO-Pointwise 对比 CE baseline 拿到 <strong>pCTR +0.9%</strong>，图文 CTR +0.706%，图文人均点击 +0.907%，图文人均曝光 +0.205%。这是论文最有说服力的一组数据——简单换 loss、不改推理代码就能上线见效。
+        </div>
+      </section>
+
+      <!-- ============ 5. 个人理解 ============ -->
+      <section class="section" id="thoughts">
+        <h2 class="section-title"><span class="icon">💭</span>5. 我的理解与启发</h2>
+
+        <h3 id="think-story">5.1 论文的"小切口大问题"叙事</h3>
+        <p>这篇论文最值得学习的地方是<strong>问题定义</strong>：训练-推理不一致并不是新问题（NMT 里有 exposure bias，Reinforce 类做法很多），但<strong>把这个不一致精确到"prefix 级 ranking 约束"并形式化成两个公式（Eq. 8 vs Eq. 9）</strong>，让方法变得非常清晰自然——既然 beam search 是 step-wise 排序，那训练就该 step-wise 监督。</p>
+
+        <h3 id="think-diff">5.2 与已有工作的核心差异</h3>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>vs S-DPO / DMPO</h4>
+            <p style="font-size:13.5px;">它们只在完整 item 层面做 ranking 对齐；APAO 把对齐颗粒度细化到<strong>每个 prefix 长度</strong>。这是真正"匹配 beam search 行为"的关键。</p>
+          </div>
+          <div class="mini-card">
+            <h4>vs MSL（mask 无效 token）</h4>
+            <p style="font-size:13.5px;">MSL 改的是 softmax 范围；APAO 改的是<strong>监督粒度</strong>。两者并不冲突，理论上可以叠加。</p>
+          </div>
+          <div class="mini-card">
+            <h4>vs DPO 系列</h4>
+            <p style="font-size:13.5px;">DPO 需要 reference model 二次 forward；APAO Pairwise 直接复用 batch 内 logits，效率更高、实现更简单。</p>
+          </div>
+          <div class="mini-card">
+            <h4>vs 推理侧方案（如约束解码）</h4>
+            <p style="font-size:13.5px;">推理侧改动会引入额外延迟；APAO 是<strong>训练侧解法</strong>，推理代码零改动，更容易上线。</p>
+          </div>
+        </div>
+
+        <h3 id="think-future">5.3 可能的延伸与不足</h3>
+        <ul>
+          <li><strong>负采样还是均匀随机</strong>：论文为公平用了 uniform random，但显然 hard negative 采样会更有效。这是明显可以补的方向。</li>
+          <li><strong>Listwise loss</strong>：论文出于效率没做 listwise；但在小语义码表（如 4×256）场景下其实开销可控，值得一试。</li>
+          <li><strong>Beam size 与训练时 prefix 长度的解耦</strong>：训练时所有前缀都"平等参与"，但实际推理 K 越大对早期前缀容忍度越高。理论上可以让"训练时关注的前缀长度"也与推理 K 相关。</li>
+          <li><strong>规模扩展</strong>：论文规模是 0.01B 级别，OneRec / TIGER 大模型规模下 APAO 是否依然显著？文中没给。</li>
+          <li><strong>Sequence-level RL 对比</strong>：论文未与 GR 上的 REINFORCE / GRPO 类方法对比，缺一个直接竞品。</li>
+        </ul>
+
+        <h3 id="think-ks">5.4 对快手推荐 / OneRec 体系的启发</h3>
+        <div class="callout callout-blue">
+          <strong>实践建议：</strong>OneRec、商家商品召回这类<em>用 SID 做 token + 自回归生成</em>的系统，本质都跑在"CE 训练 + beam search 推理"这套范式上，理论上同样存在 prefix-level 不一致。APAO-Pointwise 几乎零额外训练开销，可以作为<strong>低成本即插即用的优化项</strong>试一波。重点关注：
+          <ul style="margin-top:8px;">
+            <li>用 prefix-level Recall 而不只是 final Recall 去评估模型 — 直接看 baseline 是否真有"中途剪掉"问题</li>
+            <li>$\beta$ 取 0.1–0.4，$\eta$ 取 1e-5 量级开始 grid search</li>
+            <li>如果有 reference model 资源，pairwise 在小语料上更稳；大语料场景下 pointwise 性价比最高</li>
+          </ul>
+        </div>
+
+        <h3 id="think-summary">5.5 一句话总结</h3>
+        <blockquote>
+          APAO 没有引入新的网络结构、没有新的 tokenizer，只是<strong>把推理时的剪枝约束如实写进训练目标</strong>，加上一个"哪里弱补哪里"的自适应权重——简单、便宜、对齐了真实推理过程，最后还在工业系统跑出了 +0.9% pCTR。这是一类"看清问题本质后用最小代价解决"的好工作。
+        </blockquote>
+      </section>
+
+    </main>
+  </div>
+
+  <footer>
+    <p><a href="../index.html">← 返回论文列表</a></p>
+  </footer>
+</div>
+
+<script>
+(function(){
+  // TOC 滚动高亮：使用 IntersectionObserver 监听所有带 id 的 section/h3
+  var tocLinks = document.querySelectorAll('.toc-list a[href^="#"], .toc-sub a[href^="#"]');
+  if (!tocLinks.length) return;
+  var linkMap = {};
+  tocLinks.forEach(function(a){
+    var id = a.getAttribute('href').slice(1);
+    if (id) linkMap[id] = a;
+  });
+  var targets = Object.keys(linkMap).map(function(id){
+    return document.getElementById(id);
+  }).filter(Boolean);
+  if (!targets.length) return;
+  var activeId = null;
+  function setActive(id){
+    if (id === activeId) return;
+    activeId = id;
+    tocLinks.forEach(function(a){ a.classList.remove('active'); });
+    if (id && linkMap[id]){
+      linkMap[id].classList.add('active');
+      var toc = document.querySelector('.toc');
+      if (toc){
+        var li = linkMap[id];
+        var tocTop = toc.getBoundingClientRect().top;
+        var liTop  = li.getBoundingClientRect().top;
+        var offset = liTop - tocTop - toc.clientHeight / 2;
+        toc.scrollBy({ top: offset, behavior: 'smooth' });
+      }
+    }
+  }
+  var observer = new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      if (entry.isIntersecting){
+        setActive(entry.target.id);
+      }
+    });
+  }, { rootMargin: '-10% 0px -60% 0px', threshold: 0 });
+  targets.forEach(function(el){ observer.observe(el); });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GRAM 论文解读</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false }
+          ],
+          throwOnError: false
+        });
+      }
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #2563eb; --primary-soft: #eff6ff;
+      --accent: #7c3aed; --accent-soft: rgba(124,58,237,0.06);
+      --shadow: 0 10px 30px rgba(15,23,42,0.08); --radius: 18px; --max: 1300px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: linear-gradient(180deg,#f8fbff 0%,var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      line-height: 1.8;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .page { max-width: var(--max); margin: 0 auto; padding: 32px 20px 80px; }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    .back-link:hover { color: var(--primary); text-decoration: none; }
+    .hero {
+      background: radial-gradient(circle at top right,rgba(37,99,235,0.14),transparent 30%),
+                  radial-gradient(circle at left bottom,rgba(124,58,237,0.10),transparent 24%), var(--card);
+      border: 1px solid rgba(37,99,235,0.08); border-radius: 24px;
+      box-shadow: var(--shadow); padding: 34px 34px 28px; margin-bottom: 22px;
+    }
+    .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--primary-soft); color: var(--primary); font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+    h1 { font-size: 34px; line-height: 1.25; letter-spacing: -0.02em; margin-bottom: 10px; }
+    .subtitle { color: var(--muted); font-size: 16px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-top: 24px; }
+    .meta-card { background: #fbfdff; border: 1px solid #e7eefb; border-radius: 16px; padding: 14px 16px; }
+    .meta-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .meta-value { font-size: 14px; font-weight: 600; word-break: break-word; }
+    .layout { display: grid; grid-template-columns: 260px minmax(0,1fr); gap: 22px; align-items: start; }
+    .toc { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; }
+    .toc h2 { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+    .toc-list { list-style: none; }
+    .toc-list li { margin: 7px 0; }
+    .toc-list a { font-size: 13.5px; color: var(--muted); }
+    .toc-list a:hover { color: var(--primary); text-decoration: none; }
+    .toc-list a.active{color:var(--primary);background:#eff6ff;font-weight:600;border-left:3px solid var(--primary);padding-left:5px;}
+    .toc-sub { padding-left: 14px; margin-top: 4px; }
+    .toc-sub li { margin: 4px 0; }
+    .toc-sub a { font-size: 12.5px; }
+    .content { display: flex; flex-direction: column; gap: 20px; }
+    .section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 28px 30px; }
+    .section-title { font-size: 22px; font-weight: 800; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 2px solid #f0f4ff; display: flex; align-items: center; gap: 10px; }
+    .section-title .icon { width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+    h3 { font-size: 18px; font-weight: 700; margin: 26px 0 12px; color: #111827; }
+    h4 { font-size: 15px; font-weight: 700; margin: 20px 0 10px; color: #1d4ed8; }
+    p { margin-bottom: 12px; }
+    p:last-child { margin-bottom: 0; }
+    ul, ol { padding-left: 22px; }
+    li { margin-bottom: 8px; }
+    .callout { border-radius: 14px; padding: 14px 18px; margin: 16px 0; font-size: 14.5px; }
+    .callout-blue { background: linear-gradient(180deg,rgba(37,99,235,0.08),rgba(37,99,235,0.04)); border: 1px solid rgba(37,99,235,0.16); }
+    .callout-blue strong { color: #1d4ed8; }
+    .callout-amber { background: #fffbeb; border: 1px solid #fde68a; }
+    .callout-amber strong { color: #92400e; }
+    .callout-green { background: #f0fdf4; border: 1px solid #86efac; }
+    .callout-green strong { color: #166534; }
+    .callout-purple { background: var(--accent-soft); border: 1px solid rgba(124,58,237,0.18); }
+    .callout-purple strong { color: #6d28d9; }
+    .note { background: #f8faff; border: 1px dashed #cbd5e1; border-radius: 12px; padding: 12px 16px; color: #475467; font-size: 13.5px; margin: 12px 0; }
+    .example-box { background: #f0fdf4; border: 1px solid #86efac; border-radius: 14px; padding: 16px 20px; margin: 16px 0; }
+    .example-box .ex-title { font-size: 12px; font-weight: 700; color: #166534; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+    .example-box p { margin-bottom: 8px; font-size: 14px; color: #166534; }
+    .example-box p:last-child { margin-bottom: 0; }
+    blockquote { margin: 16px 0; padding: 14px 18px; border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 0 12px 12px 0; color: #3f3f46; font-size: 14.5px; }
+    .paper-info { background: #fafbff; border-left: 4px solid var(--primary); border-radius: 12px; padding: 14px 16px; margin: 16px 0; color: #334155; font-size: 14px; }
+    .paper-info p { margin: 5px 0; }
+    figure { margin: 22px 0; background: #fbfdff; border: 1px solid #e8edf5; border-radius: 16px; padding: 14px; }
+    figure img { width: 100%; display: block; border-radius: 12px; background: #fff; }
+    figcaption { margin-top: 10px; font-size: 13.5px; color: var(--muted); line-height: 1.6; }
+    .fig-placeholder { padding: 36px 24px; text-align: center; background: #f8faff; border-radius: 12px; color: #94a3b8; font-size: 14px; border: 2px dashed #e2e8f0; line-height: 1.9; }
+    .formula-block { background: #fafbff; border: 1px solid #e8edf5; border-radius: 14px; padding: 16px 20px; margin: 14px 0; overflow-x: auto; }
+    .formula-vars { background: #f8f9fe; border: 1px solid #e0e7ff; border-radius: 12px; padding: 12px 16px; margin-top: -6px; margin-bottom: 14px; }
+    .formula-vars .var-title { font-size: 12px; font-weight: 700; color: #4338ca; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+    .formula-vars ul { padding-left: 18px; }
+    .formula-vars li { font-size: 13.5px; color: #374151; margin-bottom: 5px; }
+    .step-list { list-style: none; padding: 0; }
+    .step { display: flex; gap: 14px; margin-bottom: 16px; }
+    .step-num { width: 30px; height: 30px; border-radius: 50%; background: var(--primary); color: #fff; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0; }
+    .mini-card { background: #f8faff; border: 1px solid #e8edf5; border-radius: 12px; padding: 14px 16px; }
+    .mini-card h4 { margin-top: 0; }
+    .flow-diagram { display: flex; flex-direction: column; gap: 8px; margin: 16px 0; }
+    .flow-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .flow-box { background: #eff6ff; border: 1.5px solid #93c5fd; border-radius: 10px; padding: 8px 14px; font-size: 13px; font-weight: 600; color: #1d4ed8; white-space: nowrap; }
+    .flow-box.green { background: #f0fdf4; border-color: #86efac; color: #166534; }
+    .flow-box.purple { background: var(--accent-soft); border-color: rgba(124,58,237,0.3); color: #6d28d9; }
+    .flow-arrow { color: #94a3b8; font-size: 16px; }
+    .table-wrap { overflow-x: auto; margin: 14px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    thead th { background: #f0f4ff; padding: 10px 12px; text-align: left; font-weight: 700; color: #1e40af; border-bottom: 2px solid #c7d2fe; }
+    tbody td { padding: 9px 12px; border-bottom: 1px solid var(--line); }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: #f8faff; }
+    footer { text-align: center; margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+    @media (max-width: 768px) {
+      .layout { grid-template-columns: 1fr; }
+      .toc { position: static; }
+      .meta-grid { grid-template-columns: 1fr 1fr; }
+      .two-col { grid-template-columns: 1fr; }
+      h1 { font-size: 26px; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+  <a href="../index.html" class="back-link">← 返回论文列表</a>
+
+  <div class="hero">
+    <div class="eyebrow">📄 论文解读 · 电商生成式检索 · WWW 2025</div>
+    <h1>GRAM</h1>
+    <p class="subtitle">Generative Retrieval and Alignment Model: A New Paradigm for E-commerce Retrieval</p>
+    <div class="meta-grid">
+      <div class="meta-card"><div class="meta-label">机构</div><div class="meta-value">JD.com (京东)</div></div>
+      <div class="meta-card"><div class="meta-label">来源</div><div class="meta-value">WWW Companion '25</div></div>
+      <div class="meta-card"><div class="meta-label">年份</div><div class="meta-value">2025</div></div>
+      <div class="meta-card"><div class="meta-label">核心命题</div><div class="meta-value">LLM 共享文本编码 + 双对齐实现一体化检索预排序</div></div>
+    </div>
+  </div>
+
+  <div class="layout">
+    <aside class="toc">
+      <h2>目录</h2>
+      <ul class="toc-list">
+        <li><a href="#summary">一句话总结</a></li>
+        <li><a href="#background">1. 背景与动机</a></li>
+        <li><a href="#method">2. 方法详解</a>
+          <ul class="toc-sub">
+            <li><a href="#code-def">2.1 Code 定义与构建</a></li>
+            <li><a href="#sft">2.2 监督微调 (SFT)</a></li>
+            <li><a href="#co-alignment">2.3 Code 协同对齐</a></li>
+            <li><a href="#qp-align">2.4 Query-Product 对齐评分</a></li>
+            <li><a href="#inference-arch">2.5 推理与部署架构</a></li>
+          </ul>
+        </li>
+        <li><a href="#experiments">3. 实验结果</a></li>
+        <li><a href="#insights">4. 个人理解</a></li>
+      </ul>
+    </aside>
+
+    <main class="content">
+
+      <!-- 一句话总结 -->
+      <section class="section" id="summary">
+        <div class="section-title"><div class="icon" style="background:#dbeafe;">💡</div>一句话总结</div>
+        <p><strong>GRAM 是京东提出的电商生成式检索新范式，核心思路是用 LLM 基于 16 种结构化属性为 Query 和 Product 生成<em>共享文本 Code</em>，通过 Co-training + DPO Co-Alignment + JS 散度评分三层对齐，将传统「意图识别→召回→粗排」三阶段流水线整合为一个端到端的生成式检索+预排序一体化过程，在京东搜索广告线上 A/B 测试中实现广告收入 +2.46%、CTR +1.27%。</strong></p>
+        <div class="paper-info">
+          <p>📄 <strong>原文：</strong><a href="https://arxiv.org/abs/2504.01403" target="_blank">https://arxiv.org/abs/2504.01403</a></p>
+          <p>🔗 <strong>会议：</strong>WWW Companion '25 (The ACM Web Conference 2025), Sydney</p>
+          <p>📦 <strong>资源目录：</strong>~/Desktop/paper-reader-assets/2504.01403/</p>
+        </div>
+        <div class="callout callout-blue">
+          <strong>三句话核心贡献：</strong><br>
+          ① <strong>共享文本 Code：</strong>不是独立为 Query 和 Product 生成不同 ID，而是以 16 种结构化属性（品牌、品类、型号、材质等）为词汇表，用 LLM 为两端生成<em>相同词汇空间</em>的文本 Code，天然打通 Query-Product 的语言鸿沟；<br>
+          ② <strong>双重对齐：</strong>Code Co-Alignment（DPO 对齐 Query 端和 Product 端的 Code 生成偏好）+ Query-Product Alignment（JS 散度跨 Code 评分），确保一个 Query 生成的 Code 能高效召回相关 Product；<br>
+          ③ <strong>召回+粗排一体化：</strong>Code 匹配召回后直接用 Code 级别的 relevance score 排序，省掉传统粗排模型，减少漏斗信息损失。
+        </div>
+      </section>
+
+      <!-- 背景 -->
+      <section class="section" id="background">
+        <div class="section-title"><div class="icon" style="background:#eff6ff;">🌐</div>1. 背景与动机</div>
+
+        <h3>问题背景</h3>
+        <p>电商搜索的检索（Recall）环节是用户体验和商业收入的关键入口。在京东这种亿级商品规模的平台上，如何在几百毫秒内从海量商品中精准找出与用户 Query 相关的商品，是一个核心挑战。</p>
+
+        <h3>现有方法的局限</h3>
+        <p>传统方法大致分为三派：</p>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>🔤 稀疏检索 (BM25 等)</h4>
+            <p>基于倒排索引的词匹配，处理同义词、专业术语、上下文语义时能力有限，对长尾 Query 效果差。</p>
+          </div>
+          <div class="mini-card">
+            <h4>🧬 稠密检索 (DPR 等)</h4>
+            <p>将 Query 和商品映射到同一向量空间做 ANN 检索。瓶颈在于缺乏 Query-Product 深度交互、存储成本高（工业级商品规模下需大量内存）、正负样本构造受限导致无法利用 LLM 的世界知识。</p>
+          </div>
+        </div>
+
+        <p>近年来<strong>生成式检索</strong>（Generative Retrieval）兴起，用模型直接生成文档标识符。但现有方法分两派且各有致命缺陷：</p>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>🆔 ID-Based (TIGER, LC-Rec)</h4>
+            <p>用静态 ID 或通过聚类生成的语义 ID（Semantic ID），需要从零训练一套新的 ID 系统，完全浪费了 LLM 预训练中蕴含的世界知识；且 beam search 召回 $k$ 个商品的时间复杂度为 $O(k^2)$，在工业级在线系统不可行。</p>
+          </div>
+          <div class="mini-card">
+            <h4>📝 String-Based (SEAL, GLEN)</h4>
+            <p>用 n-gram 或关键词集合作为标识符，虽然利用了 LLM 的先验知识，但 Query 和 Product 的<strong>词汇分布差异巨大</strong>——用户搜索「运动鞋透气网面男款」和商品标题「XX品牌2024夏季新款透气网面跑步鞋」的关键词不完全对齐，导致生成式召回时大量漏召回。</p>
+          </div>
+        </div>
+
+        <div class="callout callout-amber">
+          <strong>核心矛盾：</strong>ID-based 方法浪费 LLM 世界知识；String-based 方法 Query-Product 词汇不对齐导致召回效率低。此外，当 Query 属性较多时，两种方法都会生成大量低质量 Code，缺乏有效的 Code 质量评估手段。
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：传统方法的问题</div>
+          <p>用户搜索「<strong>华为 Mate 60 手机壳 硅胶防摔</strong>」，这是一个带多个属性的 Query。基于 n-gram 的方法可能生成「华为」「Mate」「60」「手机壳」「硅胶」「防摔」等独立 Code，但这些 Code 与商品标题「华为Mate60Pro官方硅胶保护壳全包边防摔」之间缺少系统性的对齐机制——「手机壳」和「保护壳」是同义词但不匹配，「防摔」在商品标题中没有精确出现，导致该商品可能不会被召回。</p>
+          <p>而 GRAM 通过 NER 将 Query 归一化到结构化属性空间（品牌=华为, 型号=Mate 60, 品类=手机壳, 材质=硅胶, 功能=防摔），与商品的对应属性直接匹配，大幅提升召回精度。</p>
+        </div>
+      </section>
+
+      <!-- 方法详解 -->
+      <section class="section" id="method">
+        <div class="section-title"><div class="icon" style="background:#f0fdf4;">⚙️</div>2. 方法详解</div>
+
+        <h3 id="code-def">2.1 Code 定义与构建</h3>
+
+        <p>GRAM 的第一步是定义一套<strong>Query 和 Product 共享的文本 Code 体系</strong>。作者从电商场景中抽象出 16 种结构化属性作为 Code 的「原子词汇」：</p>
+
+        <div class="callout callout-blue">
+          <strong>16 种结构化属性：</strong>品牌名称、商品品类、系列、型号、功能属性、材质属性、风格属性、颜色属性、销售规格、技术规格、适用时间、适用人群、适用场景、附加修饰词、营销术语等。
+        </div>
+
+        <p>Code 由 1 个或多个属性通过分隔符拼接而成，按粒度分为三档：</p>
+        <ul>
+          <li><strong>粗粒度 Code：</strong>1-2 个属性（如「华为|手机壳」），覆盖面广但精度低</li>
+          <li><strong>中粒度 Code：</strong>3 个属性（如「华为|手机壳|硅胶」），平衡覆盖与精度</li>
+          <li><strong>细粒度 Code：</strong>超过 3 个属性（如「华为|Mate60|手机壳|硅胶|防摔」），精度高但覆盖面窄</li>
+        </ul>
+
+        <h4>初始 Code 构建（冷启动）</h4>
+        <p>由于没有现成的 Query-Code 和 Product-Code 标注数据，GRAM 通过以下流程构建初始训练集：</p>
+
+        <ol class="step-list">
+          <li class="step"><span class="step-num">1</span><div><strong>NER 模型训练：</strong>专家标注约 300 万条 Query 的 16 种属性 → 训练 BERT-based NER 模型</div></li>
+          <li class="step"><span class="step-num">2</span><div><strong>属性提取：</strong>用 NER 模型从 Query 中提取关键属性集合 $Q$，从商品标题中提取对应属性</div></li>
+          <li class="step"><span class="step-num">3</span><div><strong>点击对挖掘：</strong>基于点击日志挖掘高频 Query-Product 对，Query 的初始 Code = 自身 NER 属性 + 关联 Product 的 NER 属性；Product 的初始 Code = 自身 NER 属性 + 反向关联 Query 的 NER 属性</div></li>
+          <li class="step"><span class="step-num">4</span><div><strong>双向扩充：</strong>最终得到 ~600 万唯一 Query、~800 万唯一 Product、~740 万唯一 Code</div></li>
+        </ol>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：初始 Code 构建</div>
+          <p>用户在京东搜索「<strong>夏天透气运动鞋白色</strong>」并点击了商品「<strong>Nike Air Zoom Pegasus 40 白色网面透气跑步鞋</strong>」。</p>
+          <p><strong>Query 侧：</strong>NER 提取 → {适用时间:夏天, 功能:透气, 品类:运动鞋, 颜色:白色} → Query Code 包括「夏天|运动鞋」「透气|白色」「运动鞋|透气|白色」等组合。</p>
+          <p><strong>Product 侧：</strong>NER 从标题提取 → {品牌:Nike, 系列:Air Zoom Pegasus, 品类:跑步鞋, 材质:网面, 功能:透气, 颜色:白色} → Product Code 包括「Nike|跑步鞋」「网面|透气|白色」等。</p>
+          <p><strong>交叉增强：</strong>由于该 Query-Product 对有点击关系，Query 额外获得「Nike|跑步鞋」这个来自 Product 的 Code，Product 额外获得「夏天|运动鞋」这个来自 Query 的 Code。这样两端 Code 逐步趋同。</p>
+        </div>
+
+        <h3 id="sft">2.2 监督微调 (SFT)</h3>
+
+        <h4>2.2.1 Query-Code 生成器 SFT</h4>
+        <p>基于 0.5B 开源 LLM，以 Query 文本为输入、Code 文本为目标做 SFT。训练目标为负对数似然最小化：</p>
+
+        <div class="formula-block">
+          $$
+          \mathcal{L}_q^{SFT} = -\mathbb{E}_{(q,c) \sim D_q^{SFT}} \sum_{i=1}^{L_c} \log Pr(c_i \mid P_{mpt}^q, q, c_1,\ldots,c_{i-1})
+          $$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$q$：用户搜索 Query</li>
+            <li>$c$：目标 Code（由 NER 构建的 gold standard）</li>
+            <li>$c_i$：Code $c$ 的第 $i$ 个 token</li>
+            <li>$P_{mpt}^q$：Query 专用 Prompt（如「请为以下搜索词生成商品属性 Code:...」）</li>
+            <li>$L_c$：Code 的长度</li>
+            <li>$D_q^{SFT}$：Query-Code 训练数据集（约 1.85 亿条）</li>
+          </ul>
+        </div>
+
+        <h4>2.2.2 Product-Code 生成器 SFT</h4>
+        <p>对称地，以商品标题为输入、Code 为目标训练 Product-Code 生成器：</p>
+
+        <div class="formula-block">
+          $$
+          \mathcal{L}_t^{SFT} = -\mathbb{E}_{(t,c) \sim D_t^{SFT}} \sum_{i=1}^{L_c} \log Pr(c_i \mid P_{mpt}^t, t, c_1,\ldots,c_{i-1})
+          $$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$t$：商品标题</li>
+            <li>$P_{mpt}^t$：Product 专用 Prompt</li>
+            <li>$D_t^{SFT}$：Product-Code 训练数据集（约 4.6 亿条）</li>
+            <li>其余符号含义同上</li>
+          </ul>
+        </div>
+
+        <h4>2.2.3 Co-training（协同训练）</h4>
+
+        <div class="callout callout-amber">
+          <strong>先确认一个关键前提：只有一个模型。</strong>Query-Code 生成器和 Product-Code 生成器<strong>不是两个独立的模型</strong>。它们是<strong>同一个 0.5B LLM</strong>，只是输入 prompt 不同时行为不同——论文 3.5.1 节明确将 SFT 后的 GRAM 称为「the reference model」（单数），且图 1 展示的是共享 Transformer 架构。类似你用同一个 GPT，给「翻译成英文」和「总结这段话」两个 prompt，模型自动切换行为。
+        </div>
+
+        <h4>为什么需要 Co-training</h4>
+        <p>2.2.1 和 2.2.2 各自 SFT 后，模型学会了从 Query 出 Code、从 Product 出 Code。但一个致命问题：<strong>模型几乎只生成细粒度 Code</strong>（4-5 个属性），因为训练数据里高频 Query-Product 对本身就属性多。细粒度 Code 精度高但覆盖面窄——中长尾 Query/Product 可能 Code 交集为空，完全无法召回。</p>
+
+        <h4>第一步：数据增强（论文明确描述）</h4>
+        <ol>
+          <li>用训练好的 Product-Code 生成器为全量活跃商品生成 Code</li>
+          <li>基于点击关系，找到每个 Query 关联的 Product，把这些 Product 的 Code 作为 Query 候选</li>
+          <li>用 Query-Code 生成器为每个 Query 额外生成 10 个新 Code</li>
+          <li>去重后用相关性模型过滤，通过的 Code 合并到训练集</li>
+        </ol>
+        <p><strong>效果：</strong>每条训练样本的 Code 从「只有 NER 标注的细粒度 Code」扩充为「粗/中/细粒度混合 Code」。如果不做这一步直接 Co-training，模型根本没见过粗 Code，训了也没用。</p>
+
+        <h4>第二步：同时训练（论文明确描述）</h4>
+        <p>论文原话：「Unlike the separate training conducted in the previous stages, this phase needs to strengthen the connection between the two models, thus training the two generators simultaneously.」</p>
+        <p><strong>一个 training step 里具体发生了什么（论文明确描述 loss 公式，以下 batch 细节为合理推断）：</strong></p>
+
+        <ol class="step-list">
+          <li class="step"><span class="step-num">1</span><div><strong>拼 prompt：</strong>每条样本根据类型拼不同 prompt 前缀——Query 样本拼「请为以下搜索词生成 Code：」，Product 样本拼「请为以下商品标题生成 Code：」。文本 + prompt 拼完就是模型的标准输入。</div></li>
+          <li class="step"><span class="step-num">2</span><div><strong>forward：</strong>所有样本（Query-Code 对 + Product-Code 对）一起送进<strong>同一个 LLM</strong>，做一次前向传播。每个 token 输出词表上的概率分布。</div></li>
+          <li class="step"><span class="step-num">3</span><div><strong>算 loss：</strong>对所有样本分别算负对数似然 loss（跟 2.2.1/2.2.2 公式一样），然后<strong>全部加在一起</strong>：batch_total_loss = Σ L_q_samples + λ · Σ L_t_samples（论文 λ=1，即等权重）。</div></li>
+          <li class="step"><span class="step-num">4</span><div><strong>backward + 更新：</strong>batch_total_loss.backward()，梯度同时流回 LLM 的<strong>同一套参数</strong>，更新。</div></li>
+        </ol>
+
+        <div class="formula-block">
+          $$
+          \mathcal{L}^{SFT} = \mathcal{L}_q^{SFT} + \lambda \cdot \mathcal{L}_t^{SFT}
+          $$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\mathcal{L}_q^{SFT}$：batch 中所有 Query-Code 样本的负对数似然 loss 之和</li>
+            <li>$\mathcal{L}_t^{SFT}$：batch 中所有 Product-Code 样本的负对数似然 loss 之和</li>
+            <li>$\lambda$：平衡超参（论文设为 1，Query 和 Product 端等权重）</li>
+            <li><strong>关键：</strong>两个 loss 作用于<strong>同一套模型参数</strong>，一次 backward 同时受两端梯度约束</li>
+          </ul>
+        </div>
+
+        <h4>跟「各自训」的核心区别</h4>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>各自训（2.2.1 + 2.2.2）</h4>
+            <p>Step 1: Batch 全是 Query-Code → forward → loss → backward（只看 Query 端）</p>
+            <p>Step 2: Batch 全是 Product-Code → forward → loss → backward（只看 Product 端）</p>
+            <p><strong>问题：</strong>两次梯度更新互不知道对方存在，参数在两个方向上各自偏移，Code 空间不一致。</p>
+          </div>
+          <div class="mini-card">
+            <h4>Co-training（2.2.3）</h4>
+            <p>Step 1: Batch 混合 → forward（<strong>同时</strong>看到两端）→ loss 求和 → backward</p>
+            <p><strong>效果：</strong>一次梯度更新 = 同时学会「Query 怎么出 Code」+「Product 怎么出 Code」，参数被拉向「两端都能预测好」的妥协点。</p>
+          </div>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：一次 Co-training step 的具体数据流</div>
+          <p><strong>Batch（假设 4 条样本，真实 batch=128）：</strong></p>
+          <p>样本 1（Query）：输入「跑步鞋透气网面」→ 目标 Code「运动鞋|透气|网面」<br>
+          样本 2（Product）：输入「Nike Air Zoom 跑鞋」→ 目标 Code「Nike|跑步鞋|透气」<br>
+          样本 3（Query）：输入「苹果手机壳防摔」→ 目标 Code「苹果|手机壳|防摔」<br>
+          样本 4（Product）：输入「Apple 20W 快充头」→ 目标 Code「苹果|充电器|快充」</p>
+          <p><strong>forward：</strong>4 条一起送进 LLM，同一个 Transformer 处理所有样本。</p>
+          <p><strong>loss：</strong>loss_1 + loss_2 + loss_3 + loss_4（λ=1，不分 Query/Product 权重）。</p>
+          <p><strong>backward：</strong>loss 对 Transformer 参数求梯度——比如某个 attention head 的权重更新方向，同时被「Query 端希望这个 token 概率高」和「Product 端希望那个 token 概率高」的梯度共同决定。</p>
+          <p><strong>训练前：</strong>Query「跑步鞋」生成 Code「跑步鞋|透气|轻便|运动|减震」（5 属性，细），Product「Nike跑鞋」生成 Code「Nike|跑步鞋|Revolution6|黑色|网面」（5 属性，细）。两端 Code 交集只有「跑步鞋」1 个 token。</p>
+          <p><strong>Co-training 后：</strong>因为扩充数据里有粗 Code（「跑步鞋」「运动鞋|跑步」），且两端 loss 同时约束同一套参数，模型学会了在粗/中/细粒度间平衡——Query 额外生成「跑步鞋」「运动鞋|跑步」，Product 也扩大粗 Code 覆盖。交集扩大到多个粗/中粒度 Code，召回率大幅提升。</p>
+        </div>
+
+        <h3 id="co-alignment">2.3 Code 协同对齐 (Code Co-Alignment)</h3>
+
+        <p>SFT 阶段主要关注「能不能生成 Code」，而 Co-Alignment 阶段关注「生成的 Code 能不能高效召回」。核心思路：<strong>用点击行为做监督信号，通过 DPO（Direct Preference Optimization）让模型偏好那些能召回更多相关商品的 Code。</strong></p>
+
+        <div class="callout callout-amber">
+          <strong>⚠️ 先澄清一个极易误解的点：</strong>论文里的 $\pi(c_w \mid q, t)$ <strong>不是</strong>「把 Query 和 Product 拼起来一起喂给模型」。GRAM 只有一个文本输入口，prompt 决定它是 Query 模式还是 Product 模式，不支持联合输入。$\pi(c_w \mid q, t)$ 的定义是两次<strong>独立 forward 的概率取平均</strong>：$\pi(c_w \mid q, t) = (\pi(c_w \mid q) + \pi(c_w \mid t))/2$。
+        </div>
+
+        <h4>正负样本构造</h4>
+        <p>对于每个 Query-Product 点击对：</p>
+        <ul>
+          <li><strong>正例 Code ($c_w$)：</strong>Query 的 Code 集合 ∩ Product 的 Code 集合 = 共享 Code</li>
+          <li><strong>负例 Code ($c_l$)：</strong>Query 的 Code 集合 − Product 的 Code 集合 = Query 独有但 Product 没有的 Code（或反过来）</li>
+        </ul>
+        <p>一条 DPO 训练样本 = <strong>(Query 文本, Product 标题, 正例 Code 文本, 负例 Code 文本)</strong> 的四元组。</p>
+
+        <h4>DPO 训练：一个样本到底发生了什么</h4>
+
+        <p><strong>第一步：参考模型打分（参数冻结，可以预先算好）</strong></p>
+        <ol class="step-list">
+          <li class="step"><span class="step-num">1</span><div><strong>Forward（Query 端）：</strong>输入 = [Query Prompt] + Query 文本 → 模型输出对 $c_w$ 和 $c_l$ 的生成概率 $\pi_{SFT}(c_w \mid q)$ 和 $\pi_{SFT}(c_l \mid q)$</div></li>
+          <li class="step"><span class="step-num">2</span><div><strong>Forward（Product 端）：</strong>输入 = [Product Prompt] + Product 标题 → 得 $\pi_{SFT}(c_w \mid t)$ 和 $\pi_{SFT}(c_l \mid t)$</div></li>
+          <li class="step"><span class="step-num">3</span><div><strong>取平均：</strong>$\pi_{SFT}(c_w \mid q, t) = (\pi_{SFT}(c_w \mid q) + \pi_{SFT}(c_w \mid t))/2$，$c_l$ 同理</div></li>
+        </ol>
+
+        <p><strong>第二步：当前模型打分（参数在训练，需要梯度）</strong></p>
+        <ol class="step-list">
+          <li class="step"><span class="step-num">4</span><div><strong>Forward（Query 端）：</strong>同样输入 Query，得 $\pi_\theta(c_w \mid q)$ 和 $\pi_\theta(c_l \mid q)$</div></li>
+          <li class="step"><span class="step-num">5</span><div><strong>Forward（Product 端）：</strong>同样输入 Product，得 $\pi_\theta(c_w \mid t)$ 和 $\pi_\theta(c_l \mid t)$</div></li>
+          <li class="step"><span class="step-num">6</span><div><strong>取平均：</strong>$\pi_\theta(c_w \mid q, t) = (\pi_\theta(c_w \mid q) + \pi_\theta(c_w \mid t))/2$</div></li>
+        </ol>
+
+        <p><strong>第三步：算 DPO loss → backward → 更新参数</strong></p>
+
+        <div class="formula-block">
+          $$
+          \mathcal{L}_{CA}(\pi_\theta) = -\mathbb{E}_{(q,t,c_w,c_l) \sim D_{CA}} \biggl[ \log \sigma \Bigl( \beta_w \log \frac{\pi_\theta(c_w \mid q, t)}{\pi_{SFT}(c_w \mid q, t)} - \beta_l \log \frac{\pi_\theta(c_l \mid q, t)}{\pi_{SFT}(c_l \mid q, t)} \Bigr) \biggr]
+          $$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$D_{CA}$：偏序数据集（6740 万条），每条是 $(q, t, c_w, c_l)$ 四元组</li>
+            <li>$\pi_{SFT}(c \mid q, t)$：参考模型对 Code $c$ 在 $(q,t)$ 下的概率 = $\frac{1}{2}[\pi_{SFT}(c \mid q) + \pi_{SFT}(c \mid t)]$（<strong>两次独立 forward 的平均</strong>，不是联合输入）</li>
+            <li>$\pi_\theta(c \mid q, t)$：当前模型同样方式算出的概率</li>
+            <li>$\beta_w, \beta_l$：正例/负例的权重超参</li>
+            <li>直观理解：让当前模型比参考模型更偏好 $c_w$（共享 Code），更不偏好 $c_l$（只有一端能生成的 Code）</li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：一条 DPO 样本的完整数据流</div>
+          <p><strong>样本：</strong>$q$=「跑步鞋透气」, $t$=「Nike Air Zoom 跑鞋」, $c_w$=「运动鞋|透气」, $c_l$=「跑步鞋|透气|轻便|减震」</p>
+          <p><strong>参考模型（SFT 后的 GRAM，冻结）：</strong><br>
+          Forward ①：输入 Query → 输出 $P(c_w|q)=0.35$, $P(c_l|q)=0.42$<br>
+          Forward ②：输入 Product → 输出 $P(c_w|t)=0.61$, $P(c_l|t)=0.12$<br>
+          平均：$\pi_{SFT}(c_w|q,t)=0.48$, $\pi_{SFT}(c_l|q,t)=0.27$</p>
+          <p><strong>当前模型：</strong><br>
+          Forward ③：输入 Query → 输出 $P(c_w|q)=0.52$, $P(c_l|q)=0.31$<br>
+          Forward ④：输入 Product → 输出 $P(c_w|t)=0.68$, $P(c_l|t)=0.15$<br>
+          平均：$\pi_\theta(c_w|q,t)=0.60$, $\pi_\theta(c_l|q,t)=0.23$</p>
+          <p><strong>DPO loss：</strong>正例比 $0.60/0.48=1.25$（偏好提升 ✓），负例比 $0.23/0.27=0.85$（偏好下降 ✓）→ loss 推动参数往这个方向继续优化。</p>
+          <p><strong>为什么是平均值？</strong>Gram 只有一个文本输入口，不支持 Query+Product 拼接。取平均近似「两端对该 Code 的共同偏好程度」——值越大，说明 Code 既对 Query 描述得好、也对 Product 描述得好，即共享 Code 质量高。</p>
+        </div>
+
+        <div class="callout callout-purple">
+          <strong>关键技巧——长度惩罚下采样：</strong>实验发现 DPO 数据中细粒度 Code 更容易被选为负例，粗粒度 Code 更容易被选为正例。这会导致模型整体偏好粗粒度 Code，精度下降。为此，作者为正例 Code 添加长度惩罚因子 $\alpha = code\_l / max\_code\_l$，每条正例 Code 的重复次数为 $n = \sqrt{k} \times \alpha$（$k$ 为该 Code 在数据中的原始出现次数），从而平衡粗细粒度 Code 的分布。
+        </div>
+
+        <h3 id="qp-align">2.4 Query-Product 对齐评分</h3>
+
+        <p>Code Co-Alignment 解决了「Code 本身好不好」的问题，但还需要解决「同一个 Query 召回的不同商品如何排序」。为此 GRAM 引入了基于 JS 散度的 Query-Product 评分机制。</p>
+
+        <h4>JS 散度评分</h4>
+        <p>对于每个 (Query, Code, Product) 三元组，逐 token 计算 Query 端和 Product 端对该 Code 的生成概率分布的差异。差异越小（即 Query 和 Product 对同一 Code 的生成概率越接近），该 Code 对该 Query-Product 对的相关性越高：</p>
+
+        <div class="formula-block">
+          $$
+          S_{rele}(q, t) = \sum_{i=1}^{n} w_i \cdot \left( P_{q_i} \cdot \ln\frac{2P_{q_i}}{P_{q_i}+P_{t_i}} + P_{t_i} \cdot \ln\frac{2P_{t_i}}{P_{q_i}+P_{t_i}} \right)
+          $$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$P_{q_i}$：Query 端生成 Code 第 $i$ 个 token 的概率（标量，0 到 1）</li>
+            <li>$P_{t_i}$：Product 端生成 Code 第 $i$ 个 token 的概率</li>
+            <li>$w_i$：每个 Code 的可学习权重（按 Code 粒度不同）</li>
+            <li>$n$：Code 的 token 数量</li>
+            <li>括号内是 Jensen-Shannon 散度（对称版 KL 散度），值越小说明两端对该 token 的生成概率越一致</li>
+            <li><strong>注意：</strong>此阶段模型参数固定，只训练权重 $w_i$</li>
+          </ul>
+        </div>
+
+        <h4>Pairwise Ranking Loss</h4>
+        <p>每个 Query 通过 Code 召回一批商品后，取 Top-K 最高分的商品作为正样本 $t_{pos}$，其余为负样本 $t_{neg}$，用 pairwise loss 训练排序：</p>
+
+        <div class="formula-block">
+          $$
+          \mathcal{L}_{rele} = \max\bigl(0,\; S_{rele}(q, t_{neg} \mid c) - S_{rele}(q, t_{pos} \mid c) + \mu \bigr)
+          $$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$t_{pos}$：通过 Code 召回的高分商品（正样本）</li>
+            <li>$t_{neg}$：召回的低分商品（负样本）</li>
+            <li>$\mu$：Margin 超参，要求正负样本分数差距至少为 $\mu$</li>
+            <li>目标：让正样本商品比负样本商品的 Code 级别 relevance 分数至少高出 $\mu$</li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：JS 散度评分如何工作（训练 &amp; 线上）</div>
+
+          <p><strong>先搞清楚 $P_q$ 和 $P_t$ 分别从哪来：</strong></p>
+          <div class="two-col">
+            <div class="mini-card">
+              <h4>$P_q$（Query 端 token 概率）</h4>
+              <p>Query 送进模型生成 Code 时，模型对每个 token 输出的概率。<strong>同一次 forward 的副产物</strong>，不额外消耗算力。</p>
+            </div>
+            <div class="mini-card">
+              <h4>$P_t$（Product 端 token 概率）</h4>
+              <p><strong>每个商品只对它自己生成的 Code 有 $P_t$。</strong>近线系统把商品标题喂给 Product-Code Generator，生成 N 个 Code，顺便记下每个 token 的概率，写进索引。一个商品没生成过的 Code，索引里就没有这个商品的条目——自然也不会被那个 Code 召回。</p>
+            </div>
+          </div>
+
+          <p><strong>具体例子：</strong></p>
+          <p>Query「苹果手机充电器快充」→ 一次 forward，生成了 Code「充电器|快充」（它还生成了其他 Code，我们只看这一个），同时拿到：$P_{q1}=0.85$, $P_{q2}=0.91$。</p>
+
+          <p>Code「充电器|快充」的倒排索引里有两个商品（因为它们各自在近线系统中都生成过这个 Code）：</p>
+
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>商品</th><th>它是怎么被召回的</th><th>预存的 $P_t$</th><th>JS 散度 vs Query</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td>A: Apple 20W USB-C 快充头</td>
+                  <td>近线处理时，Product-Code Generator 输入「Apple 20W USB-C 快充头」，生成了 Code「充电器|快充」</td>
+                  <td>$P_{t1}=0.88$, $P_{t2}=0.90$</td>
+                  <td>≈ 0.0003 ✅ 高分</td>
+                </tr>
+                <tr>
+                  <td>B: 三星 25W 旅行充电器</td>
+                  <td>近线处理时，输入「三星 25W 旅行充电器」，<strong>也生成了</strong> Code「充电器|快充」（因为「充电器」和「快充」在训练中经常共现，虽然这商品本身不是快充）</td>
+                  <td>$P_{t1}=0.85$, $P_{t2}=0.40$</td>
+                  <td>≈ 0.12 ❌ 低分</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p><strong>为什么商品 B 的 $P_{t2}$ 只有 0.40？</strong>因为它的标题里没有「快充」这个词，模型强行生成 token「快充」时信心不足。JS 散度捕捉到这个差异——Query 对「快充」很有信心（0.91），但商品 B 对「快充」很勉强（0.40），所以得分低。</p>
+
+          <p><strong>根本不会发生的事：</strong>Code「苹果|充电器|快充」的倒排链里不会有「三星充电器」——它从来没生成过这个 Code，索引里没有它的条目，自然不会被召回。$P_t$ 只对商品自己<strong>实际生成过的 Code</strong> 存在。</p>
+
+          <p><strong>线上不需要额外 forward：</strong>$P_q$ 从 Query forward 免费获得，$P_t$ 从索引查表。JS 散度是纯数学计算，几乎不耗时。</p>
+        </div>
+
+        <h3 id="inference-arch">2.5 推理与部署架构</h3>
+
+        <figure>
+          <img src="https://arxiv.org/html/2504.01403v2/x1.png" alt="Figure 1: GRAM Architecture"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+                 <b>Figure 1: GRAM 架构图</b><br><br>
+                 GRAM 包含三个核心模块：Query-Code Generator（左）接收 Query 输入生成 Code；Product-Code Generator（右）接收商品标题生成 Code；Code Co-Alignment 模块（中）确保两端生成的 Code 对齐，通过 Share Alignment 连接搜索和点击路径。
+               </div>`" />
+          <figcaption><strong>Figure 1（论文原图）：</strong>GRAM 整体架构。左侧 Query-Code Generator 输入 Query 经 Transformer 生成 Code 序列；右侧 Product-Code Generator 输入商品标题经 Transformer 生成 Code 序列；中间 Co-Alignment 模块通过 Share Alignment 确保两端 Code 对齐。最终 Query 检索到相关 Product 通过 click 反馈形成闭环。</figcaption>
+        </figure>
+
+        <p>GRAM 的在线推理流程与部署方式非常有工程价值，它做到了<strong>召回+粗排一体化</strong>：</p>
+
+        <ol class="step-list">
+          <li class="step"><span class="step-num">1</span><div><strong>Code 生成（一次 forward）：</strong>用户发起搜索 → Query-Code Generator 做一次 LLM forward，生成 N 个 Code（beam size=10）。同时<strong>免费拿到每个 token 的生成概率 $P_q$</strong>——这是 forward 的副产物，不额外消耗算力。</div></li>
+          <li class="step"><span class="step-num">2</span><div><strong>Code 匹配召回（查索引）：</strong>每个 Code 查倒排索引（Code → Product 列表），召回约 300 个广告商品。索引里除了 Code 字符串，还<strong>预存了每个商品对该 Code 的 token 级生成概率 $P_t$</strong>（近线系统提前算好写入）。</div></li>
+          <li class="step"><span class="step-num">3</span><div><strong>Query-Product 评分（纯计算，无模型调用）：</strong>对每个召回商品，用 JS 散度计算 $S_{rele} = f(P_q, P_t)$。$P_q$ 从 step 1 免费获得，$P_t$ 从 step 2 索引查表获得——<strong>全程不需要再做任何模型 forward</strong>。同一商品若被多个 Code 召回，分数累加。</div></li>
+          <li class="step"><span class="step-num">4</span><div><strong>排序输出：</strong>按 $S_{rele}$ 降序排列，直接输出——不需要额外的粗排模型。整个流程只有 step 1 涉及一次 LLM 推理。</div></li>
+        </ol>
+
+        <div class="callout callout-green">
+          <strong>为什么线上只需要一次 forward？</strong><br>
+          ① $P_q$ 是 Query forward 的<strong>天然副产物</strong>——生成 Code 时模型对每个 token 都输出概率分布，取对应 token 的概率就行。<br>
+          ② $P_t$ 由<strong>近线系统预处理</strong>——每个商品喂给 Product-Code Generator 生成 N 个 Code，<strong>只对这些生成过的 Code 记录 token 概率</strong>，写入倒排索引。线上查表即得，不需要额外 forward。<br>
+          ③ <strong>实时缓存：</strong>高频 Query 的 Code 和 $P_q$ 也会缓存，连那一次 forward 都可以省掉。
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2504.01403v2/figure/Online_GRAM.pdf" alt="Figure 2: GRAM Online Deployment"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+                 <b>Figure 2: GRAM 部署架构</b><br><br>
+                 GRAM 替代了传统系统中的意图识别→召回→粗排三层架构。在线系统接收 Query，GRAM 生成 Code 并匹配产品索引后输出带分数的商品列表；近线系统负责为新增商品生成 Code 并更新产品索引。
+               </div>`" />
+          <figcaption><strong>Figure 2（论文原图）：</strong>GRAM 在京东搜索系统中的部署架构。GRAM 统一替代了传统的「意图识别 → 多路召回 → 粗排」三层漏斗，减少信息损失。在线（Online）路径处理用户实时请求，近线（Nearline）路径处理新增商品的 Code 生成和索引更新。</figcaption>
+        </figure>
+      </section>
+
+      <!-- 实验结果 -->
+      <section class="section" id="experiments">
+        <div class="section-title"><div class="icon" style="background:#fef3c7;">📊</div>3. 实验结果</div>
+
+        <h3>数据规模</h3>
+        <p>GRAM 的实验数据来自京东真实搜索日志，规模巨大：</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>统计项</th><th>SFT Dataset</th><th>Alignment Dataset</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Query-Code 对</td><td>1.85 亿</td><td>6740 万</td></tr>
+              <tr><td>Product-Code 对</td><td>4.60 亿</td><td>1.35 亿</td></tr>
+              <tr><td>唯一 Query 数</td><td>620 万</td><td>150 万</td></tr>
+              <tr><td>唯一 Product 数</td><td>840 万</td><td>1560 万</td></tr>
+              <tr><td>唯一 Code 数</td><td>740 万</td><td>45.3 万</td></tr>
+              <tr><td>Query 平均字符数</td><td>8.0</td><td>7.0</td></tr>
+              <tr><td>Product 平均字符数</td><td>50.3</td><td>51.9</td></tr>
+              <tr><td>Code 平均字符数</td><td>9.9</td><td>7.9</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>离线评测</h3>
+        <p>评测指标：Recall@k（k=10, 100, 300，衡量点击商品被召回的比例）和 RelR（Relevance Ratio，不依赖点击的 relevance 角度评估）。</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>模型</th><th>Recall@10</th><th>Recall@100</th><th>Recall@300</th><th>RelR</th></tr>
+            </thead>
+            <tbody>
+              <tr style="background:#f0fdf4;"><td><strong>GRAM</strong></td><td><strong>2.85%</strong></td><td><strong>12.54%</strong></td><td><strong>21.13%</strong></td><td><strong>40.18%</strong></td></tr>
+              <tr><td>BM25（稀疏）</td><td>3.01%</td><td>10.52%</td><td>15.23%</td><td>35.78%</td></tr>
+              <tr><td>DocT5Query（稀疏）</td><td>3.13%</td><td>10.88%</td><td>15.88%</td><td>35.56%</td></tr>
+              <tr><td>DPR（稠密）</td><td>3.89%</td><td>11.26%</td><td>17.92%</td><td>30.96%</td></tr>
+              <tr><td>SEAL（生成式-string）</td><td>3.25%</td><td>11.62%</td><td>16.56%</td><td>27.03%</td></tr>
+              <tr><td>LC-Rec（生成式-ID）</td><td>4.35%</td><td>7.16%</td><td>7.33%</td><td>23.94%</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-blue">
+          <strong>关键发现：</strong><br>
+          ① GRAM 在 Recall@10 上略低于 DPR/BM25 等传统方法，但在 Recall@100（+11.4% vs DPR）和 Recall@300（+17.9% vs DPR）上大幅领先——说明 GRAM 的 Code 覆盖面更广，不需要在 Top-10 内就精确命中，但整体召回效率远高于传统方法；<br>
+          ② GRAM 的 RelR（40.18%）显著优于所有 baseline，说明其召回结果的「相关商品比例」更高——这是 Code 对齐模块发挥的关键作用；<br>
+          ③ LC-Rec（Semantic ID 式生成召回）在 Recall@300 只有 7.33%，说明从零训练 Semantic ID 在工业级场景的泛化能力极差；其 Recall@10 最高（4.35%）可能得益于 beam search 的局部聚焦效应，但无法扩展到更大召回量。
+        </div>
+
+        <h3>消融实验</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>模型变体</th><th>Recall@10</th><th>Recall@100</th><th>Recall@300</th><th>RelR</th></tr>
+            </thead>
+            <tbody>
+              <tr style="background:#f0fdf4;"><td><strong>GRAM (完整)</strong></td><td><strong>2.85%</strong></td><td><strong>12.54%</strong></td><td><strong>21.13%</strong></td><td><strong>40.18%</strong></td></tr>
+              <tr><td>w/o Co-Alignment (CA)</td><td>1.80%</td><td>11.37%</td><td>20.23%</td><td>33.51%</td></tr>
+              <tr><td>w/o Co-training &amp; CA</td><td>1.57%</td><td>7.64%</td><td>12.89%</td><td>33.36%</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-amber">
+          <strong>消融结论：</strong><br>
+          ① 去掉 Co-Alignment 后 Recall@300 降 ~1pp，但 RelR 暴跌 6.67pp——说明 Co-Alignment 对提升召回相关性质量至关重要；<br>
+          ② 同时去掉 Co-training 和 Co-Alignment 后 Recall@300 进一步暴跌到 12.89%（降 ~8pp），说明 Query-Product Code 的交互训练是基石。
+        </div>
+
+        <h3>在线 A/B 测试</h3>
+        <p>GRAM 在京东搜索广告线上随机服务 5% 流量 vs 基线模型 5% 流量，持续至少一周。结果以在线模型为 baseline：</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>模型</th><th>Ad. imp.</th><th>CTR</th><th>CPC</th><th>Ad. revenue</th></tr>
+            </thead>
+            <tbody>
+              <tr style="background:#f0fdf4;"><td><strong>GRAM (完整)</strong></td><td><strong>+0.74%</strong></td><td><strong>+1.27%</strong></td><td><strong>+0.45%</strong></td><td><strong>+2.46%</strong></td></tr>
+              <tr><td>GRAM w/o CA</td><td>+0.56%</td><td>+0.92%</td><td>+0.68%</td><td>+2.16%</td></tr>
+              <tr><td>GRAM w/o CT &amp; CA</td><td>+0.37%</td><td>+0.21%</td><td>+0.79%</td><td>+1.37%</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-green">
+          <strong>线上核心结论：</strong><br>
+          ① 完整 GRAM 广告收入 +2.46%，CTR +1.27%，所有指标 p&lt;0.05 显著——这在工业级搜索广告系统中是非常可观的提升；<br>
+          ② 广告展现量 +0.74% 说明 GRAM 召回了更多相关商品，扩大了可竞价广告池；<br>
+          ③ 消融趋势与离线实验完全一致：Co-Alignment 贡献最大（+0.62pp CTR），Co-training 是基础前提。
+        </div>
+      </section>
+
+      <!-- 个人理解 -->
+      <section class="section" id="insights">
+        <div class="section-title"><div class="icon" style="background:var(--accent-soft);">💭</div>4. 个人理解</div>
+
+        <h3>亮点</h3>
+        <ol>
+          <li><strong>共享 Code 空间的设计非常巧妙：</strong>不是让 Query 和 Product 各自有独立的 ID 体系，而是以 16 种结构化属性为「通用语言」，让 LLM 在同一个词汇空间里为两端生成 Code。这从根本上解决了 String-based 生成式检索中 Query-Product 词汇不对齐的核心痛点，比 TIGER/LC-Rec 的 Semantic ID 方案更充分利用了 LLM 的世界知识。</li>
+          <li><strong>工程落地思维贯穿全文：</strong>从初始 Code 冷启动（NER + 点击对挖掘），到粗中细粒度 Code 的分层设计，到长度惩罚下采样平衡粗细粒度分布，再到在线缓存的延迟优化——这不是一篇纯学术 paper，而是一个真正在亿级商品规模上跑通并持续创造收入的工业系统。</li>
+          <li><strong>召回+粗排一体化的工程价值：</strong>传统「意图识别→多路召回→粗排」的漏斗架构每层都有信息损失，GRAM 用一个模型同时完成这三步，减少信息损失、降低系统复杂度。在线 A/B 结果（收入 +2.46%）证明这个方向是对的。</li>
+          <li><strong>DPO 在检索对齐中的创新应用：</strong>将 DPO 从 LLM 对齐迁移到检索场景，用点击行为构造偏序关系来优化 Code 生成偏好——这个思路可以推广到其他生成式检索场景。</li>
+        </ol>
+
+        <h3>可能的不足</h3>
+        <ol>
+          <li><strong>对 NER 模型的强依赖：</strong>GRAM 的 Code 体系建立在 NER 提取的 16 种属性之上。NER 模型的准确率会直接影响 Code 质量，如果 NER 出错（如将「苹果」误标为水果而非品牌），会导致系统性召回偏差。论文没有分析 NER 错误对最终效果的影响。</li>
+          <li><strong>Recall@10 不如稀疏/稠密方法：</strong>离线实验中 GRAM 的 Recall@10 只有 2.85%，低于 BM25 的 3.01% 和 DPR 的 3.89%。虽然在高 K 值下 GRAM 反超，但在一些对首屏结果质量要求极高的场景（如移动端搜索），Top-10 的召回质量可能比 Top-300 更重要。</li>
+          <li><strong>新商品冷启动：</strong>虽然论文提到近线系统会为新商品生成 Code，但如果新商品的属性在训练数据中从未出现过（如全新品类），NER 模型和 Code 生成器可能都表现不佳。论文没有给出新商品的专项实验。</li>
+          <li><strong>缺乏与最新稠密检索方法的对比：</strong>Baseline 中的 DPR 是 2020 年的方法，未与更强的稠密检索方法如 SimLM、ColBERT v2 等对比。</li>
+        </ol>
+
+        <h3>对我们的启发</h3>
+        <div class="callout callout-purple">
+          <strong>可迁移思路：</strong><br>
+          ① <strong>属性化 Code 的思路可以借鉴：</strong>在我们的推荐系统中，商品也有丰富的属性（品牌、品类、价格段、适用人群等），可以尝试用类似的「结构化属性 Code」替代或补充现有的 Semantic ID 方案；<br>
+          ② <strong>双对齐范式通用性强：</strong>Code Co-Alignment + Query-Product Alignment 的两阶段对齐思路不限于电商搜索，任何需要「用户表达 → 商品匹配」的场景（如推荐系统的召回阶段）都可以复用；<br>
+          ③ <strong>召回+粗排一体化的系统简化思路：</strong>不仅减少信息损失，也降低了多模型联调的工程复杂度——可以评估在我们业务中类似思路的可行性。
+        </div>
+
+        <blockquote>
+          <strong>一句话启发：</strong>GRAD 的核心洞见是——与其让模型从头学一套 ID，不如让 LLM 用已有的「人类语言」（结构化属性）做检索的中间表征。这种「借力 LLM 世界知识」的思路，可能是生成式检索在工业界落地的最短路径。
+        </blockquote>
+      </section>
+
+    </main>
+  </div>
+
+  <footer>
+    <p><a href="../index.html">← 返回论文列表</a></p>
+    <p style="margin-top:8px;">论文解读生成时间：2025-05-15 · 论文出处：WWW Companion '25 · 资源目录：~/Desktop/paper-reader-assets/2504.01403/</p>
+  </footer>
+</div>
+</body>
+</html>
+              <tr><th>模型变体

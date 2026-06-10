@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>币圈完全入门：从 BTC 到 RWA</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '$', right: '$', display: false }
+          ],
+          throwOnError: false
+        });
+      }
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #2563eb; --primary-soft: #eff6ff;
+      --accent: #7c3aed; --accent-soft: rgba(124,58,237,0.06);
+      --gold: #d4a017; --gold-soft: #fff8e1;
+      --shadow: 0 10px 30px rgba(15,23,42,0.08); --radius: 18px; --max: 1300px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: linear-gradient(180deg,#fffdf5 0%,var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      line-height: 1.8;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .page { max-width: var(--max); margin: 0 auto; padding: 32px 20px 80px; }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    .back-link:hover { color: var(--primary); text-decoration: none; }
+    .hero {
+      background: radial-gradient(circle at top right,rgba(212,160,23,0.16),transparent 30%),
+                  radial-gradient(circle at left bottom,rgba(37,99,235,0.10),transparent 24%), var(--card);
+      border: 1px solid rgba(212,160,23,0.18); border-radius: 24px;
+      box-shadow: var(--shadow); padding: 34px 34px 28px; margin-bottom: 22px;
+    }
+    .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--gold-soft); color: #8b6914; font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+    h1 { font-size: 34px; line-height: 1.25; letter-spacing: -0.02em; margin-bottom: 10px; }
+    .subtitle { color: var(--muted); font-size: 16px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-top: 24px; }
+    .meta-card { background: #fffdf5; border: 1px solid #f5e7c0; border-radius: 16px; padding: 14px 16px; }
+    .meta-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .meta-value { font-size: 14px; font-weight: 600; word-break: break-word; }
+    .layout { display: grid; grid-template-columns: 260px minmax(0,1fr); gap: 22px; align-items: start; }
+    .toc { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; max-height: calc(100vh - 40px); overflow-y: auto; }
+    .toc h2 { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+    .toc-list { list-style: none; }
+    .toc-list li { margin: 7px 0; }
+    .toc-list a { font-size: 13.5px; color: var(--muted); }
+    .toc-list a:hover { color: var(--primary); text-decoration: none; }
+    .toc-list a.active { color: var(--primary); background: #eff6ff; font-weight: 600; border-left: 3px solid var(--primary); padding-left: 5px; }
+    .toc-sub { padding-left: 14px; margin-top: 4px; list-style: none; }
+    .toc-sub li { margin: 4px 0; }
+    .toc-sub a { font-size: 12.5px; }
+    .content { display: flex; flex-direction: column; gap: 20px; }
+    .section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 28px 30px; }
+    .section-title { font-size: 22px; font-weight: 800; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 2px solid #f0f4ff; display: flex; align-items: center; gap: 10px; }
+    .section-title .icon { width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+    h3 { font-size: 18px; font-weight: 700; margin: 26px 0 12px; color: #111827; }
+    h4 { font-size: 15px; font-weight: 700; margin: 20px 0 10px; color: #8b6914; }
+    p { margin-bottom: 12px; }
+    ul, ol { padding-left: 22px; }
+    li { margin-bottom: 8px; }
+    .callout { border-radius: 14px; padding: 14px 18px; margin: 16px 0; font-size: 14.5px; }
+    .callout-blue { background: linear-gradient(180deg,rgba(37,99,235,0.08),rgba(37,99,235,0.04)); border: 1px solid rgba(37,99,235,0.16); }
+    .callout-blue strong { color: #1d4ed8; }
+    .callout-amber { background: #fffbeb; border: 1px solid #fde68a; }
+    .callout-amber strong { color: #92400e; }
+    .callout-green { background: #f0fdf4; border: 1px solid #86efac; }
+    .callout-green strong { color: #166534; }
+    .callout-red { background: #fef2f2; border: 1px solid #fecaca; }
+    .callout-red strong { color: #991b1b; }
+    .callout-purple { background: var(--accent-soft); border: 1px solid rgba(124,58,237,0.18); }
+    .callout-purple strong { color: #6d28d9; }
+    .example-box { background: #f0fdf4; border: 1px solid #86efac; border-radius: 14px; padding: 16px 20px; margin: 16px 0; }
+    .example-box .ex-title { font-size: 12px; font-weight: 700; color: #166534; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
+    .example-box p { margin-bottom: 8px; font-size: 14px; color: #166534; }
+    blockquote { margin: 16px 0; padding: 14px 18px; border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 0 12px 12px 0; color: #3f3f46; font-size: 14.5px; }
+    .table-wrap { overflow-x: auto; margin: 16px 0; }
+    table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 12px; font-size: 13.5px; }
+    thead th { background: #fff8e1; color: #5d4a14; font-weight: 700; border-bottom: 2px solid #f5e7c0; text-align: left; padding: 12px 14px; }
+    td { padding: 11px 14px; border-bottom: 1px solid #eef2f7; vertical-align: top; }
+    tbody tr:nth-child(even) { background: #fffdf5; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+    .mini-card { border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; background: #fff; }
+    .mini-card h4 { margin-top: 0; font-size: 14px; }
+    .step-list { display: flex; flex-direction: column; gap: 14px; margin: 16px 0; }
+    .step { display: flex; gap: 14px; background: #fffdf5; border: 1px solid #f5e7c0; border-radius: 14px; padding: 14px 16px; }
+    .step-num { width: 28px; height: 28px; border-radius: 50%; background: var(--gold); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; flex-shrink: 0; margin-top: 2px; }
+    .step-body { flex: 1; }
+    .step-body strong { display: block; margin-bottom: 4px; font-size: 14.5px; color: #111; }
+    .step-body p { font-size: 13.5px; color: #374151; margin: 0; }
+    .timeline { position: relative; padding-left: 28px; margin: 20px 0; }
+    .timeline::before { content: ''; position: absolute; left: 8px; top: 8px; bottom: 8px; width: 2px; background: linear-gradient(180deg, #d4a017, #2563eb); }
+    .tl-item { position: relative; margin-bottom: 18px; }
+    .tl-item::before { content: ''; position: absolute; left: -25px; top: 6px; width: 12px; height: 12px; border-radius: 50%; background: var(--gold); border: 3px solid #fff; box-shadow: 0 0 0 2px var(--gold); }
+    .tl-date { font-size: 12px; font-weight: 700; color: var(--gold); margin-bottom: 4px; letter-spacing: 0.05em; }
+    .tl-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; color: #111; }
+    .tl-desc { font-size: 13.5px; color: #475467; }
+    .footer { margin-top: 18px; color: var(--muted); font-size: 13px; text-align: center; }
+    @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } .toc { position: static; max-height: none; } .meta-grid, .two-col { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 640px) { .page { padding: 18px 12px 56px; } .hero, .section { padding: 20px 18px; } h1 { font-size: 26px; } .meta-grid, .two-col { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div class="page">
+  <a class="back-link" href="../index.html">← 返回笔记列表</a>
+
+  <header class="hero">
+    <div class="eyebrow">💰 金融笔记 · Crypto 完全入门</div>
+    <h1>币圈完全入门：从比特币到 RWA</h1>
+    <p class="subtitle">一篇文章彻底搞懂区块链、智能合约、DeFi、Gas、稳定币、NFT 与现实资产上链</p>
+    <div class="meta-grid">
+      <div class="meta-card"><div class="meta-label">适用读者</div><div class="meta-value">完全零基础小白</div></div>
+      <div class="meta-card"><div class="meta-label">覆盖范围</div><div class="meta-value">2008 → 2026 全周期</div></div>
+      <div class="meta-card"><div class="meta-label">核心概念</div><div class="meta-value">BTC · ETH · DeFi · RWA · 稳定币</div></div>
+      <div class="meta-card"><div class="meta-label">阅读时长</div><div class="meta-value">约 30 分钟</div></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="toc">
+      <h2>📋 目录</h2>
+      <ul class="toc-list">
+        <li><a href="#summary">🎯 一句话总结</a></li>
+        <li><a href="#history">📜 币圈发展史</a>
+          <ul class="toc-sub">
+            <li><a href="#hist-prehistory">史前时代（2008 前）</a></li>
+            <li><a href="#hist-btc">比特币诞生</a></li>
+            <li><a href="#hist-eth">区块链 2.0</a></li>
+            <li><a href="#hist-ico">ICO 狂潮</a></li>
+            <li><a href="#hist-defi">DeFi 之夏与 NFT</a></li>
+            <li><a href="#hist-winter">连环暴雷与寒冬</a></li>
+            <li><a href="#hist-etf">ETF 与机构化</a></li>
+            <li><a href="#hist-now">当前阶段</a></li>
+          </ul>
+        </li>
+        <li><a href="#basics">🧱 区块链基础</a>
+          <ul class="toc-sub">
+            <li><a href="#basic-chain">区块链 = 共享账本</a></li>
+            <li><a href="#basic-btc-eth">BTC vs ETH</a></li>
+            <li><a href="#basic-tps">什么是 TPS / 速度</a></li>
+            <li><a href="#basic-gas">什么是 Gas 费</a></li>
+            <li><a href="#basic-l2">Layer 2 是什么</a></li>
+          </ul>
+        </li>
+        <li><a href="#defi">🏦 DeFi 详解</a>
+          <ul class="toc-sub">
+            <li><a href="#defi-what">什么是 DeFi</a></li>
+            <li><a href="#defi-cases">核心案例</a></li>
+            <li><a href="#defi-value">DeFi 的真实意义</a></li>
+            <li><a href="#defi-risk">DeFi 的风险</a></li>
+          </ul>
+        </li>
+        <li><a href="#stable">💵 稳定币</a></li>
+        <li><a href="#rwa">🏛️ RWA 现实资产上链</a></li>
+        <li><a href="#three-q">🤔 三大灵魂拷问</a>
+          <ul class="toc-sub">
+            <li><a href="#q1-meaning">币的实际意义</a></li>
+            <li><a href="#q2-eth-sol">ETH 会被 SOL 取代吗</a></li>
+            <li><a href="#q3-btc-gold">BTC 为何没取代黄金</a></li>
+          </ul>
+        </li>
+        <li><a href="#practice">🛠️ 小白上手实操</a></li>
+        <li><a href="#deep-qa">🔬 深度问答（小白追问）</a>
+          <ul class="toc-sub">
+            <li><a href="#dq1-storage">账本存哪？关机怎办</a></li>
+            <li><a href="#dq2-btc-value">BTC 为啥成交易对象</a></li>
+            <li><a href="#dq3-eth-code">ETH 怎么编程 / Gas 原理</a></li>
+            <li><a href="#dq4-write-code">普通人能写合约吗</a></li>
+            <li><a href="#dq5-defi-vs-btc">DeFi vs BTC 转账有啥区别</a></li>
+            <li><a href="#dq6-rwa-chain">RWA 用哪条链 / 怎么监管</a></li>
+          </ul>
+        </li>
+      </ul>
+    </aside>
+
+    <main class="content">
+
+      <!-- ═══ 一句话总结 ═══ -->
+      <section class="section" id="summary">
+        <div class="section-title"><span class="icon" style="background:#fff8e1">💡</span>一句话总结</div>
+        <p><strong>币圈本质是用「全球共享、不可篡改的数据库」重写金融基础设施的实验。BTC 是数字黄金（价值存储），ETH/SOL 等公链是可编程的金融操作系统，DeFi 是没有银行的银行，稳定币是不被冻结的美元，RWA 是把现实资产搬到链上的桥梁。99% 的代币会归零，但底层技术正在重塑全球金融。</strong></p>
+        <div class="callout callout-amber">
+          <strong>三条核心认知：</strong><br>
+          ① 币 ≠ 链：链有价值不代表所有币有价值；<br>
+          ② 取代 ≠ 共存：新东西很少"取代"老东西，更多是新增一个维度；<br>
+          ③ 波动率即定位：BTC 还不能"取代"黄金，因为波动率太高。
+        </div>
+      </section>
+
+      <!-- ═══ 发展史 ═══ -->
+      <section class="section" id="history">
+        <div class="section-title"><span class="icon" style="background:#fff8e1">📜</span>币圈发展史（2008-2026）</div>
+
+        <h3 id="hist-prehistory">一、史前时代（2008 年之前）：思想准备期</h3>
+        <p>加密货币并非凭空出现，根源在上世纪 80-90 年代的 <strong>Cypherpunk（密码朋克）运动</strong>。核心难题始终是：<em>如何在没有中心机构的情况下解决"双花问题"</em>。</p>
+        <div class="timeline">
+          <div class="tl-item"><div class="tl-date">1982</div><div class="tl-title">David Chaum 提出盲签名技术</div><div class="tl-desc">奠定了电子现金的密码学基础</div></div>
+          <div class="tl-item"><div class="tl-date">1997</div><div class="tl-title">Adam Back 发明 Hashcash</div><div class="tl-desc">PoW 工作量证明的雏形（原本用于反垃圾邮件）</div></div>
+          <div class="tl-item"><div class="tl-date">1998</div><div class="tl-title">B-money / Bit Gold 概念</div><div class="tl-desc">Wei Dai 和 Nick Szabo 提出，是比特币的直接前身</div></div>
+        </div>
+
+        <h3 id="hist-btc">二、比特币诞生（2008-2012）：创世期</h3>
+        <div class="timeline">
+          <div class="tl-item"><div class="tl-date">2008.10.31</div><div class="tl-title">中本聪发布比特币白皮书</div><div class="tl-desc">《Bitcoin: A Peer-to-Peer Electronic Cash System》</div></div>
+          <div class="tl-item"><div class="tl-date">2009.01.03</div><div class="tl-title">创世区块被挖出</div><div class="tl-desc">嵌入留言："The Times 03/Jan/2009 Chancellor on brink of second bailout for banks"</div></div>
+          <div class="tl-item"><div class="tl-date">2010.05.22</div><div class="tl-title">比特币披萨日</div><div class="tl-desc">程序员 Laszlo 用 1 万 BTC 买了两个披萨，第一次给 BTC 标定法币价格</div></div>
+          <div class="tl-item"><div class="tl-date">2011</div><div class="tl-title">BTC 首次达到 1 美元</div><div class="tl-desc">莱特币（LTC）诞生，"竞争币（Altcoin）"概念出现</div></div>
+        </div>
+
+        <h3 id="hist-eth">三、区块链 2.0（2013-2016）：以太坊与智能合约</h3>
+        <div class="timeline">
+          <div class="tl-item"><div class="tl-date">2013.12</div><div class="tl-title">Vitalik Buterin 发布以太坊白皮书</div><div class="tl-desc">19 岁的他提出"世界计算机"愿景——区块链不只是货币，而是可编程的状态机</div></div>
+          <div class="tl-item"><div class="tl-date">2015.07.30</div><div class="tl-title">以太坊主网上线</div><div class="tl-desc">智能合约时代正式开启</div></div>
+          <div class="tl-item"><div class="tl-date">2016.06</div><div class="tl-title">The DAO 黑客事件</div><div class="tl-desc">5000 万美元 ETH 被盗，导致以太坊硬分叉为 ETH 和 ETC</div></div>
+        </div>
+
+        <h3 id="hist-ico">四、ICO 狂潮（2017-2018）</h3>
+        <p>ERC-20 标准让"发币"变得极其简单，<strong>ICO（首次代币发行）</strong>井喷。2017.12 BTC 冲到约 2 万美元，全民炒币达到顶峰。但 2018 年泡沫破裂，BTC 跌到 3000 美元附近，<strong>95% 的 ICO 项目归零</strong>。</p>
+        <div class="callout callout-red">
+          <strong>泡沫本质：</strong>技术成熟度跟不上叙事，绝大多数项目只有白皮书没有产品。同年 9 月 4 日中国发布"九四禁令"，全面禁止 ICO 和境内交易所。
+        </div>
+
+        <h3 id="hist-defi">五、DeFi 之夏与 NFT 热潮（2019-2021）</h3>
+        <div class="timeline">
+          <div class="tl-item"><div class="tl-date">2020 夏</div><div class="tl-title">DeFi Summer 爆发</div><div class="tl-desc">Compound 推出流动性挖矿，DeFi TVL 从 10 亿美元飙升至 200 亿</div></div>
+          <div class="tl-item"><div class="tl-date">2021.03</div><div class="tl-title">Beeple 的 NFT 拍出 6900 万美元</div><div class="tl-desc">NFT 进入主流视野</div></div>
+          <div class="tl-item"><div class="tl-date">2021.05</div><div class="tl-title">Axie Infinity 引爆 GameFi</div><div class="tl-desc">Play-to-Earn 模式风靡东南亚</div></div>
+          <div class="tl-item"><div class="tl-date">2021.11</div><div class="tl-title">BTC 创下历史最高约 6.9 万美元</div><div class="tl-desc">ETH 约 4800 美元，Solana/Avalanche/Polygon 等"以太坊杀手"崛起</div></div>
+        </div>
+
+        <h3 id="hist-winter">六、连环暴雷与寒冬（2022）</h3>
+        <p>这是币圈最黑暗的一年，<strong>信任体系全面崩塌</strong>：</p>
+        <div class="timeline">
+          <div class="tl-item"><div class="tl-date">2022.05</div><div class="tl-title">Terra/LUNA 算法稳定币崩盘</div><div class="tl-desc">UST 脱锚，约 400 亿美元市值蒸发</div></div>
+          <div class="tl-item"><div class="tl-date">2022.06-07</div><div class="tl-title">三箭资本、Celsius、Voyager 连环爆雷</div><div class="tl-desc">借贷平台批量破产</div></div>
+          <div class="tl-item"><div class="tl-date">2022.11</div><div class="tl-title">FTX 帝国崩塌</div><div class="tl-desc">SBF 从币圈神童变成阶下囚（后判 25 年），BTC 跌至约 1.6 万美元</div></div>
+        </div>
+
+        <h3 id="hist-etf">七、复苏与机构化（2023-2024）</h3>
+        <div class="timeline">
+          <div class="tl-item"><div class="tl-date">2024.01</div><div class="tl-title">美国 SEC 批准比特币现货 ETF</div><div class="tl-desc">贝莱德、富达等巨头入场，被视为里程碑事件</div></div>
+          <div class="tl-item"><div class="tl-date">2024.04</div><div class="tl-title">BTC 完成第四次减半</div><div class="tl-desc">区块奖励 6.25 → 3.125 BTC</div></div>
+          <div class="tl-item"><div class="tl-date">2024.11</div><div class="tl-title">BTC 首次突破 10 万美元</div><div class="tl-desc">特朗普胜选承诺打造"加密之都"</div></div>
+        </div>
+
+        <h3 id="hist-now">八、当前阶段（2025-2026）：金融化与 AI 融合</h3>
+        <ul>
+          <li><strong>稳定币立法</strong>：美国 GENIUS Act 等法案推进，USDC/USDT 进入合规化</li>
+          <li><strong>RWA 大爆发</strong>：贝莱德 BUIDL 基金等推动美债、股票上链</li>
+          <li><strong>AI × Crypto</strong>：去中心化算力（io.net、Render）、AI Agent 链（Virtuals、ai16z）成为新叙事</li>
+          <li><strong>比特币战略储备</strong>：美国部分州、多国央行讨论将 BTC 纳入储备资产</li>
+        </ul>
+
+        <div class="callout callout-blue">
+          <strong>核心规律：</strong>每轮周期都遵循 <em>技术突破 → 叙事扩散 → 资金涌入 → 杠杆堆积 → 黑天鹅爆雷 → 寒冬建设 → 下一轮</em> 的循环。每次崩盘后留下的真实技术（PoW、智能合约、DeFi、ETF 通道）才是行业的真正资产。
+        </div>
+      </section>
+
+
+      <!-- ═══ 区块链基础 ═══ -->
+      <section class="section" id="basics">
+        <div class="section-title"><span class="icon" style="background:#dbeafe">🧱</span>区块链基础概念</div>
+
+        <h3 id="basic-chain">1. 区块链 = 全球共享的 Excel 表格</h3>
+        <p>想象一下：全世界有 100 万台电脑，<strong>每台电脑都存着同一份 Excel 表格</strong>。这张表记录"谁有多少钱"、"谁转给了谁"。任何人想改这张表，必须让超过一半的电脑同意。这张表<strong>只能新增行，不能删除/修改旧行</strong>（这就是"区块链"——一串带时间戳的账本块）。</p>
+        <div class="callout callout-blue">
+          <strong>本质：</strong>区块链就是一个没人能单独篡改的共享账本。这种"分布式共识"让人类历史上第一次实现了——<em>不需要任何中介，陌生人之间也能完成可信交易</em>。
+        </div>
+
+        <h3 id="basic-btc-eth">2. BTC vs ETH 的根本区别</h3>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>🟠 比特币（BTC）</h4>
+            <p>这张表格<strong>只能记账</strong>：A 转给 B 多少钱。功能单一但极其安全，被定位为"数字黄金"——价值存储。</p>
+          </div>
+          <div class="mini-card">
+            <h4>🔵 以太坊（ETH）</h4>
+            <p>这张表格<strong>还能跑程序</strong>：你可以在表格里写"如果 X 发生，就自动转账给 Y"。这就是<strong>智能合约</strong>——写在区块链上的、自动执行的程序代码。</p>
+          </div>
+        </div>
+        <div class="example-box">
+          <div class="ex-title">💡 举例：智能合约的威力</div>
+          <p>传统场景：你想买保险——需要保险公司、理赔员、合同律师，理赔等 3 个月。</p>
+          <p>智能合约场景：航班延误险用代码写"如果航班延误超过 2 小时，自动转 500 元到投保人地址"。航班数据由预言机喂入，<strong>延误一发生，钱秒到账，无人参与</strong>。</p>
+        </div>
+
+        <h3 id="basic-tps">3. 什么是 TPS / 速度？</h3>
+        <p><strong>TPS = Transactions Per Second（每秒处理多少笔交易）</strong></p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>系统</th><th>TPS</th><th>类比</th></tr></thead>
+            <tbody>
+              <tr><td>比特币</td><td>7</td><td>全村一个会计，一秒记 7 笔</td></tr>
+              <tr><td>以太坊</td><td>15</td><td>两个会计</td></tr>
+              <tr><td>Solana</td><td>3000+</td><td>小型银行</td></tr>
+              <tr><td>Visa</td><td>24,000</td><td>全球支付巨头</td></tr>
+              <tr><td>支付宝双 11</td><td>500,000+</td><td>中国基建</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p><strong>为什么以太坊这么慢？</strong>因为那 100 万台电脑<strong>每台都要重新算一遍</strong>这笔交易对不对，才能写入表格。<em>安全性和速度天然冲突</em>——参与的电脑越多越安全，但越慢。</p>
+        <div class="callout callout-amber">
+          <strong>区块链不可能三角：</strong>安全性、去中心化、速度三者不可兼得。Solana 选了"速度+去中心化"放弃了一些安全（宕机过 7+ 次），比特币选了"安全+去中心化"放弃了速度。
+        </div>
+
+        <h3 id="basic-gas">4. 什么是 Gas 费？</h3>
+        <p>你在以太坊上做任何操作（转账、买 NFT、用 DeFi），都相当于<strong>雇全世界的电脑帮你跑一段程序</strong>。<strong>Gas = 给这些电脑的小费 / 算力费</strong>。</p>
+        <ul>
+          <li>简单转账：消耗少量 Gas（≈ 几块钱）</li>
+          <li>复杂操作（比如用 5 个币换 3 个币再质押）：消耗多 Gas（几十上百块）</li>
+          <li>网络拥堵时：Gas 价格暴涨（2021 NFT 热潮时一笔操作要 200+ 美元）</li>
+        </ul>
+        <p><strong>Gas 用什么付？</strong>在以太坊上付 ETH，Solana 上付 SOL，BNB Chain 上付 BNB。这就是<strong>公链原生代币的核心价值——网络燃料</strong>。</p>
+        <div class="example-box">
+          <div class="ex-title">💡 举例：一次 Uniswap 换币</div>
+          <p>你在钱包点"Swap"，把 100 USDT 换 ETH。</p>
+          <p>钱包提示："此操作需消耗 0.003 ETH（约 12 美元）Gas 费"。</p>
+          <p>你确认 → 全网电脑执行 → 12 秒到账 → 那 0.003 ETH 被分给了打包交易的验证者。</p>
+        </div>
+
+        <h3 id="basic-l2">5. 以太坊的解决方案：Layer 2（二层网络）</h3>
+        <div class="step-list">
+          <div class="step">
+            <div class="step-num">L1</div>
+            <div class="step-body">
+              <strong>主网（以太坊）= 最高法院</strong>
+              <p>慢但绝对安全。所有最终结算和争议仲裁都在这里。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">L2</div>
+            <div class="step-body">
+              <strong>二层（Arbitrum / Base / Optimism）= 派出所</strong>
+              <p>平时在这里快速便宜地处理交易，定期把结果打包提交到主网。用户体验"又快又便宜"，安全性继承自以太坊。</p>
+            </div>
+          </div>
+        </div>
+        <blockquote>你不会让最高法院处理你的停车罚单，但停车罚单的最终上诉权在最高法院。这就是 L1 + L2 的关系。</blockquote>
+      </section>
+
+      <!-- ═══ DeFi ═══ -->
+      <section class="section" id="defi">
+        <div class="section-title"><span class="icon" style="background:#dcfce7">🏦</span>DeFi 详解：去中心化金融</div>
+
+        <h3 id="defi-what">1. 什么是 DeFi？</h3>
+        <p><strong>DeFi = Decentralized Finance = 去中心化金融</strong></p>
+        <blockquote>把传统银行能做的事（存款、贷款、转账、外汇、理财），用智能合约代码重写一遍，<strong>不需要银行这个中介</strong>。</blockquote>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>你想做的事</th><th>传统方式</th><th>DeFi 方式</th></tr></thead>
+            <tbody>
+              <tr><td>存钱拿利息</td><td>存银行（年化 1.5%）</td><td>存 Aave（年化 3-8% USDC）</td></tr>
+              <tr><td>借钱</td><td>找银行（要征信、审批 1 周）</td><td>抵押 ETH 借 USDC（5 秒到账，不问你是谁）</td></tr>
+              <tr><td>换外汇</td><td>去银行（手续费 1%，限额 5 万）</td><td>Uniswap（手续费 0.3%，无限额）</td></tr>
+              <tr><td>买基金</td><td>开户、KYC</td><td>Curve 流动性份额</td></tr>
+              <tr><td>期货衍生品</td><td>期货公司</td><td>dYdX、GMX</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="defi-cases">2. 核心案例：Uniswap（去中心化交易所 DEX）</h3>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>❌ 传统交易所（Binance）</h4>
+            <p>你把钱存进去，他们撮合买卖。风险：交易所跑路（FTX）、被黑（Mt.Gox）、冻结账户。</p>
+          </div>
+          <div class="mini-card">
+            <h4>✅ Uniswap</h4>
+            <p>没有公司、没有员工、没有客服，<strong>就是一段代码</strong>。任何人往池子里存 ETH 和 USDC，池子按公式 $x \cdot y = k$ 自动计算汇率。</p>
+          </div>
+        </div>
+        <div class="example-box">
+          <div class="ex-title">💡 举例：AMM 自动做市商</div>
+          <p>池子里有 100 ETH 和 200,000 USDC，那么 $k = 100 \times 200000 = 2 \times 10^7$。</p>
+          <p>你拿 1 ETH 想换 USDC：池子变成 101 ETH，新 USDC = $2 \times 10^7 / 101 \approx 198020$，所以你得到 $200000 - 198020 = 1980$ USDC。</p>
+          <p>你买得越多，价格越贵——这就叫"滑点"。整个过程没有任何中介撮合，纯数学公式自动定价。</p>
+        </div>
+
+        <h3 id="defi-value">3. DeFi 的真实意义</h3>
+        <ul>
+          <li><strong>金融普惠</strong>：非洲、东南亚、拉美 17 亿没有银行账户的人，有手机就能用 DeFi</li>
+          <li><strong>抗审查</strong>：俄罗斯被制裁后，DeFi 是唯一不能被冻结的金融通道</li>
+          <li><strong>7×24 全球市场</strong>：股市还要开盘休市，DeFi 永远在跑</li>
+          <li><strong>可组合性（"金融乐高"）</strong>：DeFi 协议可以无限嵌套——在 A 借出钱→拿到 B 去交易→拿 LP 份额到 C 抵押再借钱，玩出传统金融不可能的玩法</li>
+        </ul>
+
+        <h3 id="defi-risk">4. DeFi 的风险（必须知道）</h3>
+        <div class="callout callout-red">
+          <strong>四大风险：</strong><br>
+          ① <strong>智能合约漏洞</strong>：代码有 bug 就会被黑，2022 年 DeFi 被盗 30 亿美元；<br>
+          ② <strong>价格预言机被操控</strong>：可能导致清算异常；<br>
+          ③ <strong>Rug Pull（跑路）</strong>：项目方做局把池子里的钱卷走；<br>
+          ④ <strong>复杂度高</strong>：小白点错按钮签错授权，钱包可能被一键清空。
+        </div>
+      </section>
+
+
+      <!-- ═══ 稳定币 ═══ -->
+      <section class="section" id="stable">
+        <div class="section-title"><span class="icon" style="background:#dcfce7">💵</span>稳定币：币圈最大的现实应用</div>
+        <p><strong>稳定币 = 价格与法币（通常是美元）1:1 锚定的加密代币。</strong>是币圈连接现实世界的最重要桥梁。</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>类型</th><th>代表</th><th>锚定机制</th><th>风险</th></tr></thead>
+            <tbody>
+              <tr><td>法币抵押</td><td>USDT (Tether)、USDC (Circle)</td><td>发行方在银行存 1 美元，发 1 个币</td><td>发行方暴雷 / 监管</td></tr>
+              <tr><td>加密超额抵押</td><td>DAI (MakerDAO)</td><td>抵押 150 美元的 ETH，借出 100 DAI</td><td>清算瀑布</td></tr>
+              <tr><td>算法稳定币</td><td>UST (已死)</td><td>纯算法+套利维稳，无抵押</td><td>💀 历史已证明不可行</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout callout-blue">
+          <strong>现实使用场景（远超你想象）：</strong><br>
+          • <strong>跨境汇款</strong>：USDT 在东南亚、非洲、拉美几乎成了"事实美元"，比 SWIFT 快 1000 倍、便宜 100 倍<br>
+          • <strong>避险</strong>：阿根廷通胀 200% 时民众疯抢 USDT，土耳其、俄罗斯同理<br>
+          • <strong>跨境贸易结算</strong>：年结算量已超过 Visa + Mastercard 总和<br>
+          • <strong>USDT 流通量 ≈ 1500 亿美元</strong>，相当于一个中等国家的 M0
+        </div>
+        <div class="example-box">
+          <div class="ex-title">💡 举例：阿根廷的故事</div>
+          <p>2023 年阿根廷比索年通胀 200%，工资到手就贬值。</p>
+          <p>普通人发工资后立刻去交易所把比索换成 USDT，需要花钱时再换回比索——<strong>USDT 实质上变成了阿根廷的"储蓄货币"</strong>，让普通人能对抗本币崩溃。</p>
+        </div>
+      </section>
+
+      <!-- ═══ RWA ═══ -->
+      <section class="section" id="rwa">
+        <div class="section-title"><span class="icon" style="background:#fff8e1">🏛️</span>RWA：现实世界资产上链</div>
+        <p><strong>RWA = Real World Assets = 真实世界资产（上链）</strong></p>
+        <p>把链下的真实资产（房产、美债、股票、艺术品、黄金）<strong>做成链上的代币</strong>，让它享受区块链的所有好处：7×24 交易、可拆分、可全球流通、可作为 DeFi 抵押品。</p>
+
+        <h3>1. 最具里程碑的案例：贝莱德 BUIDL 基金</h3>
+        <ul>
+          <li>贝莱德（全球最大资管，管 11 万亿美元）2024 年发行</li>
+          <li>把<strong>美国短期国债</strong>做成以太坊上的代币</li>
+          <li>你买 1 个 BUIDL 代币 = 持有 1 美元的美债 + 自动收利息（4.5% 年化）</li>
+          <li>目前规模 ~30 亿美元，2026 年预计破千亿</li>
+        </ul>
+
+        <h3>2. 房产代币化</h3>
+        <div class="example-box">
+          <div class="ex-title">💡 举例：迪拜公寓拆成 100 万份</div>
+          <p>一套迪拜公寓值 100 万美元，切成 100 万份代币，每份 1 美元。</p>
+          <p>全球任何人都能买几份"分享租金收益"，解决了房产<strong>流动性差、门槛高</strong>的痛点。</p>
+        </div>
+
+        <h3>3. 为什么 RWA 是 2024-2026 最大叙事？</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>市场</th><th>规模</th></tr></thead>
+            <tbody>
+              <tr><td>全球房产总值</td><td>~330 万亿美元</td></tr>
+              <tr><td>全球股票总值</td><td>~110 万亿美元</td></tr>
+              <tr><td>全球债券总值</td><td>~130 万亿美元</td></tr>
+              <tr><td>当前加密市场</td><td>~3 万亿美元</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout callout-purple">
+          <strong>只要把传统金融的 1% 搬上链，加密市场就翻倍。</strong>这就是华尔街疯狂入场的原因。RWA 把"虚拟"和"现实"真正打通——加密世界开始有真实现金流作为支撑。
+        </div>
+      </section>
+
+      <!-- ═══ 三大灵魂拷问 ═══ -->
+      <section class="section" id="three-q">
+        <div class="section-title"><span class="icon" style="background:#fef9c3">🤔</span>三大灵魂拷问</div>
+
+        <h3 id="q1-meaning">Q1. 这些币到底有没有"实际意义"？</h3>
+        <p>要分清楚：<strong>"币的意义"和"链的意义"是两回事</strong>。99% 的山寨币会归零，但底层公链和少数代币有真实功能。</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>类别</th><th>代表</th><th>实际功能</th></tr></thead>
+            <tbody>
+              <tr><td>价值存储</td><td>BTC</td><td>抗通胀、抗审查的数字黄金</td></tr>
+              <tr><td>基础设施燃料</td><td>ETH、SOL</td><td>跨境支付、智能合约 Gas</td></tr>
+              <tr><td>稳定币</td><td>USDT、USDC</td><td>跨境结算、对抗本币贬值</td></tr>
+              <tr><td>DeFi 协议</td><td>UNI、AAVE</td><td>去中介化金融</td></tr>
+              <tr><td>应用代币</td><td>LINK、RNDR</td><td>预言机、去中心化算力</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout callout-red">
+          <strong>99% 的山寨币确实是赌博筹码：</strong>Meme 币（DOGE、SHIB、PEPE）本质是注意力博弈无现金流；大部分 ICO 项目白皮书+一个网站发币，3 个月归零。
+        </div>
+
+        <h3 id="q2-eth-sol">Q2. ETH 会被 SOL 取代吗？</h3>
+        <p><strong>短答：不会被取代，但会被分流；头部公链归零概率极低。</strong></p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>维度</th><th>ETH</th><th>SOL</th></tr></thead>
+            <tbody>
+              <tr><td>TPS（吞吐）</td><td>主网 ~15，L2 后 1000+</td><td>65000（实际 ~3000）</td></tr>
+              <tr><td>Gas 费</td><td>0.5-50 美元</td><td>0.0001 美元</td></tr>
+              <tr><td>去中心化</td><td>~100 万验证者</td><td>~1500 验证者</td></tr>
+              <tr><td>稳定性</td><td>9 年没宕机</td><td>宕机 7+ 次</td></tr>
+              <tr><td>生态定位</td><td>DeFi/RWA/机构首选</td><td>Meme/高频交易首选</td></tr>
+              <tr><td>市值</td><td>~5000 亿</td><td>~800 亿</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p><strong>ETH 难被取代的 4 个原因：</strong></p>
+        <ol>
+          <li><strong>网络效应锁定</strong>：以太坊有 6000 亿美元 TVL、几万个 DApp，迁移成本极高</li>
+          <li><strong>机构选择 ETH</strong>：贝莱德 BUIDL 等 RWA 基金都建在 ETH 上，安全性 > 性能</li>
+          <li><strong>L2 战略补齐短板</strong>：Arbitrum、Base 已把性能短板补上</li>
+          <li><strong>去中心化中立性</strong>：ETH 没有公司，SOL 背后是 Solana Labs（中心化风险）</li>
+        </ol>
+        <blockquote>ETH 和 SOL 更像 <strong>iOS vs Android</strong>，不是替代关系，而是分层共存。ETH = "数字金融基础设施"，SOL = "加密世界的 Nasdaq"。</blockquote>
+
+        <h3 id="q3-btc-gold">Q3. BTC 优势那么多，为什么没取代黄金？</h3>
+        <p>BTC 的所有技术优势（可分割、可携带、有限供应）都是真的，但<strong>取代黄金需要的不是技术优势，而是"时间共识"</strong>。</p>
+        <div class="step-list">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <strong>5000 年的共识 vs 16 年的共识</strong>
+              <p>黄金从苏美尔时代就是货币，跨越无数王朝、宗教、战争。BTC 才 16 岁，没经历过真正全球性危机。共识不是逻辑，是时间——你爷爷的爷爷信黄金，你才会无意识地信。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <strong>波动率天差地别</strong>
+              <p>黄金年波动 ~15%，BTC 年波动 ~60-80%。真正的避险资产不能一天跌 20%，机构和央行无法把这种东西作为储备。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <strong>央行储备格局</strong>
+              <p>全球央行持有约 3.5 万吨黄金（价值 ~2.5 万亿）；BTC 总市值 ~2 万亿，央行持有 < 0.5%。黄金已是各国货币体系的底层抵押物，BTC 还没进入这个游戏。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-body">
+              <strong>物理性 vs 数字性（双刃剑）</strong>
+              <p>黄金抗物理毁灭（断电断网不影响），但易被政府查封；BTC 抗审查（私钥在脑中），但断电断网就没了。两者各有场景，不存在"全面替代"。</p>
+            </div>
+          </div>
+        </div>
+        <div class="callout callout-green">
+          <strong>现状：BTC 正在"侵蚀"而非"取代"黄金。</strong>2024 年 BTC ETF 通过后，BTC 出现"年轻人的黄金"叙事，部分千禧/Z 世代资金从黄金转向 BTC。高盛、贝莱德的报告把 BTC 列为"另类储备资产"，不是"取代黄金"。
+        </div>
+      </section>
+
+      <!-- ═══ 小白实操 ═══ -->
+      <section class="section" id="practice">
+        <div class="section-title"><span class="icon" style="background:#dbeafe">🛠️</span>小白上手实操（50 美元体验所有概念）</div>
+        <p>真正搞懂这些概念，<strong>花 50 美元做一次完整体验</strong>比看 100 篇文章都管用：</p>
+        <div class="step-list">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <strong>下载钱包</strong>
+              <p>安装 MetaMask（小狐狸，浏览器插件）——这是币圈的"支付宝"。务必把助记词抄到纸上，永远不要拍照或上传。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <strong>买币提币</strong>
+              <p>从交易所（Binance / OKX）买 50 美元的 ETH，提到钱包。第一次体验"链上转账"。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <strong>切换到 L2 网络</strong>
+              <p>在 MetaMask 切到 Arbitrum（以太坊 L2），用桥（Bridge）把 ETH 从主网搬到 L2，Gas 费降到几分钱。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-body">
+              <strong>体验 DEX</strong>
+              <p>去 Uniswap 把一部分 ETH 换成 USDC，亲自感受 AMM 滑点。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">5</div>
+            <div class="step-body">
+              <strong>体验 DeFi 借贷</strong>
+              <p>去 Aave 把 USDC 存进去赚利息，看到实时利率波动——这就是"无银行的银行"。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">6</div>
+            <div class="step-body">
+              <strong>体验 RWA</strong>
+              <p>去 Ondo 买 1 个 USDY，背后是美债——你已经亲手把链上资产连接到美国国债的真实现金流。</p>
+            </div>
+          </div>
+        </div>
+        <div class="callout callout-amber">
+          <strong>⚠️ 安全提示：</strong>① 助记词永远只能写在纸上；② 不要随便点不明链接 / 签授权；③ 小额体验，不要梭哈；④ 任何承诺"稳赚"的项目 100% 是骗局。
+        </div>
+      </section>
+
+      <!-- ═══ 深度问答 ═══ -->
+      <section class="section" id="deep-qa">
+        <div class="section-title"><span class="icon" style="background:#dbeafe">🔬</span>深度问答（小白追问篇）</div>
+        <p>下面这些问题，是真正搞懂币圈"第一性原理"必须想清楚的。</p>
+
+        <h3 id="dq1-storage">Q1. 账本是不是存在每个人电脑上？我关机怎么办？账本会无限大？</h3>
+
+        <h4>1.1 谁在存账本？三类角色</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>角色</th><th>做什么</th><th>是否存账本</th></tr></thead>
+            <tbody>
+              <tr><td>普通用户</td><td>用钱包转账（MetaMask、OKX）</td><td>❌ 不存账本，只存"私钥"</td></tr>
+              <tr><td>全节点（Full Node）</td><td>自愿运行节点软件，验证所有交易</td><td>✅ 存完整账本（~600 GB）</td></tr>
+              <tr><td>矿工/验证者</td><td>全节点 + 打包新区块赚奖励</td><td>✅ 存完整账本</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout callout-blue">
+          <strong>关键：</strong>全球比特币全节点约 <strong>1.7 万个</strong>（极客、矿池、交易所、研究机构在运行）。普通人不需要存账本——就像你用微信不需要存腾讯所有人的聊天记录。
+        </div>
+
+        <h4>1.2 你关机了，今天的交易怎么办？</h4>
+        <p>完全不影响。你的钱包<strong>不参与记账</strong>，账本由全节点和矿工 24×7 维护。下次开机时，钱包只是去问"我这个地址现在还有多少钱"——网络会告诉你最新状态。</p>
+        <div class="callout callout-green">
+          <strong>关键概念：私钥 = 你的银行卡 + 密码</strong><br>
+          你的"BTC 资产"本质是<em>一串数字签名权限</em>，能证明某个地址里的钱属于你。哪怕你的电脑爆炸了，只要私钥（助记词）还在，去任何新电脑导入助记词，钱原封不动。<br>
+          <strong>资产不在"你的电脑里"，而在"链上"。</strong>
+        </div>
+
+        <h4>1.3 账本会越来越大吗？</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>链</th><th>当前账本大小</th><th>年增长</th></tr></thead>
+            <tbody>
+              <tr><td>比特币</td><td>~600 GB（16 年累计）</td><td>~50 GB/年</td></tr>
+              <tr><td>以太坊全节点</td><td>~1.2 TB</td><td>~150 GB/年</td></tr>
+              <tr><td>以太坊归档节点</td><td>~20 TB</td><td>增长很快</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p><strong>为什么不爆炸？</strong></p>
+        <ol>
+          <li><strong>区块有大小限制</strong>：BTC 每个区块最多 ~1 MB，每 10 分钟一个，年增最多约 50 GB</li>
+          <li><strong>轻节点方案</strong>：手机钱包只下载"区块头"（几百 MB），不下载交易细节</li>
+          <li><strong>状态修剪</strong>：以太坊主网支持 pruning，普通全节点只保留近期数据</li>
+        </ol>
+
+        <h3 id="dq2-btc-value">Q2. BTC 既然是账单，为什么成了交易对象？买它有啥用？</h3>
+
+        <h4>2.1 严格定义：BTC ≠ 账单本身</h4>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>比特币网络</h4>
+            <p>那个全球账本系统（基础设施）。你不能把"系统"本身卖给别人。</p>
+          </div>
+          <div class="mini-card">
+            <h4>BTC</h4>
+            <p>这个账本上的"内部记账单位"——账本里只能记 BTC 的转移。你买卖的是这个"余额"。</p>
+          </div>
+        </div>
+        <blockquote>
+          类比：微信 = 系统（账本），微信余额 = 记账单位。你不能买"微信系统"，但可以买卖"微信余额"。
+        </blockquote>
+
+        <h4>2.2 BTC 凭什么有价值？4 大独特属性</h4>
+        <div class="step-list">
+          <div class="step"><div class="step-num">1</div><div class="step-body"><strong>绝对稀缺</strong><p>写死在代码里，永远只有 2100 万枚，没人能增发（黄金还能挖矿、美元还能印）。</p></div></div>
+          <div class="step"><div class="step-num">2</div><div class="step-body"><strong>不可没收</strong><p>私钥在你脑子里，没人能强制取走（黄金会被海关查、银行账户会被冻结）。</p></div></div>
+          <div class="step"><div class="step-num">3</div><div class="step-body"><strong>全球可转</strong><p>10 分钟内可以从中国转 1 亿美元到阿根廷，绕开所有银行管制。</p></div></div>
+          <div class="step"><div class="step-num">4</div><div class="step-body"><strong>可验证真伪</strong><p>任何人都能数学验证"这笔 BTC 真的属于我"，没法造假。</p></div></div>
+        </div>
+
+        <h4>2.3 买 BTC 的真实用途（不是只有炒作）</h4>
+        <ul>
+          <li><strong>价值存储</strong>：通胀国家（土耳其、阿根廷、委内瑞拉）的普通人买 BTC 保值</li>
+          <li><strong>跨境转账</strong>：印度劳工在迪拜打工，用 BTC 把工资寄回家，比西联汇款便宜 95%</li>
+          <li><strong>抗审查避险</strong>：被制裁的俄罗斯人/被冻结的难民/反政府人士唯一能用的资产</li>
+          <li><strong>机构资产配置</strong>：贝莱德、MicroStrategy 把 BTC 当"数字黄金"加入组合</li>
+          <li><strong>支付</strong>：少数商家接受 BTC 付款（特斯拉曾经）</li>
+          <li><strong>投机/炒作</strong>：90% 购买者其实是这个目的——赌它会涨</li>
+        </ul>
+        <div class="callout callout-amber">
+          <strong>价值 vs 价格：</strong>BTC 的"价值"（上面 6 个真实用途）和"价格"（市场博弈+情绪+流动性）是两回事，可以短期严重偏离。黄金每克 500 元也没多少实用价值，本质也是"共识"。BTC 是同一个游戏，只是共识只有 16 年，所以波动远大于黄金。
+        </div>
+
+        <h3 id="dq3-eth-code">Q3. ETH 怎么"在账单上编程"？为啥要消耗 Gas？</h3>
+
+        <h4>3.1 比特币 vs 以太坊：账本能记什么</h4>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>比特币账本</h4>
+            <p>每行只能记一种事：<code>A 转给 B X 个 BTC</code></p>
+          </div>
+          <div class="mini-card">
+            <h4>以太坊账本</h4>
+            <p>每行可以记：<code>A 调用了合约 C 的函数 F，参数是...，结果改变了 D 的余额</code></p>
+          </div>
+        </div>
+        <p>以太坊账本里有两种账户：</p>
+        <ul>
+          <li><strong>EOA（普通账户）</strong>：余额 + 公钥（这就是你的钱包地址）</li>
+          <li><strong>合约账户</strong>：余额 + <strong>一段代码（智能合约）</strong> + 状态变量</li>
+        </ul>
+        <div class="callout callout-blue">
+          <strong>关键创新：</strong>账本上不只能放"余额"，还能放"代码"。部署合约 = 把一段程序代码写进账本里。这段代码从此永远存在，任何人调用它，全网电脑都会按代码执行。
+        </div>
+
+        <h4>3.2 编程能干啥？真实案例</h4>
+        <div class="step-list">
+          <div class="step"><div class="step-num">1</div><div class="step-body"><strong>USDT 稳定币（最大用例）</strong><p>一段 200 行合约代码，记录"地址 X 拥有 Y 个 USDT"。整个 USDT（1500 亿美元市值）就是一段代码！</p></div></div>
+          <div class="step"><div class="step-num">2</div><div class="step-body"><strong>Uniswap 去中心化交易所</strong><p>合约维护"池子里有 100 ETH + 200,000 USDC"，按 $x \cdot y = k$ 自动算汇率。没有公司、没有员工，几百行代码 = 一个交易所。</p></div></div>
+          <div class="step"><div class="step-num">3</div><div class="step-body"><strong>NFT</strong><p>合约记录"Token #123 属于地址 0xAB..."。猴子头像图片不在链上，链上只存所有权证明。</p></div></div>
+          <div class="step"><div class="step-num">4</div><div class="step-body"><strong>DAO（去中心化组织）</strong><p>合约管理金库，规定"任何提案 >50% 持币者投票通过自动执行"。"公司"不需要 CEO/法人/股东大会。</p></div></div>
+          <div class="step"><div class="step-num">5</div><div class="step-body"><strong>链上彩票 / 航班延误险</strong><p>合约接收购票款 → 用区块哈希作随机数 → 自动派奖。或连预言机监控航班 → 延误自动赔付。完全无法作弊。</p></div></div>
+        </div>
+
+        <h4>3.3 为什么要消耗 Gas？三重作用</h4>
+        <div class="callout callout-red">
+          <strong>问题：</strong>如果运行合约不要钱，会有人写死循环把全球电脑搞瘫痪。
+        </div>
+        <ol>
+          <li><strong>防止恶意攻击</strong>：你写 <code>while(true) {}</code> 死循环？跑几秒钱就花完了自动停止</li>
+          <li><strong>给矿工/验证者付工资</strong>：几万台电脑帮你跑代码维护账本，凭啥免费？你付的 Gas 直接奖励给打包你交易的验证者</li>
+          <li><strong>优先级排序</strong>：大家都想用网络时，愿意付高 Gas 的人先被打包，相当于"加价插队"</li>
+        </ol>
+
+        <h4>3.4 为什么 Gas 必须用 ETH 付？</h4>
+        <blockquote>想用以太坊？就必须先买 ETH。这就是 ETH 这个币的底层价值锚。</blockquote>
+        <p>以太坊上的交易越多 → 需要的 ETH 越多 → ETH 价格越高。<strong>ETH 的价值 = 以太坊网络这个"全球计算机"的使用费。</strong></p>
+        <div class="callout callout-purple">
+          <strong>EIP-1559 销毁机制：</strong>2021 年起，每笔交易的部分 Gas 被<strong>直接销毁</strong>（不给任何人，从供应中消失）。网络越繁荣 → 销毁越多 → ETH 越通缩。这就是为什么以太坊从"无限供应"变成了"可能通缩资产"。
+        </div>
+
+        <h3 id="dq4-write-code">Q4. 普通人也能在 ETH 上写代码吗？我们转账是调用现成的函数？</h3>
+
+        <div class="callout callout-green">
+          <strong>完全正确！</strong>这是对以太坊本质最精准的理解。
+        </div>
+
+        <h4>4.1 任何人都能部署合约（无需许可）</h4>
+        <ul>
+          <li><strong>门槛</strong>：会 Solidity（以太坊编程语言）→ 写代码 → 编译 → 付 Gas 部署</li>
+          <li><strong>不需要审批</strong>：没有 App Store 审核，没有"以太坊公司"批准</li>
+          <li><strong>一旦部署，永远存在</strong>：即使你删了源码、忘了密码、人没了，代码还在链上跑</li>
+        </ul>
+
+        <h4>4.2 普通用户其实都在"调用别人写好的合约"</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>你做的操作</th><th>实际在调用的合约</th></tr></thead>
+            <tbody>
+              <tr><td>转 ETH</td><td>不需要合约（ETH 转账是底层原生功能）</td></tr>
+              <tr><td>转 USDT</td><td>调用 Tether 公司部署的 USDT 合约的 <code>transfer()</code> 函数</td></tr>
+              <tr><td>Uniswap 换币</td><td>调用 Uniswap 团队部署的合约的 <code>swap()</code> 函数</td></tr>
+              <tr><td>买 NFT</td><td>调用 OpenSea / NFT 项目方部署的合约</td></tr>
+              <tr><td>玩 DeFi</td><td>调用 Aave / Compound 部署的借贷合约</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4>4.3 以太坊 = 苹果 App Store（更精确的心智模型）</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>类比</th><th>以太坊对应</th></tr></thead>
+            <tbody>
+              <tr><td>iOS 系统</td><td>以太坊网络</td></tr>
+              <tr><td>App 开发者</td><td>智能合约部署者（Tether、Uniswap、你）</td></tr>
+              <tr><td>App</td><td>智能合约</td></tr>
+              <tr><td>用户使用 App</td><td>钱包调用合约函数</td></tr>
+              <tr><td>应用内付费</td><td>Gas 费</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p><strong>关键区别：</strong>iOS 上发 App 要苹果审核，以太坊上<em>任何人都能"上架"代码</em>，无需许可。</p>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：你用 MetaMask 转 100 USDT 给朋友，幕后发生了什么</div>
+          <p><strong>1. 你点"发送 USDT"</strong> → 钱包帮你构造一笔交易：</p>
+          <p>• 调用合约：<code>0xdAC17F958D2ee523a2206206994597C13D831ec7</code>（Tether 的 USDT 合约地址）<br>
+             • 调用函数：<code>transfer(朋友地址, 100000000)</code>（USDT 有 6 位小数）<br>
+             • 附带：约 0.0005 ETH 作为 Gas 费</p>
+          <p><strong>2. 全网节点执行</strong>：跑 Tether 工程师 2017 年写好的代码 → 你余额 -100，朋友 +100</p>
+          <p><strong>3. 打包进区块</strong> → 12 秒后朋友收到</p>
+          <p>你以为是"转了 100 USDT"，本质上你执行了一段几十行的 Solidity 代码。</p>
+        </div>
+
+        <h4>4.4 三层用户结构</h4>
+        <div class="step-list">
+          <div class="step"><div class="step-num">3</div><div class="step-body"><strong>普通用户（99%）</strong><p>用钱包点点点，调用现成合约：转 USDT、换币、买 NFT</p></div></div>
+          <div class="step"><div class="step-num">2</div><div class="step-body"><strong>开发者（几十万人）</strong><p>写 Solidity 部署合约：Tether 写了 USDT 合约，Uniswap 写了 DEX 合约</p></div></div>
+          <div class="step"><div class="step-num">1</div><div class="step-body"><strong>协议层（以太坊核心团队）</strong><p>设计 EVM 虚拟机和共识机制：Vitalik 等</p></div></div>
+        </div>
+
+        <h4>4.5 现成合约也可能有坑（必须知道）</h4>
+        <div class="callout callout-red">
+          <strong>三大风险：</strong><br>
+          • <strong>Rug Pull</strong>：项目方在合约里偷偷写后门，能把池子里的钱全卷走<br>
+          • <strong>漏洞</strong>：2016 The DAO、2023 Curve 都是合约 bug 被黑<br>
+          • <strong>授权陷阱</strong>：你"授权"一个合约动你钱 → 那合约就能把你的币全转走<br>
+          <br>
+          这就是为什么进 DeFi 要看：<em>合约是否开源 + 是否审计 + 历史是否安全</em>。
+        </div>
+
+        <h4>4.6 普通人想写合约的门槛</h4>
+        <ul>
+          <li><strong>学 Solidity</strong>：跟学 JavaScript 难度差不多，几周入门</li>
+          <li><strong>部署成本</strong>：主网部署普通合约要 0.05 ETH（~200 美元），L2 上几美元</li>
+          <li><strong>正经项目</strong>：合约要做安全审计（Trail of Bits、OpenZeppelin 一次 5-20 万美元）</li>
+          <li><strong>在线练习</strong>：Remix IDE（remix.ethereum.org）浏览器里就能写合约</li>
+        </ul>
+
+        <div class="callout callout-blue">
+          <strong>终极理解：</strong>以太坊本质是一个"<strong>全球可编程数据库</strong>"。开发者把功能（合约）写进去，普通用户付 Gas 调用这些函数。整个 DeFi / NFT / DAO 生态，就是<em>几千个程序员写的代码 + 几亿用户在调用</em>。
+        </div>
+
+        <h3 id="dq5-defi-vs-btc">Q5. DeFi 不就是转账吗？BTC 也能转账啊，有啥新意？</h3>
+
+        <div class="callout callout-amber">
+          <strong>核心答案：</strong>DeFi 不是"转账"，DeFi 是"<em>在转账过程中自动跑一段复杂逻辑</em>"。BTC 只能 A→B 转钱，DeFi 能做的事 BTC 永远做不了。
+        </div>
+
+        <h4>5.1 BTC 转账 vs DeFi 操作</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>维度</th><th>BTC 转账</th><th>DeFi 操作</th></tr></thead>
+            <tbody>
+              <tr><td>能做什么</td><td>A 转给 B 多少钱</td><td>边转账边自动执行复杂条件</td></tr>
+              <tr><td>能否有条件</td><td>❌ 不能</td><td>✅ "如果 X 发生就 Y"</td></tr>
+              <tr><td>能否多步骤</td><td>❌ 一笔一事</td><td>✅ 一笔交易 5-10 件事</td></tr>
+              <tr><td>能否互动</td><td>❌ 只有人和人</td><td>✅ 人 ↔ 合约 ↔ 合约</td></tr>
+              <tr><td>能否自动化</td><td>❌ 必须手动</td><td>✅ 合约自动触发</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4>5.2 关键例子：借钱这件事</h4>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>❌ BTC 能做"抵押借钱"吗？</h4>
+            <p>不能。必须找中心化机构（BlockFi、Celsius）：转 BTC 给他们→手动审核→打美元给你→他们手动清算。</p>
+            <p><strong>风险：</strong>他们跑路（BlockFi 真的破产了）/ 冻结你 / 要 KYC。</p>
+          </div>
+          <div class="mini-card">
+            <h4>✅ DeFi（Aave）怎么做</h4>
+            <p>点一下"抵押 1 ETH 借 2000 USDC"→ 一段合约自动做 5 件事：锁 ETH、查抵押率、转 USDC、标利率、设清算阈值。</p>
+            <p><strong>全程无人参与，5 秒完成，不问你是谁。</strong></p>
+          </div>
+        </div>
+
+        <h4>5.3 BTC 为啥做不了 DeFi？</h4>
+        <p>BTC 的脚本语言<strong>故意被设计得极简</strong>（只支持几十条简单指令），就是为了<strong>安全</strong>：不支持循环、不支持复杂状态、一笔交易就一件事。</p>
+        <blockquote>
+          中本聪当年觉得"图灵完备会带来攻击面"，主动放弃了编程能力。<br>
+          Vitalik 觉得"必须图灵完备才能解锁全部金融应用"，于是发明了以太坊。
+        </blockquote>
+
+        <h4>5.4 DeFi 真正炸裂的地方：金融乐高</h4>
+        <p>合约能调用合约，一笔交易可以联动多个协议：</p>
+        <div class="example-box">
+          <div class="ex-title">💡 举例：一次点击 = 5 个协议联动</div>
+          <p><strong>你的一笔交易（点一下按钮）：</strong></p>
+          <p>1. Uniswap 把 USDC 换成 ETH<br>
+             ↓ 2. Aave 把 ETH 抵押借出 DAI<br>
+             ↓ 3. Curve 把 DAI 换成 USDT<br>
+             ↓ 4. Yearn 把 USDT 存进高收益策略<br>
+             ↓ 5. 把策略凭证质押到挖矿合约</p>
+          <p><strong>一笔交易，5 个协议联动，10 秒完成。</strong>传统金融做不到——跨机构操作要 T+1/T+3 天结算，每步都要中介。</p>
+        </div>
+
+        <div class="callout callout-blue">
+          <strong>一句话总结：</strong>BTC 转账 = 微信发红包；DeFi 操作 = 在微信里同时做"转账+理财+借贷+保险+期货+乐高式嵌套"，全部由代码自动执行，没有任何机构插手。
+        </div>
+
+        <h3 id="dq6-rwa-chain">Q6. RWA 用哪条链？怎么保障"链下真有这个东西"？</h3>
+
+        <h4>6.1 链的三种类型</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>类型</th><th>谁能用</th><th>谁能记账</th><th>代表</th></tr></thead>
+            <tbody>
+              <tr><td>公链 Public</td><td>全世界任何人</td><td>任何人</td><td>以太坊、Solana、BTC</td></tr>
+              <tr><td>联盟链 Consortium</td><td>限定机构</td><td>联盟成员</td><td>Hyperledger（IBM）、Quorum（摩根）</td></tr>
+              <tr><td>私链 Private</td><td>一家公司内部</td><td>那家公司</td><td>沃尔玛供应链链</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>公链特点</h4>
+            <p>✅ 去中心化强、抗审查、全球透明<br>❌ 慢、监管难</p>
+          </div>
+          <div class="mini-card">
+            <h4>私链特点</h4>
+            <p>✅ 快、监管友好、完全可控<br>❌ 其实就是个"分布式数据库"，老板说关就关</p>
+          </div>
+        </div>
+
+        <h4>6.2 RWA 用什么链？</h4>
+        <p><strong>绝大多数 RWA 用公链（主要是以太坊），少数用联盟链：</strong></p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>项目</th><th>链</th><th>原因</th></tr></thead>
+            <tbody>
+              <tr><td>贝莱德 BUIDL（美债）</td><td>以太坊</td><td>机构生态最成熟、安全性最高</td></tr>
+              <tr><td>Ondo USDY（美债）</td><td>以太坊 + Solana + Sui</td><td>多链布局</td></tr>
+              <tr><td>摩根大通 Onyx</td><td>私链（自己搭）</td><td>银行不想让世界看自己交易</td></tr>
+              <tr><td>黄金代币 PAXG</td><td>以太坊</td><td>—</td></tr>
+              <tr><td>香港数码港房产 RWA</td><td>联盟链</td><td>监管要求</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4>6.3 "ETH 链"和"SOL 链"是不同的账本</h4>
+        <div class="callout callout-green">
+          你的理解完全正确——<strong>每条公链 = 一个独立的账本系统</strong>。以太坊和 Solana <em>互相完全独立，不共享数据</em>。以太坊用 ETH 付 Gas，Solana 用 SOL 付 Gas。
+        </div>
+        <p><strong>同一个资产可以同时在多条链上吗？</strong>可以，但其实是"在每条链上各发一份代币"：</p>
+        <ul>
+          <li>USDT 在以太坊上有 600 亿美元</li>
+          <li>USDT 在波场（Tron）上也有 600 亿美元</li>
+          <li><strong>它们是两份独立的合约</strong>，由 Tether 公司分别铸造，背后用同 1 美元做储备</li>
+        </ul>
+        <div class="example-box">
+          <div class="ex-title">💡 举例：跨链桥怎么工作</div>
+          <p>你想把以太坊上的 1 USDT 转到 Solana：</p>
+          <p>1. 把 1 USDT 锁进跨链桥的合约 → 2. 桥在 Solana 上铸造 1 USDT 给你</p>
+          <p><strong>⚠️ 跨链桥是币圈最危险的地方</strong>——2022 年被盗 30 亿美元中 70% 来自跨链桥被黑。</p>
+        </div>
+
+        <h4>6.4 RWA 怎么保障"链下真有这个东西"？</h4>
+        <div class="callout callout-red">
+          <strong>这是 RWA 最核心、最致命的问题。</strong>答案：<em>链本身保障不了，必须靠链下的法律 + 审计 + 托管机构</em>。
+        </div>
+
+        <p>以贝莱德 BUIDL 为例，完整保障体系：</p>
+        <div class="step-list">
+          <div class="step"><div class="step-num">1</div><div class="step-body"><strong>法律绑定（核心）</strong><p>购买协议写明："持有 1 个 BUIDL = 拥有贝莱德基金 1 美元份额的法律权利"。贝莱德不兑现，你可以在美国法院告它。<strong>代币本身不值钱，值钱的是它背后的法律债权。</strong></p></div></div>
+          <div class="step"><div class="step-num">2</div><div class="step-body"><strong>持牌托管</strong><p>真实美债存在<strong>纽约梅隆银行</strong>（全球最大托管行之一，受美国监管）。不是贝莱德自己保管（防内部作恶）。</p></div></div>
+          <div class="step"><div class="step-num">3</div><div class="step-body"><strong>第三方实时审计</strong><p>普华永道每日审计储备。链上 BUIDL 总量 vs 链下美债总额必须 1:1 对应，数据公开可查（Proof of Reserves）。</p></div></div>
+        </div>
+
+        <h4>6.5 不同 RWA 的可信度对比</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>RWA 类型</th><th>链下保障</th><th>可信度</th></tr></thead>
+            <tbody>
+              <tr><td>美债 RWA（BUIDL）</td><td>SEC 监管 + 大行托管 + 四大审计</td><td>⭐⭐⭐⭐⭐</td></tr>
+              <tr><td>黄金 RWA（PAXG）</td><td>纽约金库 + 月度审计</td><td>⭐⭐⭐⭐</td></tr>
+              <tr><td>房产 RWA（小项目）</td><td>当地律所 + 房产登记</td><td>⭐⭐⭐</td></tr>
+              <tr><td>艺术品 RWA</td><td>仓库 + 鉴定证书</td><td>⭐⭐</td></tr>
+              <tr><td>"迪拜山区土地" RWA</td><td>不明小公司 + 自称</td><td>⭐（基本骗局）</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4>6.6 各国 RWA 监管态度</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>地区</th><th>监管态度</th><th>标志性事件</th></tr></thead>
+            <tbody>
+              <tr><td>🇺🇸 美国</td><td>SEC 把 RWA 当证券管，要求注册披露</td><td>BUIDL 获准</td></tr>
+              <tr><td>🇪🇺 欧盟</td><td>MiCA 法案 2024 生效，RWA 需许可</td><td>—</td></tr>
+              <tr><td>🇸🇬 新加坡</td><td>MAS 沙盒，鼓励合规创新</td><td>—</td></tr>
+              <tr><td>🇭🇰 香港</td><td>全力支持，要建"RWA 之都"</td><td>数码港 RWA</td></tr>
+              <tr><td>🇨🇳 中国大陆</td><td>全面禁止（但鼓励"数字人民币"）</td><td>—</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4>6.7 RWA 的本质风险</h4>
+        <div class="callout callout-red">
+          <strong>"链上代币 ≠ 链下资产"，永远存在断裂风险：</strong><br>
+          • <strong>托管方作恶</strong>：银行卷款跑路（FTX 中心化版本）<br>
+          • <strong>法律纠纷</strong>：跨国资产，哪国法院说了算？<br>
+          • <strong>审计造假</strong>：普华永道签字也可能错（恒大就是例子）<br>
+          • <strong>合规变化</strong>：新政府上台规则一夜变天<br>
+          • <strong>预言机被攻击</strong>：喂给链的"资产价值数据"被操纵
+        </div>
+
+        <div class="callout callout-purple">
+          <strong>一句话总结：</strong>RWA 的"链"是公链账本（多数是以太坊），同一个资产在不同链上是不同的代币。"链下真有这个东西"靠的不是技术，而是<strong>"法律 + 持牌托管 + 第三方审计 + 政府监管"</strong>这套传统金融体系——区块链只是把"凭证"放上链让它能秒级流通和组合。
+        </div>
+
+        <h4>6.8 三者关系：BTC vs DeFi vs RWA</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>概念</th><th>本质</th></tr></thead>
+            <tbody>
+              <tr><td><strong>BTC</strong></td><td>链上原生资产，价值靠共识</td></tr>
+              <tr><td><strong>DeFi</strong></td><td>把"传统金融服务"用代码重写，去掉中介</td></tr>
+              <tr><td><strong>RWA</strong></td><td>把"传统现实资产"做成链上代币，让 DeFi 能用上它</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <blockquote>
+          未来 5 年最大叙事：<strong>RWA + DeFi 融合</strong>——让美债、股票、房产都能在 Uniswap 上 7×24 交易。RWA 提供"真实资产" → 进入 DeFi 协议 → 享受全球流通。一边靠链下监管，一边靠链上代码。
+        </blockquote>
+      </section>
+
+      <!-- ═══ 终极心智模型 ═══ -->
+      <section class="section">
+        <div class="section-title"><span class="icon" style="background:#fff8e1">🧠</span>终极心智模型</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>传统资产</th><th>数字孪生</th></tr></thead>
+            <tbody>
+              <tr><td>现金 / 活期</td><td>USDC / USDT（稳定币）</td></tr>
+              <tr><td>黄金</td><td>BTC（数字黄金）</td></tr>
+              <tr><td>股票</td><td>ETH / SOL 等公链代币</td></tr>
+              <tr><td>房产 / 债券</td><td>RWA（链上真实资产）</td></tr>
+              <tr><td>彩票</td><td>Meme 币</td></tr>
+              <tr><td>风投股权</td><td>ICO / IDO 代币</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout callout-blue">
+          <strong>记住三句话：</strong><br>
+          ① 币 ≠ 链：链有价值不代表所有币都有价值<br>
+          ② 取代 ≠ 共存：新东西很少"取代"老东西，更多是新增维度<br>
+          ③ 波动率即定位：BTC 必须经历 2-3 轮周期，波动率降到 20% 以下，才有资格谈"取代黄金"
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <div class="footer">
+    © 2026 · 金融笔记 · 币圈完全入门
+  </div>
+</div>
+
+<script>
+  // TOC 滚动高亮
+  document.addEventListener('DOMContentLoaded', function () {
+    const tocLinks = document.querySelectorAll('.toc-list a, .toc-sub a');
+    const sections = [];
+    tocLinks.forEach(a => {
+      const id = a.getAttribute('href').slice(1);
+      const el = document.getElementById(id);
+      if (el) sections.push({ id, el, link: a });
+    });
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          tocLinks.forEach(l => l.classList.remove('active'));
+          const found = sections.find(s => s.id === entry.target.id);
+          if (found) found.link.classList.add('active');
+        }
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+    sections.forEach(s => observer.observe(s.el));
+  });
+</script>
+</body>
+</html>

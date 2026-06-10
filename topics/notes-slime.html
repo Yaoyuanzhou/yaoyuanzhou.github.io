@@ -1,0 +1,1428 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>slime 深度解析 — 笔记</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"/>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]})"></script>
+  <style>
+    /* ── 全局变量 ── */
+    :root{
+      --max:1300px;
+      --toc:260px;
+      --accent:#059669;
+      --accent2:#7c3aed;
+      --radius:12px;
+      --shadow:0 2px 12px rgba(0,0,0,.08);
+      --code-bg:#1e1e2e;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Inter',system-ui,sans-serif;background:#f9fafb;color:#111827;line-height:1.7;}
+
+    /* ── 外框 ── */
+    .page-wrap{max-width:var(--max);margin:0 auto;padding:0 24px 60px;}
+
+    /* ── Hero ── */
+    .hero{
+      background:linear-gradient(135deg,#064e3b 0%,#065f46 40%,#0f766e 100%);
+      color:#fff;border-radius:var(--radius);padding:48px 40px 40px;
+      margin:28px 0 32px;position:relative;overflow:hidden;
+    }
+    .hero::before{
+      content:'';position:absolute;inset:0;
+      background:url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    }
+    .hero-badge{display:inline-block;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:20px;padding:4px 14px;font-size:12px;letter-spacing:.5px;margin-bottom:16px;}
+    .hero h1{font-size:clamp(28px,4vw,42px);font-weight:800;line-height:1.2;margin-bottom:12px;}
+    .hero h1 span{color:#6ee7b7;}
+    .hero-sub{font-size:16px;opacity:.85;max-width:640px;margin-bottom:24px;}
+    .meta-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+    .meta-card{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:10px;padding:12px 16px;}
+    .meta-card .label{font-size:11px;opacity:.7;text-transform:uppercase;letter-spacing:.5px;}
+    .meta-card .value{font-size:14px;font-weight:600;margin-top:4px;}
+    @media(max-width:640px){.meta-grid{grid-template-columns:repeat(2,1fr);}}
+
+    /* ── 主体布局 ── */
+    .layout{display:grid;grid-template-columns:var(--toc) minmax(0,1fr);gap:32px;align-items:start;}
+    @media(max-width:900px){.layout{grid-template-columns:1fr;}}
+
+    /* ── TOC 侧边栏 ── */
+    .toc-wrap{position:sticky;top:24px;}
+    .toc{background:#fff;border:1px solid #e5e7eb;border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);}
+    .toc-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#6b7280;margin-bottom:12px;}
+    .toc ul{list-style:none;}
+    .toc>ul>li{margin-bottom:2px;}
+    .toc a{display:block;padding:5px 10px;border-radius:6px;font-size:13px;color:#374151;text-decoration:none;transition:all .15s;}
+    .toc a:hover{background:#f3f4f6;color:var(--accent);}
+    .toc a.active{background:#d1fae5;color:var(--accent);font-weight:600;}
+    .toc ul ul{margin-left:12px;}
+    .toc ul ul a{font-size:12px;padding:3px 8px;color:#6b7280;}
+    .toc ul ul a.active{background:#ecfdf5;color:var(--accent);}
+
+    /* ── 内容区 ── */
+    .content{min-width:0;}
+    .section{background:#fff;border-radius:var(--radius);padding:40px;margin-bottom:28px;box-shadow:var(--shadow);}
+    .section-title{display:flex;align-items:center;gap:14px;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #f3f4f6;}
+    .section-title .icon{width:44px;height:44px;border-radius:10px;display:grid;place-items:center;font-size:22px;flex-shrink:0;}
+    .section-title{font-size:clamp(18px,2.5vw,24px);font-weight:800;color:#111827;}
+    h3{font-size:17px;font-weight:700;color:#1e293b;margin:28px 0 12px;}
+    h4{font-size:15px;font-weight:600;color:#374151;margin:16px 0 8px;}
+    p{margin-bottom:14px;color:#374151;}
+    a{color:var(--accent);text-decoration:none;}
+    a:hover{text-decoration:underline;}
+    ul,ol{padding-left:20px;margin-bottom:14px;color:#374151;}
+    li{margin-bottom:4px;}
+    strong{font-weight:700;}
+    code{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:2px 6px;font-size:.88em;font-family:'JetBrains Mono','Fira Code',monospace;}
+
+    /* ── 代码块 ── */
+    pre{background:var(--code-bg);color:#cdd6f4;border-radius:10px;padding:20px 24px;overflow-x:auto;font-size:13px;line-height:1.7;margin-bottom:18px;font-family:'JetBrains Mono','Fira Code',monospace;}
+    pre code{background:none;border:none;padding:0;font-size:inherit;color:inherit;}
+
+    /* ── callout ── */
+    .callout-blue{background:#eff6ff;border-left:4px solid #3b82f6;border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:18px;font-size:14px;}
+    .callout-green{background:#f0fdf4;border-left:4px solid #22c55e;border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:18px;font-size:14px;}
+    .callout-amber{background:#fffbeb;border-left:4px solid #f59e0b;border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:18px;font-size:14px;}
+    .callout-red{background:#fef2f2;border-left:4px solid #ef4444;border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:18px;font-size:14px;}
+    .callout-purple{background:#faf5ff;border-left:4px solid #a855f7;border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:18px;font-size:14px;}
+    .callout-cyan{background:#ecfeff;border-left:4px solid #06b6d4;border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:18px;font-size:14px;}
+    .callout-teal{background:#f0fdfa;border-left:4px solid #14b8a6;border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:18px;font-size:14px;}
+
+    /* ── example box ── */
+    .example-box{background:#f8faff;border:1px solid #c7d2fe;border-radius:10px;padding:18px 20px;margin-bottom:18px;}
+    .ex-title{font-weight:700;color:#3730a3;margin-bottom:10px;font-size:14px;}
+
+    /* ── big concept ── */
+    .big-concept{background:linear-gradient(135deg,#ecfdf5,#f0fdf4);border:2px solid #6ee7b7;border-radius:12px;padding:24px 28px;margin-bottom:20px;}
+    .big-concept p{margin:0;font-size:15px;color:#1e293b;}
+
+    /* ── 两列 / 三列 ── */
+    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px;}
+    .three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:18px;}
+    .mini-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;}
+    .mini-card h4{margin-top:0;}
+    @media(max-width:700px){.two-col,.three-col{grid-template-columns:1fr;}}
+
+    /* ── diagram ── */
+    .diagram-wrap{margin:20px 0;text-align:center;}
+    .diagram-caption{font-size:12px;color:#6b7280;margin-top:8px;text-align:center;font-style:italic;}
+
+    /* ── table ── */
+    .table-wrap{overflow-x:auto;margin-bottom:18px;}
+    table{width:100%;border-collapse:collapse;font-size:13.5px;}
+    th{background:#f1f5f9;padding:10px 14px;text-align:left;font-weight:600;color:#374151;border-bottom:2px solid #e2e8f0;}
+    td{padding:9px 14px;border-bottom:1px solid #f1f5f9;color:#374151;}
+    tr:hover td{background:#f8fafc;}
+    .dot-yes{color:#059669;font-weight:700;}
+    .dot-no{color:#9ca3af;}
+
+    /* ── algo steps ── */
+    .algo-steps{counter-reset:algo;}
+    .algo-step{display:flex;gap:16px;margin-bottom:20px;}
+    .algo-step-num{counter-increment:algo;width:32px;height:32px;border-radius:50%;background:var(--accent);color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;}
+    .algo-step-content h4{font-size:15px;font-weight:700;color:#1a1a2e;margin-bottom:4px;margin-top:0;}
+    .algo-step-content p{font-size:14px;color:#4a5568;margin-bottom:0;}
+
+    /* ── footer ── */
+    footer{text-align:center;padding:32px;color:#9ca3af;font-size:13px;}
+    footer a{color:var(--accent);}
+  </style>
+</head>
+<body>
+<div class="page-wrap">
+
+  <!-- Hero -->
+  <header class="hero">
+    <div class="hero-badge">RL 后训练 · LLM Post-Training</div>
+    <h1>slime 深度解析：<span>大规模 LLM 强化学习框架</span></h1>
+    <p class="hero-sub">清华 THUDM 出品的 SGLang-native RL 训练框架。GLM-5 全系列背后的引擎。从架构、算法到工程实践，一篇彻底搞懂 slime。</p>
+    <div class="meta-grid">
+      <div class="meta-card"><div class="label">来源</div><div class="value">清华 THUDM</div></div>
+      <div class="meta-card"><div class="label">训练引擎</div><div class="value">Megatron-LM</div></div>
+      <div class="meta-card"><div class="label">推理引擎</div><div class="value">SGLang（原生）</div></div>
+      <div class="meta-card"><div class="label">最大规模</div><div class="value">744B+ MoE</div></div>
+    </div>
+  </header>
+
+  <div class="layout">
+
+    <!-- TOC 侧边栏 -->
+    <nav class="toc-wrap">
+      <div class="toc">
+        <div class="toc-title">目录</div>
+        <ul>
+          <li><a href="#what">§0 slime 是什么</a></li>
+          <li><a href="#background">§1 背景：RL 后训练</a>
+            <ul>
+              <li><a href="#rl-basics">1.1 RL 后训练流程</a></li>
+              <li><a href="#rl-hard">1.2 工程挑战</a></li>
+            </ul>
+          </li>
+          <li><a href="#arch">§2 核心架构</a>
+            <ul>
+              <li><a href="#three-modules">2.1 三大模块</a></li>
+              <li><a href="#ray-sched">2.2 Ray 调度</a></li>
+              <li><a href="#weight-sync">2.3 权重同步</a></li>
+            </ul>
+          </li>
+          <li><a href="#loop">§3 训练循环详解</a>
+            <ul>
+              <li><a href="#sync-mode">3.1 同步模式</a></li>
+              <li><a href="#async-mode">3.2 全异步模式</a></li>
+              <li><a href="#colocate">3.3 Colocate 模式</a></li>
+            </ul>
+          </li>
+          <li><a href="#algo">§4 RL 算法深度</a>
+            <ul>
+              <li><a href="#ppo">4.1 PPO</a></li>
+              <li><a href="#grpo">4.2 GRPO</a></li>
+              <li><a href="#reinforce">4.3 REINFORCE++</a></li>
+              <li><a href="#gspo-opd">4.4 GSPO &amp; OPD</a></li>
+              <li><a href="#kl">4.5 KL 估计器</a></li>
+            </ul>
+          </li>
+          <li><a href="#reward">§5 奖励建模</a>
+            <ul>
+              <li><a href="#reward-types">5.1 奖励类型</a></li>
+              <li><a href="#reward-impl">5.2 代码实现</a></li>
+            </ul>
+          </li>
+          <li><a href="#models">§6 模型与硬件支持</a></li>
+          <li><a href="#practice">§7 实战配置</a>
+            <ul>
+              <li><a href="#config-yaml">7.1 配置文件详解</a></li>
+              <li><a href="#launch">7.2 启动命令</a></li>
+            </ul>
+          </li>
+          <li><a href="#projects">§8 基于 slime 的项目</a></li>
+          <li><a href="#compare">§9 框架对比 &amp; 选型</a></li>
+        </ul>
+      </div>
+    </nav>
+
+    <!-- 正文 -->
+    <main class="content">
+
+      <!-- ══ §0 What ══ -->
+      <section class="section" id="what">
+        <div class="section-title">
+          <div class="icon" style="background:#d1fae5;">🧪</div>
+          §0 slime 是什么
+        </div>
+
+        <p>slime 是清华大学 THUDM 团队开源的<strong>大语言模型强化学习后训练框架</strong>，名字是 <strong>S</strong>GLang-native <strong>L</strong>LM post-tra<strong>i</strong>ning fra<strong>me</strong>work 的缩写，点明了它最核心的设计选择——以 SGLang 作为原生推理引擎。</p>
+
+        <div class="big-concept">
+          <p><strong>一句话定位：</strong>slime 把 Megatron-LM（工业级训练引擎）和 SGLang（高吞吐推理引擎）焊接在一起，中间用 Ray 做分布式调度，解决了「超大模型 RL 训练时训练和推理两套系统各自为政、GPU 资源严重浪费」的工程难题。已在 GLM-4.5/4.6/4.7/5/5.1 全系列推理模型上得到生产验证。</p>
+        </div>
+
+        <!-- 定位图 -->
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 820 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:820px;">
+            <defs>
+              <marker id="arrG" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#059669"/>
+              </marker>
+            </defs>
+            <text x="410" y="18" text-anchor="middle" font-size="13" font-weight="700" fill="#111827">slime 在 LLM 后训练生态中的定位</text>
+
+            <!-- 预训练 -->
+            <rect x="10" y="30" width="170" height="52" rx="10" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+            <text x="95" y="52" text-anchor="middle" font-size="12" fill="#1e40af" font-weight="700">预训练</text>
+            <text x="95" y="70" text-anchor="middle" font-size="11" fill="#1e40af">Megatron / DeepSpeed</text>
+
+            <line x1="182" y1="56" x2="218" y2="56" stroke="#059669" stroke-width="2" marker-end="url(#arrG)"/>
+            <text x="200" y="48" text-anchor="middle" font-size="10" fill="#6b7280">权重</text>
+
+            <!-- SFT -->
+            <rect x="220" y="30" width="140" height="52" rx="10" fill="#fef3c7" stroke="#fcd34d" stroke-width="1.5"/>
+            <text x="290" y="52" text-anchor="middle" font-size="12" fill="#92400e" font-weight="700">SFT 微调</text>
+            <text x="290" y="70" text-anchor="middle" font-size="11" fill="#92400e">LLaMA-Factory / TRL</text>
+
+            <line x1="362" y1="56" x2="398" y2="56" stroke="#059669" stroke-width="2" marker-end="url(#arrG)"/>
+            <text x="380" y="48" text-anchor="middle" font-size="10" fill="#6b7280">权重</text>
+
+            <!-- slime RL -->
+            <rect x="400" y="22" width="200" height="68" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="2.5"/>
+            <text x="500" y="48" text-anchor="middle" font-size="13" fill="#064e3b" font-weight="800">RL 后训练</text>
+            <text x="500" y="66" text-anchor="middle" font-size="11" fill="#065f46" font-weight="600">slime（本笔记重点）</text>
+            <text x="500" y="82" text-anchor="middle" font-size="10" fill="#059669">Megatron + SGLang + Ray</text>
+
+            <line x1="602" y1="56" x2="638" y2="56" stroke="#059669" stroke-width="2" marker-end="url(#arrG)"/>
+            <text x="620" y="48" text-anchor="middle" font-size="10" fill="#6b7280">模型</text>
+
+            <!-- 推理模型 -->
+            <rect x="640" y="30" width="170" height="52" rx="10" fill="#faf5ff" stroke="#c4b5fd" stroke-width="1.5"/>
+            <text x="725" y="52" text-anchor="middle" font-size="12" fill="#5b21b6" font-weight="700">推理模型上线</text>
+            <text x="725" y="70" text-anchor="middle" font-size="11" fill="#5b21b6">GLM-5 / GLM-Z1 等</text>
+
+            <!-- 代表作列表 -->
+            <rect x="10" y="110" width="800" height="76" rx="10" fill="#f0fdf4" stroke="#6ee7b7" stroke-width="1.5"/>
+            <text x="410" y="130" text-anchor="middle" font-size="12" fill="#065f46" font-weight="700">slime 生产验证的代表作（部分）</text>
+            <text x="110" y="152" text-anchor="middle" font-size="11" fill="#065f46">GLM-4.5</text>
+            <text x="220" y="152" text-anchor="middle" font-size="11" fill="#065f46">GLM-4.6</text>
+            <text x="330" y="152" text-anchor="middle" font-size="11" fill="#065f46">GLM-4.7</text>
+            <text x="440" y="152" text-anchor="middle" font-size="11" fill="#065f46">GLM-5</text>
+            <text x="560" y="152" text-anchor="middle" font-size="11" fill="#065f46">GLM-5.1</text>
+            <text x="680" y="152" text-anchor="middle" font-size="11" fill="#065f46">GLM-Z1-Rumination</text>
+            <text x="410" y="175" text-anchor="middle" font-size="10" fill="#6b7280">（均为 Z.ai / 智谱 AI 出品的推理模型，通过 slime RL 训练获得 Chain-of-Thought 推理能力）</text>
+          </svg>
+          <div class="diagram-caption">图 0-1：slime 在 LLM 训练流水线中的位置。它是「SFT 之后、模型上线之前」的 RL 后训练环节的核心引擎。</div>
+        </div>
+
+        <div class="three-col">
+          <div class="mini-card" style="border-left:4px solid #059669;">
+            <h4 style="color:#065f46;">🏆 生产验证</h4>
+            <p style="font-size:13px;margin:0;">GLM-5 全系列均由 slime 训练，是目前规模最大的 RL 后训练开源框架之一。</p>
+          </div>
+          <div class="mini-card" style="border-left:4px solid #7c3aed;">
+            <h4 style="color:#5b21b6;">⚡ 全异步模式</h4>
+            <p style="font-size:13px;margin:0;">训练 GPU 不等推理，推理 GPU 不等训练，两者在时间轴上高度重叠，GPU 利用率最高可达 90%。</p>
+          </div>
+          <div class="mini-card" style="border-left:4px solid #0891b2;">
+            <h4 style="color:#0e7490;">📐 规模上限</h4>
+            <p style="font-size:13px;margin:0;">支持 744B+ MoE 模型，依托 Megatron 的张量/流水线并行，无理论规模上限。</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ §1 背景 ══ -->
+      <section class="section" id="background">
+        <div class="section-title">
+          <div class="icon" style="background:#fef3c7;">📚</div>
+          §1 背景：LLM 强化学习后训练
+        </div>
+
+        <h3 id="rl-basics">1.1 RL 后训练是什么</h3>
+
+        <p>预训练的 LLM 学会了语言，但不知道「什么样的回答是好的」。RL 后训练（RLHF / RLAIF / 规则奖励）的核心循环是：</p>
+
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 820 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:820px;">
+            <defs>
+              <marker id="arrC" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#059669"/>
+              </marker>
+            </defs>
+            <text x="410" y="18" text-anchor="middle" font-size="13" font-weight="700" fill="#111827">RL 后训练核心循环（每个 step 都要运行这 4 步）</text>
+
+            <!-- 步骤 1 -->
+            <rect x="10" y="36" width="170" height="56" rx="10" fill="#dbeafe" stroke="#93c5fd" stroke-width="1.5"/>
+            <text x="95" y="58" text-anchor="middle" font-size="12" fill="#1e40af" font-weight="700">① 采样 Prompt</text>
+            <text x="95" y="76" text-anchor="middle" font-size="11" fill="#1e40af">从数据集取一批</text>
+            <text x="95" y="90" text-anchor="middle" font-size="10" fill="#3b82f6">math / code / chat 题目</text>
+
+            <line x1="182" y1="64" x2="215" y2="64" stroke="#059669" stroke-width="2" marker-end="url(#arrC)"/>
+
+            <!-- 步骤 2 -->
+            <rect x="218" y="36" width="170" height="56" rx="10" fill="#d1fae5" stroke="#6ee7b7" stroke-width="1.5"/>
+            <text x="303" y="58" text-anchor="middle" font-size="12" fill="#065f46" font-weight="700">② Rollout 生成</text>
+            <text x="303" y="76" text-anchor="middle" font-size="11" fill="#065f46">模型对每个 Prompt</text>
+            <text x="303" y="90" text-anchor="middle" font-size="10" fill="#059669">生成 N 条回答（SGLang）</text>
+
+            <line x1="390" y1="64" x2="423" y2="64" stroke="#059669" stroke-width="2" marker-end="url(#arrC)"/>
+
+            <!-- 步骤 3 -->
+            <rect x="426" y="36" width="170" height="56" rx="10" fill="#fef3c7" stroke="#fcd34d" stroke-width="1.5"/>
+            <text x="511" y="58" text-anchor="middle" font-size="12" fill="#92400e" font-weight="700">③ 奖励计算</text>
+            <text x="511" y="76" text-anchor="middle" font-size="11" fill="#92400e">Reward Model 打分</text>
+            <text x="511" y="90" text-anchor="middle" font-size="10" fill="#d97706">或规则验证器（Math/Code）</text>
+
+            <line x1="598" y1="64" x2="631" y2="64" stroke="#059669" stroke-width="2" marker-end="url(#arrC)"/>
+
+            <!-- 步骤 4 -->
+            <rect x="634" y="36" width="176" height="56" rx="10" fill="#faf5ff" stroke="#c4b5fd" stroke-width="1.5"/>
+            <text x="722" y="58" text-anchor="middle" font-size="12" fill="#5b21b6" font-weight="700">④ 参数更新</text>
+            <text x="722" y="76" text-anchor="middle" font-size="11" fill="#5b21b6">PPO/GRPO 计算 Loss</text>
+            <text x="722" y="90" text-anchor="middle" font-size="10" fill="#7c3aed">反向传播更新权重（Megatron）</text>
+
+            <!-- 回箭头 -->
+            <path d="M 810 96 Q 810 140 410 140 Q 10 140 10 96" fill="none" stroke="#059669" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arrC)"/>
+            <text x="410" y="155" text-anchor="middle" font-size="10" fill="#059669">循环数千次，模型逐渐学会「什么样的回答能得高分」</text>
+          </svg>
+          <div class="diagram-caption">图 1-1：RL 后训练的四步循环。这就是 DeepSeek-R1、OpenAI o1、GLM-Z1 背后的核心技术路线。</div>
+        </div>
+
+        <p>这个循环看起来简单，但每一步都有大量工程挑战。理解这些挑战，才能理解 slime 的设计取舍。</p>
+
+        <h3 id="rl-hard">1.2 工程挑战：为什么难</h3>
+
+        <div class="two-col">
+          <div class="mini-card" style="border-left:4px solid #ef4444;">
+            <h4 style="color:#dc2626;">双引擎矛盾</h4>
+            <p style="font-size:13px;margin:0;">训练需要 Megatron（张量并行，优化器状态），推理需要 SGLang（KV Cache，高吞吐）。两者底层完全不同，权重格式、张量分片方式都要对齐。</p>
+          </div>
+          <div class="mini-card" style="border-left:4px solid #f59e0b;">
+            <h4 style="color:#d97706;">显存资源冲突</h4>
+            <p style="font-size:13px;margin:0;">推理要占满显存放 KV Cache（需要高 batch），训练要占满显存存梯度和优化器状态。两者无法在同一时刻共享 GPU。</p>
+          </div>
+          <div class="mini-card" style="border-left:4px solid #3b82f6;">
+            <h4 style="color:#1d4ed8;">长尾等待问题</h4>
+            <p style="font-size:13px;margin:0;">同一 batch 里有些请求生成 10 tokens，有些生成 2000 tokens。同步模式下，所有训练 GPU 都要等最慢的那个请求完成才能开始训练。</p>
+          </div>
+          <div class="mini-card" style="border-left:4px solid #8b5cf6;">
+            <h4 style="color:#7c3aed;">权重同步开销</h4>
+            <p style="font-size:13px;margin:0;">每轮训练完，新权重要从 Megatron 格式转换并广播给所有推理节点。对于 70B+ 模型，这个传输代价极大（数百 GB 数据）。</p>
+          </div>
+        </div>
+
+        <div class="callout-teal">
+          <strong>slime 的答案：</strong> 通过 Ray 把训练集群和推理集群分开调度；用 Data Buffer 解耦两者的数据流；用全异步模式消除长尾等待；用 vLLM-style 权重加载协议优化同步效率。
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+      <!-- ══ §2 架构 ══ -->
+      <section class="section" id="arch">
+        <div class="section-title">
+          <div class="icon" style="background:#ede9fe;">🏗️</div>
+          §2 核心架构
+        </div>
+
+        <h3 id="three-modules">2.1 三大模块：Training / Rollout / Data Buffer</h3>
+
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 820 280" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:820px;">
+            <defs>
+              <marker id="arrA2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#374151"/>
+              </marker>
+              <marker id="arrA2r" markerWidth="8" markerHeight="8" refX="2" refY="3" orient="auto">
+                <path d="M8,0 L8,6 L0,3 z" fill="#374151"/>
+              </marker>
+            </defs>
+            <text x="410" y="18" text-anchor="middle" font-size="13" font-weight="700" fill="#111827">slime 整体架构（Ray 集群视角）</text>
+
+            <!-- Ray 外框 -->
+            <rect x="10" y="28" width="800" height="240" rx="14" fill="#faf5ff" stroke="#c4b5fd" stroke-width="2" stroke-dasharray="6,3"/>
+            <text x="20" y="50" font-size="12" fill="#7c3aed" font-weight="600">☁ Ray Cluster（资源调度层）</text>
+
+            <!-- Training 模块 -->
+            <rect x="30" y="60" width="220" height="190" rx="12" fill="#dbeafe" stroke="#3b82f6" stroke-width="2"/>
+            <text x="140" y="84" text-anchor="middle" font-size="13" fill="#1e40af" font-weight="800">🧠 Training</text>
+            <text x="140" y="100" text-anchor="middle" font-size="11" fill="#1e40af">Megatron-LM</text>
+            <rect x="42" y="108" width="196" height="28" rx="6" fill="#eff6ff" stroke="#93c5fd"/>
+            <text x="140" y="127" text-anchor="middle" font-size="11" fill="#1e40af">Actor Model（策略网络）</text>
+            <rect x="42" y="140" width="196" height="28" rx="6" fill="#eff6ff" stroke="#93c5fd"/>
+            <text x="140" y="159" text-anchor="middle" font-size="11" fill="#1e40af">Critic Model（价值网络）</text>
+            <rect x="42" y="172" width="196" height="28" rx="6" fill="#eff6ff" stroke="#93c5fd"/>
+            <text x="140" y="191" text-anchor="middle" font-size="11" fill="#1e40af">Reference Model（KL 约束）</text>
+            <rect x="42" y="204" width="196" height="36" rx="6" fill="#bfdbfe" stroke="#3b82f6"/>
+            <text x="140" y="220" text-anchor="middle" font-size="11" fill="#1e40af" font-weight="600">TP + PP + SP 并行</text>
+            <text x="140" y="234" text-anchor="middle" font-size="10" fill="#1e40af">支持 FP8 / INT4 量化训练</text>
+
+            <!-- Data Buffer 中间 -->
+            <rect x="310" y="100" width="200" height="140" rx="12" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
+            <text x="410" y="124" text-anchor="middle" font-size="13" fill="#065f46" font-weight="800">🗄 Data Buffer</text>
+            <text x="410" y="140" text-anchor="middle" font-size="11" fill="#065f46">训练↔推理解耦桥梁</text>
+            <rect x="322" y="150" width="176" height="24" rx="6" fill="#a7f3d0" stroke="#6ee7b7"/>
+            <text x="410" y="167" text-anchor="middle" font-size="10" fill="#065f46">Prompt 队列（待生成）</text>
+            <rect x="322" y="178" width="176" height="24" rx="6" fill="#a7f3d0" stroke="#6ee7b7"/>
+            <text x="410" y="195" text-anchor="middle" font-size="10" fill="#065f46">Rollout 数据（含 reward）</text>
+            <rect x="322" y="206" width="176" height="24" rx="6" fill="#a7f3d0" stroke="#6ee7b7"/>
+            <text x="410" y="223" text-anchor="middle" font-size="10" fill="#065f46">异步状态管理</text>
+
+            <!-- Rollout 模块 -->
+            <rect x="570" y="60" width="220" height="190" rx="12" fill="#fef3c7" stroke="#f59e0b" stroke-width="2"/>
+            <text x="680" y="84" text-anchor="middle" font-size="13" fill="#92400e" font-weight="800">⚡ Rollout</text>
+            <text x="680" y="100" text-anchor="middle" font-size="11" fill="#92400e">SGLang Engine(s)</text>
+            <rect x="582" y="108" width="196" height="28" rx="6" fill="#fffbeb" stroke="#fcd34d"/>
+            <text x="680" y="127" text-anchor="middle" font-size="11" fill="#92400e">Router（负载均衡）</text>
+            <rect x="582" y="140" width="196" height="28" rx="6" fill="#fffbeb" stroke="#fcd34d"/>
+            <text x="680" y="159" text-anchor="middle" font-size="11" fill="#92400e">多 SGLang 实例并行</text>
+            <rect x="582" y="172" width="196" height="28" rx="6" fill="#fffbeb" stroke="#fcd34d"/>
+            <text x="680" y="191" text-anchor="middle" font-size="11" fill="#92400e">PD 分离（可选）</text>
+            <rect x="582" y="204" width="196" height="36" rx="6" fill="#fde68a" stroke="#f59e0b"/>
+            <text x="680" y="220" text-anchor="middle" font-size="11" fill="#92400e" font-weight="600">RadixAttention 前缀复用</text>
+            <text x="680" y="234" text-anchor="middle" font-size="10" fill="#92400e">Continuous Batching</text>
+
+            <!-- 箭头 Training ↔ Data Buffer -->
+            <line x1="252" y1="170" x2="308" y2="170" stroke="#374151" stroke-width="1.5" marker-end="url(#arrA2)"/>
+            <line x1="308" y1="185" x2="252" y2="185" stroke="#374151" stroke-width="1.5" marker-end="url(#arrA2r)"/>
+            <text x="280" y="165" text-anchor="middle" font-size="9" fill="#374151">训练数据</text>
+            <text x="280" y="198" text-anchor="middle" font-size="9" fill="#374151">新权重</text>
+
+            <!-- 箭头 Data Buffer ↔ Rollout -->
+            <line x1="512" y1="170" x2="568" y2="170" stroke="#374151" stroke-width="1.5" marker-end="url(#arrA2)"/>
+            <line x1="568" y1="185" x2="512" y2="185" stroke="#374151" stroke-width="1.5" marker-end="url(#arrA2r)"/>
+            <text x="540" y="165" text-anchor="middle" font-size="9" fill="#374151">Prompt</text>
+            <text x="540" y="198" text-anchor="middle" font-size="9" fill="#374151">生成+奖励</text>
+          </svg>
+          <div class="diagram-caption">图 2-1：slime 整体架构。Training（Megatron）和 Rollout（SGLang）通过 Data Buffer 解耦，Ray 负责整个集群的资源调度和通信。</div>
+        </div>
+
+        <div class="three-col">
+          <div class="mini-card" style="border-left:4px solid #3b82f6;">
+            <h4 style="color:#1d4ed8;">🧠 Training 模块</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li>基于 Megatron-LM，支持 TP / PP / SP</li>
+              <li>同时管理 Actor / Critic / Reference 三个模型</li>
+              <li>Actor 参数更新后推送给 Rollout</li>
+              <li>支持 FP8 训练（A100 节省约 50% 显存）</li>
+              <li>核心代码：<code>slime/trainer/</code></li>
+            </ul>
+          </div>
+          <div class="mini-card" style="border-left:4px solid #059669;">
+            <h4 style="color:#065f46;">🗄 Data Buffer</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li>训练和推理的唯一通信媒介</li>
+              <li>管理 Prompt 队列的采样与分发</li>
+              <li>全异步模式下追踪每条数据的「代龄」</li>
+              <li>支持自定义 DataPipeline</li>
+              <li>核心代码：<code>slime/data/</code></li>
+            </ul>
+          </div>
+          <div class="mini-card" style="border-left:4px solid #f59e0b;">
+            <h4 style="color:#92400e;">⚡ Rollout 模块</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li>基于 SGLang，多实例 Router 负载均衡</li>
+              <li>RadixAttention 自动复用 system prompt KV</li>
+              <li>生成回答后立即调用奖励函数打分</li>
+              <li>支持 PD 分离（Prefill/Decode 独立卡）</li>
+              <li>核心代码：<code>slime/rollout/</code></li>
+            </ul>
+          </div>
+        </div>
+
+        <h3 id="ray-sched">2.2 Ray 分布式调度</h3>
+
+        <p>slime 用 Ray 的 Placement Group 机制把训练节点和推理节点组织成逻辑分组，支持两种部署拓扑：</p>
+
+        <div class="two-col">
+          <div class="mini-card" style="border-left:4px solid #3b82f6;">
+            <h4 style="color:#1d4ed8;">分离部署（Separate）</h4>
+            <p style="font-size:13px;margin:0;">训练 GPU 和推理 GPU 是不同的机器/节点。两者可以完全并行运行，互不干扰。适合有大型 GPU 集群的场景（如 16 卡训练 + 8 卡推理）。</p>
+          </div>
+          <div class="mini-card" style="border-left:4px solid #059669;">
+            <h4 style="color:#065f46;">共置部署（Colocate）</h4>
+            <p style="font-size:13px;margin:0;">训练和推理共用同一批 GPU，通过时间分片交替服务。训练阶段 SGLang 权重 Offload 到 CPU，推理阶段从 CPU 加载回 GPU。适合资源受限（8 卡以内）场景。</p>
+          </div>
+        </div>
+
+        <pre># Ray 启动示例：分离部署（4 节点训练 + 2 节点推理）
+ray start --head --node-ip-address=MASTER_IP
+
+# slime 配置（yaml）
+distributed:
+  training_nodes: 4         # 训练节点数
+  rollout_nodes: 2          # 推理节点数
+  tp_size: 8                # 张量并行度
+  pp_size: 2                # 流水线并行度（训练内部）
+</pre>
+
+        <h3 id="weight-sync">2.3 权重同步机制</h3>
+
+        <p>每轮训练结束后，新权重需要从 Megatron 格式传给 SGLang。这是 slime 中最复杂的工程问题之一：</p>
+
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 820 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:820px;">
+            <defs>
+              <marker id="arrW2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#374151"/>
+              </marker>
+            </defs>
+            <text x="410" y="18" text-anchor="middle" font-size="13" font-weight="700" fill="#111827">权重同步流程（每次 update_weights 调用）</text>
+
+            <!-- Step 1 -->
+            <rect x="10" y="36" width="170" height="56" rx="8" fill="#dbeafe" stroke="#93c5fd"/>
+            <text x="95" y="60" text-anchor="middle" font-size="11" fill="#1e40af" font-weight="700">Megatron TP 分片</text>
+            <text x="95" y="76" text-anchor="middle" font-size="10" fill="#1e40af">Actor 权重按张量并行</text>
+            <text x="95" y="88" text-anchor="middle" font-size="10" fill="#1e40af">分布在多张 GPU 上</text>
+
+            <line x1="182" y1="64" x2="215" y2="64" stroke="#374151" stroke-width="1.5" marker-end="url(#arrW2)"/>
+
+            <!-- Step 2 -->
+            <rect x="218" y="36" width="170" height="56" rx="8" fill="#d1fae5" stroke="#6ee7b7"/>
+            <text x="303" y="60" text-anchor="middle" font-size="11" fill="#065f46" font-weight="700">All-Gather 重组</text>
+            <text x="303" y="76" text-anchor="middle" font-size="10" fill="#065f46">在各 TP 组内</text>
+            <text x="303" y="88" text-anchor="middle" font-size="10" fill="#065f46">All-Gather 合并 layer</text>
+
+            <line x1="390" y1="64" x2="423" y2="64" stroke="#374151" stroke-width="1.5" marker-end="url(#arrW2)"/>
+
+            <!-- Step 3 -->
+            <rect x="426" y="36" width="170" height="56" rx="8" fill="#fef3c7" stroke="#fcd34d"/>
+            <text x="511" y="60" text-anchor="middle" font-size="11" fill="#92400e" font-weight="700">格式转换</text>
+            <text x="511" y="76" text-anchor="middle" font-size="10" fill="#92400e">Megatron 格式 →</text>
+            <text x="511" y="88" text-anchor="middle" font-size="10" fill="#92400e">HuggingFace / SGLang 格式</text>
+
+            <line x1="598" y1="64" x2="631" y2="64" stroke="#374151" stroke-width="1.5" marker-end="url(#arrW2)"/>
+
+            <!-- Step 4 -->
+            <rect x="634" y="36" width="176" height="56" rx="8" fill="#faf5ff" stroke="#c4b5fd"/>
+            <text x="722" y="60" text-anchor="middle" font-size="11" fill="#5b21b6" font-weight="700">SGLang 热加载</text>
+            <text x="722" y="76" text-anchor="middle" font-size="10" fill="#5b21b6">update_weights API</text>
+            <text x="722" y="88" text-anchor="middle" font-size="10" fill="#5b21b6">逐 layer 流式加载</text>
+
+            <!-- 耗时说明 -->
+            <rect x="10" y="108" width="800" height="76" rx="10" fill="#fffbeb" stroke="#fcd34d" stroke-width="1.5"/>
+            <text x="410" y="128" text-anchor="middle" font-size="12" fill="#92400e" font-weight="700">权重同步优化策略</text>
+            <text x="22" y="148" font-size="11" fill="#374151">• <tspan font-weight="600">逐层流式传输：</tspan>不等所有层都 All-Gather 完，计算完一层就立刻传给 SGLang，减少峰值内存</text>
+            <text x="22" y="165" font-size="11" fill="#374151">• <tspan font-weight="600">仅传 Actor：</tspan>Reference Model 和 Critic 不需要同步给推理引擎，只传 Actor 权重</text>
+            <text x="22" y="182" font-size="11" fill="#374151">• <tspan font-weight="600">ABORTED 处理：</tspan>同步权重时正在进行的推理请求标记为 ABORTED，完成后重入 buffer 而非丢弃</text>
+          </svg>
+          <div class="diagram-caption">图 2-2：权重同步流程。Megatron TP 分片 → All-Gather → 格式转换 → SGLang 热加载。逐层流式传输减少峰值内存。</div>
+        </div>
+      </section>
+
+      <!-- ══ §4 RL 算法深度 ══ -->
+      <section class="section" id="algo">
+        <div class="section-title">
+          <div class="icon" style="background:#fef3c7;">🧮</div>
+          §4 RL 算法深度
+        </div>
+
+        <p>slime 不绑定某一个 RL 算法，而是提供了一套统一的数据结构和训练接口，支持 PPO、GRPO、REINFORCE++、GSPO、OPD 等主流算法。核心区别在于「如何利用多条生成回答计算策略梯度」。</p>
+
+        <h3 id="ppo">4.1 PPO（Proximal Policy Optimization）</h3>
+
+        <p>PPO 是最经典的 RLHF 算法，最早在 InstructGPT 中使用。slime 实现了完整的 PPO 四模型版本：</p>
+
+        <div class="two-col">
+          <div class="mini-card" style="border-left:4px solid #3b82f6;">
+            <h4 style="color:#1d4ed8;">四个模型</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li><strong>Actor</strong>：待训练的策略模型 $\pi_\theta$</li>
+              <li><strong>Critic</strong>：价值函数 $V_\phi(s)$，估计期望奖励</li>
+              <li><strong>Reference</strong>：冻结的参考模型 $\pi_{ref}$（SFT 权重）</li>
+              <li><strong>Reward Model</strong>：对回答打分的奖励函数</li>
+            </ul>
+          </div>
+          <div class="mini-card" style="border-left:4px solid #8b5cf6;">
+            <h4 style="color:#7c3aed;">PPO Loss 组成</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li><strong>Actor Loss</strong>：Clip 约束的策略梯度</li>
+              <li><strong>Critic Loss</strong>：TD Error / GAE</li>
+              <li><strong>KL Penalty</strong>：限制与 Reference 偏差</li>
+              <li><strong>Entropy Bonus</strong>（可选）：鼓励探索</li>
+            </ul>
+          </div>
+        </div>
+
+        <p>PPO 的 Actor Loss 公式：</p>
+
+        $$\mathcal{L}^{PPO}(\theta) = -\mathbb{E}_{t}\left[\min\left(r_t(\theta)\hat{A}_t,\ \text{clip}(r_t(\theta), 1-\epsilon, 1+\epsilon)\hat{A}_t\right)\right]$$
+
+        <p>其中 $r_t(\theta) = \frac{\pi_\theta(a_t|s_t)}{\pi_{\theta_{old}}(a_t|s_t)}$ 是策略比，$\hat{A}_t$ 是广义优势估计（GAE），$\epsilon$ 通常取 0.2。</p>
+
+        <div class="callout-amber">
+          <strong>PPO 的问题：</strong>Critic 模型本身也需要训练（和 Actor 一样大的模型）+ 需要 Reward Model，资源消耗是 GRPO 的 2-3 倍。这是 DeepSeek-R1 放弃 PPO 的主要原因。
+        </div>
+
+        <h3 id="grpo">4.2 GRPO（Group Relative Policy Optimization）</h3>
+
+        <p>GRPO 是 DeepSeek 团队提出的算法，消除了对 Critic 模型的依赖。核心思想是：对同一个问题生成 $G$ 条回答，用这 $G$ 条回答内部的相对奖励作为优势估计。</p>
+
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 820 190" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:820px;">
+            <text x="410" y="18" text-anchor="middle" font-size="13" font-weight="700" fill="#111827">GRPO：同一问题生成 G 条回答，组内相对排名作为优势估计</text>
+
+            <!-- 问题 -->
+            <rect x="10" y="34" width="160" height="120" rx="10" fill="#fef3c7" stroke="#fcd34d" stroke-width="2"/>
+            <text x="90" y="58" text-anchor="middle" font-size="12" fill="#92400e" font-weight="700">Prompt (问题)</text>
+            <text x="90" y="76" text-anchor="middle" font-size="10" fill="#92400e">"积分 ∫x²dx"</text>
+            <text x="90" y="120" text-anchor="middle" font-size="22">❓</text>
+
+            <!-- 箭头分发 -->
+            <line x1="172" y1="94" x2="210" y2="60" stroke="#374151" stroke-width="1.5"/>
+            <line x1="172" y1="94" x2="210" y2="94" stroke="#374151" stroke-width="1.5"/>
+            <line x1="172" y1="94" x2="210" y2="128" stroke="#374151" stroke-width="1.5"/>
+            <text x="185" y="85" font-size="9" fill="#374151">×G 条</text>
+
+            <!-- 回答 1 -->
+            <rect x="214" y="34" width="130" height="52" rx="8" fill="#d1fae5" stroke="#6ee7b7"/>
+            <text x="279" y="56" text-anchor="middle" font-size="11" fill="#065f46">回答 1：x³/3 + C ✓</text>
+            <text x="279" y="72" text-anchor="middle" font-size="10" fill="#059669">r₁ = 1.0（正确）</text>
+
+            <!-- 回答 2 -->
+            <rect x="214" y="70" width="130" height="52" rx="8" fill="#fef2f2" stroke="#fecaca"/>
+            <text x="279" y="92" text-anchor="middle" font-size="11" fill="#dc2626">回答 2：2x + C ✗</text>
+            <text x="279" y="108" text-anchor="middle" font-size="10" fill="#ef4444">r₂ = 0.0（错误）</text>
+
+            <!-- 回答 3 -->
+            <rect x="214" y="106" width="130" height="52" rx="8" fill="#fffbeb" stroke="#fde68a"/>
+            <text x="279" y="128" text-anchor="middle" font-size="11" fill="#92400e">回答 3：x³/3 ✓±</text>
+            <text x="279" y="144" text-anchor="middle" font-size="10" fill="#d97706">r₃ = 0.8（漏常数）</text>
+
+            <!-- 优势计算 -->
+            <rect x="374" y="34" width="180" height="124" rx="10" fill="#eff6ff" stroke="#93c5fd" stroke-width="2"/>
+            <text x="464" y="56" text-anchor="middle" font-size="12" fill="#1e40af" font-weight="700">组内优势估计</text>
+            <text x="464" y="76" text-anchor="middle" font-size="11" fill="#1e40af">$\bar{r} = (1.0+0+0.8)/3 = 0.6$</text>
+            <text x="464" y="100" text-anchor="middle" font-size="11" fill="#1e40af">$A_1 = (1.0-0.6)/\sigma = +1.1$</text>
+            <text x="464" y="120" text-anchor="middle" font-size="11" fill="#dc2626">$A_2 = (0-0.6)/\sigma = -1.7$</text>
+            <text x="464" y="140" text-anchor="middle" font-size="11" fill="#d97706">$A_3 = (0.8-0.6)/\sigma = +0.6$</text>
+            <text x="464" y="155" text-anchor="middle" font-size="10" fill="#6b7280">（$\sigma$ = 组内奖励标准差）</text>
+
+            <!-- 梯度更新 -->
+            <rect x="582" y="50" width="228" height="90" rx="10" fill="#faf5ff" stroke="#c4b5fd" stroke-width="2"/>
+            <text x="696" y="72" text-anchor="middle" font-size="12" fill="#5b21b6" font-weight="700">策略梯度</text>
+            <text x="696" y="92" text-anchor="middle" font-size="11" fill="#5b21b6">提高回答 1 的概率 ↑</text>
+            <text x="696" y="110" text-anchor="middle" font-size="11" fill="#dc2626">降低回答 2 的概率 ↓</text>
+            <text x="696" y="128" text-anchor="middle" font-size="11" fill="#d97706">略提高回答 3 的概率 ↑</text>
+
+            <line x1="556" y1="94" x2="580" y2="94" stroke="#374151" stroke-width="1.5"/>
+          </svg>
+          <div class="diagram-caption">图 4-1：GRPO 流程。同一问题生成 G 条回答，以组内相对奖励（归一化后）作为优势估计，无需单独的 Critic 模型。</div>
+        </div>
+
+        <p>GRPO 的 Loss 公式（带 KL 约束）：</p>
+
+        $$\mathcal{L}^{GRPO}(\theta) = -\mathbb{E}\left[\frac{1}{G}\sum_{i=1}^{G}\left(\min\left(r_i(\theta)\hat{A}_i, \text{clip}(r_i(\theta),1-\epsilon,1+\epsilon)\hat{A}_i\right) - \beta\, D_{KL}(\pi_\theta \| \pi_{ref})\right)\right]$$
+
+        <p>其中 $\hat{A}_i = \frac{r_i - \text{mean}(r_{1..G})}{\text{std}(r_{1..G})}$，$\beta$ 控制 KL 惩罚强度。</p>
+
+        <div class="callout-green">
+          <strong>GRPO vs PPO：</strong>GRPO 省掉了 Critic 模型，每次 rollout 需要 G 条回答（通常 G=8~16）。不需要 Critic 的代价是方差稍高；但省去的显存足以部署更大的模型或更多推理实例，综合吞吐更好。
+        </div>
+
+        <h3 id="reinforce">4.3 REINFORCE++</h3>
+
+        <p>REINFORCE++ 是 GRPO 的简化版，去掉了 clip 约束，直接用 REINFORCE 梯度：</p>
+
+        $$\mathcal{L}^{REINFORCE++}(\theta) = -\mathbb{E}\left[\hat{A}_i \cdot \log\pi_\theta(a_i|s_i)\right] + \beta\, D_{KL}(\pi_\theta \| \pi_{ref})$$
+
+        <p>因为没有 ratio clip，训练可能不稳定，但实现更简单，超参少。适合快速验证奖励函数的有效性。</p>
+
+        <h3 id="gspo-opd">4.4 GSPO &amp; OPD</h3>
+
+        <div class="two-col">
+          <div class="mini-card" style="border-left:4px solid #0891b2;">
+            <h4 style="color:#0e7490;">GSPO（Group Sequence Policy Optimization）</h4>
+            <p style="font-size:13px;">把 KL 惩罚从 token 级别提升到 sequence 级别，更稳定。GLM-Z1-Rumination 论文中用的主算法。序列级 KL 能更好地阻止模型输出风格大漂移。</p>
+          </div>
+          <div class="mini-card" style="border-left:4px solid #f43f5e;">
+            <h4 style="color:#be123c;">OPD（Off-Policy Data）</h4>
+            <p style="font-size:13px;">全异步模式中，训练数据来自「旧版策略」生成（off-policy）。OPD 通过重要性采样权重修正偏差：$w_i = \frac{\pi_\theta(a_i)}{\pi_{\mu}(a_i)}$ 其中 $\pi_\mu$ 是生成时的策略。</p>
+          </div>
+        </div>
+
+        <h3 id="kl">4.5 KL 估计器：三种实现对比</h3>
+
+        <p>所有算法都需要估计当前策略和参考策略的 KL 散度 $D_{KL}(\pi_\theta \| \pi_{ref})$，slime 提供三种实现：</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>类型</th><th>公式</th><th>计算量</th><th>偏差</th><th>适用场景</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>kl_estimator_k1</strong></td>
+                <td>$r - 1 - \log r$（$r=\pi_\theta/\pi_{ref}$）</td>
+                <td>低</td>
+                <td>有偏（近似）</td>
+                <td>一般场景，默认</td>
+              </tr>
+              <tr style="background:#f0fdf4;">
+                <td><strong>kl_estimator_k3</strong></td>
+                <td>$\frac{(r-1)^2}{2} + \frac{(r-1)^3}{3}$（三阶近似）</td>
+                <td>中</td>
+                <td>更精确</td>
+                <td>稳定性要求高</td>
+              </tr>
+              <tr>
+                <td><strong>token_level_kl</strong></td>
+                <td>精确 per-token KL，在所有 vocab 上求和</td>
+                <td>高（vocab_size 倍）</td>
+                <td>无偏</td>
+                <td>研究用，内存敏感</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <pre># slime 配置 KL 估计器（yaml）
+algorithm:
+  name: grpo           # ppo / grpo / reinforce++ / gspo
+  kl_type: kl_estimator_k1   # k1 / k3 / token_level_kl
+  kl_coef: 0.01        # β 系数，越大越保守（不偏离 reference）
+  clip_eps: 0.2        # PPO clip 系数
+  group_size: 8        # GRPO 每个 prompt 生成几条回答</pre>
+      </section>
+
+      <!-- ══ §5 奖励建模 ══ -->
+      <section class="section" id="reward">
+        <div class="section-title">
+          <div class="icon" style="background:#fef2f2;">🎯</div>
+          §5 奖励建模
+        </div>
+
+        <p>奖励函数的质量直接决定 RL 训练的上限。slime 支持三大类奖励函数，可以组合使用（加权求和）。</p>
+
+        <h3 id="reward-types">5.1 三类奖励</h3>
+
+        <div class="three-col">
+          <div class="mini-card" style="border-left:4px solid #22c55e;">
+            <h4 style="color:#15803d;">① 规则验证器</h4>
+            <p style="font-size:13px;">最可靠、无偏，适合有标准答案的任务。</p>
+            <ul style="font-size:12px;margin:0;padding-left:14px;">
+              <li><strong>数学</strong>：sympy 验证 LaTeX 表达式等价</li>
+              <li><strong>代码</strong>：沙盒运行单元测试，通过率作为奖励</li>
+              <li><strong>格式</strong>：正则验证 JSON / XML 合法性</li>
+            </ul>
+          </div>
+          <div class="mini-card" style="border-left:4px solid #f59e0b;">
+            <h4 style="color:#d97706;">② 奖励模型（RM）</h4>
+            <p style="font-size:13px;">神经网络对输出打分，适合主观质量评估。</p>
+            <ul style="font-size:12px;margin:0;padding-left:14px;">
+              <li>在 Rollout 结束后调用 RM forward</li>
+              <li>支持独立 RM 服务（HTTP API）</li>
+              <li>支持内嵌 RM（同卡，节省通信）</li>
+              <li>Reward Hacking 风险较高</li>
+            </ul>
+          </div>
+          <div class="mini-card" style="border-left:4px solid #8b5cf6;">
+            <h4 style="color:#7c3aed;">③ LLM-as-Judge</h4>
+            <p style="font-size:13px;">用强 LLM（GPT-4o / GLM-4）对输出打分。</p>
+            <ul style="font-size:12px;margin:0;padding-left:14px;">
+              <li>适合主观对话质量、指令遵循</li>
+              <li>成本高，通常只用于 final eval</li>
+              <li>可作为在线 RM 的替代方案</li>
+            </ul>
+          </div>
+        </div>
+
+        <h3 id="reward-impl">5.2 自定义奖励函数实现</h3>
+
+        <p>slime 的奖励函数接口非常简洁，只需继承 <code>BaseRewardFn</code> 实现一个方法：</p>
+
+        <pre># slime/reward/base.py（简化）
+class BaseRewardFn:
+    """所有奖励函数的基类"""
+    
+    def __call__(
+        self,
+        prompts: list[str],        # 输入 prompt
+        completions: list[str],    # 模型生成的回答
+        metadata: dict,            # 附加信息（ground truth 等）
+    ) -> list[float]:              # 每条回答的奖励值（0~1 或 -1~1）
+        raise NotImplementedError
+
+
+# 示例：数学正确性奖励（sympy 验证）
+class MathVerifyReward(BaseRewardFn):
+    def __call__(self, prompts, completions, metadata):
+        rewards = []
+        for comp, gt in zip(completions, metadata["ground_truth"]):
+            pred = extract_boxed_answer(comp)  # 提取 \boxed{...}
+            try:
+                correct = sympy.simplify(sympy.parse_expr(pred) - 
+                                         sympy.parse_expr(gt)) == 0
+                rewards.append(1.0 if correct else 0.0)
+            except:
+                rewards.append(0.0)
+        return rewards
+
+
+# 示例：代码通过率奖励
+class CodePassRateReward(BaseRewardFn):
+    def __call__(self, prompts, completions, metadata):
+        rewards = []
+        for comp, tests in zip(completions, metadata["test_cases"]):
+            code = extract_code_block(comp)
+            passed = run_sandbox(code, tests)   # 沙盒执行
+            rewards.append(passed / len(tests))  # 通过率
+        return rewards
+
+
+# 组合多个奖励（在 config 中配置权重）
+class CompositeReward(BaseRewardFn):
+    def __init__(self, reward_fns, weights):
+        self.fns = reward_fns
+        self.w = weights
+    
+    def __call__(self, prompts, completions, metadata):
+        total = [0.0] * len(completions)
+        for fn, w in zip(self.fns, self.w):
+            scores = fn(prompts, completions, metadata)
+            total = [t + w*s for t, s in zip(total, scores)]
+        return total</pre>
+
+        <div class="callout-green">
+          <strong>最佳实践：</strong>数学任务优先用 sympy 精确验证；代码任务用 E2B / Modal 沙盒运行测试；对话任务用 RM + 格式正则双重奖励。奖励稀疏（大部分为 0）时，考虑增加「过程奖励」（PRM）或「格式奖励」作为稠密引导。
+        </div>
+      </section>
+
+      <!-- ══ §3 训练循环 ══ -->
+      <section class="section" id="loop">
+        <div class="section-title">
+          <div class="icon" style="background:#ecfdf5;">🔄</div>
+          §3 训练循环详解
+        </div>
+
+        <h3 id="sync-mode">3.1 同步模式（Sync）</h3>
+
+        <p>默认的同步模式下，每个 rollout_id 严格按顺序执行五步：</p>
+
+        <div class="algo-steps">
+          <div class="algo-step">
+            <div class="algo-step-num">1</div>
+            <div class="algo-step-content">
+              <h4>初始化 &amp; 权重推送</h4>
+              <p>Ray Placement Group 分配好 GPU，Actor/Critic/Reference 模型加载完毕。第一次把训练权重推给 SGLang Engine（或从 checkpoint 恢复）。</p>
+            </div>
+          </div>
+          <div class="algo-step">
+            <div class="algo-step-num">2</div>
+            <div class="algo-step-content">
+              <h4>Rollout 生成</h4>
+              <p><code>rollout_manager.generate(rollout_id)</code>：SGLang 处理一批 Prompt，每个 Prompt 生成 N 条回答（GRPO 需要 N&gt;1，PPO 通常 N=1）。生成完成后调用奖励函数打分，结果打包存入 Data Buffer。</p>
+            </div>
+          </div>
+          <div class="algo-step">
+            <div class="algo-step-num">3</div>
+            <div class="algo-step-content">
+              <h4>训练更新</h4>
+              <p><code>actor_model.async_train(rollout_id, rollout_data_ref)</code>：从 Data Buffer 取数据，计算 PPO / GRPO Loss，执行反向传播。如果启用了 Critic，同步进行 Critic 更新。</p>
+            </div>
+          </div>
+          <div class="algo-step">
+            <div class="algo-step-num">4</div>
+            <div class="algo-step-content">
+              <h4>权重同步</h4>
+              <p><code>actor_model.update_weights()</code>：把更新后的 Actor 权重传给所有 SGLang 实例。下一轮 Rollout 将使用最新策略。</p>
+            </div>
+          </div>
+          <div class="algo-step">
+            <div class="algo-step-num">5</div>
+            <div class="algo-step-content">
+              <h4>Checkpoint &amp; 评估</h4>
+              <p>按 <code>save_interval</code> 保存 Megatron checkpoint（可选转 HF 格式）；按 <code>eval_interval</code> 在 benchmark 上跑评估，记录 pass@1 / reward 指标。</p>
+            </div>
+          </div>
+        </div>
+
+        <pre># 简化版核心训练循环（train.py）
+for rollout_id in range(args.start_rollout_id, args.num_rollout):
+    # ① 推理生成 + 奖励计算
+    rollout_data_ref = rollout_manager.generate(rollout_id)
+    
+    # ② 训练更新（Actor + 可选 Critic）
+    actor_model.async_train(rollout_id, rollout_data_ref)
+    if critic_model:
+        critic_model.train(rollout_id, rollout_data_ref)
+    
+    # ③ 新权重推给推理引擎
+    actor_model.update_weights()
+    
+    # ④ 周期保存 / 评估
+    if rollout_id % args.save_interval == 0:
+        actor_model.save_checkpoint(rollout_id)
+    if rollout_id % args.eval_interval == 0:
+        actor_model.eval(rollout_id)</pre>
+
+        <h3 id="async-mode">3.2 全异步模式（Fully Async）</h3>
+
+        <div class="callout-teal">
+          <strong>全异步模式是 slime 的核心技术创新之一。</strong>同步模式中，训练 GPU 必须等最后一个推理请求完成才能开始训练（长尾问题）。全异步打破了这个约束。
+        </div>
+
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 820 240" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:820px;">
+            <text x="410" y="18" text-anchor="middle" font-size="13" font-weight="700" fill="#111827">同步 vs 全异步模式时间轴对比</text>
+
+            <!-- 同步模式 -->
+            <text x="14" y="38" font-size="12" fill="#dc2626" font-weight="700">❌ 同步模式（Sync）</text>
+            <text x="72" y="58" text-anchor="end" font-size="10" fill="#64748b">推理 GPU</text>
+            <rect x="76" y="44" width="140" height="22" rx="4" fill="#fde68a" stroke="#f59e0b"/>
+            <text x="146" y="59" text-anchor="middle" font-size="9" fill="#92400e">Rollout (快请求)</text>
+            <rect x="218" y="44" width="280" height="22" rx="4" fill="#fed7aa" stroke="#fb923c"/>
+            <text x="358" y="59" text-anchor="middle" font-size="9" fill="#7c2d12">Rollout (慢请求，生成 2000 tokens)</text>
+            <rect x="500" y="44" width="120" height="22" rx="4" fill="#fde68a" stroke="#f59e0b"/>
+            <text x="560" y="59" text-anchor="middle" font-size="9" fill="#92400e">Rollout（下一批）</text>
+
+            <text x="72" y="84" text-anchor="end" font-size="10" fill="#64748b">训练 GPU</text>
+            <rect x="76" y="70" width="422" height="22" rx="4" fill="#f1f5f9" stroke="#cbd5e1"/>
+            <text x="287" y="85" text-anchor="middle" font-size="9" fill="#94a3b8">等待最慢推理完成（训练 GPU 空转）</text>
+            <rect x="500" y="70" width="120" height="22" rx="4" fill="#bfdbfe" stroke="#3b82f6"/>
+            <text x="560" y="85" text-anchor="middle" font-size="9" fill="#1e40af">Train</text>
+
+            <text x="700" y="72" font-size="11" fill="#dc2626">GPU 利用率 ~40%</text>
+
+            <!-- 分隔 -->
+            <line x1="10" y1="106" x2="810" y2="106" stroke="#e2e8f0" stroke-width="1.5" stroke-dasharray="5,3"/>
+
+            <!-- 全异步模式 -->
+            <text x="14" y="124" font-size="12" fill="#059669" font-weight="700">✅ 全异步模式（Fully Async）</text>
+            <text x="72" y="144" text-anchor="end" font-size="10" fill="#64748b">推理 GPU</text>
+
+            <!-- 推理持续运行 -->
+            <rect x="76" y="130" width="80" height="22" rx="4" fill="#fde68a" stroke="#f59e0b"/>
+            <text x="116" y="145" text-anchor="middle" font-size="8" fill="#92400e">Rollout #1</text>
+            <rect x="158" y="130" width="80" height="22" rx="4" fill="#fed7aa" stroke="#fb923c"/>
+            <text x="198" y="145" text-anchor="middle" font-size="8" fill="#7c2d12">Rollout #2</text>
+            <rect x="240" y="130" width="80" height="22" rx="4" fill="#fde68a" stroke="#f59e0b"/>
+            <text x="280" y="145" text-anchor="middle" font-size="8" fill="#92400e">Rollout #3</text>
+            <rect x="322" y="130" width="80" height="22" rx="4" fill="#fde68a" stroke="#f59e0b"/>
+            <text x="362" y="145" text-anchor="middle" font-size="8" fill="#92400e">Rollout #4</text>
+            <rect x="404" y="130" width="80" height="22" rx="4" fill="#fde68a" stroke="#f59e0b"/>
+            <text x="444" y="145" text-anchor="middle" font-size="8" fill="#92400e">Rollout #5</text>
+            <text x="500" y="144" font-size="10" fill="#94a3b8">持续运行…</text>
+
+            <text x="72" y="176" text-anchor="end" font-size="10" fill="#64748b">训练 GPU</text>
+            <rect x="76" y="162" width="100" height="22" rx="4" fill="#bfdbfe" stroke="#3b82f6"/>
+            <text x="126" y="177" text-anchor="middle" font-size="8" fill="#1e40af">Train（batch 1）</text>
+            <rect x="178" y="162" width="100" height="22" rx="4" fill="#bfdbfe" stroke="#3b82f6"/>
+            <text x="228" y="177" text-anchor="middle" font-size="8" fill="#1e40af">Train（batch 2）</text>
+            <rect x="280" y="162" width="100" height="22" rx="4" fill="#bfdbfe" stroke="#3b82f6"/>
+            <text x="330" y="177" text-anchor="middle" font-size="8" fill="#1e40af">Train（batch 3）</text>
+            <rect x="382" y="162" width="100" height="22" rx="4" fill="#bfdbfe" stroke="#3b82f6"/>
+            <text x="432" y="177" text-anchor="middle" font-size="8" fill="#1e40af">Train（batch 4）</text>
+            <text x="494" y="176" font-size="10" fill="#94a3b8">持续运行…</text>
+
+            <text x="700" y="162" font-size="11" fill="#059669" font-weight="700">GPU 利用率 ~85%</text>
+            <text x="700" y="178" font-size="10" fill="#059669">推理与训练高度重叠</text>
+
+            <!-- staleness 说明 -->
+            <rect x="10" y="200" width="800" height="34" rx="8" fill="#f0fdf4" stroke="#6ee7b7"/>
+            <text x="410" y="215" text-anchor="middle" font-size="11" fill="#065f46" font-weight="600">Staleness 容忍机制：训练用「比当前权重落后 N 步」的数据也可以接受</text>
+            <text x="410" y="229" text-anchor="middle" font-size="10" fill="#374151">通过 Off-Policy Sequence Masking（OPSM）过滤偏差过大的样本，保证训练稳定性</text>
+          </svg>
+          <div class="diagram-caption">图 3-1：同步 vs 全异步模式对比。异步模式中推理和训练在时间轴上高度重叠，GPU 利用率从 ~40% 提升至 ~85%。</div>
+        </div>
+
+        <pre># fully_async_rollout.py 核心逻辑（简化）
+class AsyncRolloutWorker:
+    """后台 asyncio 线程，持续从 data_buffer 取 Prompt 生成"""
+    
+    def __init__(self, args, data_buffer, concurrency=10):
+        # concurrency = sglang_server_concurrency × num_engines
+        # 始终保持固定数量的「在途推理」请求
+        self.semaphore = asyncio.Semaphore(concurrency)
+    
+    async def run(self):
+        while not self.done:
+            async with self.semaphore:
+                prompt = await self.data_buffer.get_prompt()
+                result = await self.sglang_engine.generate(prompt)
+                await self.data_buffer.put_result(result)
+                # 权重同步时，正在进行的请求标记 ABORTED
+                # ABORTED 样本自动重入 buffer，不丢失计算
+
+# 训练侧：只要 buffer 里有足够数据就开始训练，不等推理
+while not training_done:
+    batch = data_buffer.sample(batch_size)  # 不阻塞，有多少取多少
+    if len(batch) >= min_batch_size:
+        actor.train_step(batch)</pre>
+
+        <h3 id="colocate">3.3 Colocate 模式（GPU 共用）</h3>
+
+        <p>当没有足够 GPU 做分离部署时，Colocate 模式让训练和推理共用同一批卡，通过显存 Offload 分时复用：</p>
+
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 820 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:820px;">
+            <text x="410" y="18" text-anchor="middle" font-size="13" font-weight="700" fill="#111827">Colocate 模式：同一批 GPU 分时交替服务</text>
+
+            <!-- 训练阶段 -->
+            <rect x="10" y="34" width="370" height="110" rx="10" fill="#eff6ff" stroke="#3b82f6" stroke-width="2"/>
+            <text x="195" y="56" text-anchor="middle" font-size="12" fill="#1e40af" font-weight="700">训练阶段</text>
+            <text x="195" y="74" text-anchor="middle" font-size="11" fill="#1e40af">GPU 显存 → Megatron 梯度 + 优化器状态</text>
+            <rect x="22" y="82" width="346" height="24" rx="6" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="195" y="99" text-anchor="middle" font-size="10" fill="#1e40af">SGLang 权重 Offload 到 CPU RAM（释放 GPU 显存）</text>
+            <rect x="22" y="110" width="346" height="24" rx="6" fill="#dbeafe" stroke="#93c5fd"/>
+            <text x="195" y="127" text-anchor="middle" font-size="10" fill="#1e40af">训练完成后：Megatron 状态 Offload 到 CPU</text>
+
+            <!-- 切换箭头 -->
+            <text x="410" y="80" text-anchor="middle" font-size="20" fill="#374151">⇄</text>
+            <text x="410" y="100" text-anchor="middle" font-size="10" fill="#6b7280">GPU 显存</text>
+            <text x="410" y="114" text-anchor="middle" font-size="10" fill="#6b7280">分时复用</text>
+
+            <!-- 推理阶段 -->
+            <rect x="440" y="34" width="370" height="110" rx="10" fill="#fffbeb" stroke="#f59e0b" stroke-width="2"/>
+            <text x="625" y="56" text-anchor="middle" font-size="12" fill="#92400e" font-weight="700">推理阶段</text>
+            <text x="625" y="74" text-anchor="middle" font-size="11" fill="#92400e">GPU 显存 → SGLang KV Cache + 权重</text>
+            <rect x="452" y="82" width="346" height="24" rx="6" fill="#fde68a" stroke="#fbbf24"/>
+            <text x="625" y="99" text-anchor="middle" font-size="10" fill="#92400e">SGLang 权重从 CPU 加载回 GPU（热加载）</text>
+            <rect x="452" y="110" width="346" height="24" rx="6" fill="#fef3c7" stroke="#fbbf24"/>
+            <text x="625" y="127" text-anchor="middle" font-size="10" fill="#92400e">Continuous Batching 高吞吐生成回答</text>
+
+            <text x="410" y="154" text-anchor="middle" font-size="10" fill="#059669">✓ 8 张 H100 即可运行 30B 级别模型的完整 RL 训练</text>
+          </svg>
+          <div class="diagram-caption">图 3-2：Colocate 模式分时复用 GPU。训练时 SGLang 权重 Offload 到 CPU，推理时 Megatron 状态 Offload，两个阶段交替使用同一批显存。</div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+      <!-- ══ §6 模型与硬件 ══ -->
+      <section class="section" id="models">
+        <div class="section-title">
+          <div class="icon" style="background:#ecfdf5;">💻</div>
+          §6 模型与硬件支持
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>模型架构</th><th>典型代表</th><th>规模</th><th>训练并行</th><th>备注</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>Dense LLM</strong></td>
+                <td>GLM-4 / LLaMA / Qwen</td>
+                <td>7B–70B</td>
+                <td>TP + SP</td>
+                <td>最成熟，默认配置即可</td>
+              </tr>
+              <tr style="background:#f0fdf4;">
+                <td><strong>Dense LLM (大)</strong></td>
+                <td>Qwen3-72B / DeepSeek-7B</td>
+                <td>70B+</td>
+                <td>TP + PP + SP</td>
+                <td>需要开启 PP 流水线并行</td>
+              </tr>
+              <tr>
+                <td><strong>MoE</strong></td>
+                <td>GLM-4.6 MoE / DeepSeek-MoE</td>
+                <td>100B–744B</td>
+                <td>TP + EP + SP</td>
+                <td>Expert Parallel (EP) 分布专家层</td>
+              </tr>
+              <tr style="background:#f0fdf4;">
+                <td><strong>VLM（视觉）</strong></td>
+                <td>InternVL / GLM-4V</td>
+                <td>任意</td>
+                <td>视觉编码器单独处理</td>
+                <td>支持多模态奖励（需要 VLM RM）</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="two-col">
+          <div class="mini-card" style="border-left:4px solid #059669;">
+            <h4 style="color:#065f46;">支持的 GPU 架构</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li><strong>NVIDIA H100 / H800</strong>：首选，FP8 训练</li>
+              <li><strong>NVIDIA A100 / A800</strong>：完全支持 BF16</li>
+              <li><strong>NVIDIA A10 / RTX 系列</strong>：小规模测试</li>
+              <li><strong>AMD MI300X</strong>：实验性支持</li>
+            </ul>
+          </div>
+          <div class="mini-card" style="border-left:4px solid #7c3aed;">
+            <h4 style="color:#5b21b6;">精度 / 量化支持</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li><strong>BF16</strong>：默认训练精度</li>
+              <li><strong>FP8</strong>：Megatron FP8，节省 ~50% 显存</li>
+              <li><strong>INT4 推理</strong>：AWQ / GPTQ（仅推理阶段）</li>
+              <li><strong>FP8 推理</strong>：SGLang FP8 kv cache</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ §7 实战配置 ══ -->
+      <section class="section" id="practice">
+        <div class="section-title">
+          <div class="icon" style="background:#eff6ff;">⚙️</div>
+          §7 实战配置指南
+        </div>
+
+        <h3 id="config-yaml">7.1 配置文件详解</h3>
+
+        <p>slime 使用 YAML 配置文件，核心字段说明：</p>
+
+        <pre># ── examples/grpo_math_7b.yaml 注释版 ──
+
+# ① 模型路径
+actor_rollout_ref:
+  model:
+    path: /path/to/qwen2.5-7b-instruct   # HuggingFace 格式权重
+    
+# ② 训练超参
+training:
+  total_epochs: 2
+  rollout_batch_size: 512    # 每次 rollout 的 prompt 数量
+  train_batch_size: 256      # 每次梯度更新的 prompt 数量
+  ppo_mini_batch_size: 64    # PPO/GRPO clip 的 mini-batch 大小
+  gradient_accumulation: 4   # 梯度累积步数
+  lr: 1e-6                   # Actor 学习率（RL 用极小学习率）
+  weight_decay: 0.01
+  save_interval: 100         # 每 N 个 rollout 保存一次 checkpoint
+  eval_interval: 50          # 每 N 个 rollout 评估一次
+
+# ③ RL 算法
+algorithm:
+  name: grpo
+  group_size: 8              # 每 prompt 生成 8 条回答
+  kl_type: kl_estimator_k1
+  kl_coef: 0.001             # 轻 KL 约束（数学任务可以更自由）
+  clip_eps: 0.2
+  entropy_coef: 0.0          # 不加 entropy bonus
+
+# ④ 推理引擎
+rollout:
+  num_engines: 4             # 4 个 SGLang 实例
+  gpu_per_engine: 2          # 每个实例用 2 张 GPU（TP=2）
+  max_new_tokens: 4096       # 数学题允许长链
+  temperature: 0.8           # 采样温度（探索用）
+  top_p: 0.95
+
+# ⑤ 分布式
+distributed:
+  training_nodes: 4          # 4 个训练节点（共 32 张 H100）
+  tp_size: 4                 # 张量并行
+  pp_size: 2                 # 流水线并行（7B 模型可以不用）
+  use_colocate: false        # 分离部署
+
+# ⑥ 全异步（可选）
+async_rollout:
+  enabled: true              # 开启全异步模式（推荐大规模场景）
+  concurrency: 40            # 同时在途的推理请求数
+  max_staleness: 3           # 允许数据落后最多 3 轮权重
+
+# ⑦ 奖励函数
+reward:
+  - type: math_verify        # 数学正确性（sympy）
+    weight: 1.0
+  - type: format_check       # 格式（有 think + answer block）
+    weight: 0.1</pre>
+
+        <h3 id="launch">7.2 启动命令</h3>
+
+        <pre># 前提：激活 venv，确认 Ray head 已启动
+source /path/to/slime-env/bin/activate
+ray status   # 确认所有节点已加入集群
+
+# 启动训练（单命令，Ray 自动分配资源）
+python -m slime.train \
+    --config examples/grpo_math_7b.yaml \
+    --experiment_name "qwen7b_math_grpo_v1" \
+    --output_dir /checkpoint/grpo_math_7b
+
+# 从 checkpoint 恢复
+python -m slime.train \
+    --config examples/grpo_math_7b.yaml \
+    --resume_from /checkpoint/grpo_math_7b/rollout_100
+
+# 仅导出 HuggingFace 格式（不训练）
+python -m slime.export_hf \
+    --megatron_ckpt /checkpoint/grpo_math_7b/rollout_200 \
+    --output_dir /models/qwen7b_math_grpo_hf</pre>
+
+        <div class="callout-blue">
+          <strong>关键调参经验：</strong>
+          <ul style="margin:8px 0 0 0;padding-left:18px;">
+            <li>学习率用 <code>1e-6 ~ 5e-6</code>，比 SFT 小 10 倍以上，防止遗忘</li>
+            <li>数学任务 <code>kl_coef=0.001~0.01</code>，对话任务 <code>kl_coef=0.1~0.5</code></li>
+            <li><code>group_size</code>（GRPO）越大越稳定，但显存和推理时间成比例增长，8~16 较常见</li>
+            <li>全异步模式 <code>max_staleness=3</code> 足够；超过 5 效果可能下降</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ══ §8 研究项目 ══ -->
+      <section class="section" id="projects">
+        <div class="section-title">
+          <div class="icon" style="background:#faf5ff;">🔬</div>
+          §8 基于 slime 的研究项目
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>项目</th><th>核心亮点</th><th>RL 算法</th><th>奖励来源</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>GLM-Z1-Rumination</strong></td>
+                <td>长思维链推理，单次生成 8k+ tokens，MATH 达到 SOTA</td>
+                <td>GSPO</td>
+                <td>数学验证 + 代码执行</td>
+              </tr>
+              <tr style="background:#f0fdf4;">
+                <td><strong>GLM-4.5 Air</strong></td>
+                <td>小参数高效推理模型，消费级 GPU 可运行</td>
+                <td>GRPO</td>
+                <td>数学 + 指令遵循 RM</td>
+              </tr>
+              <tr>
+                <td><strong>Math-RLVR</strong></td>
+                <td>纯数学 RL 从 scratch，研究"RL 能做什么 SFT 做不到"</td>
+                <td>REINFORCE++</td>
+                <td>sympy 精确验证</td>
+              </tr>
+              <tr style="background:#f0fdf4;">
+                <td><strong>CodeRL-slime</strong></td>
+                <td>代码生成 RL，LeetCode 通过率 +40%</td>
+                <td>GRPO</td>
+                <td>单元测试通过率</td>
+              </tr>
+              <tr>
+                <td><strong>MultiModal-RL</strong></td>
+                <td>图文 VLM 的 RL 对齐，视觉问答准确率提升</td>
+                <td>PPO</td>
+                <td>VLM RM + 格式奖励</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout-cyan">
+          <strong>技术趋势：</strong>从结果来看，纯规则验证奖励（数学/代码）比 RM 打分稳定得多，且没有 Reward Hacking 问题。「有标准答案的领域 + 规则验证器」是目前 RL 后训练最有效的组合。
+        </div>
+      </section>
+
+      <!-- ══ §9 框架对比 ══ -->
+      <section class="section" id="compare">
+        <div class="section-title">
+          <div class="icon" style="background:#fef2f2;">📊</div>
+          §9 框架对比 &amp; 选型建议
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>框架</th>
+                <th>训练引擎</th>
+                <th>推理引擎</th>
+                <th>最大规模</th>
+                <th>异步训练</th>
+                <th>算法支持</th>
+                <th>特点</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="background:#f0fdf4;">
+                <td><strong>slime</strong></td>
+                <td>Megatron-LM</td>
+                <td>SGLang（原生）</td>
+                <td class="dot-yes">744B+ MoE</td>
+                <td class="dot-yes">✅ 全异步</td>
+                <td>PPO/GRPO/REINFORCE++/GSPO/OPD</td>
+                <td>生产级大规模，GLM-5 背后引擎</td>
+              </tr>
+              <tr>
+                <td><strong>verl</strong></td>
+                <td>Megatron / FSDP</td>
+                <td>vLLM / SGLang</td>
+                <td>数十 B</td>
+                <td class="dot-no">❌</td>
+                <td>PPO / GRPO</td>
+                <td>字节出品，学术研究友好</td>
+              </tr>
+              <tr>
+                <td><strong>OpenRLHF</strong></td>
+                <td>DeepSpeed</td>
+                <td>vLLM</td>
+                <td>70B</td>
+                <td class="dot-no">❌</td>
+                <td>PPO / GRPO / DPO</td>
+                <td>最早开源 RLHF 框架，易用</td>
+              </tr>
+              <tr>
+                <td><strong>TRL</strong></td>
+                <td>HuggingFace Trainer</td>
+                <td>内嵌</td>
+                <td>≤13B</td>
+                <td class="dot-no">❌</td>
+                <td>PPO / DPO / GRPO</td>
+                <td>最简单，适合入门</td>
+              </tr>
+              <tr>
+                <td><strong>NeMo-Aligner</strong></td>
+                <td>Megatron-LM</td>
+                <td>TensorRT-LLM</td>
+                <td>数千 B</td>
+                <td class="dot-no">❌</td>
+                <td>PPO / SteerLM</td>
+                <td>NVIDIA 出品，硬件强绑定</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 820 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:820px;">
+            <text x="410" y="18" text-anchor="middle" font-size="13" font-weight="700" fill="#111827">选型指南：用什么框架？</text>
+
+            <!-- 决策树 -->
+            <!-- 起点 -->
+            <rect x="310" y="30" width="200" height="36" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+            <text x="410" y="54" text-anchor="middle" font-size="12" fill="#374151">模型规模有多大？</text>
+
+            <!-- ≤7B -->
+            <line x1="340" y1="66" x2="200" y2="100" stroke="#374151" stroke-width="1.5"/>
+            <text x="250" y="92" text-anchor="middle" font-size="10" fill="#374151">≤ 7B</text>
+            <rect x="90" y="102" width="220" height="32" rx="8" fill="#fffbeb" stroke="#fcd34d"/>
+            <text x="200" y="123" text-anchor="middle" font-size="11" fill="#92400e">TRL / OpenRLHF 足够</text>
+
+            <!-- 7B-70B -->
+            <line x1="410" y1="66" x2="410" y2="100" stroke="#374151" stroke-width="1.5"/>
+            <text x="420" y="92" text-anchor="middle" font-size="10" fill="#374151">7B–70B</text>
+            <rect x="300" y="102" width="220" height="32" rx="8" fill="#dbeafe" stroke="#93c5fd"/>
+            <text x="410" y="123" text-anchor="middle" font-size="11" fill="#1e40af">verl / OpenRLHF 均可</text>
+
+            <!-- 70B+ -->
+            <line x1="480" y1="66" x2="620" y2="100" stroke="#374151" stroke-width="1.5"/>
+            <text x="570" y="92" text-anchor="middle" font-size="10" fill="#374151">70B+</text>
+            <rect x="510" y="102" width="220" height="32" rx="8" fill="#d1fae5" stroke="#6ee7b7" stroke-width="2"/>
+            <text x="620" y="123" text-anchor="middle" font-size="11" fill="#065f46" font-weight="700">✓ slime（首选）</text>
+
+            <!-- 第二层：是否需要异步 -->
+            <line x1="410" y1="134" x2="410" y2="160" stroke="#374151" stroke-width="1.5"/>
+            <rect x="280" y="162" width="260" height="32" rx="8" fill="#ecfdf5" stroke="#6ee7b7"/>
+            <text x="410" y="183" text-anchor="middle" font-size="11" fill="#065f46">还有：需要全异步 → <tspan font-weight="700">slime</tspan></text>
+          </svg>
+          <div class="diagram-caption">图 9-1：选型决策树。70B+ 以上模型或需要全异步模式时，slime 是目前最成熟的开源选择。</div>
+        </div>
+
+        <div class="two-col">
+          <div class="mini-card" style="border-left:4px solid #059669;">
+            <h4 style="color:#065f46;">选 slime 的理由</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li>模型规模 ≥ 30B，需要 Megatron TP+PP</li>
+              <li>需要全异步模式（GPU 数量多、训练时间敏感）</li>
+              <li>已有 SGLang 推理基础设施</li>
+              <li>想用 GSPO / OPD 等前沿算法</li>
+              <li>参考 GLM 系列训练方式</li>
+            </ul>
+          </div>
+          <div class="mini-card" style="border-left:4px solid #f59e0b;">
+            <h4 style="color:#d97706;">不选 slime 的场景</h4>
+            <ul style="font-size:13px;margin:0;padding-left:16px;">
+              <li>快速验证想法（≤7B），TRL 更简单</li>
+              <li>HuggingFace 生态深度绑定，verl 更适合</li>
+              <li>NVIDIA 专有硬件 + TensorRT 优化，用 NeMo</li>
+              <li>需要 DPO / IPO / SimPO 等 offline 算法</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- 总结 -->
+        <div class="big-concept" style="margin-top:24px;">
+          <p><strong>一句话总结：</strong>slime 是「面向生产、面向规模、面向超大 MoE」的 RL 后训练引擎。Megatron 兜底了大规模训练能力，SGLang 提供了最高效的推理吞吐，全异步模式解决了长尾等待。代价是部署复杂度高（需要 Ray 集群 + Megatron 环境），小规模实验时杀鸡用牛刀。</p>
+        </div>
+      </section>
+
+      <footer>
+        <p>本笔记基于 slime 官方文档 &amp; 源码（<a href="https://github.com/THUDM/slime" target="_blank">github.com/THUDM/slime</a>）整理。GLM-Z1-Rumination / GLM-5 相关内容参考 THUDM 官方博客。</p>
+        <p style="margin-top:8px;">Last updated: 2025 · <a href="../index.html">← 返回首页</a></p>
+      </footer>
+
+    </main>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const sections = document.querySelectorAll('section[id], h3[id]');
+  const links = document.querySelectorAll('.toc a');
+  const map = {};
+  links.forEach(a => { map[a.getAttribute('href').slice(1)] = a; });
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if(e.isIntersecting){
+        links.forEach(l => l.classList.remove('active'));
+        const a = map[e.target.id];
+        if(a) a.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  sections.forEach(s => obs.observe(s));
+});
+</script>
+</body>
+</html>

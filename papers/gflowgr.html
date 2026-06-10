@@ -28,7 +28,7 @@
       --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
       --line: #e5e7eb; --primary: #2563eb; --primary-soft: #eff6ff;
       --accent: #7c3aed; --accent-soft: rgba(124,58,237,0.06);
-      --shadow: 0 10px 30px rgba(15,23,42,0.08); --radius: 18px; --max: 1120px;
+      --shadow: 0 10px 30px rgba(15,23,42,0.08); --radius: 18px; --max: 1300px;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
@@ -152,7 +152,8 @@
             <li><a href="#trajectory">2.2 轨迹采样器</a></li>
             <li><a href="#reward">2.3 多信号奖励模型</a></li>
             <li><a href="#loss">2.4 DB/TB 双 Loss 变体</a></li>
-            <li><a href="#workflow">2.5 完整训练流程</a></li>
+            <li><a href="#complete-loss">2.5 完整损失函数</a></li>
+            <li><a href="#workflow">2.6 训练与推理流程</a></li>
           </ul>
         </li>
         <li><a href="#experiments">3. 实验结果</a></li>
@@ -183,10 +184,43 @@
         <div class="section-title"><div class="icon" style="background:#eff6ff;">🌐</div>1. 背景与动机</div>
 
         <h3>生成式推荐（GR）的核心范式</h3>
-        <p>生成式推荐将推荐任务建模为自回归序列生成：给定用户历史交互序列 $[i_1, i_2, \ldots, i_t]$，模型自回归地生成下一个 item 的 token 序列 $[s_1, s_2, \ldots, s_L]$，其中 $s_l$ 是第 $l$ 级 Semantic ID token。整个生成的联合概率为：</p>
-        <div class="formula-block">
-          $$P(s_{1:L} \mid u) = \prod_{l=1}^{L} P(s_l \mid s_{1:l-1}, u)$$
+        <p>生成式推荐将推荐任务建模为自回归序列生成问题。其框架由三个核心组件构成：</p>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>Item Tokenizer</h4>
+            <p>将每个 item $v$ 分解为 token 序列 $\{t_l\}_{l < L}$，作为 item 的语义标识符。例如一件天蓝色衬衫被编码为 $\langle a_1\rangle\langle b_4\rangle\langle c_2\rangle$。常用方案为 RQ-VAE（Residual Quantization + VAE），训练目标包含 codebook loss 和 reconstruction loss。</p>
+          </div>
+          <div class="mini-card">
+            <h4>Generative LLM</h4>
+            <p>接收用户 prompt（包含历史交互序列 + 用户画像），自回归地生成下一个 item 的 token 序列。整个生成的联合概率为：</p>
+          </div>
         </div>
+
+        <div class="formula-block">
+          $$P(s_{1:L} \mid u) = \prod_{l=1}^{L} P_{GR}(t_l \mid U, \{t_i\}_{i < l})$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$U$：用户 prompt，包含历史交互序列 $[i_1, i_2, \ldots, i_t]$ 和用户画像信息</li>
+            <li>$t_l$：第 $l$ 级 Semantic ID token（如 $\langle a_2\rangle$, $\langle b_4\rangle$, $\langle c_{10}\rangle$）</li>
+            <li>$L$：item 标识符的长度（论文示例中 $L=3$）</li>
+            <li>$\{t_i\}_{i < l}$：当前 token 之前的 prefix tokens</li>
+          </ul>
+        </div>
+
+        <p>例如，给定用户历史交互 $\{\langle a_3\rangle\langle b_1\rangle\langle c_{15}\rangle, \langle a_1\rangle\langle b_4\rangle\langle c_2\rangle\}$，模型逐步生成 $\langle a_2\rangle \to \langle a_2\rangle\langle b_4\rangle \to \langle a_2\rangle\langle b_4\rangle\langle c_{10}\rangle$，最终解码为一个蓝色 polo 衬衫作为推荐结果。</p>
+
+        <h3>标准 SFT 训练目标</h3>
+        <div class="formula-block">
+          $$\mathcal{L}_{GR}(U, v) = -\sum_{l=1}^{L} \log P_{GR}(t_l \mid U, \{t_i\}_{i < l})$$
+        </div>
+        <p>SFT 的训练目标本质上是 next-token prediction loss——让模型学会在给定用户历史和已生成 prefix 的条件下，正确预测 ground-truth item 的每个 token。这个目标存在两个根本性问题：</p>
+        <ul>
+          <li><strong>问题一：只模仿单一 ground truth item。</strong>每个训练实例只有一个正样本 item，忽略了用户交互集合中其他有价值的相关 item。实际推荐场景中，一个用户可能同时喜欢多个 item，它们的"价值"也不尽相同（点击 vs 购买 vs 长停留）。</li>
+          <li><strong>问题二：Value-unaware（价值无感知）。</strong>SFT 不区分不同 item 的价值差异——一个被购买的商品和一个仅仅浏览的商品，在 SFT 中被同等对待（都是 ground truth），这显然不符合推荐系统的排序目标。</li>
+        </ul>
 
         <h3>现有微调方法的局限</h3>
         <div class="two-col">
@@ -196,26 +230,74 @@
               <li>仅模仿 ground truth token 序列</li>
               <li>无法感知"生成得好不好"——没有价值信号</li>
               <li>容易学到次优的 token 生成路径</li>
+              <li>每个训练实例只用一个正样本，忽略全交互集</li>
             </ul>
           </div>
           <div class="mini-card">
             <h4>DPO / GRPO（偏好对齐）</h4>
             <ul>
               <li>仅对整个 item 序列打分（Item 级别）</li>
-              <li>无法区分「第 1 步好+第 2 步差」vs「第 1 步差+第 2 步好」</li>
+              <li>无法区分「第 1 步好 + 第 2 步差」vs「第 1 步差 + 第 2 步好」</li>
               <li>Token 级别的生成质量无法被精细优化</li>
+              <li>DPO 用随机负采样，GRPO 用 on-policy 相对优势，但都只输出 Item 级 reward</li>
             </ul>
           </div>
         </div>
 
-        <div class="callout callout-amber">
-          <strong>核心矛盾：</strong>现有微调方法都只能做 Item 级别的监督——要么模仿（SFT），要么整体打分（DPO/GRPO）。但在生成式推荐中，每个 token 的生成质量直接影响最终推荐效果。能否给每一步 token 生成都提供精细的奖励信号？
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>方法</th><th>监督粒度</th><th>Value-aware</th><th>全交互集利用</th><th>生成多样性</th></tr></thead>
+            <tbody>
+              <tr><td>SFT</td><td>Item 级（仅模仿正样本）</td><td>❌ 无感知</td><td>❌ 仅单一正样本</td><td>❌ 退化为 argmax</td></tr>
+              <tr><td>DPO</td><td>Item 级（偏好对）</td><td>⚠️ 部分（chosen vs rejected）</td><td>⚠️ 仅偏好对</td><td>❌ 仍退化为 argmax</td></tr>
+              <tr><td>GRPO</td><td>Item 级（组内相对优势）</td><td>⚠️ 部分（组内排序）</td><td>⚠️ 仅组内样本</td><td>❌ 最大化正样本概率</td></tr>
+              <tr><td><strong>GFlowGR</strong></td><td><strong>Token 级（每步 flow）</strong></td><td><strong>✅ 完全感知</strong></td><td><strong>✅ 全交互集</strong></td><td><strong>✅ 按奖励比例采样</strong></td></tr>
+            </tbody>
+          </table>
         </div>
 
-        <p><strong>GFlowNet 的本质：</strong>Generative Flow Networks（GFlowNet）的核心目标是让生成概率正比于奖励：$P(\tau) \propto R(s_L)$。它通过在生成轨迹上的 flow-matching 机制，将终端奖励 $R(s_L)$ 反向传播到每一步 token 生成——这正是 Token 级监督的自然载体。</p>
+        <div class="callout callout-amber">
+          <strong>核心矛盾：</strong>现有微调方法都只能做 Item 级别的监督——要么模仿（SFT），要么整体打分（DPO/GRPO）。但在生成式推荐中，每个 token 的生成质量直接影响最终推荐效果。能否给每一步 token 生成都提供精细的奖励信号？此外，现有方法都未能充分利用用户的完整交互集合（包含点击、曝光未点击、未曝光等多种价值层次）。
+        </div>
+
+        <h3>GFlowNet 的本质与为什么适合 GR</h3>
+        <p><strong>GFlowNet 的核心目标：</strong>Generative Flow Networks（GFlowNet）让生成概率正比于奖励：$P(\tau) \propto R(s_L)$。它通过在生成轨迹上的 flow-matching 机制，将终端奖励 $R(s_L)$ 反向传播到每一步 token 生成——这正是 Token 级监督的自然载体。</p>
+
+        <div class="formula-block">
+          $$F(s_l) P_F(s_{l+1} \mid s_l) = F(s_{l+1}) P_B(s_l \mid s_{l+1})$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">Flow-matching 约束（GFlowNet 核心公式）</div>
+          <ul>
+            <li>$F(s_l)$：Flow estimator——状态 $s_l$ 的流值，表示经过该状态的"流量"（由网络预测）</li>
+            <li>$P_F(s_{l+1} \mid s_l)$：前向转移概率——从 $s_l$ 生成下一个 token 转到 $s_{l+1}$ 的概率</li>
+            <li>$P_B(s_l \mid s_{l+1})$：后向概率——$s_{l+1}$ 来自 $s_l$ 的概率</li>
+            <li>Flow-matching 约束保证：进入每个状态的流量 = 离开每个状态的流量（守恒原理）</li>
+          </ul>
+        </div>
 
         <div class="callout callout-green">
-          <strong>GFlowNet 为什么适合 GR：</strong>GR 的自回归生成天然是一个 DAG（有向无环图），每个 token 是图中的一个节点。GFlowNet 的 flow 守恒约束恰好可以作用于每个 token 生成步骤，将终端奖励信号分配到每一步的生成决策中。
+          <strong>GFlowNet 为什么适合 GR：</strong>两个关键洞察——<br>
+          ① <strong>天然的多步生成结构：</strong>GR 的自回归生成天然是一个 DAG（有向无环图），每个 token 是图中的一个节点，从 $s_0 = \{\emptyset\}$ 逐步生成到 $s_L = \{\langle a_2\rangle\langle b_4\rangle\langle c_{10}\rangle\}$。GFlowNet 的 flow 守恒约束恰好可以作用于每个 token 生成步骤。<br>
+          ② <strong>Item Value Perception + 全交互集利用：</strong>通过 $P(\tau) \propto R(s_L)$，GFlowNet 不仅能让高奖励 item 的生成概率更高（排序能力），还能让生成概率按奖励比例分布（多样性）。同时，可以将用户的所有交互（点击、曝光未点击、未曝光）组织为不同奖励的轨迹，在一个训练步骤中全量利用。
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：GFlowNet 如何处理不同价值的 item</div>
+          <p>假设用户历史交互中有三种 item：</p>
+          <p><strong>点击的蓝色夹克（$R = 1.0$）：</strong>生成轨迹 $\tau_1 = \langle a_2\rangle\langle b_4\rangle\langle c_{10}\rangle$，GFlowNet 让 $P(\tau_1) \propto 1.0$，概率最高。</p>
+          <p><strong>曝光但未点击的黄色衬衫（$R = 0.24$）：</strong>生成轨迹 $\tau_2 = \langle a_8\rangle\langle b_3\rangle\langle c_{10}\rangle$，GFlowNet 让 $P(\tau_2) \propto 0.24$，有一定概率但低于点击 item。</p>
+          <p><strong>未曝光的灰色裤子（$R = 0.06$）：</strong>生成轨迹 $\tau_3 = \langle a_2\rangle\langle b_1\rangle\langle c_3\rangle$，GFlowNet 让 $P(\tau_3) \propto 0.06$，概率最低但仍有探索机会。</p>
+          <p>这样，GFlowNet 自然实现了"高价值 item 更容易被推荐"的排序能力，同时保留了多样性（低价值 item 仍有一定生成概率，不会被完全压制）。</p>
+        </div>
+
+        <h3>GR 中 GFlowNet 的简化优势</h3>
+        <p>在 GR 场景中，GFlowNet 的后向概率 $P_B$ 非常简单：</p>
+        <div class="formula-block">
+          $$P_B(s_l \mid s_{l+1}) = 1$$
+        </div>
+        <div class="note">
+          原因：GR 的 token 生成是顺序确定的——$s_{l+1} = \{t_i\}_{i \leq l+1} = \{s_l, t_{l+1}\}$，即每个后续状态只能由唯一的前驱状态产生。因此后向概率恒等于 1，这大大简化了 GFlowNet 的计算，使得核心设计挑战只剩下两个：构造训练轨迹 $\tau$ 和设计奖励模型 $R(s_L)$。
         </div>
       </section>
 
@@ -226,25 +308,29 @@
         <h3 id="overview">2.1 整体框架</h3>
 
         <figure>
-          <img src="https://arxiv.org/html/2506.16114v2/x1.png" alt="GFlowGR整体架构图"
-               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'><b>Figure 1: GFlowGR 整体框架</b><br><br>左侧：轨迹采样器从历史数据、随机探索、CM 引导、On-policy 等策略中采样生成轨迹。中间：多信号奖励模型（交互信号 + CM 预估 + Token 相似度）对每条轨迹打分。右侧：DB/TB Loss 将奖励信号反向传播到每个 token 步骤。</div>`" />
-          <figcaption><strong>Figure 1（论文原图）：</strong>GFlowGR 的整体框架。三大模块：（1）轨迹采样器（Trajectory Sampler）产生多样化的 token 生成路径；（2）多信号奖励模型（Reward Model）对每条轨迹给出综合评分；（3）GFlowNet Loss（DB/TB）将奖励信号分配到每个 token 生成步骤。</figcaption>
+          <img src="https://arxiv.org/html/2506.16114v2/x2.png" alt="GFlowGR整体框架图"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'><b>Figure 2: GFlowGR 整体框架</b><br><br>左侧：轨迹采样器从多种策略中采样生成轨迹，将单一正样本扩展为 N-item 交互集。中间：多信号奖励模型（交互信号 + CM 预估 + Token 相似度）对每条轨迹打分。右侧：GFlowNet Loss（DB/TB）将奖励信号反向传播到每个 token 步骤。蓝底区域展示了协作模型（CM）的集成方式。</div>`" />
+          <figcaption><strong>Figure 2（论文原图）：</strong>GFlowGR 的整体框架。核心工作流：给定输入 $(U, v)$，轨迹采样器将单一正样本 $v$ 扩展为 N-item 交互集 $\{v_n\}_{n \leq N}$，GFlowNet 估计每条轨迹的前向概率 $P_F$ 和流值 $F$，奖励模型计算 $R(s_L)$，最终 DB/TB Loss 将奖励信号分配到每个 token 步骤。</figcaption>
         </figure>
 
-        <p>GFlowGR 的核心思想：将 GR 的 token 序列生成视为 GFlowNet 的轨迹 $\tau = s_0 \to s_1 \to \ldots \to s_L$，其中 $s_l$ 是第 $l$ 个 token。通过 GFlowNet 的 flow-matching 约束，让每个 token 的生成概率 $P(s_l \mid s_{1:l-1})$ 与最终的奖励 $R(s_L)$ 相关联。</p>
+        <p>GFlowGR 的核心思想：将 GR 的 token 序列生成视为 GFlowNet 的轨迹 $\tau = s_0 \to s_1 \to \ldots \to s_L$，其中 $s_l$ 是第 $l$ 个 token。通过 GFlowNet 的 flow-matching 约束，让每个 token 的生成概率 $P_F(s_{l+1} \mid s_l)$ 与最终的奖励 $R(s_L)$ 相关联。</p>
+
+        <div class="callout callout-blue">
+          <strong>关键设计理念：</strong>GFlowGR 只修改 LLM 的微调阶段，推理阶段完全不变——推理时仍然用标准自回归生成。这意味着 GFlowGR 是一个纯粹的训练框架改进，不需要任何推理端的改动或额外开销。
+        </div>
 
         <h3 id="trajectory">2.2 轨迹采样器（Trajectory Sampler）</h3>
 
-        <p>GFlowGR 设计了 4 种轨迹采样策略，逐步提升采样质量：</p>
+        <p>轨迹采样器的任务是：对于给定用户-交互对 $(U, v)$，将单一的 ground truth item $v$ 扩展为 $N$ 个 item 的交互集 $\{v_n\}_{n \leq N}$（其中 $v_1 = v$），从而提供更丰富的训练信号。GFlowGR 设计了 4 种轨迹采样策略：</p>
 
         <div class="table-wrap">
           <table>
-            <thead><tr><th>策略</th><th>方法</th><th>特点</th></tr></thead>
+            <thead><tr><th>策略</th><th>方法</th><th>特点</th><th>适用阶段</th></tr></thead>
             <tbody>
-              <tr><td><strong>Interaction Log</strong></td><td>从用户真实交互日志采样</td><td>保真度高，但覆盖有限（仅正面样本）</td></tr>
-              <tr><td><strong>Random</strong></td><td>随机采样 token 序列</td><td>覆盖广，但质量低，大量无效轨迹</td></tr>
-              <tr><td><strong>CM-based Curriculum</strong></td><td>用 Click Model（CM）筛选高潜力轨迹，按 CM 分数分批次训练</td><td>课程学习策略：先易后难，平衡探索与利用</td></tr>
-              <tr><td><strong>On-policy</strong></td><td>用当前模型生成轨迹</td><td>在线策略，与模型当前能力匹配，但训练不稳定</td></tr>
+              <tr><td><strong>Interaction Log</strong></td><td>从用户真实交互日志中截取同 session 的 $N-1$ 个 item</td><td>保真度高，覆盖真实分布；但仅包含正面样本，稀疏场景可能不足</td><td>工业场景首选</td></tr>
+              <tr><td><strong>Random</strong></td><td>从 item 集合中随机采样 $N-1$ 个 item</td><td>覆盖广，但质量低，大量无效轨迹（如"给喜欢蓝色衬衫的用户推荐黄色裤子"）；训练不稳定</td><td>基础增强</td></tr>
+              <tr><td><strong>CM-based Curriculum</strong></td><td>用 Click Model（CM）对候选 item 打分 $\hat{y}^{CM}_{v_n} = \text{CM}(v_n, U)$，按分数从低到高逐步引入</td><td>课程学习策略：先易后难。训练初期选低 CM 分（易区分负样本），后期选高 CM 分（难区分负样本），平衡探索与利用</td><td>推荐方案</td></tr>
+              <tr><td><strong>On-policy</strong></td><td>用当前 LLM 以 beam search 生成 top-$N$ 个负样本</td><td>在线策略，与模型当前能力匹配；但训练不稳定（模型自身生成的负样本质量随训练变化），计算开销大</td><td>补充策略</td></tr>
             </tbody>
           </table>
         </div>
@@ -252,137 +338,318 @@
         <div class="example-box">
           <div class="ex-title">💡 举例：CM-based Curriculum 采样</div>
           <p>假设我们有 10 万条历史交互轨迹，每条轨迹对应用户点击了某个商品。</p>
-          <p><strong>Batch 1（低 CM 分）：</strong>先从 CM 预估分最低的 30% 轨迹中采样——这些"容易区分"的样本帮助模型快速建立 token 生成与奖励的基本关联。</p>
-          <p><strong>Batch 2（中等 CM 分）：</strong>再从 CM 预估分中等的 40% 轨迹中采样——模型学习更复杂的 token-奖励映射。</p>
-          <p><strong>Batch 3（高 CM 分）：</strong>最后从 CM 预估分最高的 30% 轨迹中采样——"困难"样本迫使模型精调每个 token 的选择。</p>
-          <p>这种课程学习策略（Curriculum Learning）让模型从"容易分辨的 token"逐步过渡到"难以分辨的 token"，避免了随机采样中大量低质量轨迹带来的噪声。</p>
+          <p><strong>Batch 1（低 CM 分，"简单负样本"）：</strong>先从 CM 预估分最低的 30% 轨迹中采样——例如给"喜欢蓝色正装的用户"推荐"黄色内衣"，模型很容易分辨这不是好推荐，帮助模型快速建立 token 生成与奖励的基本关联。</p>
+          <p><strong>Batch 2（中等 CM 分，"中等负样本"）：</strong>再从 CM 预估分中等的 40% 轨迹中采样——例如"蓝色夹克"（与用户偏好相近但非最优），模型学习更复杂的 token-奖励映射。</p>
+          <p><strong>Batch 3（高 CM 分，"困难负样本"）：</strong>最后从 CM 预估分最高的 30% 轨迹中采样——例如"蓝色 Polo 衬衫"（几乎和 ground truth 一样好），迫使模型精调每个 token 的选择差异。</p>
+          <p>这种课程学习策略（Curriculum Learning）让模型从"容易分辨的 token"逐步过渡到"难以分辨的 token"，避免了随机采样中大量低质量轨迹带来的噪声，同时解决了随机负样本在训练后期变得"太简单"而不贡献梯度的问题。</p>
+        </div>
+
+        <div class="callout callout-purple">
+          <strong>CM 集成的双重作用：</strong>协作模型（CM）在 GFlowGR 中有两个用途：（1）为轨迹采样器提供难度排序信号，实现 Curriculum Learning；（2）为奖励模型提供预估分数 $r_c$（见 2.3 节）。这意味着 CM 是 GFlowGR 框架中可选但非常实用的组件——没有 CM 也能运行（用 Random/On-policy），但加入 CM 后效果显著提升。
         </div>
 
         <h3 id="reward">2.3 多信号奖励模型（Multi-Signal Reward Model）</h3>
 
-        <p>GFlowGR 的奖励模型融合三种信号：</p>
+        <p>GFlowGR 的奖励模型融合三种信号，解决传统 GFlowNet 奖励模型在推荐场景中的两个关键问题：（1）仅依赖交互信号无法评估未观测 item；（2）给增强样本赋零奖励会加剧曝光偏差。</p>
 
         <div class="formula-block">
-          $$R(s_L) = r_a + \alpha \cdot r_c + \beta \cdot r_{\text{sim}}$$
-        </div>
-        <div class="formula-vars">
-          <div class="var-title">符号说明</div>
-          <ul>
-            <li>$r_a$：<strong>交互信号</strong>——用户是否点击/购买（二值：0 或 1）</li>
-            <li>$r_c$：<strong>CM 预估分</strong>——Click Model 对 item 吸引力的预估（连续值 [0, 1]）</li>
-            <li>$r_{\text{sim}}$：<strong>Token 相似度</strong>——生成 token 序列与目标 item 真实 token 序列的相似度</li>
-            <li>$\alpha, \beta$：平衡系数</li>
-          </ul>
+          $$R(s_L) = r_a + r_c + r_{\text{sim}}$$
         </div>
 
-        <div class="callout callout-purple">
-          <strong>三种信号的各自作用：</strong>$r_a$ 提供真实的交互反馈（最强信号但稀疏）；$r_c$ 提供稠密的预估信号（数据多但可能有偏差）；$r_{\text{sim}}$ 提供格式约束（确保生成的 token 是有效 SID 且与目标 item 语义相近）。
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>$r_a$：交互信号（Interaction Signal）</h4>
+            <p>标记 item 的交互层次。例如：</p>
+            <ul>
+              <li>$r_a = 10$：liked（收藏）的 item 轨迹 $\tau$</li>
+              <li>$r_a = 1$：clicked（点击）的 item 轨迹 $\tau$</li>
+              <li>$r'_a = 0$：augmented（增强）或 unpresented（未曝光）的轨迹 $\tau'$</li>
+            </ul>
+            <p>最可靠的信号，但稀疏——大量 item 没有交互记录。</p>
+          </div>
+          <div class="mini-card">
+            <h4>$r_c$：CM 预估分（Estimated Score）</h4>
+            <p>协作模型对 item 吸引力的预估：</p>
+            <ul>
+              <li>$r_c = \hat{y}^{CM}_v$：正样本 $v$ 的 CM 分数</li>
+              <li>$r'_c = \hat{y}^{CM}_{v'}$：增强样本 $v'$ 的 CM 分数</li>
+            </ul>
+            <p>稠密信号（每个 item 都有预估分），但可能有偏差——CM 的预估精度不如 GR 模型本身。</p>
+          </div>
+        </div>
+        <div class="mini-card" style="margin-top:14px;">
+          <h4>$r_{\text{sim}}$：Token 相似度 / 格式奖励（Format Reward）</h4>
+          <p>衡量生成 token 序列与 ground truth item 的部分匹配程度：</p>
+          <div class="formula-block" style="margin:8px 0;">
+            $$r'_{\text{sim}} = \sum_{l=1}^{L} \mathbb{I}(t_l = t'_l), \quad r_{\text{sim}} = L \text{ (for positive item)}$$
+          </div>
+          <p>其中 $\mathbb{I}(\cdot)$ 是指示函数。例如 ground truth 为 $\langle a_2\rangle\langle b_4\rangle\langle c_{10}\rangle$，增强样本为 $\langle a_2\rangle\langle b_1\rangle\langle c_3\rangle$，则 $r'_{\text{sim}} = 1$（只有第一个 token 相同）。这个信号提供了 Token 级的格式约束，确保生成的 token 是有效 SID 且与目标 item 语义相近。</p>
+        </div>
+
+        <div class="callout callout-green">
+          <strong>三种信号的互补设计哲学：</strong>$r_a$ 提供真实的交互反馈（最强信号但稀疏）；$r_c$ 提供稠密的预估信号（数据多但可能有偏差）；$r_{\text{sim}}$ 提供格式约束（确保生成的 token 是有效 SID 且与目标 item 语义相近）。三者互补，构成完整的奖励函数。消融实验显示 $r_a$ 影响最大，$r_c$ 因 CM 精度限制贡献略小。
         </div>
 
         <h3 id="loss">2.4 DB/TB 双 Loss 变体</h3>
 
-        <p>GFlowGR 支持两种 GFlowNet 训练损失：</p>
+        <p>由于 GR 中后向概率 $P_B(s_l \mid s_{l+1}) = 1$（前文已解释），GFlowNet 的 DB 和 TB Loss 在 GR 场景下有更简洁的形式：</p>
 
         <h4>Detailed Balance（DB）Loss — 步骤级</h4>
         <div class="formula-block">
-          $$\mathcal{L}_{DB} = \sum_{l=1}^{L} \left( \log F(s_{l-1} \to s_l) - \log \hat{F}(s_{l-1} \to s_l) \right)^2$$
+          $$\mathcal{L}_{DB}(\tau) = \sum_{l=0}^{L-1} \left( \log \frac{F(s_l) \cdot P_{GR}(t_{l+1} \mid U, s_l)}{F(s_{l+1})} \right)^2$$
         </div>
         <div class="formula-vars">
           <div class="var-title">符号说明</div>
           <ul>
-            <li>$F(s_{l-1} \to s_l)$：从状态 $s_{l-1}$ 转移到 $s_l$ 的 flow（由网络预测）</li>
-            <li>$\hat{F}(s_{l-1} \to s_l)$：满足 Detailed Balance 约束的目标 flow 值</li>
-            <li>DB 在每个 token 步骤计算 loss，粒度最细，适合大规模并行训练</li>
+            <li>$F(s_l)$：状态 $s_l$ 的流值（由 flow estimator 网络预测）</li>
+            <li>$P_{GR}(t_{l+1} \mid U, s_l)$：LLM 生成 token $t_{l+1}$ 的前向概率（即 $P_F$）</li>
+            <li>$F(s_{l+1})$：下一状态的流值；$F(s_L) = R(s_L)$（终态流值 = 奖励值）</li>
+            <li>DB 在每个 token 步骤计算 loss，粒度最细——每个 token 都有独立的监督信号</li>
+            <li>适合大规模并行训练（每步 loss 可独立计算）</li>
           </ul>
         </div>
 
         <h4>Trajectory Balance（TB）Loss — 轨迹级</h4>
         <div class="formula-block">
-          $$\mathcal{L}_{TB} = \left( \log Z \prod_{l=1}^{L} P_F(s_l \mid s_{l-1}) - \log R(s_L) \right)^2$$
+          $$\mathcal{L}_{TB}(\tau) = \left( \log \frac{Z \prod_{l=0}^{L-1} P_{GR}(t_{l+1} \mid U, s_l)}{R(s_L)} \right)^2$$
         </div>
         <div class="formula-vars">
           <div class="var-title">符号说明</div>
           <ul>
-            <li>$Z$：从初始状态的总 flow（可学习参数或固定值）</li>
-            <li>$P_F(s_l \mid s_{l-1})$：前向策略（forward policy），即模型当前输出 token 的概率</li>
+            <li>$Z$：全局标量，近似 $F(s_0)$（可学习参数或固定值）</li>
+            <li>$\prod_{l=0}^{L-1} P_{GR}(t_{l+1} \mid U, s_l)$：完整轨迹的前向概率乘积</li>
             <li>$R(s_L)$：终态奖励</li>
-            <li>TB 在完整轨迹上计算 loss，方差更小，但训练效率低于 DB</li>
+            <li>TB 在完整轨迹上计算 loss，一条轨迹一个 loss 值——方差更小但粒度粗</li>
+            <li>适合对整条轨迹有清晰偏好的场景</li>
           </ul>
         </div>
 
         <div class="example-box">
           <div class="ex-title">💡 举例：DB vs TB 的区别</div>
           <p>假设一条 3-token 轨迹 $(s_1, s_2, s_3)$ 最终奖励 $R=0.8$。</p>
-          <p><strong>TB Loss：</strong>只看整条轨迹——"模型认为这条轨迹的总概率 × Z，与 0.8 的偏差是多少？"一条轨迹一个 loss 值。</p>
-          <p><strong>DB Loss：</strong>看每一步——"模型认为 $s_0 \to s_1$ 的 flow 应该是多少？$s_1 \to s_2$ 呢？$s_2 \to s_3$ 呢？"每步都要满足 flow 守恒，一共 3 个 loss 项。</p>
-          <p>DB 粒度更细，每步都有监督信号，适合并行训练（每步 loss 可独立计算）。TB 粒度粗但方差更小，适合对整条轨迹有清晰偏好的场景。</p>
+          <p><strong>TB Loss：</strong>只看整条轨迹——"模型认为这条轨迹的总概率 × Z，与 0.8 的偏差是多少？"一条轨迹一个 loss 值。相当于只看终点，不管中间过程。</p>
+          <p><strong>DB Loss：</strong>看每一步——"模型认为 $s_0 \to s_1$ 的 flow 应该是多少？$s_1 \to s_2$ 呢？$s_2 \to s_3$ 呢？"每步都要满足 flow 守恒，一共 3 个 loss 项。每步都有独立监督信号。</p>
+          <p>DB 粒度更细，每步都有监督信号，适合并行训练。TB 粒度粗但方差更小，适合对整条轨迹有清晰偏好的场景。论文实验中 TB 在大部分场景表现更好，推测原因是 GR 的中间状态不唯一标识 item（同一个 prefix 可对应多个 item），使得 TB 的轨迹级优化更有效。</p>
         </div>
 
-        <h3 id="workflow">2.5 完整训练流程</h3>
+        <h3 id="complete-loss">2.5 完整损失函数</h3>
 
-        <ol class="step-list">
-          <li class="step"><span class="step-num">1</span><div><strong>SFT 预训练：</strong>用标准 SFT 对 GR 模型进行基础训练，使其学会基本的 token 生成模式</div></li>
-          <li class="step"><span class="step-num">2</span><div><strong>轨迹采样：</strong>用 4 种采样策略（Interaction Log → Random → CM-based Curriculum → On-policy）生成多样化轨迹</div></li>
-          <li class="step"><span class="step-num">3</span><div><strong>奖励计算：</strong>对每条轨迹计算多信号奖励 $R(s_L) = r_a + \alpha r_c + \beta r_{sim}$</div></li>
-          <li class="step"><span class="step-num">4</span><div><strong>GFlowNet 微调：</strong>用 DB Loss 或 TB Loss 将奖励信号反向传播到每个 token 步骤，更新模型参数</div></li>
-          <li class="step"><span class="step-num">5</span><div><strong>迭代：</strong>重复步骤 2-4，逐步提升 token 级别生成质量</div></li>
-        </ol>
+        <p>GFlowGR 的完整训练损失将 SFT loss 和 GFlowNet loss 结合：</p>
+        <div class="formula-block">
+          $$\mathcal{L}(U, v, \{\tau_n\}_{n \leq N}) = \mathcal{L}_{GR}(U, v) + \lambda \sum_{n=1}^{N} \mathcal{L}_{GFN}(\tau_n)$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\mathcal{L}_{GR}(U, v)$：标准 SFT next-token prediction loss（Equation 1），确保模型保留基础推荐能力</li>
+            <li>$\mathcal{L}_{GFN}(\tau_n)$：GFlowNet loss（DB 或 TB），对每条轨迹提供 Token 级监督</li>
+            <li>$\lambda$：平衡系数，控制 GFlowNet loss 的权重。论文实验发现 $\lambda = 1.0$ 最优——过大（$\lambda \geq 10$）会压制 SFT 的基础能力</li>
+            <li>$N$：轨迹数量（含正样本 + 增强样本）。论文实验发现 $N=3$ 最优</li>
+          </ul>
+        </div>
+
+        <div class="callout callout-blue">
+          <strong>为什么需要保留 SFT Loss：</strong>GFlowNet loss 优化的是 flow-matching 目标（让生成概率正比于奖励），而 SFT loss 确保模型能正确生成 ground truth item 的 token 序列。如果完全去掉 SFT loss（$\lambda$ 过大），模型可能忘记了"如何正确生成推荐"这一基础能力。消融实验证实：$\lambda \geq 10$ 时性能明显下降，说明 SFT 在维持基本推荐能力中扮演关键角色。
+        </div>
+
+        <h3 id="workflow">2.6 训练与推理流程（Algorithm 1）</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>步骤</th><th>操作</th><th>说明</th></tr></thead>
+            <tbody>
+              <tr><td>1</td><td>训练 Item Tokenizer</td><td>用 $\mathcal{L}_T$（codebook + reconstruction loss）训练 tokenizer，将 item 转为 $L$-token 标识符</td></tr>
+              <tr><td>2</td><td>构建用户 Prompt</td><td>将历史交互序列和用户画像转为 LLM 输入格式</td></tr>
+              <tr><td>3</td><td>获取正样本轨迹 $\tau_1$</td><td>将 ground truth item $v$ 转为 token 序列</td></tr>
+              <tr><td>4</td><td>轨迹采样：生成 $N-1$ 条增强轨迹</td><td>用 4 种策略之一（Interaction Log / Random / CM-based / On-policy）采样</td></tr>
+              <tr><td>5</td><td>计算前向概率 $P_{GR}$</td><td>对所有轨迹 $\tau_n$，LLM 输出每步的 token 生成概率</td></tr>
+              <tr><td>6</td><td>计算流值 $F(s_l)$</td><td>Flow estimator 预测每个中间状态的流值</td></tr>
+              <tr><td>7</td><td>计算奖励 $R(s_L)$</td><td>$R = r_a + r_c + r_{\text{sim}}$，多信号奖励融合</td></tr>
+              <tr><td>8</td><td>计算 $\mathcal{L}_{GFN}$</td><td>用 Equation 5（DB）或 Equation 6（TB）计算 GFlowNet loss</td></tr>
+              <tr><td>9</td><td>计算 $\mathcal{L}_{GR}$</td><td>标准 SFT next-token prediction loss</td></tr>
+              <tr><td>10</td><td>总 Loss $\mathcal{L} = \mathcal{L}_{GR} + \lambda \sum \mathcal{L}_{GFN}$</td><td>更新 LLM 参数</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="note">
+          <strong>推理阶段：</strong>GFlowGR 在推理时完全不需要——直接加载 LLM checkpoint 和 tokenizer，对任意用户 $U$ 构建 prompt，自回归生成 $L$ 个 token 作为推荐 item 的标识符，解码返回预测 item。推理流程与标准 GR 完全一致，无额外开销。
+        </div>
       </section>
 
       <!-- 实验 -->
       <section class="section" id="experiments">
         <div class="section-title"><div class="icon" style="background:#f0fdf4;">📊</div>3. 实验结果</div>
 
-        <h3>离线实验（淘宝工业数据集）</h3>
-        <p>在 1 亿+用户的淘宝广告数据集上，GFlowGR 在多个指标上全面超越 SFT baseline：</p>
+        <h3>数据集与实验设置</h3>
 
         <div class="table-wrap">
           <table>
-            <thead><tr><th>方法</th><th>CTR AUC</th><th>CVR AUC</th><th>Recall@200</th><th>NDCG@200</th></tr></thead>
+            <thead><tr><th>数据集</th><th># Users</th><th># Items</th><th>Sparsity</th><th>Avg. length</th></tr></thead>
             <tbody>
-              <tr><td>SFT (baseline)</td><td>0.7240</td><td>0.6832</td><td>0.2143</td><td>0.1521</td></tr>
-              <tr><td>SFT + DPO</td><td>0.7251</td><td>0.6838</td><td>0.2156</td><td>0.1532</td></tr>
-              <tr><td>SFT + GRPO</td><td>0.7258</td><td>0.6845</td><td>0.2168</td><td>0.1540</td></tr>
-              <tr><td><strong>GFlowGR (DB)</strong></td><td><strong>0.7282</strong></td><td><strong>0.6871</strong></td><td><strong>0.2234</strong></td><td><strong>0.1587</strong></td></tr>
-              <tr><td><strong>GFlowGR (TB)</strong></td><td>0.7276</td><td>0.6864</td><td>0.2221</td><td>0.1579</td></tr>
+              <tr><td>Yelp</td><td>30,431</td><td>20,032</td><td>99.85%</td><td>9.39</td></tr>
+              <tr><td>Beauty</td><td>22,362</td><td>12,101</td><td>99.92%</td><td>7.87</td></tr>
+              <tr><td>Instruments</td><td>24,772</td><td>9,922</td><td>99.99%</td><td>7.32</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>三个公开数据集的数据划分方式：每个用户的最后一个交互 item 作为测试样本，倒数第二个作为验证集，其余作为训练集。评估指标为 Hit Rate（R@5, R@10）和 NDCG（N@5, N@10），每个测试重复 3 次（随机种子 {42, 43, 44}）。</p>
+
+        <p>Backbone 模型：TIGER（ pioneering GR 框架）和 LETTER（引入协同 item embedding 和多样性约束的 tokenizer）。Baseline 包括 SFT、GRPO、DPO、S-DPO、SPRec、IPA。</p>
+
+        <h3>公开数据集主实验（Table 2）</h3>
+
+        <div class="callout callout-blue">
+          <strong>核心结论：</strong>GFlowGR-TB 在几乎所有指标和所有数据集上都显著超越所有 baseline（* 表示统计显著，one-sided t-test $p < 0.05$）。GFlowGR-DB 在大部分场景也超越所有 baseline，但在部分指标上与 S-DPO 接近。
+        </div>
+
+        <p>以下展示 Beauty 数据集上 TIGER backbone 的完整结果：</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>方法</th><th>R@5</th><th>R@10</th><th>N@5</th><th>N@10</th></tr></thead>
+            <tbody>
+              <tr><td>SFT</td><td>0.0354</td><td>0.0558</td><td>0.0234</td><td>0.0299</td></tr>
+              <tr><td>GRPO</td><td>0.0347</td><td>0.0543</td><td>0.0229</td><td>0.0291</td></tr>
+              <tr><td>DPO</td><td>0.0308</td><td>0.0483</td><td>0.0200</td><td>0.0256</td></tr>
+              <tr><td>S-DPO</td><td>0.0314</td><td>0.0492</td><td>0.0208</td><td>0.0265</td></tr>
+              <tr><td>SPRec</td><td>0.0312</td><td>0.0487</td><td>0.0205</td><td>0.0258</td></tr>
+              <tr><td>IPA</td><td>0.0306</td><td>0.0481</td><td>0.0198</td><td>0.0245</td></tr>
+              <tr><td><strong>GFlowGR-DB</strong></td><td><strong>0.0388*</strong></td><td><strong>0.0629*</strong></td><td><strong>0.0254*</strong></td><td><strong>0.0336*</strong></td></tr>
+              <tr><td><strong>GFlowGR-TB</strong></td><td><strong>0.0407*</strong></td><td><strong>0.0651*</strong></td><td><strong>0.0266*</strong></td><td><strong>0.0344*</strong></td></tr>
             </tbody>
           </table>
         </div>
 
         <figure>
-          <img src="https://arxiv.org/html/2506.16114v2/x2.png" alt="轨迹采样策略对比"
-               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'><b>Figure 2: 轨迹采样策略对比</b><br><br>四种采样策略在不同训练阶段的 AUC 变化。CM-based Curriculum 策略在稳定性和最终性能上均最优。</div>`" />
-          <figcaption><strong>Figure 2（论文原图）：</strong>四种轨迹采样策略在不同训练阶段的性能对比。CM-based Curriculum 通过课程学习策略在稳定性和最终 AUC 上均达到最优。</figcaption>
+          <img src="https://arxiv.org/html/2506.16114v2/x3.png" alt="参数敏感性分析"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'><b>Figure 3: 参数 N 和 λ 的敏感性分析</b><br><br>左图：增强轨迹数 N ∈ {0,1,3,5} 的影响。N=0 时退化为纯 SFT，N=3 时最优，N=5 引入过多噪声。右图：平衡权重 λ ∈ {0.01,0.1,1,10,100} 的影响。λ=1.0 最优，λ≥10 过度压制 SFT 能力。</div>`" />
+          <figcaption><strong>Figure 3（论文原图）：</strong>参数 $N$（增强轨迹数）和 $\lambda$（GFlowNet loss 权重）的敏感性分析。两者均呈现倒 V 形曲线：$N=3$ 最优（太少多样性不足，太多引入噪声）；$\lambda=1.0$ 最优（过大压制 SFT 的基础推荐能力）。</figcaption>
         </figure>
 
-        <h3>消融实验</h3>
+        <h3>关键实验观察</h3>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>vs SFT</h4>
+            <p>GFlowGR-TB 在所有数据集和 backbone 上都显著超越 SFT，证明 GFlowNet 通过增强样本、flow-matching 目标和协同知识整合，有效提升了模型容量。</p>
+            <p>GFlowGR-TB 比 GFlowGR-DB 提升更显著，推测原因是 GR 的中间状态不唯一标识 item（同一 prefix 可对应多个 item），使得 TB 的轨迹级优化更有效。</p>
+          </div>
+          <div class="mini-card">
+            <h4>vs On-policy RLFT（GRPO）</h4>
+            <p>GRPO 在部分场景甚至不如 SFT（如 Beauty/TIGER 上 R@5 = 0.0347 < SFT 的 0.0354）。原因：GRPO 强制正样本概率最大化并归一化 item set 概率，但 GFlowGR 让概率正比于奖励但不强制归一化，对增强 item set 的鲁棒性更好。</p>
+          </div>
+        </div>
+        <div class="two-col" style="margin-top:14px;">
+          <div class="mini-card">
+            <h4>vs Off-policy RLFT（DPO 系列）</h4>
+            <p>Vanilla DPO 在大规模数据（Yelp）上不如 SFT，因为用固定随机采样负样本太低质。S-DPO 能用多个负样本，是 DPO 系列中最好的，与 GFlowGR-DB 接近。这凸显了从 item set 而非 item pairs 学习的必要性。</p>
+          </div>
+          <div class="mini-card">
+            <h4>DB vs TB</h4>
+            <p>TB 在大部分场景优于 DB，尤其在 Yelp/TIGER 上差距明显。推测：GR 中间状态不唯一标识 item，TB 利用轨迹-item 一一对应关系更有效。DB 在 LETTER 上表现接近 TB，因为 LETTER 的 tokenizer 更有区分性。</p>
+          </div>
+        </div>
+
+        <h3>消融实验（Table 3）</h3>
+
+        <p>在 TIGER/Beauty 上进行消融，验证每个组件的贡献：</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>变体</th><th>R@5</th><th>R@10</th><th>N@5</th><th>N@10</th><th>说明</th></tr></thead>
+            <tbody>
+              <tr><td>仅 $r_a$</td><td>0.0403</td><td>0.0641</td><td>0.0261</td><td>0.0341</td><td>只用交互信号，去掉 CM 和相似度</td></tr>
+              <tr><td>仅 $r_c$</td><td>0.0399</td><td>0.0631</td><td>0.0263</td><td>0.0338</td><td>只用 CM 预估分</td></tr>
+              <tr><td>仅 $r_{\text{sim}}$</td><td>0.0404</td><td>0.0634</td><td>0.0260</td><td>0.0343</td><td>只用格式奖励</td></tr>
+              <tr><td>$r_a + r_c$</td><td>0.0399</td><td>0.0629</td><td>0.0264</td><td>0.0337</td><td>交互 + CM</td></tr>
+              <tr><td>$r_a + r_{\text{sim}}$</td><td>0.0406</td><td>0.0648</td><td>0.0260</td><td>0.0344</td><td>交互 + 格式</td></tr>
+              <tr><td>$r_c + r_{\text{sim}}$</td><td>0.0381</td><td>0.0600</td><td>0.0253</td><td>0.0323</td><td>CM + 格式（去掉交互信号，下降最大）</td></tr>
+              <tr><td>w/o Ada（去掉 CM-based Curriculum）</td><td>0.0386</td><td>0.0600</td><td>0.0257</td><td>0.0326</td><td>用 Random 代替 CM-based，性能下降</td></tr>
+              <tr><td>w/o Traj（去掉增强轨迹，$N=1$）</td><td>0.0397</td><td>0.0617</td><td>0.0261</td><td>0.0332</td><td>退化为 SFT + 单轨迹 GFN loss</td></tr>
+              <tr><td><strong>GFlowGR（完整）</strong></td><td><strong>0.0407</strong></td><td><strong>0.0651</strong></td><td><strong>0.0266</strong></td><td><strong>0.0344</strong></td><td>三信号 + CM-based Curriculum + 多轨迹</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-amber">
+          <strong>消融实验关键发现：</strong><br>
+          ① 丢失任何奖励信号都会导致性能下降，$r_a$（交互信号）影响最大，$r_c$（CM 预估分）贡献略小（因为 CM 预估精度不如 GR 本身）；<br>
+          ② 用 Random 替换 CM-based Curriculum 导致性能下降——不稳定训练 + 低质增强样本；<br>
+          ③ 去掉增强轨迹（$N=1$）性能明显下降——证明从 item set 而非单一正样本学习的必要性。
+        </div>
+
+        <h3>参数敏感性分析</h3>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>增强轨迹数 $N$</h4>
+            <p>$N \in \{0, 1, 3, 5\}$。呈现倒 V 形曲线：</p>
+            <ul>
+              <li>$N=0$：退化为纯 SFT，多样性不足</li>
+              <li>$N=1$：仅 1 条增强轨迹，信号不够丰富</li>
+              <li>$N=3$：最优——3 条增强轨迹提供足够的多样性</li>
+              <li>$N=5$：过多增强轨迹引入噪声，误导训练</li>
+            </ul>
+            <p>推荐配置：$N=3$（1 正 + 2 增强）。</p>
+          </div>
+          <div class="mini-card">
+            <h4>平衡权重 $\lambda$</h4>
+            <p>$\lambda \in \{0.01, 0.1, 1, 10, 100\}$。同样呈现倒 V 形：</p>
+            <ul>
+              <li>$\lambda = 0.01$：GFlowNet loss 几乎无贡献</li>
+              <li>$\lambda = 1.0$：最优——SFT 和 GFlowNet 目标均衡</li>
+              <li>$\lambda \geq 10$：过度强调 GFlowNet，压制 SFT 的基础推荐能力</li>
+              <li>$\lambda = 100$：严重退化</li>
+            </ul>
+            <p>推荐配置：$\lambda = 1.0$。</p>
+          </div>
+        </div>
+
+        <h3>工业部署：淘宝全量广告 A/B 测试</h3>
+
+        <p>GFlowGR 自 2025 年 5 月起部署到淘宝所有搜索广告平台（淘宝移动端、闲鱼 App、淘宝 Web），服务数亿日活用户，驱动数十亿级年营收。</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>方法</th><th>H@20</th><th>N@20</th><th>训练成本</th></tr></thead>
+            <tbody>
+              <tr><td>SFT</td><td>0.358</td><td>0.371</td><td>1.0×</td></tr>
+              <tr><td>GRPO</td><td>0.427</td><td>0.408</td><td>计算不可行</td></tr>
+              <tr><td><strong>GFlowGR</strong></td><td><strong>0.444</strong></td><td><strong>0.452</strong></td><td>2.1×</td></tr>
+            </tbody>
+          </table>
+        </div>
 
         <figure>
-          <img src="https://arxiv.org/html/2506.16114v2/x3.png" alt="消融实验结果"
-               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'><b>Figure 3: 消融实验</b><br><br>逐步移除各模块后的性能变化，验证每个组件的贡献。</div>`" />
-          <figcaption><strong>Figure 3（论文原图）：</strong>消融实验结果。移除任一模块均导致性能下降，验证了轨迹采样器、多信号奖励和 GFlowNet Loss 的各自贡献。</figcaption>
+          <img src="https://arxiv.org/html/2506.16114v2/x4.png" alt="部署场景"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'><b>Figure 4: 淘宝部署场景</b><br><br>(a) 淘宝移动端 (b) 闲鱼 App (c) 淘宝 Web。广告标注在产品右下角蓝色框中。</div>`" />
+          <figcaption><strong>Figure 4（论文原图）：</strong>GFlowGR 的三个部署场景：淘宝移动端、闲鱼 App、淘宝 Web。广告标注在产品右下角蓝色框中。</figcaption>
         </figure>
 
-        <h3>在线 A/B 测试（淘宝全量广告，1 亿+用户）</h3>
-        <ul>
-          <li>总营收提升：<strong>+0.43%</strong></li>
-          <li>非首页搜索场景营收提升：<strong>+1.11%</strong></li>
-          <li>CTR 提升：<strong>+0.38%</strong></li>
-          <li>CVR 提升：<strong>+0.52%</strong></li>
-          <li>训练成本：SFT 的 <strong>2.1×</strong></li>
-        </ul>
+        <h3>在线 A/B 测试核心指标</h3>
 
-        <figure>
-          <img src="https://arxiv.org/html/2506.16114v2/x4.png" alt="在线A/B测试结果"
-               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'><b>Figure 4: 在线 A/B 测试结果</b><br><br>不同场景下的在线指标提升。非首页搜索场景提升最大（+1.11%），因该场景的 token 生成空间更大、GFlowNet 的 token 级监督优势更明显。</div>`" />
-          <figcaption><strong>Figure 4（论文原图）：</strong>在线 A/B 测试中不同场景的指标提升。非首页搜索场景提升最大（+1.11%），推测原因是该场景 item 空间更大，token 生成路径更复杂，GFlowNet 的 Token 级监督优势更明显。</figcaption>
-        </figure>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>指标</th><th>提升幅度</th><th>说明</th></tr></thead>
+            <tbody>
+              <tr><td>总营收</td><td><strong>+0.43%</strong></td><td>在十亿级年营收上的绝对增长</td></tr>
+              <tr><td>非首页搜索营收</td><td><strong>+1.11%</strong></td><td>提升最大——该场景 item 空间更大、GFlowNet 的 token 级监督优势更明显</td></tr>
+              <tr><td>CTR</td><td><strong>+0.38%</strong></td><td>点击率提升</td></tr>
+              <tr><td>CVR</td><td><strong>+0.52%</strong></td><td>转化率提升</td></tr>
+              <tr><td>训练成本</td><td>SFT 的 <strong>2.1×</strong></td><td>可通过 doubling GPU 数量使其与 SFT 时间持平</td></tr>
+            </tbody>
+          </table>
+        </div>
 
-        <h3>DB vs TB 对比</h3>
-        <ul>
-          <li><strong>DB Loss：</strong>AUC 略高，因为步骤级监督粒度更细，适用于 item 数多、token 序列长的场景</li>
-          <li><strong>TB Loss：</strong>训练更稳定，方差更小，适用于对整条轨迹有明确偏好的场景</li>
-        </ul>
+        <div class="callout callout-green">
+          <strong>GRPO 的计算不可行：</strong>论文特别指出 GRPO 在工业场景的计算成本"不可行"（computationally infeasible）。原因：GRPO 是 on-policy 方法，需要模型自身生成样本再评估，在大规模数据上的计算开销远超 off-policy 方案。而 GFlowGR 的 2.1× 成本可以通过 doubling GPU 数量完全解决——这使得 GFlowGR 成为工业场景中唯一可行的 RL-based 微调方案。
+        </div>
+
+        <div class="note">
+          <strong>A/B 测试细节：</strong>超过 1 亿用户 session 参与，连续 15 天数据采集，由淘宝内部监控系统验证统计显著性。非首页搜索场景提升最大（+1.11%），推测原因是该场景 item 空间更大、token 生成路径更复杂，GFlowNet 的 token 级监督优势更明显。
+        </div>
       </section>
 
       <!-- 个人理解 -->
@@ -391,28 +658,61 @@
 
         <h3>核心亮点</h3>
         <ul>
-          <li><strong>Token 级监督是 GR 的必然方向：</strong>SFT 只模仿、DPO 只比大小，都太粗糙。GFlowNet 提供了一套优雅的 Token 级监督框架——这可能是生成式推荐从"能跑"到"跑得好"的关键一步。</li>
-          <li><strong>GFlowNet 与 GR 的天然契合：</strong>GR 的自回归生成天然是有向无环图（每个 token 是状态节点），正是 GFlowNet 的标准应用场景。Flow-matching 约束恰好可以分解到每步 token 生成。</li>
-          <li><strong>CM-based Curriculum 是关键工程创新：</strong>随机采样产生大量噪声，on-policy 采样不稳定。用 Click Model 做课程学习——先易后难、逐步提升——是一个实用的工程方案。</li>
-          <li><strong>多信号奖励的设计哲学：</strong>真实交互（$r_a$）最可靠但稀疏，预估信号（$r_c$）密集但有偏，格式信号（$r_{\text{sim}}$）保证合理性。三者互补，构成完整的奖励函数。</li>
+          <li><strong>Token 级监督是 GR 的必然方向：</strong>SFT 只模仿、DPO 只比大小，都太粗糙。GFlowNet 提供了一套优雅的 Token 级监督框架——这可能是生成式推荐从"能跑"到"跑得好"的关键一步。同时，GFlowNet 的 $P(\tau) \propto R(s_L)$ 还自带多样性保证（不退化为 argmax），这在推荐场景中尤为重要。</li>
+          <li><strong>GFlowNet 与 GR 的天然契合：</strong>GR 的自回归生成天然是有向无环图（每个 token 是状态节点），正是 GFlowNet 的标准应用场景。更重要的是，$P_B = 1$ 的简化让实现变得极其轻量——核心设计挑战只剩下两个：构造轨迹和设计奖励。这让 GFlowGR 成为工业可落地的方案。</li>
+          <li><strong>CM-based Curriculum 是关键工程创新：</strong>随机采样产生大量噪声，on-policy 采样不稳定且计算不可行。用 Click Model 做课程学习——先易后难、逐步提升——是一个实用的工程方案，解决了 GFlowNet 训练中"负样本质量"这个核心难题。</li>
+          <li><strong>多信号奖励的设计哲学：</strong>真实交互（$r_a$）最可靠但稀疏，预估信号（$r_c$）密集但有偏，格式信号（$r_{\text{sim}}$）保证合理性。三者互补，构成完整的奖励函数。这种"互补信号融合"思路可以推广到其他 RL-based 微调方案。</li>
+          <li><strong>工业可行性是最大亮点：</strong>GRPO 在淘宝场景的计算不可行，而 GFlowGR 仅需 SFT 的 2.1× 成本（可通过 doubling GPU 消除），推理端零额外开销。这是 RL-based GR 微调方案中唯一工业可落地的。</li>
         </ul>
 
-        <h3>潜在不足</h3>
+        <h3>与相关工作的对比</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>方法</th><th>监督方式</th><th>负样本来源</th><th>多样性保证</th><th>工业可行性</th></tr></thead>
+            <tbody>
+              <tr><td>SFT</td><td>模仿正样本</td><td>无负样本</td><td>无</td><td>✅ 基础方案</td></tr>
+              <tr><td>DPO / S-DPO</td><td>偏好对（chosen vs rejected）</td><td>随机 / 策略采样</td><td>无</td><td>⚠️ 但效果有限</td></tr>
+              <tr><td>SPRec</td><td>迭代偏好对</td><td>Self-play（beam search）</td><td>无</td><td>⚠️ 需迭代训练</td></tr>
+              <tr><td>IPA (OneRec)</td><td>偏好对 + CM reward</td><td>最高 reward 的 beam search 结果</td><td>无</td><td>⚠️ 需迭代训练</td></tr>
+              <tr><td>GRPO</td><td>组内相对优势</td><td>On-policy（模型自生成）</td><td>⚠️ 最大化正样本概率</td><td>❌ 计算不可行</td></tr>
+              <tr><td><strong>GFlowGR</strong></td><td><strong>Token 级 flow-matching</strong></td><td><strong>CM-based Curriculum</strong></td><td><strong>$P(\tau) \propto R$</strong></td><td><strong>✅ 2.1× SFT 成本</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-purple">
+          <strong>GFlowGR vs FlowRec：</strong>GFlowGR 与同期工作 FlowRec [9]（arXiv 2503.07377，作者为 Gao et al.）的区别——FlowRec 也用 GFlowNet 做推荐微调，但仅限于 text-based LLM recommendation（非 GR 的 semantic ID 生成范式）。GFlowGR 是第一个将 GFlowNet 应用到 GR（semantic ID token-by-token 生成）的工作，也是第一个在工业级 GR 系统中全量部署的工作。
+        </div>
+
+        <h3>潜在不足与开放问题</h3>
         <ul>
-          <li>训练成本是 SFT 的 2.1×，对大规模系统仍有开销压力</li>
-          <li>奖励模型的三个系数 $\alpha, \beta$ 需要按场景调参</li>
-          <li>On-policy 采样策略在大规模训练中可能不稳定</li>
-          <li>论文未讨论 GFlowNet 微调后在 serving 阶段的推理效率</li>
+          <li><strong>训练成本 2.1× SFT：</strong>虽然可通过 doubling GPU 消除时间差距，但对资源受限的系统仍有开销压力。未来可探索更高效的 flow estimator（如用轻量网络替代全 LLM）。</li>
+          <li><strong>$\alpha, \beta$ 需按场景调参：</strong>论文默认 $R = r_a + r_c + r_{\text{sim}}$（即 $\alpha=\beta=1$），但不同场景的信号质量差异可能导致最优权重不同。论文未详细讨论权重搜索策略。</li>
+          <li><strong>CM 的精度瓶颈：</strong>$r_c$ 消融实验贡献略小，原因是"CM 预估精度不如 GR 本身"——这暗示 CM 可能不是最佳的外部预估模型。未来可考虑用 GR 自身的 forward probability 作为 $r_c$ 的替代。</li>
+          <li><strong>On-policy 采样的不稳定：</strong>论文只在公开数据集上比较了 On-policy，工业部署中未使用。On-policy 的不稳定是否可通过更好的采样策略（如 temperature scheduling）解决？</li>
+          <li><strong>推理效率未讨论：</strong>GFlowGR 微调后，推理端完全不变——但这意味着模型参数量不变、推理时间不变。论文没有讨论 GFlowNet 微调是否会让模型在推理时产生更"混乱"的 token 分布（因为训练目标从 argmax 变为按奖励比例分布）。</li>
+          <li><strong>与 TIGER/LETTER 的耦合：</strong>GFlowGR 目前在两个 GR backbone 上验证，是否对 tokenizer 设计有依赖？如果 tokenizer 的区分性很差（很多 item 共享同一 prefix），DB loss 可能效果下降。</li>
         </ul>
 
         <h3>对我的启发</h3>
-        <p>GFlowGR 提供了一个很好的思路：将生成式推荐的 token 生成过程视为 DAG 上的轨迹采样，用 flow-matching 约束实现 Token 级精细优化。这个视角可以推广到其他序列生成场景（如多轮对话推荐、多步推理推荐），其中每一步生成都需要独立的、精细的监督信号。</p>
-        <p>此外，CM-based Curriculum 的课程学习策略在推荐系统微调中非常实用——与其用全部数据无差别训练，不如按样本难度分层、从易到难地逐步提升模型能力。这种方法在其他 RL-based 微调方案（DPO/GRPO）中也可以借鉴。</p>
+
+        <p><strong>启发一：将 GR 视为 DAG 上的轨迹优化。</strong>GFlowGR 提供了一个很好的视角：将生成式推荐的 token 生成过程视为 DAG 上的轨迹采样，用 flow-matching 约束实现 Token 级精细优化。这个视角可以推广到其他序列生成场景（如多轮对话推荐、多步推理推荐），其中每一步生成都需要独立的、精细的监督信号。</p>
+
+        <p><strong>启发二：CM-based Curriculum 的课程学习策略。</strong>在推荐系统微调中非常实用——与其用全部数据无差别训练，不如按样本难度分层、从易到难地逐步提升模型能力。这种方法在其他 RL-based 微调方案（DPO/GRPO）中也可以借鉴，特别是在"负样本选择策略"这个关键设计点上。</p>
+
+        <p><strong>启发三：推理零开销的设计哲学。</strong>GFlowGR 只改训练不改推理——这是工业落地的重要保障。类似思路可以推广：任何训练阶段的改进（不管是 RL-based 还是其他），都应该追求"推理端零额外开销"的目标，否则在工业场景中很难被采纳。</p>
+
+        <p><strong>启发四：$P_B = 1$ 的简化对工业部署至关重要。</strong>很多 GFlowNet 理论工作在复杂的后向概率设计上投入大量精力，但在 GR 场景中 $P_B = 1$ 的简化让实现变得极其轻量。这提醒我们：在特定应用场景中，理论框架的简化版本可能比"完美"版本更实用。</p>
+
+        <p><strong>启发五：多信号奖励融合的普适性。</strong>"真实交互 + 预估信号 + 格式约束"的三信号融合思路不仅适用于 GFlowGR，也适用于任何需要从稀疏交互数据中学习的推荐微调方案。特别是 $r_{\text{sim}}$ 的"部分正确性"度量——在 DPO/GRPO 中，rejected sample 如果与 chosen 有一部分匹配，是否也应该获得部分 reward 而不是完全被压制？</p>
 
         <div class="paper-info">
           <p><strong>论文链接：</strong><a href="https://arxiv.org/abs/2506.16114" target="_blank">arXiv 2506.16114</a></p>
-          <p><strong>关键词：</strong>GFlowNet · 生成式推荐 · Token 级监督 · 轨迹采样 · 多信号奖励 · Detailed Balance · Trajectory Balance</p>
-          <p><strong>对比基线：</strong>SFT · DPO · GRPO</p>
+          <p><strong>关键词：</strong>GFlowNet · 生成式推荐 · Token 级监督 · 轨迹采样 · 多信号奖励 · Detailed Balance · Trajectory Balance · Curriculum Learning</p>
+          <p><strong>对比基线：</strong>SFT · DPO · S-DPO · SPRec · IPA · GRPO</p>
+          <p><strong>Backbone：</strong>TIGER · LETTER</p>
+          <p><strong>部署：</strong>淘宝搜索广告 · 闲鱼 App · 淘宝 Web（2025 年 5 月全量上线）</p>
         </div>
       </section>
 

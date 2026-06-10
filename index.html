@@ -212,10 +212,10 @@
     <h1>学习笔记 &amp; 论文解读</h1>
     <p>推荐 · 搜索 · LLM · NLP · 工业落地</p>
     <div class="stats">
-      <div class="stat-pill">论文 <strong>32</strong> 篇</div>
+      <div class="stat-pill">论文 <strong>38</strong> 篇</div>
       <div class="stat-pill">📝 学习笔记 <strong>18</strong></div>
       <div class="stat-pill">🧪 生成式推荐 <strong>24</strong></div>
-      <div class="stat-pill">🤖 LLM4Rec <strong>5</strong></div>
+      <div class="stat-pill">🤖 LLM4Rec <strong>6</strong></div>
       <div class="stat-pill">📊 传统推荐 <strong>3</strong></div>
     </div>
   </div>
@@ -223,23 +223,31 @@
   <div class="tabs-wrap">
     <div class="tabs">
       <button class="tab-btn active" onclick="switchTab('all',this)">
-        全部 <span class="tab-count">50</span>
+        全部 <span class="tab-count">61</span>
       </button>
       <button class="tab-btn" onclick="switchTab('notes',this)">
         <span class="tab-dot" style="background:#0891b2"></span>
-        📝 学习笔记 <span class="tab-count">18</span>
+        📝 学习笔记 <span class="tab-count">20</span>
       </button>
       <button class="tab-btn" onclick="switchTab('gen-rec',this)">
         <span class="tab-dot" style="background:#1d4ed8"></span>
-        🧪 生成式推荐 <span class="tab-count">24</span>
+        🧪 生成式推荐 <span class="tab-count">28</span>
       </button>
       <button class="tab-btn" onclick="switchTab('llm4rec',this)">
         <span class="tab-dot" style="background:#92400e"></span>
-        🤖 LLM4Rec <span class="tab-count">5</span>
+        🤖 LLM4Rec <span class="tab-count">6</span>
       </button>
       <button class="tab-btn" onclick="switchTab('traditional',this)">
         <span class="tab-dot" style="background:#065f46"></span>
         📊 传统推荐 <span class="tab-count">3</span>
+      </button>
+      <button class="tab-btn" onclick="switchTab('llm',this)">
+        <span class="tab-dot" style="background:#7c3aed"></span>
+        🧠 LLM <span class="tab-count">3</span>
+      </button>
+      <button class="tab-btn" onclick="switchTab('finance',this)">
+        <span class="tab-dot" style="background:#d4a017"></span>
+        💰 金融 <span class="tab-count">1</span>
       </button>
     </div>
   </div>
@@ -252,6 +260,96 @@
   <!-- 全部 -->
   <div id="panel-all" class="panel visible">
     <div class="paper-list">
+<!-- GR4AD 2026 Kuaishou 广告 -->
+      <a class="paper-card" href="papers/gr4ad.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2026</span>
+            <span class="tag tv">arXiv 2602.22732</span>
+            <span class="tag tc-gen">生成式推荐 · 广告系统</span>
+            <span class="tag tc-indus">快手广告 收入 +4.2%</span>
+          </div>
+          <div class="card-title">GR4AD：为大规模广告系统量身设计的生成式推荐器</div>
+          <div class="card-subtitle">Generative Recommendation for Large-Scale Advertising · Peng Jiang, Kun Gai et al. · Kuaishou Technology</div>
+          <div class="card-summary">把 GR 搬到广告会撞上 token 化 / 学习范式 / 实时服务三堵墙。GR4AD 给四件套答案：UA-SID（MLLM 微调 + 多粒度多分辨率 RQ-Kmeans，碰撞率 85%→18%）、LazyAR（前 K 层并行 + 跨 beam 共享，QPS 翻倍）、VSL+RSPO（list-wise RL，可证为 NDCG 上界）、DBS（动态 beam serving）。快手广告全量上线，A/B 收入 +4.2%，转化率 +10.17%。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+<!-- APAO 2026 KDD 清华 -->
+      <a class="paper-card" href="papers/apao.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2026</span>
+            <span class="tag tv">KDD 2026 · arXiv 2603.02730</span>
+            <span class="tag tc-gen">生成式推荐 · 训练-推理对齐</span>
+            <span class="tag tc-indus">微信 pCTR +0.9%</span>
+          </div>
+          <div class="card-title">APAO：把 Beam Search 的剪枝压力提前灌进训练里</div>
+          <div class="card-subtitle">Adaptive Prefix-Aware Optimization for Generative Recommendation · Yu, Wang, Ma, Guo, Zhang · 清华 DCST/AIR · 鹊承实验室</div>
+          <div class="card-summary">生成式推荐用 CE 训练 + beam search 推理，但 CE 假设前缀永远正确，beam search 却步步剪枝。APAO 把每个前缀必须存活的约束写成 prefix-aware loss（pointwise + pairwise），并用自适应权重聚焦最薄弱的前缀。4 数据集 + TIGER/Llama 双 backbone 全面打赢 S-DPO/DMPO，微信公众号 A/B pCTR +0.9%。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+<!-- LLM4Rec Survey 2025 LinkedIn/Meta/Amazon -->
+      <a class="paper-card" href="papers/llm4rec-survey.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">arXiv:2507.21117</span>
+            <span class="tag tc-llm">LLM4Rec 综述</span>
+            <span class="tag tc-gen">系统性分类</span>
+          </div>
+          <div class="card-title">LLM4Rec 综述：用 LLM 系统性破解推荐系统的九大顽疾</div>
+          <div class="card-subtitle">A Comprehensive Review on Harnessing Large Language Models to Overcome Recommender System Challenges · Raja, Vats, Vats, Majumder · LinkedIn / Meta / Amazon / CMU / Stanford</div>
+          <div class="card-summary">2025 年的 LLM4Rec 综述，作者来自工业一线。它不是简单罗列论文，而是把推荐系统的所有痛点按"数据/建模/评估/隐私"四类分层归类，对每个子问题给出具体的 LLM 解法（含公式、prompt 模板、真实工业案例）。涵盖冷启动、稀疏、噪声、漂移、多模态、可扩展性、长尾、线上线下不一致、合规审计——一张完整的"挑战 × LLM 方案"对照表。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+<!-- Scaling Laws 2020 OpenAI -->
+      <a class="paper-card" href="papers/scaling-laws.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2020</span>
+            <span class="tag tv">arXiv:2001.08361</span>
+            <span class="tag tc-llm">Scaling Laws</span>
+            <span class="tag tc-nlp">Power Law</span>
+          </div>
+          <div class="card-title">Scaling Laws：语言模型的幂律缩放规律</div>
+          <div class="card-subtitle">Scaling Laws for Neural Language Models · Kaplan, McCandlish, Henighan, Brown, Chess, Child, Gray, Radford, Wu, Amodei · OpenAI</div>
+          <div class="card-summary">Loss 随模型参数量、数据量、计算量呈幂律下降，跨越七个数量级仍然成立。模型形状（宽度/深度）对 loss 几乎无影响。给定固定算力，最优策略是训练非常大的模型、用相对少的数据、在远未收敛时停止——这一发现重塑了整个大模型领域的资源分配策略。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+<!-- SPIN 2024 UCLA ICML -->
+      <a class="paper-card" href="papers/spin.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2024</span>
+            <span class="tag tv">ICML 2024 · arXiv 2401.01335</span>
+            <span class="tag tc-llm">LLM 自对齐</span>
+            <span class="tag tc-nlp">Self-Play Fine-Tuning</span>
+          </div>
+          <div class="card-title">SPIN：让弱语言模型通过自我博弈变强</div>
+          <div class="card-subtitle">Self-Play Fine-Tuning Converts Weak Language Models to Strong Language Models · Chen*, Deng*, Yuan* et al. · UCLA</div>
+          <div class="card-summary">SFT 后继续训练无收益？SPIN 用自博弈机制打破瓶颈：旧模型生成假回答作为 rejected，人类回答作为 chosen，新模型学习区分真假。仅用 50k SFT 数据（无额外偏好标注）迭代 3 轮，平均得分从 58.14→63.16（+5.02%），超越 DPO+62k GPT-4 偏好数据。理论保证：当 pθ=pdata 时全局最优且自然收敛。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+<!-- RPT 2025 Microsoft -->
+      <a class="paper-card" href="papers/rpt.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">arXiv 2506.08007</span>
+            <span class="tag tc-llm">RL 预训练</span>
+            <span class="tag tc-nlp">Next-Token Reasoning</span>
+          </div>
+          <div class="card-title">Reinforcement Pre-Training (RPT)：将 NTP 重构为 Reasoning Task</div>
+          <div class="card-subtitle">Reinforcement Pre-Training · Qingxiu Dong, Li Dong et al. · Microsoft Research + PKU + THU</div>
+          <div class="card-summary">将 next-token prediction 重构为 reasoning task，用 RL + 可验证 reward 实现通用预训练。14B 模型匹配 32B 性能，幂律 scaling curves R²>0.98。Continual NTP 训练摧毁推理能力（51.2→10.7），RPT 提供 +5.1pp 更高起点。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
 <!-- SID-Coord 2026 快手 SIGIR -->
       <a class="paper-card" href="papers/sid-coord.html">
         <div>
@@ -554,6 +652,22 @@
         </div>
         <div class="card-arrow">→</div>
       </a>
+<!-- OneReason 2026.06 -->
+      <a class="paper-card" href="papers/onereason.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2026.06</span>
+            <span class="tag tv">arXiv 2606.06260</span>
+            <span class="tag tc-gen">生成式推荐</span>
+            <span class="tag tc-sid">CoT × Reasoning</span>
+            <span class="tag tc-indus">Kuaishou 落地</span>
+          </div>
+          <div class="card-title">OneReason：让生成式推荐真正"先思考再回答"</div>
+          <div class="card-subtitle">OneReason Technical Report · Kuaishou OneRec Team</div>
+          <div class="card-summary">解决 OneRec 系列 thinking ≤ non-thinking 的反常现象。借鉴 MLLM 诊断把根因归到 Perception × Cognition 双支柱：① Pre-training 四粒度数据（Token / Item / Relational / User）强化 itemic-text 对齐；② SFT 用 R0→R1→R2→R3 四层认知 CoT；③ RL 走 Specialize-then-Unify 先单域专精再跨域统一蒸馏。结果 thinking mode 首次稳定超越 non-thinking，并发现 CoT 监督会渗透到 non-thinking 推理。开源 OneReason-8B / 0.8B。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
 <!-- OneRec Technical Report 2025.06 -->
       <a class="paper-card" href="papers/onerec-tech-report.html">
         <div>
@@ -600,6 +714,21 @@
         </div>
         <div class="card-arrow">→</div>
       </a>
+<!-- GRAM 2025 JD.com -->
+      <a class="paper-card" href="papers/gram.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">WWW Companion '25</span>
+            <span class="tag tc-sid">电商生成式检索</span>
+            <span class="tag tc-indus">京东</span>
+          </div>
+          <div class="card-title">GRAM：LLM 共享文本编码 + 双对齐，电商一体化检索预排序</div>
+          <div class="card-subtitle">Generative Retrieval and Alignment Model: A New Paradigm for E-commerce Retrieval · JD.com</div>
+          <div class="card-summary">京东提出的电商生成式检索框架，利用 LLM 共享文本编码实现 query 和 item 在同一语义空间表示，双对齐机制（语义对齐+协同对齐）提升检索精度，统一检索与预排序。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
 <!-- LIGER 2024.11 -->
       <a class="paper-card" href="papers/liger.html">
         <div>
@@ -614,8 +743,24 @@
         </div>
         <div class="card-arrow">→</div>
       </a>
+<!-- XHS RL Relevance 2025 小红书 -->
+      <a class="paper-card" href="papers/xhs-rl-relevance.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">KDD 2026 · arXiv 2512.00968</span>
+            <span class="tag tc-sid">搜索相关性 × RL</span>
+            <span class="tag tc-llm">LLM 推理</span>
+            <span class="tag tc-indus">小红书搜索</span>
+          </div>
+          <div class="card-title">小红书 RL 搜索相关性：SAM+GRPO 工业级方案</div>
+          <div class="card-subtitle">Optimizing Generative Ranking Relevance via Reinforcement Learning in Xiaohongshu Search · 小红书 + 北邮</div>
+          <div class="card-summary">过程监督 RL 比 SFT 更高效地训练搜索相关性推理。小红书搜索团队提出 SAM（Self-Adaptive Margin）奖励 + GRPO 强化学习框架，工业级部署验证过程监督 RL 在搜索相关性排序上的优势。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
 <!-- RoleGen 2025 快手+北航 -->
-      <a class="paper-card" href="rolegen.html">
+      <a class="paper-card" href="papers/rolegen.html">
         <div>
           <div class="card-meta">
             <span class="tag ty">2025</span>
@@ -956,7 +1101,48 @@
         </div>
         <div class="card-arrow">→</div>
       </a>
-<!-- 大模型训练流水线 -->
+<!-- SGLang -->
+      <a class="paper-card" href="topics/notes-sglang.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#e0f7fa;color:#006064;">📝 学习笔记</span>
+            <span class="tag ty">LLM 基础</span>
+            <span class="tag tc-llm">推理引擎 / KV Cache</span>
+          </div>
+          <div class="card-title">SGLang 深度解析：RadixAttention 与高效 LLM 推理</div>
+          <div class="card-subtitle">UC Berkeley LMSYS 出品，前缀 KV Cache 自动复用，比 vLLM 快 2~5×（有公共前缀场景）</div>
+          <div class="card-summary">从 KV Cache 基础讲起，重点解析 SGLang 的核心创新 RadixAttention（Radix Tree 自动前缀复用，引用计数+LRU 淘汰）。覆盖 Continuous Batching、Chunked Prefill、fork/join 并行编程原语、约束生成（JSON Schema/Regex）、多 GPU TP 部署、量化（FP8/AWQ/GPTQ）、投机解码（Speculative Decoding/Eagle-2）。含 SGLang vs vLLM 性能对比图和场景选型指南。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+<!-- slime -->
+      <a class="paper-card" href="topics/notes-slime.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#e0f7fa;color:#006064;">📝 学习笔记</span>
+            <span class="tag ty">LLM 基础</span>
+            <span class="tag tc-llm">RL 后训练 / 强化学习</span>
+          </div>
+          <div class="card-title">slime 深度解析：大规模 LLM 强化学习训练框架</div>
+          <div class="card-subtitle">清华 THUDM 出品，SGLang-native RL 框架，GLM-5 全系列背后引擎，支持 744B+ MoE</div>
+          <div class="card-summary">从 RL 后训练工程难题讲起，深度解析 slime 的三大模块：Megatron-LM 训练引擎、SGLang Rollout、Data Buffer 解耦设计。覆盖全异步训练模式（GPU 利用率 ~85%）、Colocate 分时复用、逐层权重同步机制。算法侧对比 PPO / GRPO / REINFORCE++ / GSPO / OPD，含完整数学公式推导和 KL 估计器三种实现。附完整 YAML 配置详解、自定义奖励函数接口、框架选型对比（verl / OpenRLHF / TRL / NeMo）。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+<!-- DeepSpeed -->
+      <a class="paper-card" href="topics/notes-deepspeed.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#e0f7fa;color:#006064;">📝 学习笔记</span>
+            <span class="tag ty">LLM 基础</span>
+            <span class="tag tc-llm">ZeRO / 3D 并行</span>
+          </div>
+          <div class="card-title">DeepSpeed 完全图解：ZeRO / 3D 并行 / Offload 从零讲清楚</div>
+          <div class="card-subtitle">微软开源的大模型训练加速库，从「显存被谁吃了」讲到 ZeRO-1/2/3、Offload、Infinity、3D 并行</div>
+          <div class="card-summary">完全新手向 DeepSpeed 解读。先把「训练显存到底花在哪儿」算清楚（参数+梯度+优化器=16 字节/参数），再讲 ZeRO 三档怎么逐级切：ZeRO-1 切优化器、ZeRO-2 加切梯度、ZeRO-3 连参数也切。配 GPU 内存分布图、4 卡示意、显存计算举例（1B/7B/13B 实算）。ZeRO-Offload 把状态甩 CPU、Infinity 甩 NVMe、3D 并行 DP×TP×PP（含 BLOOM-176B 实例）、混合精度 FP16/BF16、Gradient Checkpointing。附实战 ds_config.json + 选型速查表 + 7 个常见坑。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
       <a class="paper-card" href="topics/notes-llm-pipeline.html">
         <div>
           <div class="card-meta">
@@ -1217,6 +1403,48 @@
         </div>
         <div class="card-arrow">→</div>
       </a>
+<!-- SGLang -->
+      <a class="paper-card" href="topics/notes-sglang.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#e0f7fa;color:#006064;">📝 学习笔记</span>
+            <span class="tag ty">LLM 基础</span>
+            <span class="tag tc-llm">推理引擎 / KV Cache</span>
+          </div>
+          <div class="card-title">SGLang 深度解析：RadixAttention 与高效 LLM 推理</div>
+          <div class="card-subtitle">UC Berkeley LMSYS 出品，前缀 KV Cache 自动复用，比 vLLM 快 2~5×（有公共前缀场景）</div>
+          <div class="card-summary">从 KV Cache 基础讲起，重点解析 SGLang 的核心创新 RadixAttention（Radix Tree 自动前缀复用，引用计数+LRU 淘汰）。覆盖 Continuous Batching、Chunked Prefill、fork/join 并行编程原语、约束生成（JSON Schema/Regex）、多 GPU TP 部署、量化（FP8/AWQ/GPTQ）、投机解码（Speculative Decoding/Eagle-2）。含 SGLang vs vLLM 性能对比图和场景选型指南。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+<!-- slime -->
+      <a class="paper-card" href="topics/notes-slime.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#e0f7fa;color:#006064;">📝 学习笔记</span>
+            <span class="tag ty">LLM 基础</span>
+            <span class="tag tc-llm">RL 后训练 / 强化学习</span>
+          </div>
+          <div class="card-title">slime 深度解析：大规模 LLM 强化学习训练框架</div>
+          <div class="card-subtitle">清华 THUDM 出品，SGLang-native RL 框架，GLM-5 全系列背后引擎，支持 744B+ MoE</div>
+          <div class="card-summary">从 RL 后训练工程难题讲起，深度解析 slime 的三大模块：Megatron-LM 训练引擎、SGLang Rollout、Data Buffer 解耦设计。覆盖全异步训练模式（GPU 利用率 ~85%）、Colocate 分时复用、逐层权重同步机制。算法侧对比 PPO / GRPO / REINFORCE++ / GSPO / OPD，含完整数学公式推导和 KL 估计器三种实现。附完整 YAML 配置详解、自定义奖励函数接口、框架选型对比（verl / OpenRLHF / TRL / NeMo）。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+<!-- DeepSpeed -->
+      <a class="paper-card" href="topics/notes-deepspeed.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#e0f7fa;color:#006064;">📝 学习笔记</span>
+            <span class="tag ty">LLM 基础</span>
+            <span class="tag tc-llm">ZeRO / 3D 并行</span>
+          </div>
+          <div class="card-title">DeepSpeed 完全图解：ZeRO / 3D 并行 / Offload 从零讲清楚</div>
+          <div class="card-subtitle">微软开源的大模型训练加速库，从「显存被谁吃了」讲到 ZeRO-1/2/3、Offload、Infinity、3D 并行</div>
+          <div class="card-summary">完全新手向 DeepSpeed 解读。先把「训练显存到底花在哪儿」算清楚（参数+梯度+优化器=16 字节/参数），再讲 ZeRO 三档怎么逐级切：ZeRO-1 切优化器、ZeRO-2 加切梯度、ZeRO-3 连参数也切。配 GPU 内存分布图、4 卡示意、显存计算举例（1B/7B/13B 实算）。ZeRO-Offload 把状态甩 CPU、Infinity 甩 NVMe、3D 并行 DP×TP×PP（含 BLOOM-176B 实例）、混合精度 FP16/BF16、Gradient Checkpointing。附实战 ds_config.json + 选型速查表 + 7 个常见坑。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
 <!-- 大模型训练流水线 -->
       <a class="paper-card" href="topics/notes-llm-pipeline.html">
         <div>
@@ -1255,6 +1483,36 @@
       <span class="cat-desc">自回归/seq2seq 直接生成 item ID + Semantic ID 表征；含工业落地与架构统一</span>
     </div>
     <div class="paper-list">
+<!-- GR4AD 2026 Kuaishou 广告 -->
+      <a class="paper-card" href="papers/gr4ad.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2026</span>
+            <span class="tag tv">arXiv 2602.22732</span>
+            <span class="tag tc-gen">生成式推荐 · 广告系统</span>
+            <span class="tag tc-indus">快手广告 收入 +4.2%</span>
+          </div>
+          <div class="card-title">GR4AD：为大规模广告系统量身设计的生成式推荐器</div>
+          <div class="card-subtitle">Generative Recommendation for Large-Scale Advertising · Peng Jiang, Kun Gai et al. · Kuaishou Technology</div>
+          <div class="card-summary">把 GR 搬到广告会撞上 token 化 / 学习范式 / 实时服务三堵墙。GR4AD 给四件套答案：UA-SID（MLLM 微调 + 多粒度多分辨率 RQ-Kmeans，碰撞率 85%→18%）、LazyAR（前 K 层并行 + 跨 beam 共享，QPS 翻倍）、VSL+RSPO（list-wise RL，可证为 NDCG 上界）、DBS（动态 beam serving）。快手广告全量上线，A/B 收入 +4.2%，转化率 +10.17%。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+<!-- APAO 2026 KDD 清华 -->
+      <a class="paper-card" href="papers/apao.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2026</span>
+            <span class="tag tv">KDD 2026 · arXiv 2603.02730</span>
+            <span class="tag tc-gen">生成式推荐 · 训练-推理对齐</span>
+            <span class="tag tc-indus">微信 pCTR +0.9%</span>
+          </div>
+          <div class="card-title">APAO：把 Beam Search 的剪枝压力提前灌进训练里</div>
+          <div class="card-subtitle">Adaptive Prefix-Aware Optimization for Generative Recommendation · Yu, Wang, Ma, Guo, Zhang · 清华 DCST/AIR · 鹊承实验室</div>
+          <div class="card-summary">生成式推荐用 CE 训练 + beam search 推理，但 CE 假设前缀永远正确，beam search 却步步剪枝。APAO 把每个前缀必须存活的约束写成 prefix-aware loss（pointwise + pairwise），并用自适应权重聚焦最薄弱的前缀。4 数据集 + TIGER/Llama 双 backbone 全面打赢 S-DPO/DMPO，微信公众号 A/B pCTR +0.9%。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
 <!-- SID-Coord 2026 快手 SIGIR -->
       <a class="paper-card" href="papers/sid-coord.html">
         <div>
@@ -1557,6 +1815,22 @@
         </div>
         <div class="card-arrow">→</div>
       </a>
+<!-- OneReason 2026.06 -->
+      <a class="paper-card" href="papers/onereason.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2026.06</span>
+            <span class="tag tv">arXiv 2606.06260</span>
+            <span class="tag tc-gen">生成式推荐</span>
+            <span class="tag tc-sid">CoT × Reasoning</span>
+            <span class="tag tc-indus">Kuaishou 落地</span>
+          </div>
+          <div class="card-title">OneReason：让生成式推荐真正"先思考再回答"</div>
+          <div class="card-subtitle">OneReason Technical Report · Kuaishou OneRec Team</div>
+          <div class="card-summary">解决 OneRec 系列 thinking ≤ non-thinking 的反常现象。借鉴 MLLM 诊断把根因归到 Perception × Cognition 双支柱：① Pre-training 四粒度数据（Token / Item / Relational / User）强化 itemic-text 对齐；② SFT 用 R0→R1→R2→R3 四层认知 CoT；③ RL 走 Specialize-then-Unify 先单域专精再跨域统一蒸馏。结果 thinking mode 首次稳定超越 non-thinking，并发现 CoT 监督会渗透到 non-thinking 推理。开源 OneReason-8B / 0.8B。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
 <!-- OneRec Technical Report 2025.06 -->
       <a class="paper-card" href="papers/onerec-tech-report.html">
         <div>
@@ -1627,8 +1901,23 @@
       <span class="cat-desc">LLM Agent / CoT 推理 / RAG 直接驱动推荐与搜索</span>
     </div>
     <div class="paper-list">
+<!-- LLM4Rec Survey 2025 LinkedIn/Meta/Amazon -->
+      <a class="paper-card" href="papers/llm4rec-survey.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">arXiv:2507.21117</span>
+            <span class="tag tc-llm">LLM4Rec 综述</span>
+            <span class="tag tc-gen">系统性分类</span>
+          </div>
+          <div class="card-title">LLM4Rec 综述：用 LLM 系统性破解推荐系统的九大顽疾</div>
+          <div class="card-subtitle">A Comprehensive Review on Harnessing Large Language Models to Overcome Recommender System Challenges · LinkedIn / Meta / Amazon / CMU / Stanford</div>
+          <div class="card-summary">把推荐系统所有痛点按"数据/建模/评估/隐私"四类分层归类，对每个子问题给出具体的 LLM 解法（含公式、prompt 模板、真实工业案例）。冷启动、稀疏、噪声、漂移、多模态、可扩展性、长尾、线上线下不一致、合规审计——一张完整的"挑战 × LLM 方案"对照表。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
 <!-- RoleGen 2025 快手+北航 -->
-      <a class="paper-card" href="rolegen.html">
+      <a class="paper-card" href="papers/rolegen.html">
         <div>
           <div class="card-meta">
             <span class="tag ty">2025</span>
@@ -1704,6 +1993,61 @@
       </a>
     </div>
   </div>
+  <!-- LLM -->
+  <div id="panel-llm" class="panel">
+    <div class="cat-header">
+      <span class="tab-dot" style="background:#7c3aed;width:9px;height:9px;border-radius:50%;display:inline-block"></span>
+      <h2>🧠 LLM</h2>
+      <span class="cat-desc">大语言模型基础理论</span>
+    </div>
+    <div class="paper-list">
+<!-- Scaling Laws 2020 OpenAI -->
+      <a class="paper-card" href="papers/scaling-laws.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2020</span>
+            <span class="tag tv">arXiv:2001.08361</span>
+            <span class="tag tc-llm">Scaling Laws</span>
+            <span class="tag tc-nlp">Power Law</span>
+          </div>
+          <div class="card-title">Scaling Laws：语言模型的幂律缩放规律</div>
+          <div class="card-subtitle">Scaling Laws for Neural Language Models · Kaplan, McCandlish, Henighan, Brown, Chess, Child, Gray, Radford, Wu, Amodei · OpenAI</div>
+          <div class="card-summary">Loss 随模型参数量、数据量、计算量呈幂律下降，跨越七个数量级仍然成立。模型形状（宽度/深度）对 loss 几乎无影响。给定固定算力，最优策略是训练非常大的模型、用相对少的数据、在远未收敛时停止。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+<!-- SPIN 2024 UCLA ICML -->
+      <a class="paper-card" href="papers/spin.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2024</span>
+            <span class="tag tv">ICML 2024 · arXiv 2401.01335</span>
+            <span class="tag tc-llm">LLM 自对齐</span>
+            <span class="tag tc-nlp">Self-Play Fine-Tuning</span>
+          </div>
+          <div class="card-title">SPIN：让弱语言模型通过自我博弈变强</div>
+          <div class="card-subtitle">Self-Play Fine-Tuning Converts Weak Language Models to Strong Language Models · Chen*, Deng*, Yuan* et al. · UCLA</div>
+          <div class="card-summary">SFT 后继续训练无收益？SPIN 用自博弈机制打破瓶颈：旧模型生成假回答作为 rejected，人类回答作为 chosen，新模型学习区分真假。仅用 50k SFT 数据（无额外偏好标注）迭代 3 轮，平均得分从 58.14→63.16（+5.02%），超越 DPO+62k GPT-4 偏好数据。理论保证：当 pθ=pdata 时全局最优且自然收敛。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+<!-- RPT 2025 Microsoft -->
+      <a class="paper-card" href="papers/rpt.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">arXiv 2506.08007</span>
+            <span class="tag tc-llm">RL 预训练</span>
+            <span class="tag tc-nlp">Next-Token Reasoning</span>
+          </div>
+          <div class="card-title">Reinforcement Pre-Training (RPT)：将 NTP 重构为 Reasoning Task</div>
+          <div class="card-subtitle">Reinforcement Pre-Training · Qingxiu Dong, Li Dong et al. · Microsoft Research + PKU + THU</div>
+          <div class="card-summary">将 next-token prediction 重构为 reasoning task，用 RL + 可验证 reward 实现通用预训练。14B 模型匹配 32B 性能，幂律 scaling curves R²>0.98。Continual NTP 训练摧毁推理能力（51.2→10.7），RPT 提供 +5.1pp 更高起点。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+    </div>
+  </div>
   <!-- 传统推荐 -->
   <div id="panel-traditional" class="panel">
     <div class="cat-header">
@@ -1753,6 +2097,30 @@
           <div class="card-title">UniMixer：统一 Attention / TokenMixer / FM 三大 Scaling 架构</div>
           <div class="card-subtitle">UniMixer: A Unified Architecture for Scaling Laws in Recommendation Systems · Kuaishou Technology</div>
           <div class="card-summary">通过 TokenMixer 等价参数化将推荐系统三大 Scaling 范式统一到一个理论框架；UniMixer-Lite 参数效率最优，Scaling 指数（0.1419）高于 RankMixer（0.1160）；SiameseNorm 解决深度退化，快手广告在线 CAD +15%。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+    </div>
+  </div>
+  <!-- 💰 金融 -->
+  <div id="panel-finance" class="panel">
+    <div class="cat-header">
+      <span class="tab-dot" style="background:#d4a017;width:9px;height:9px;border-radius:50%;display:inline-block"></span>
+      <h2>💰 金融</h2>
+      <span class="cat-desc">区块链 · 加密货币 · DeFi · 稳定币 · RWA</span>
+    </div>
+    <div class="paper-list">
+<!-- 币圈完全入门 2026 -->
+      <a class="paper-card" href="topics/notes-crypto.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#fff8e1;color:#8b6914;">💰 金融笔记</span>
+            <span class="tag ty">2026</span>
+            <span class="tag" style="background:#fef3c7;color:#92400e;">BTC · ETH · DeFi · RWA</span>
+          </div>
+          <div class="card-title">币圈完全入门：从比特币到 RWA</div>
+          <div class="card-subtitle">小白向 Crypto 全景图 · 2008→2026 发展史 · 区块链/智能合约/Gas/L2 基础 · DeFi/稳定币/RWA 实战</div>
+          <div class="card-summary">完全零基础也能看懂的币圈百科：从中本聪 2008 白皮书讲到 2026 的 RWA 大爆发；用「全球共享 Excel」类比区块链、用「停车罚单 vs 最高法院」解释 L2、用阿根廷通胀讲清稳定币真实需求；三大灵魂拷问（币的实际意义 / ETH 会被 SOL 取代吗 / BTC 为何没取代黄金）一次说透；附 50 美元小白上手实操路径。</div>
         </div>
         <div class="card-arrow">→</div>
       </a>

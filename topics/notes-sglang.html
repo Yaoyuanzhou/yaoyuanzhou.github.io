@@ -1,0 +1,1246 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>SGLang 深度解析 — 笔记</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"/>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]})"></script>
+  <style>
+    /* ── 全局变量 ── */
+    :root{
+      --max:1300px;
+      --toc:260px;
+      --accent:#7c3aed;
+      --accent2:#0891b2;
+      --radius:12px;
+      --shadow:0 2px 12px rgba(0,0,0,.08);
+      --code-bg:#1e1e2e;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Inter',system-ui,sans-serif;background:#f9fafb;color:#111827;line-height:1.7;}
+
+    /* ── 外框 ── */
+    .page-wrap{max-width:var(--max);margin:0 auto;padding:0 24px 60px;}
+
+    /* ── Hero ── */
+    .hero{
+      background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 40%,#0891b2 100%);
+      color:#fff;border-radius:var(--radius);padding:48px 40px 40px;
+      margin:28px 0 32px;position:relative;overflow:hidden;
+    }
+    .hero::before{
+      content:'';position:absolute;inset:0;
+      background:url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    }
+    .hero-badge{display:inline-block;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:20px;padding:4px 14px;font-size:12px;letter-spacing:.5px;margin-bottom:16px;}
+    .hero h1{font-size:clamp(28px,4vw,42px);font-weight:800;line-height:1.2;margin-bottom:12px;}
+    .hero h1 span{color:#a5f3fc;}
+    .hero-sub{font-size:16px;opacity:.85;max-width:640px;margin-bottom:24px;}
+    .meta-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+    .meta-card{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:10px;padding:12px 16px;}
+    .meta-card .label{font-size:11px;opacity:.7;text-transform:uppercase;letter-spacing:.5px;}
+    .meta-card .value{font-size:14px;font-weight:600;margin-top:4px;}
+    @media(max-width:640px){.meta-grid{grid-template-columns:repeat(2,1fr);}}
+
+    /* ── 主体布局 ── */
+    .layout{display:grid;grid-template-columns:var(--toc) minmax(0,1fr);gap:32px;align-items:start;}
+    @media(max-width:900px){.layout{grid-template-columns:1fr;}}
+
+    /* ── TOC 侧边栏 ── */
+    .toc-wrap{position:sticky;top:24px;}
+    .toc{background:#fff;border:1px solid #e5e7eb;border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);}
+    .toc-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#6b7280;margin-bottom:12px;}
+    .toc ul{list-style:none;}
+    .toc>ul>li{margin-bottom:2px;}
+    .toc a{display:block;padding:5px 10px;border-radius:6px;font-size:13px;color:#374151;text-decoration:none;transition:all .15s;}
+    .toc a:hover{background:#f3f4f6;color:var(--accent);}
+    .toc a.active{background:#ede9fe;color:var(--accent);font-weight:600;}
+    .toc ul ul{margin-left:12px;}
+    .toc ul ul a{font-size:12px;padding:3px 8px;color:#6b7280;}
+    .toc ul ul a.active{background:#f0f9ff;color:var(--accent2);}
+
+    /* ── 内容区 ── */
+    .content{min-width:0;}
+    .section{background:#fff;border-radius:var(--radius);padding:40px;margin-bottom:28px;box-shadow:var(--shadow);}
+    .section-title{display:flex;align-items:center;gap:14px;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #f3f4f6;}
+    .section-title .icon{width:44px;height:44px;border-radius:10px;display:grid;place-items:center;font-size:22px;flex-shrink:0;}
+    .section-title{font-size:clamp(18px,2.5vw,24px);font-weight:800;color:#111827;}
+    h3{font-size:17px;font-weight:700;color:#1e293b;margin:28px 0 12px;}
+    h4{font-size:15px;font-weight:600;color:#374151;margin:16px 0 8px;}
+    p{margin-bottom:14px;color:#374151;}
+    a{color:var(--accent);text-decoration:none;}
+    a:hover{text-decoration:underline;}
+    ul,ol{padding-left:20px;margin-bottom:14px;color:#374151;}
+    li{margin-bottom:4px;}
+    strong{font-weight:700;}
+    code{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:2px 6px;font-size:.88em;font-family:'JetBrains Mono','Fira Code',monospace;}
+
+    /* ── 代码块 ── */
+    pre{background:var(--code-bg);color:#cdd6f4;border-radius:10px;padding:20px 24px;overflow-x:auto;font-size:13px;line-height:1.7;margin-bottom:18px;font-family:'JetBrains Mono','Fira Code',monospace;}
+    pre code{background:none;border:none;padding:0;font-size:inherit;color:inherit;}
+
+    /* ── callout ── */
+    .callout-blue{background:#eff6ff;border-left:4px solid #3b82f6;border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:18px;font-size:14px;}
+    .callout-green{background:#f0fdf4;border-left:4px solid #22c55e;border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:18px;font-size:14px;}
+    .callout-amber{background:#fffbeb;border-left:4px solid #f59e0b;border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:18px;font-size:14px;}
+    .callout-red{background:#fef2f2;border-left:4px solid #ef4444;border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:18px;font-size:14px;}
+    .callout-purple{background:#faf5ff;border-left:4px solid #a855f7;border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:18px;font-size:14px;}
+    .callout-cyan{background:#ecfeff;border-left:4px solid #06b6d4;border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:18px;font-size:14px;}
+
+    /* ── example box ── */
+    .example-box{background:#f8faff;border:1px solid #c7d2fe;border-radius:10px;padding:18px 20px;margin-bottom:18px;}
+    .ex-title{font-weight:700;color:#3730a3;margin-bottom:10px;font-size:14px;}
+
+    /* ── big concept ── */
+    .big-concept{background:linear-gradient(135deg,#faf5ff,#eff6ff);border:2px solid #a5b4fc;border-radius:12px;padding:24px 28px;margin-bottom:20px;}
+    .big-concept p{margin:0;font-size:15px;color:#1e293b;}
+
+    /* ── 两列 / 三列 ── */
+    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px;}
+    .three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:18px;}
+    .mini-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;}
+    .mini-card h4{margin-top:0;}
+    @media(max-width:700px){.two-col,.three-col{grid-template-columns:1fr;}}
+
+    /* ── diagram ── */
+    .diagram-wrap{margin:20px 0;text-align:center;}
+    .diagram-caption{font-size:12px;color:#6b7280;margin-top:8px;text-align:center;font-style:italic;}
+
+    /* ── table ── */
+    .table-wrap{overflow-x:auto;margin-bottom:18px;}
+    table{width:100%;border-collapse:collapse;font-size:13.5px;}
+    th{background:#f1f5f9;padding:10px 14px;text-align:left;font-weight:600;color:#374151;border-bottom:2px solid #e2e8f0;}
+    td{padding:9px 14px;border-bottom:1px solid #f1f5f9;color:#374151;}
+    tr:hover td{background:#f8fafc;}
+
+    /* ── footer ── */
+    footer{text-align:center;padding:32px;color:#9ca3af;font-size:13px;}
+    footer a{color:var(--accent);}
+  </style>
+</head>
+<body>
+<div class="page-wrap">
+
+  <!-- Hero -->
+  <header class="hero">
+    <div class="hero-badge">推理系统 · LLM Serving</div>
+    <h1>SGLang 深度解析：<span>高效 LLM 推理引擎</span></h1>
+    <p class="hero-sub">从 RadixAttention 到 Continuous Batching，彻底搞懂 SGLang 为什么比 vLLM 更快，以及如何正确部署。</p>
+    <div class="meta-grid">
+      <div class="meta-card"><div class="label">来源</div><div class="value">UC Berkeley / LMSYS</div></div>
+      <div class="meta-card"><div class="label">核心论文</div><div class="value">Zheng et al., 2024</div></div>
+      <div class="meta-card"><div class="label">核心优化</div><div class="value">RadixAttention</div></div>
+      <div class="meta-card"><div class="label">定位</div><div class="value">生产级推理框架</div></div>
+    </div>
+  </header>
+
+  <div class="layout">
+
+    <!-- TOC 侧边栏 -->
+    <nav class="toc-wrap">
+      <div class="toc">
+        <div class="toc-title">目录</div>
+        <ul>
+          <li><a href="#what">§0 SGLang 是什么</a></li>
+          <li><a href="#kvcache">§1 KV Cache 基础</a>
+            <ul>
+              <li><a href="#paged">1.1 PagedAttention</a></li>
+              <li><a href="#prefix">1.2 前缀重用问题</a></li>
+            </ul>
+          </li>
+          <li><a href="#radix">§2 RadixAttention</a>
+            <ul>
+              <li><a href="#radix-tree">2.1 Radix Tree 结构</a></li>
+              <li><a href="#eviction">2.2 淘汰策略</a></li>
+              <li><a href="#radix-perf">2.3 性能收益</a></li>
+            </ul>
+          </li>
+          <li><a href="#batch">§3 调度与 Batching</a>
+            <ul>
+              <li><a href="#continuous">3.1 Continuous Batching</a></li>
+              <li><a href="#chunked">3.2 Chunked Prefill</a></li>
+              <li><a href="#scheduler">3.3 调度器设计</a></li>
+            </ul>
+          </li>
+          <li><a href="#api">§4 编程接口</a>
+            <ul>
+              <li><a href="#runtime">4.1 Runtime API</a></li>
+              <li><a href="#lang">4.2 SGLang 语言</a></li>
+              <li><a href="#constrained">4.3 约束生成</a></li>
+            </ul>
+          </li>
+          <li><a href="#deploy">§5 部署实践</a>
+            <ul>
+              <li><a href="#multiGPU">5.1 多 GPU 部署</a></li>
+              <li><a href="#quant">5.2 量化</a></li>
+              <li><a href="#speculative">5.3 投机解码</a></li>
+            </ul>
+          </li>
+          <li><a href="#perf">§6 性能对比 &amp; 选型</a></li>
+        </ul>
+      </div>
+    </nav>
+
+    <!-- 正文 -->
+    <main class="content">
+
+      <!-- ══ §0 What is SGLang ══ -->
+      <section class="section" id="what">
+        <div class="section-title">
+          <div class="icon" style="background:#ede9fe;">🚀</div>
+          §0 SGLang 是什么
+        </div>
+
+        <p>SGLang 是由 UC Berkeley LMSYS 团队（就是开发 Vicuna、FastChat 的那个组）于 2024 年推出的<strong>高性能 LLM 推理框架</strong>。名字来自 "Structured Generation Language"。</p>
+
+        <p>它不是从零搭建的推理系统，而是在 Python + Triton GPU kernel 基础上，做了两件核心事情：</p>
+
+        <div class="two-col">
+          <div class="mini-card" style="border-left:4px solid #7c3aed;">
+            <h4 style="color:#5b21b6;">① 系统层：RadixAttention</h4>
+            <p style="margin:0;font-size:13px;">自动 KV Cache 前缀复用。同一个 system prompt 被多个请求复用时，KV Cache 只算一次，自动共享。不需要用户感知。</p>
+          </div>
+          <div class="mini-card" style="border-left:4px solid #0891b2;">
+            <h4 style="color:#0e7490;">② 语言层：SGLang 原语</h4>
+            <p style="margin:0;font-size:13px;">提供 Python DSL，把多轮对话、并行采样、约束生成（JSON/Regex）封装成声明式接口，运行时自动调度并行执行。</p>
+          </div>
+        </div>
+
+        <!-- SGLang 在推理栈中的位置 -->
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 820 220" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:820px;">
+            <defs>
+              <marker id="arrW" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#64748b"/>
+              </marker>
+            </defs>
+            <text x="410" y="18" text-anchor="middle" font-size="13" font-weight="700" fill="#111827">LLM 推理框架生态定位</text>
+
+            <!-- 用户应用层 -->
+            <rect x="10" y="28" width="800" height="36" rx="8" fill="#ede9fe" stroke="#c4b5fd" stroke-width="1.5"/>
+            <text x="410" y="51" text-anchor="middle" font-size="12" fill="#5b21b6" font-weight="600">用户应用层：Agent、RAG Pipeline、Chatbot、代码生成工具</text>
+
+            <line x1="410" y1="65" x2="410" y2="82" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrW)"/>
+
+            <!-- SGLang 语言层 -->
+            <rect x="10" y="84" width="800" height="36" rx="8" fill="#dbeafe" stroke="#93c5fd" stroke-width="2"/>
+            <text x="410" y="107" text-anchor="middle" font-size="13" fill="#1e40af" font-weight="700">SGLang 语言层：gen() / select() / fork() / 约束生成（JSON / Regex）</text>
+
+            <line x1="410" y1="121" x2="410" y2="138" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrW)"/>
+
+            <!-- SGLang 运行时 -->
+            <rect x="10" y="140" width="800" height="40" rx="8" fill="#fef3c7" stroke="#fcd34d" stroke-width="2"/>
+            <text x="410" y="158" text-anchor="middle" font-size="13" fill="#92400e" font-weight="700">SGLang Runtime：RadixAttention + Continuous Batching + Scheduler</text>
+            <text x="410" y="173" text-anchor="middle" font-size="11" fill="#92400e">（核心系统层，本笔记重点）</text>
+
+            <line x1="410" y1="181" x2="410" y2="196" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrW)"/>
+
+            <!-- 底层 -->
+            <rect x="10" y="198" width="390" height="18" rx="6" fill="#f0fdf4" stroke="#86efac"/>
+            <text x="205" y="211" text-anchor="middle" font-size="11" fill="#166534">GPU Kernel：Triton / FlashAttention / cuBLAS</text>
+            <rect x="420" y="198" width="390" height="18" rx="6" fill="#fef2f2" stroke="#fecaca"/>
+            <text x="615" y="211" text-anchor="middle" font-size="11" fill="#991b1b">模型权重：HuggingFace / SafeTensors</text>
+          </svg>
+          <div class="diagram-caption">图 0-1：SGLang 在 LLM 推理栈中的位置。它同时提供系统层优化（RadixAttention）和语言层 API，用户应用直接对接 SGLang。</div>
+        </div>
+
+        <h3>与主流框架对比</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>框架</th><th>核心机制</th><th>KV 前缀复用</th><th>编程模型</th><th>适合场景</th></tr></thead>
+            <tbody>
+              <tr><td><strong>vLLM</strong></td><td>PagedAttention</td><td>❌ 无自动复用</td><td>OpenAI 兼容 API</td><td>通用 serving，最广泛</td></tr>
+              <tr style="background:#faf5ff;"><td><strong>SGLang</strong></td><td>RadixAttention</td><td>✅ 自动前缀共享</td><td>Python DSL + REST</td><td>有公共前缀的场景（RAG/Agent）</td></tr>
+              <tr><td><strong>TensorRT-LLM</strong></td><td>静态编译优化</td><td>✅（手动）</td><td>C++ / Python</td><td>NVIDIA 硬件极致优化</td></tr>
+              <tr><td><strong>LMDeploy</strong></td><td>PagedAttention + 量化</td><td>❌</td><td>Python API</td><td>轻量部署，国产模型</td></tr>
+              <tr><td><strong>Ollama</strong></td><td>llama.cpp</td><td>❌</td><td>简单 REST</td><td>本地单机推理</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout-cyan">
+          <strong>一句话记住 SGLang：</strong> 当你的推理请求有大量<strong>共同前缀</strong>（System Prompt / RAG 检索文档 / Few-shot 示例），SGLang 的 RadixAttention 能把这部分的 KV Cache 自动共享，速度比 vLLM 快 2~6×。
+        </div>
+      </section>
+
+      <!-- ══ §1 KV Cache 基础 ══ -->
+      <section class="section" id="kvcache">
+        <div class="section-title">
+          <div class="icon" style="background:#fef3c7;">💾</div>
+          §1 KV Cache 基础：为什么缓存这么重要
+        </div>
+
+        <p>要理解 SGLang 的核心优化，必须先搞清楚 LLM 推理时 KV Cache 是什么、占多大内存、为什么贵。</p>
+
+        <h3 id="paged">1.1 Attention 计算与 KV Cache</h3>
+
+        <p>Transformer 每个 Attention 层在计算第 $t$ 个 token 时，需要访问前面所有 token 的 Key 和 Value 向量。为了避免重复计算，推理时会把它们缓存起来——这就是 KV Cache：</p>
+
+        <!-- KV Cache 内存示意图 -->
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 820 260" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:820px;">
+            <text x="410" y="18" text-anchor="middle" font-size="13" font-weight="700" fill="#111827">KV Cache 内存结构（单请求，32 层 Transformer）</text>
+
+            <!-- 列标题 -->
+            <text x="70"  y="38" text-anchor="middle" font-size="11" fill="#64748b" font-weight="600">Token</text>
+            <text x="240" y="38" text-anchor="middle" font-size="11" fill="#1e40af" font-weight="600">Key Cache（所有层）</text>
+            <text x="450" y="38" text-anchor="middle" font-size="11" fill="#7c3aed" font-weight="600">Value Cache（所有层）</text>
+            <text x="720" y="38" text-anchor="middle" font-size="11" fill="#64748b" font-weight="600">说明</text>
+
+            <!-- Token 1 (prompt) -->
+            <rect x="10" y="46" width="120" height="28" rx="6" fill="#e0f2fe" stroke="#7dd3fc"/>
+            <text x="70" y="65" text-anchor="middle" font-size="11" fill="#0369a1" font-weight="600">token 1（prompt）</text>
+            <rect x="135" y="46" width="210" height="28" rx="6" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="240" y="65" text-anchor="middle" font-size="11" fill="#1e40af">K[1] × 32 层 × 头数</text>
+            <rect x="350" y="46" width="210" height="28" rx="6" fill="#ddd6fe" stroke="#c4b5fd"/>
+            <text x="455" y="65" text-anchor="middle" font-size="11" fill="#5b21b6">V[1] × 32 层 × 头数</text>
+            <rect x="568" y="46" width="240" height="28" rx="6" fill="#f0fdf4" stroke="#86efac"/>
+            <text x="688" y="65" text-anchor="middle" font-size="11" fill="#166534">已计算，缓存</text>
+
+            <!-- Token 2~N -->
+            <rect x="10" y="80" width="120" height="28" rx="6" fill="#e0f2fe" stroke="#7dd3fc"/>
+            <text x="70" y="99" text-anchor="middle" font-size="11" fill="#0369a1" font-weight="600">token 2～N（prompt）</text>
+            <rect x="135" y="80" width="210" height="28" rx="6" fill="#bfdbfe" stroke="#93c5fd" opacity="0.7"/>
+            <text x="240" y="99" text-anchor="middle" font-size="11" fill="#1e40af">K[2～N] × 32 层</text>
+            <rect x="350" y="80" width="210" height="28" rx="6" fill="#ddd6fe" stroke="#c4b5fd" opacity="0.7"/>
+            <text x="455" y="99" text-anchor="middle" font-size="11" fill="#5b21b6">V[2～N] × 32 层</text>
+            <rect x="568" y="80" width="240" height="28" rx="6" fill="#f0fdf4" stroke="#86efac"/>
+            <text x="688" y="99" text-anchor="middle" font-size="11" fill="#166534">Prefill 阶段一次算完</text>
+
+            <!-- 分隔线 -->
+            <line x1="10" y1="113" x2="808" y2="113" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="4,3"/>
+            <text x="410" y="127" text-anchor="middle" font-size="11" fill="#94a3b8">↑ Prompt（预填充） ↓ Generation（逐 token 生成）</text>
+
+            <!-- 生成 token N+1 -->
+            <rect x="10" y="134" width="120" height="28" rx="6" fill="#fef3c7" stroke="#fbbf24"/>
+            <text x="70" y="153" text-anchor="middle" font-size="11" fill="#92400e" font-weight="600">token N+1（生成）</text>
+            <rect x="135" y="134" width="210" height="28" rx="6" fill="#fde68a" stroke="#fbbf24"/>
+            <text x="240" y="153" text-anchor="middle" font-size="11" fill="#92400e">K[N+1] 追加 1 行</text>
+            <rect x="350" y="134" width="210" height="28" rx="6" fill="#fed7aa" stroke="#fb923c"/>
+            <text x="455" y="153" text-anchor="middle" font-size="11" fill="#7c2d12">V[N+1] 追加 1 行</text>
+            <rect x="568" y="134" width="240" height="28" rx="6" fill="#fffbeb" stroke="#fcd34d"/>
+            <text x="688" y="153" text-anchor="middle" font-size="11" fill="#92400e">每步追加一行</text>
+
+            <text x="70" y="178" text-anchor="middle" font-size="10" fill="#94a3b8">token N+2, N+3 …</text>
+            <text x="240" y="178" text-anchor="middle" font-size="10" fill="#94a3b8">不断追加…</text>
+            <text x="455" y="178" text-anchor="middle" font-size="10" fill="#94a3b8">不断追加…</text>
+
+            <!-- 内存计算框 -->
+            <rect x="10" y="194" width="798" height="56" rx="10" fill="#fef2f2" stroke="#fecaca" stroke-width="1.5"/>
+            <text x="410" y="212" text-anchor="middle" font-size="12" fill="#991b1b" font-weight="700">KV Cache 内存计算（LLaMA-7B 为例）</text>
+            <text x="410" y="228" text-anchor="middle" font-size="11" fill="#991b1b">32 层 × 32 头 × 128 dim × 2(K+V) × 2 字节(FP16) = 每 token 512KB</text>
+            <text x="410" y="244" text-anchor="middle" font-size="11" fill="#991b1b">batch=32，seq=2048：32 × 2048 × 512KB = 32 GB — 轻松占满一张 A100</text>
+          </svg>
+          <div class="diagram-caption">图 1-1：KV Cache 内存结构。Prompt 部分 Prefill 阶段一次算完并缓存；Generation 阶段每步追加一行 K/V，随序列增长线性增大。</div>
+        </div>
+
+        <h3 id="prefix">1.2 前缀重用问题：传统 PagedAttention 的盲点</h3>
+
+        <p>vLLM 的 PagedAttention 把 KV Cache 分成固定大小的 Page（block），解决了显存碎片问题。但它有一个盲点：<strong>多个请求共用同一前缀时，KV Cache 仍然各自计算、各自存储，形成大量冗余</strong>。</p>
+
+        <!-- 前缀重用对比图 -->
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 820 280" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:820px;">
+            <text x="410" y="18" text-anchor="middle" font-size="13" font-weight="700" fill="#111827">100 个并发请求，相同 System Prompt（1000 tokens）</text>
+
+            <!-- 上半：vLLM -->
+            <text x="14" y="38" font-size="12" fill="#dc2626" font-weight="700">❌ vLLM PagedAttention：每个请求独立存储</text>
+
+            <rect x="10" y="46" width="220" height="24" rx="5" fill="#fca5a5" stroke="#f87171"/>
+            <text x="120" y="63" text-anchor="middle" font-size="10" fill="#991b1b" font-weight="600">请求 1 — System Prompt KV（500MB）</text>
+            <rect x="234" y="46" width="100" height="24" rx="5" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="284" y="63" text-anchor="middle" font-size="10" fill="#1e40af">用户问题</text>
+
+            <rect x="10" y="76" width="220" height="24" rx="5" fill="#fca5a5" stroke="#f87171"/>
+            <text x="120" y="93" text-anchor="middle" font-size="10" fill="#991b1b" font-weight="600">请求 2 — System Prompt KV（重复！）</text>
+            <rect x="234" y="76" width="120" height="24" rx="5" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="294" y="93" text-anchor="middle" font-size="10" fill="#1e40af">用户问题</text>
+
+            <rect x="10" y="106" width="220" height="24" rx="5" fill="#fca5a5" stroke="#f87171"/>
+            <text x="120" y="123" text-anchor="middle" font-size="10" fill="#991b1b" font-weight="600">请求 3 — System Prompt KV（再次重复）</text>
+            <rect x="234" y="106" width="90" height="24" rx="5" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="279" y="123" text-anchor="middle" font-size="10" fill="#1e40af">用户问题</text>
+
+            <text x="14" y="142" font-size="11" fill="#94a3b8">…… 共 100 个请求，System Prompt 存了 100 份</text>
+
+            <rect x="430" y="46" width="380" height="96" rx="8" fill="#fef2f2" stroke="#fecaca"/>
+            <text x="620" y="70" text-anchor="middle" font-size="12" fill="#dc2626" font-weight="700">显存浪费：</text>
+            <text x="620" y="90" text-anchor="middle" font-size="11" fill="#dc2626">1000 tokens × 512KB = 500MB / 请求</text>
+            <text x="620" y="108" text-anchor="middle" font-size="11" fill="#dc2626">100 请求 × 500MB = 50 GB 显存</text>
+            <text x="620" y="126" text-anchor="middle" font-size="11" fill="#dc2626">且每次都要重新 Prefill（浪费算力）</text>
+
+            <!-- 分隔线 -->
+            <line x1="10" y1="152" x2="810" y2="152" stroke="#d1d5db" stroke-width="1.5" stroke-dasharray="6,3"/>
+
+            <!-- 下半：SGLang -->
+            <text x="14" y="170" font-size="12" fill="#166534" font-weight="700">✅ SGLang RadixAttention：共同前缀只存一份</text>
+
+            <!-- 共享前缀块 -->
+            <rect x="10" y="178" width="200" height="68" rx="8" fill="#d1fae5" stroke="#6ee7b7" stroke-width="2"/>
+            <text x="110" y="202" text-anchor="middle" font-size="11" fill="#065f46" font-weight="700">System Prompt KV</text>
+            <text x="110" y="218" text-anchor="middle" font-size="11" fill="#065f46">只存 1 份</text>
+            <text x="110" y="234" text-anchor="middle" font-size="11" fill="#065f46">500 MB</text>
+
+            <!-- 分叉线 -->
+            <line x1="212" y1="212" x2="248" y2="192" stroke="#166534" stroke-width="1.5"/>
+            <line x1="212" y1="212" x2="248" y2="212" stroke="#166534" stroke-width="1.5"/>
+            <line x1="212" y1="212" x2="248" y2="232" stroke="#166534" stroke-width="1.5"/>
+
+            <rect x="250" y="182" width="140" height="22" rx="5" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="320" y="197" text-anchor="middle" font-size="10" fill="#1e40af">请求 1 独有 KV</text>
+            <rect x="250" y="202" width="140" height="22" rx="5" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="320" y="217" text-anchor="middle" font-size="10" fill="#1e40af">请求 2 独有 KV</text>
+            <rect x="250" y="222" width="140" height="22" rx="5" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="320" y="237" text-anchor="middle" font-size="10" fill="#1e40af">请求 3 独有 KV</text>
+            <text x="320" y="255" font-size="10" fill="#94a3b8">…… 100 个</text>
+
+            <rect x="430" y="178" width="380" height="68" rx="8" fill="#f0fdf4" stroke="#86efac"/>
+            <text x="620" y="202" text-anchor="middle" font-size="12" fill="#166534" font-weight="700">节省：</text>
+            <text x="620" y="220" text-anchor="middle" font-size="11" fill="#166534">System Prompt KV 只需 500MB（1 份）</text>
+            <text x="620" y="238" text-anchor="middle" font-size="11" fill="#166534">节省 49.5 GB 显存，Prefill 只算一次</text>
+          </svg>
+          <div class="diagram-caption">图 1-2：vLLM vs SGLang 前缀处理。100 请求相同 System Prompt，vLLM 存 100 份（50GB），SGLang 只存 1 份（500MB）。</div>
+        </div>
+
+        <div class="callout-amber">
+          <strong>什么时候有公共前缀？</strong> 几乎所有实际业务都有：
+          <ul style="margin:8px 0 0;">
+            <li><strong>RAG</strong>：检索到的相同文档片段 + 格式 prompt</li>
+            <li><strong>Agent</strong>：固定的系统角色定义和工具描述</li>
+            <li><strong>Few-shot</strong>：每个请求开头的固定示例</li>
+            <li><strong>多轮对话</strong>：前几轮的历史对话</li>
+            <li><strong>代码补全</strong>：相同的文件上下文</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ══ §2 RadixAttention ══ -->
+      <section class="section" id="radix">
+        <div class="section-title">
+          <div class="icon" style="background:#ede9fe;">🌳</div>
+          §2 RadixAttention：KV Cache 的前缀树
+        </div>
+
+        <p>RadixAttention 是 SGLang 的核心创新。它把所有请求的 KV Cache 组织成一棵 <strong>Radix Tree（压缩前缀树）</strong>，自动发现并复用公共前缀，完全对用户透明。</p>
+
+        <h3 id="radix-tree">2.1 Radix Tree 数据结构</h3>
+
+        <!-- Radix Tree 图 -->
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 820 310" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:820px;">
+            <defs>
+              <marker id="arrR" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#7c3aed"/>
+              </marker>
+              <marker id="arrRb" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#0891b2"/>
+              </marker>
+            </defs>
+            <text x="410" y="18" text-anchor="middle" font-size="13" font-weight="700" fill="#111827">RadixAttention KV Cache 树结构示例</text>
+
+            <!-- 根节点 -->
+            <rect x="330" y="28" width="160" height="38" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="2"/>
+            <text x="410" y="52" text-anchor="middle" font-size="12" fill="#5b21b6" font-weight="700">Root（空节点）</text>
+
+            <!-- 第一层分支 -->
+            <line x1="360" y1="66" x2="200" y2="106" stroke="#7c3aed" stroke-width="1.5" marker-end="url(#arrR)"/>
+            <text x="260" y="90" font-size="10" fill="#7c3aed">System Prompt A</text>
+            <rect x="70" y="108" width="260" height="40" rx="10" fill="#d1fae5" stroke="#6ee7b7" stroke-width="2"/>
+            <text x="200" y="124" text-anchor="middle" font-size="11" fill="#065f46" font-weight="700">"你是一个专业助手…" KV</text>
+            <text x="200" y="140" text-anchor="middle" font-size="10" fill="#065f46">tokens: 500，引用计数: 3，已缓存</text>
+
+            <line x1="460" y1="66" x2="620" y2="106" stroke="#7c3aed" stroke-width="1.5" marker-end="url(#arrR)"/>
+            <text x="560" y="90" font-size="10" fill="#7c3aed">System Prompt B</text>
+            <rect x="490" y="108" width="260" height="40" rx="10" fill="#d1fae5" stroke="#6ee7b7" stroke-width="2"/>
+            <text x="620" y="124" text-anchor="middle" font-size="11" fill="#065f46" font-weight="700">"You are a code expert…" KV</text>
+            <text x="620" y="140" text-anchor="middle" font-size="10" fill="#065f46">tokens: 300，引用计数: 2，已缓存</text>
+
+            <!-- 第二层：Prompt A 的子节点 -->
+            <line x1="150" y1="148" x2="100" y2="196" stroke="#0891b2" stroke-width="1.5" marker-end="url(#arrRb)"/>
+            <rect x="14" y="198" width="172" height="36" rx="8" fill="#e0f2fe" stroke="#7dd3fc"/>
+            <text x="100" y="214" text-anchor="middle" font-size="10" fill="#0369a1" font-weight="600">"帮我写个报告" KV</text>
+            <text x="100" y="227" text-anchor="middle" font-size="9" fill="#0369a1">tokens: 20，引用: 1</text>
+
+            <line x1="250" y1="148" x2="300" y2="196" stroke="#0891b2" stroke-width="1.5" marker-end="url(#arrRb)"/>
+            <rect x="218" y="198" width="172" height="36" rx="8" fill="#e0f2fe" stroke="#7dd3fc"/>
+            <text x="304" y="214" text-anchor="middle" font-size="10" fill="#0369a1" font-weight="600">"分析这篇文章" KV</text>
+            <text x="304" y="227" text-anchor="middle" font-size="9" fill="#0369a1">tokens: 25，引用: 2</text>
+
+            <!-- 第二层：Prompt B 的子节点 -->
+            <line x1="580" y1="148" x2="540" y2="196" stroke="#0891b2" stroke-width="1.5" marker-end="url(#arrRb)"/>
+            <rect x="456" y="198" width="168" height="36" rx="8" fill="#e0f2fe" stroke="#7dd3fc"/>
+            <text x="540" y="214" text-anchor="middle" font-size="10" fill="#0369a1" font-weight="600">"写个快排算法" KV</text>
+            <text x="540" y="227" text-anchor="middle" font-size="9" fill="#0369a1">tokens: 18，引用: 1</text>
+
+            <line x1="660" y1="148" x2="700" y2="196" stroke="#0891b2" stroke-width="1.5" marker-end="url(#arrRb)"/>
+            <rect x="628" y="198" width="178" height="36" rx="8" fill="#e0f2fe" stroke="#7dd3fc"/>
+            <text x="717" y="214" text-anchor="middle" font-size="10" fill="#0369a1" font-weight="600">"解释这段代码" KV</text>
+            <text x="717" y="227" text-anchor="middle" font-size="9" fill="#0369a1">tokens: 30，引用: 1</text>
+
+            <!-- 第三层：生成追加 -->
+            <line x1="304" y1="234" x2="304" y2="262" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4,2"/>
+            <rect x="240" y="264" width="128" height="24" rx="6" fill="#fef3c7" stroke="#fbbf24"/>
+            <text x="304" y="280" text-anchor="middle" font-size="10" fill="#92400e">生成 token 追加…</text>
+
+            <!-- 图例 -->
+            <rect x="10" y="298" width="800" height="10" rx="4" fill="#f8fafc" stroke="#e2e8f0"/>
+            <rect x="16" y="299" width="10" height="8" rx="2" fill="#d1fae5" stroke="#6ee7b7"/>
+            <text x="32" y="307" font-size="9" fill="#065f46">共享前缀节点（引用计数&gt;0 不淘汰）</text>
+            <rect x="230" y="299" width="10" height="8" rx="2" fill="#e0f2fe" stroke="#7dd3fc"/>
+            <text x="246" y="307" font-size="9" fill="#0369a1">请求独有节点</text>
+            <rect x="430" y="299" width="10" height="8" rx="2" fill="#fef3c7" stroke="#fbbf24"/>
+            <text x="446" y="307" font-size="9" fill="#92400e">生成中追加节点</text>
+            <text x="610" y="307" font-size="9" fill="#64748b">引用计数=0 时可按 LRU 淘汰</text>
+          </svg>
+          <div class="diagram-caption">图 2-1：RadixAttention KV Cache 树。绿色节点为多请求共享的前缀；蓝色节点为各请求独有部分；生成的 token 继续追加到叶节点。</div>
+        </div>
+
+        <div class="callout-purple">
+          <strong>关键：</strong> 每个节点存一段 token 序列的 KV Cache 及引用计数。新请求到来时，系统沿树根做最长前缀匹配，命中直接复用；不命中的部分才重新计算并插入树。整个过程用户无感知。
+        </div>
+
+        <h3 id="eviction">2.2 淘汰策略：引用计数 + LRU</h3>
+
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 820 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:820px;">
+            <text x="410" y="18" text-anchor="middle" font-size="13" font-weight="700" fill="#111827">KV Cache 节点淘汰策略</text>
+
+            <rect x="10" y="28" width="390" height="120" rx="10" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
+            <text x="205" y="50" text-anchor="middle" font-size="12" fill="#065f46" font-weight="700">保留（不淘汰）</text>
+            <text x="22" y="70" font-size="11" fill="#166534">✓ 引用计数 &gt; 0（有请求正在使用）</text>
+            <text x="22" y="88" font-size="11" fill="#166534">✓ 最近刚被访问（LRU 队列靠前）</text>
+            <text x="22" y="106" font-size="11" fill="#166534">✓ 是活跃叶节点的祖先（父节点受保护）</text>
+            <text x="22" y="124" font-size="11" fill="#166534">✓ 显存充足</text>
+            <text x="22" y="142" font-size="11" fill="#166534">✓ Root 节点（永不淘汰）</text>
+
+            <rect x="420" y="28" width="390" height="120" rx="10" fill="#fef2f2" stroke="#fecaca" stroke-width="1.5"/>
+            <text x="615" y="50" text-anchor="middle" font-size="12" fill="#dc2626" font-weight="700">淘汰（可回收）</text>
+            <text x="432" y="70" font-size="11" fill="#991b1b">✗ 引用计数 = 0（无活跃请求）</text>
+            <text x="432" y="88" font-size="11" fill="#991b1b">✗ LRU 队列末尾（最久未访问）</text>
+            <text x="432" y="106" font-size="11" fill="#991b1b">✗ 显存压力大时优先淘汰叶节点</text>
+            <text x="432" y="124" font-size="11" fill="#991b1b">✗ 短节点优先（tokens 少，收益低）</text>
+            <text x="432" y="142" font-size="11" fill="#991b1b">✗ 从叶往根方向淘汰（保留上层共享前缀）</text>
+          </svg>
+          <div class="diagram-caption">图 2-2：KV Cache 淘汰策略。引用计数 = 0 且最久未访问的叶节点优先被淘汰；System Prompt 等共享父节点受子节点保护。</div>
+        </div>
+
+        <h3 id="radix-perf">2.3 性能收益</h3>
+
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 820 190" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:820px;">
+            <text x="410" y="18" text-anchor="middle" font-size="13" font-weight="700" fill="#111827">不同场景下 RadixAttention 的吞吐量提升（论文实测）</text>
+
+            <!-- 表头 -->
+            <text x="155" y="38" text-anchor="middle" font-size="11" fill="#64748b" font-weight="600">场景</text>
+            <text x="430" y="38" text-anchor="middle" font-size="11" fill="#64748b" font-weight="600">KV Cache 命中率</text>
+            <text x="700" y="38" text-anchor="middle" font-size="11" fill="#64748b" font-weight="600">吞吐量提升</text>
+
+            <!-- 行 1：多轮对话 -->
+            <rect x="10" y="46" width="290" height="28" rx="6" fill="#ede9fe" stroke="#c4b5fd"/>
+            <text x="155" y="65" text-anchor="middle" font-size="11" fill="#5b21b6" font-weight="600">多轮对话（Multi-turn Chat）</text>
+            <rect x="310" y="50" width="200" height="20" rx="4" fill="#7c3aed"/>
+            <text x="520" y="64" font-size="11" fill="#5b21b6" font-weight="600"> ~80%</text>
+            <rect x="580" y="50" width="160" height="20" rx="4" fill="#7c3aed"/>
+            <text x="750" y="64" font-size="11" fill="#5b21b6" font-weight="600"> 3.8×</text>
+
+            <!-- 行 2：RAG -->
+            <rect x="10" y="82" width="290" height="28" rx="6" fill="#d1fae5" stroke="#6ee7b7"/>
+            <text x="155" y="101" text-anchor="middle" font-size="11" fill="#065f46" font-weight="600">RAG（检索文档前缀）</text>
+            <rect x="310" y="86" width="230" height="20" rx="4" fill="#16a34a"/>
+            <text x="550" y="100" font-size="11" fill="#166534" font-weight="600"> ~90%</text>
+            <rect x="580" y="86" width="220" height="20" rx="4" fill="#16a34a"/>
+            <text x="810" y="100" font-size="11" fill="#166534" font-weight="600"> 5.2×</text>
+
+            <!-- 行 3：Agent -->
+            <rect x="10" y="118" width="290" height="28" rx="6" fill="#fef3c7" stroke="#fbbf24"/>
+            <text x="155" y="137" text-anchor="middle" font-size="11" fill="#92400e" font-weight="600">Agent（固定 System Prompt）</text>
+            <rect x="310" y="122" width="180" height="20" rx="4" fill="#f59e0b"/>
+            <text x="500" y="136" font-size="11" fill="#92400e" font-weight="600"> ~70%</text>
+            <rect x="580" y="122" width="160" height="20" rx="4" fill="#f59e0b"/>
+            <text x="750" y="136" font-size="11" fill="#92400e" font-weight="600"> 2.9×</text>
+
+            <!-- 行 4：无前缀 -->
+            <rect x="10" y="154" width="290" height="28" rx="6" fill="#f1f5f9" stroke="#e2e8f0"/>
+            <text x="155" y="173" text-anchor="middle" font-size="11" fill="#64748b" font-weight="600">无公共前缀（独立单问）</text>
+            <rect x="310" y="158" width="22" height="20" rx="4" fill="#94a3b8"/>
+            <text x="340" y="172" font-size="11" fill="#64748b"> ~5%（几乎无复用）</text>
+            <rect x="580" y="158" width="28" height="20" rx="4" fill="#94a3b8"/>
+            <text x="616" y="172" font-size="11" fill="#64748b"> ≈ 1.0×（与 vLLM 持平）</text>
+          </svg>
+          <div class="diagram-caption">图 2-3：RadixAttention 在不同场景的收益。公共前缀越多，命中率越高，加速越显著。无公共前缀时与 vLLM 基本持平。</div>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：构建 RAG 问答服务</div>
+          <ul style="margin:0;">
+            <li>每次请求都包含：System Prompt（200 tokens）+ 检索到的文档块（1000 tokens）+ 用户问题（50 tokens）</li>
+            <li>如果 1000 个用户问的是同一篇文档，前 1200 tokens KV Cache 只算一次</li>
+            <li>第 2 个请求开始，TTFT（首 token 延迟）从 ~500ms 降到 ~20ms（跳过 Prefill）</li>
+            <li>整体吞吐量提升 5~6×</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ══ §3 调度与 Batching ══ -->
+      <section class="section" id="batch">
+        <div class="section-title">
+          <div class="icon" style="background:#ecfeff;">⚡</div>
+          §3 调度与 Batching：如何让 GPU 永不空闲
+        </div>
+
+        <p>KV Cache 管理只是一方面。要榨干 GPU 的吞吐量，还需要精巧的调度策略。SGLang 在这里借鉴并改进了 Continuous Batching，并引入了 Chunked Prefill。</p>
+
+        <h3 id="continuous">3.1 Continuous Batching：请求粒度的动态调度</h3>
+
+        <p>传统推理框架（TGI 早期版本等）使用静态 Batching：<strong>等一批请求都到齐了再一起推理</strong>，某个请求先生成完也要等其他人。这会造成严重的 GPU 空转。</p>
+
+        <!-- 静态 vs 动态 Batching 对比 -->
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 820 260" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:820px;">
+            <text x="410" y="18" text-anchor="middle" font-size="13" font-weight="700" fill="#111827">Static Batching vs Continuous Batching（时间轴对比）</text>
+
+            <!-- ── 上半：Static Batching ── -->
+            <text x="14" y="38" font-size="12" fill="#dc2626" font-weight="700">❌ Static Batching（按最长请求等待）</text>
+
+            <!-- 时间轴 -->
+            <text x="70" y="56" text-anchor="middle" font-size="10" fill="#64748b">Req A（短）</text>
+            <rect x="100" y="44" width="120" height="20" rx="4" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="160" y="58" text-anchor="middle" font-size="9" fill="#1e40af">生成 10 tokens</text>
+            <rect x="222" y="44" width="118" height="20" rx="4" fill="#f1f5f9" stroke="#e2e8f0"/>
+            <text x="281" y="58" text-anchor="middle" font-size="9" fill="#94a3b8">等待（空转）</text>
+
+            <text x="70" y="80" text-anchor="middle" font-size="10" fill="#64748b">Req B（中）</text>
+            <rect x="100" y="68" width="200" height="20" rx="4" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="200" y="82" text-anchor="middle" font-size="9" fill="#1e40af">生成 20 tokens</text>
+            <rect x="302" y="68" width="38" height="20" rx="4" fill="#f1f5f9" stroke="#e2e8f0"/>
+            <text x="321" y="82" text-anchor="middle" font-size="9" fill="#94a3b8">等</text>
+
+            <text x="70" y="104" text-anchor="middle" font-size="10" fill="#64748b">Req C（长）</text>
+            <rect x="100" y="92" width="340" height="20" rx="4" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="270" y="106" text-anchor="middle" font-size="9" fill="#1e40af">生成 40 tokens（决定整批等待时间）</text>
+
+            <line x1="440" y1="44" x2="440" y2="115" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4,3"/>
+            <text x="450" y="80" font-size="11" fill="#dc2626" font-weight="600">批次结束</text>
+            <text x="450" y="96" font-size="10" fill="#dc2626">新请求只能在</text>
+            <text x="450" y="108" font-size="10" fill="#dc2626">下一批开始</text>
+
+            <rect x="100" y="114" width="240" height="18" rx="4" fill="#fef2f2" stroke="#fecaca"/>
+            <text x="220" y="127" text-anchor="middle" font-size="10" fill="#dc2626" font-weight="600">GPU 利用率低：短请求完成后 GPU 在空等长请求</text>
+
+            <!-- ── 下半：Continuous Batching ── -->
+            <line x1="10" y1="142" x2="810" y2="142" stroke="#d1d5db" stroke-width="1" stroke-dasharray="6,3"/>
+            <text x="14" y="160" font-size="12" fill="#166534" font-weight="700">✅ Continuous Batching（token 粒度动态插入）</text>
+
+            <text x="70" y="178" text-anchor="middle" font-size="10" fill="#64748b">GPU 时间槽</text>
+
+            <!-- 每个 step 动态填充 -->
+            <rect x="100" y="166" width="30" height="20" rx="3" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="115" y="180" text-anchor="middle" font-size="8" fill="#1e40af">A</text>
+            <rect x="132" y="166" width="30" height="20" rx="3" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="147" y="180" text-anchor="middle" font-size="8" fill="#1e40af">B</text>
+            <rect x="164" y="166" width="30" height="20" rx="3" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="179" y="180" text-anchor="middle" font-size="8" fill="#1e40af">C</text>
+            <rect x="196" y="166" width="30" height="20" rx="3" fill="#d1fae5" stroke="#6ee7b7"/>
+            <text x="211" y="180" text-anchor="middle" font-size="8" fill="#065f46">D*</text>
+            <rect x="228" y="166" width="30" height="20" rx="3" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="243" y="180" text-anchor="middle" font-size="8" fill="#1e40af">B</text>
+            <rect x="260" y="166" width="30" height="20" rx="3" fill="#d1fae5" stroke="#6ee7b7"/>
+            <text x="275" y="180" text-anchor="middle" font-size="8" fill="#065f46">D</text>
+            <rect x="292" y="166" width="30" height="20" rx="3" fill="#fef3c7" stroke="#fbbf24"/>
+            <text x="307" y="180" text-anchor="middle" font-size="8" fill="#92400e">E*</text>
+            <rect x="324" y="166" width="30" height="20" rx="3" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="339" y="180" text-anchor="middle" font-size="8" fill="#1e40af">C</text>
+            <rect x="356" y="166" width="30" height="20" rx="3" fill="#d1fae5" stroke="#6ee7b7"/>
+            <text x="371" y="180" text-anchor="middle" font-size="8" fill="#065f46">D</text>
+            <rect x="388" y="166" width="30" height="20" rx="3" fill="#fef3c7" stroke="#fbbf24"/>
+            <text x="403" y="180" text-anchor="middle" font-size="8" fill="#92400e">E</text>
+            <text x="430" y="180" font-size="12" fill="#94a3b8">…</text>
+
+            <text x="200" y="204" font-size="10" fill="#166534">* 号 = 新请求在前一个请求完成后立即插入 batch，无需等待整批结束</text>
+
+            <rect x="100" y="212" width="710" height="36" rx="8" fill="#f0fdf4" stroke="#86efac"/>
+            <text x="455" y="228" text-anchor="middle" font-size="11" fill="#065f46" font-weight="700">GPU 利用率：几乎 100%</text>
+            <text x="455" y="244" text-anchor="middle" font-size="10" fill="#166534">每个 step 都把 batch 中空出来的位置立刻用新请求填满；新请求 P99 延迟大幅降低</text>
+          </svg>
+          <div class="diagram-caption">图 3-1：Static Batching vs Continuous Batching。Continuous Batching 在 token 粒度动态调度，GPU 时间槽永不空闲。</div>
+        </div>
+
+        <h3 id="chunked">3.2 Chunked Prefill：平衡 Prefill 与 Decode 的延迟</h3>
+
+        <p>Continuous Batching 遇到一个新问题：<strong>Prefill 阶段（算整个 prompt）计算量大，会抢占 Decode 请求的 GPU 时间，导致在线请求卡顿（TTFT 增大）</strong>。</p>
+
+        <!-- Chunked Prefill 示意 -->
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 820 220" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:820px;">
+            <text x="410" y="18" text-anchor="middle" font-size="13" font-weight="700" fill="#111827">Chunked Prefill：把长 Prompt 切片，与 Decode 混合调度</text>
+
+            <!-- 不分 chunk：Prefill 抢占 -->
+            <text x="14" y="38" font-size="11" fill="#dc2626" font-weight="600">❌ 不分 Chunk：Prefill 阻塞 Decode</text>
+
+            <rect x="100" y="44" width="280" height="22" rx="5" fill="#fca5a5" stroke="#f87171"/>
+            <text x="240" y="59" text-anchor="middle" font-size="11" fill="#991b1b" font-weight="600">Prefill 2048 tokens（耗时 200ms）</text>
+            <rect x="382" y="44" width="30" height="22" rx="5" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="397" y="59" text-anchor="middle" font-size="9" fill="#1e40af">D1</text>
+            <rect x="414" y="44" width="30" height="22" rx="5" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="429" y="59" text-anchor="middle" font-size="9" fill="#1e40af">D2</text>
+
+            <text x="240" y="80" font-size="10" fill="#dc2626">其他请求的 Decode 必须等 Prefill 结束才能继续 → TPOT 增大，用户感觉卡顿</text>
+
+            <!-- 分 chunk -->
+            <line x1="10" y1="94" x2="810" y2="94" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="4,3"/>
+            <text x="14" y="112" font-size="11" fill="#166534" font-weight="600">✅ Chunked Prefill（chunk_size=512）：分片与 Decode 交替</text>
+
+            <rect x="100" y="118" width="70" height="22" rx="5" fill="#fed7aa" stroke="#fb923c"/>
+            <text x="135" y="133" text-anchor="middle" font-size="9" fill="#7c2d12">Pfill[0:512]</text>
+            <rect x="172" y="118" width="30" height="22" rx="5" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="187" y="133" text-anchor="middle" font-size="9" fill="#1e40af">D1</text>
+            <rect x="204" y="118" width="30" height="22" rx="5" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="219" y="133" text-anchor="middle" font-size="9" fill="#1e40af">D2</text>
+
+            <rect x="236" y="118" width="70" height="22" rx="5" fill="#fed7aa" stroke="#fb923c"/>
+            <text x="271" y="133" text-anchor="middle" font-size="9" fill="#7c2d12">Pfill[512:1024]</text>
+            <rect x="308" y="118" width="30" height="22" rx="5" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="323" y="133" text-anchor="middle" font-size="9" fill="#1e40af">D1</text>
+            <rect x="340" y="118" width="30" height="22" rx="5" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="355" y="133" text-anchor="middle" font-size="9" fill="#1e40af">D2</text>
+
+            <rect x="372" y="118" width="70" height="22" rx="5" fill="#fed7aa" stroke="#fb923c"/>
+            <text x="407" y="133" text-anchor="middle" font-size="9" fill="#7c2d12">Pfill[1024:1536]</text>
+            <rect x="444" y="118" width="30" height="22" rx="5" fill="#bfdbfe" stroke="#93c5fd"/>
+            <text x="459" y="133" text-anchor="middle" font-size="9" fill="#1e40af">D1</text>
+
+            <rect x="476" y="118" width="70" height="22" rx="5" fill="#fed7aa" stroke="#fb923c"/>
+            <text x="511" y="133" text-anchor="middle" font-size="9" fill="#7c2d12">Pfill[1536:2048]</text>
+
+            <text x="600" y="133" font-size="11" fill="#94a3b8">→ 完成</text>
+
+            <text x="100" y="158" font-size="10" fill="#166534">每个 chunk 后立即穿插 Decode step，在线请求 TPOT 稳定，用户无卡顿感</text>
+
+            <!-- 配置说明 -->
+            <rect x="10" y="170" width="800" height="40" rx="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+            <text x="410" y="186" text-anchor="middle" font-size="11" fill="#1e40af" font-weight="600">SGLang 配置：--chunked-prefill-size 512</text>
+            <text x="410" y="202" text-anchor="middle" font-size="11" fill="#374151">chunk_size 越小 → Decode 延迟越稳定，但 Prefill 总耗时略长；通常设 512~1024</text>
+          </svg>
+          <div class="diagram-caption">图 3-2：Chunked Prefill 把长 prompt 切成 512-token 的片段，与 Decode 请求交替执行，避免 Prefill 抢占导致的卡顿。</div>
+        </div>
+
+        <h3 id="scheduler">3.3 SGLang 调度器设计</h3>
+
+        <div class="two-col">
+          <div class="mini-card" style="border-left:4px solid #7c3aed;">
+            <h4 style="color:#5b21b6;">Prefill-first 策略</h4>
+            <p style="margin:0;font-size:13px;">新请求优先 Prefill（否则 TTFT 无限延长），Prefill 完成后加入 Decode batch。Chunked Prefill 控制单步 Prefill 计算量不超过预算。</p>
+          </div>
+          <div class="mini-card" style="border-left:4px solid #0891b2;">
+            <h4 style="color:#0e7490;">内存感知调度</h4>
+            <p style="margin:0;font-size:13px;">调度器实时追踪 KV Cache 占用。如显存不足，会先触发 RadixAttention 淘汰，再必要时 preempt（换出）低优先级请求（swap 到 CPU 或直接 recompute）。</p>
+          </div>
+        </div>
+
+        <div class="three-col">
+          <div class="mini-card">
+            <h4 style="color:#374151;">TTFT</h4>
+            <p style="font-size:12px;margin:0;color:#6b7280;">Time To First Token<br/>首 token 延迟。受 Prefill 速度影响，RadixAttention 命中时极低（毫秒级）</p>
+          </div>
+          <div class="mini-card">
+            <h4 style="color:#374151;">TPOT</h4>
+            <p style="font-size:12px;margin:0;color:#6b7280;">Time Per Output Token<br/>每个生成 token 的延迟。受 batch size 和 KV Cache 访问速度影响</p>
+          </div>
+          <div class="mini-card">
+            <h4 style="color:#374151;">Throughput</h4>
+            <p style="font-size:12px;margin:0;color:#6b7280;">output tokens / second<br/>系统整体吞吐量。Continuous Batching + RadixAttention 双重加速</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ §4 编程接口 ══ -->
+      <section class="section" id="api">
+        <div class="section-title">
+          <div class="icon" style="background:#fef3c7;">🧩</div>
+          §4 编程接口：Runtime API 与 SGLang 语言
+        </div>
+
+        <p>SGLang 提供两套接口：<strong>底层 HTTP/Python Runtime API</strong>（兼容 OpenAI，用于接入现有工具链），以及<strong>SGLang 语言原语</strong>（高级 DSL，用于复杂多步推理编程）。</p>
+
+        <h3 id="runtime">4.1 Runtime API：OpenAI 兼容接口</h3>
+
+        <p>启动服务器后，SGLang 自动提供 OpenAI 兼容的 HTTP 端点，直接替换 openai.baseUrl 即可：</p>
+
+        <pre># 启动 SGLang 服务
+python -m sglang.launch_server \
+    --model-path meta-llama/Llama-3-8B-Instruct \
+    --host 0.0.0.0 --port 30000 \
+    --tp 1                        # tensor_parallel_size
+
+# 使用 OpenAI 客户端
+from openai import OpenAI
+client = OpenAI(base_url="http://localhost:30000/v1", api_key="EMPTY")
+
+response = client.chat.completions.create(
+    model="meta-llama/Llama-3-8B-Instruct",
+    messages=[{"role": "user", "content": "你好"}],
+    max_tokens=100,
+)</pre>
+
+        <p>也支持原生 Python Runtime API，可以更细粒度地控制缓存行为：</p>
+
+        <pre>import sglang as sgl
+
+# 初始化 Runtime
+runtime = sgl.Runtime(model_path="meta-llama/Llama-3-8B-Instruct")
+sgl.set_default_backend(runtime)
+
+# 简单生成
+@sgl.function
+def simple_qa(s, question):
+    s += sgl.system("你是一个有用的助手")
+    s += sgl.user(question)
+    s += sgl.assistant(sgl.gen("answer", max_new_tokens=200))
+
+# 单个调用
+state = simple_qa.run(question="什么是深度学习？")
+print(state["answer"])
+
+runtime.shutdown()</pre>
+
+        <h3 id="lang">4.2 SGLang 原语：高级并行控制</h3>
+
+        <p>SGLang 最强大的地方在于其<strong>声明式编程原语</strong>，可以轻松实现并行采样、多步推理、Fork-Join 等复杂模式：</p>
+
+        <!-- 原语图 -->
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 820 240" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:820px;">
+            <defs>
+              <marker id="arrA" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#2563eb"/>
+              </marker>
+            </defs>
+            <text x="410" y="18" text-anchor="middle" font-size="13" font-weight="700" fill="#111827">SGLang 核心原语：fork() 实现并行采样</text>
+
+            <!-- 共享 prefix -->
+            <rect x="10" y="28" width="820" height="0" rx="0" fill="none"/>
+            <rect x="280" y="28" width="260" height="42" rx="10" fill="#d1fae5" stroke="#6ee7b7" stroke-width="2"/>
+            <text x="410" y="46" text-anchor="middle" font-size="12" fill="#065f46" font-weight="700">共享前缀</text>
+            <text x="410" y="62" text-anchor="middle" font-size="11" fill="#065f46">System Prompt + 问题 = KV Cache 复用</text>
+
+            <!-- fork 分支 -->
+            <line x1="280" y1="70" x2="140" y2="100" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrA)"/>
+            <line x1="410" y1="70" x2="410" y2="100" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrA)"/>
+            <line x1="540" y1="70" x2="680" y2="100" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrA)"/>
+            <text x="410" y="88" text-anchor="middle" font-size="11" fill="#2563eb" font-weight="600">fork(3) — 并行生成 3 个答案</text>
+
+            <!-- 3 个分支 -->
+            <rect x="40" y="102" width="200" height="52" rx="8" fill="#ede9fe" stroke="#c4b5fd"/>
+            <text x="140" y="122" text-anchor="middle" font-size="11" fill="#5b21b6" font-weight="600">Branch 0</text>
+            <text x="140" y="138" text-anchor="middle" font-size="10" fill="#5b21b6">gen("answer_0", temp=0.8)</text>
+            <text x="140" y="152" text-anchor="middle" font-size="9" fill="#7c3aed">独立 KV Cache（从 fork 点起）</text>
+
+            <rect x="310" y="102" width="200" height="52" rx="8" fill="#ede9fe" stroke="#c4b5fd"/>
+            <text x="410" y="122" text-anchor="middle" font-size="11" fill="#5b21b6" font-weight="600">Branch 1</text>
+            <text x="410" y="138" text-anchor="middle" font-size="10" fill="#5b21b6">gen("answer_1", temp=0.8)</text>
+            <text x="410" y="152" text-anchor="middle" font-size="9" fill="#7c3aed">共享 prefix KV，不重复计算</text>
+
+            <rect x="580" y="102" width="200" height="52" rx="8" fill="#ede9fe" stroke="#c4b5fd"/>
+            <text x="680" y="122" text-anchor="middle" font-size="11" fill="#5b21b6" font-weight="600">Branch 2</text>
+            <text x="680" y="138" text-anchor="middle" font-size="10" fill="#5b21b6">gen("answer_2", temp=0.8)</text>
+            <text x="680" y="152" text-anchor="middle" font-size="9" fill="#7c3aed">共享 prefix KV，不重复计算</text>
+
+            <!-- join -->
+            <line x1="140" y1="154" x2="310" y2="178" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrA)"/>
+            <line x1="410" y1="154" x2="410" y2="178" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrA)"/>
+            <line x1="680" y1="154" x2="510" y2="178" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrA)"/>
+
+            <rect x="260" y="180" width="300" height="38" rx="10" fill="#fef3c7" stroke="#fbbf24" stroke-width="2"/>
+            <text x="410" y="197" text-anchor="middle" font-size="12" fill="#92400e" font-weight="700">join — 汇聚 3 个结果</text>
+            <text x="410" y="212" text-anchor="middle" font-size="10" fill="#92400e">Best-of-N 采样 / 投票 / 结果对比</text>
+          </svg>
+          <div class="diagram-caption">图 4-1：SGLang fork-join 模式。共享前缀只计算一次，fork 后 3 个分支并行生成，各自维护独立 KV Cache，最后 join 汇聚结果。</div>
+        </div>
+
+        <pre>import sglang as sgl
+
+@sgl.function
+def best_of_n_qa(s, question, n=3):
+    s += sgl.system("你是一个专业的问答助手，请尽量准确回答。")
+    s += sgl.user(question)
+    # fork: 并行生成 n 个候选答案（共享上方 KV Cache）
+    forks = s.fork(n)
+    for f in forks:
+        f += sgl.assistant(sgl.gen("answer", max_new_tokens=200, temperature=0.8))
+    # join: 汇聚所有结果
+    s.join(forks)
+    # 让模型从 n 个答案中选最好的
+    s += sgl.user("以上" + str(n) + "个答案，哪个最准确？请指出序号。")
+    s += sgl.assistant(sgl.gen("best", max_new_tokens=50, temperature=0.0))
+
+state = best_of_n_qa.run(question="深度学习和机器学习的区别是什么？")
+# 访问结果
+for i in range(3):
+    print(f"答案 {i}:", state[f"answer_{i}"])
+print("最优答案:", state["best"])</pre>
+
+        <h3 id="constrained">4.3 约束生成（Structured Output）</h3>
+
+        <p>SGLang 内置<strong>约束解码</strong>：强制模型输出严格符合 JSON Schema 或正则表达式的文本，无需后处理。</p>
+
+        <pre>import sglang as sgl
+
+@sgl.function
+def extract_info(s, article):
+    s += sgl.user(f"从以下文章中提取信息：{article}")
+    s += sgl.assistant(
+        sgl.gen(
+            "json_output",
+            # 强制输出符合 JSON Schema
+            json_schema={
+                "type": "object",
+                "properties": {
+                    "title":    {"type": "string"},
+                    "author":   {"type": "string"},
+                    "keywords": {"type": "array", "items": {"type": "string"}},
+                    "summary":  {"type": "string", "maxLength": 200}
+                },
+                "required": ["title", "author", "keywords", "summary"]
+            }
+        )
+    )
+
+# 或使用 regex 约束（如提取日期）
+@sgl.function
+def extract_date(s, text):
+    s += sgl.user(f"提取文本中的日期：{text}")
+    s += sgl.assistant(
+        sgl.gen("date", regex=r"\d{4}-\d{2}-\d{2}")  # 强制 YYYY-MM-DD 格式
+    )</pre>
+
+        <div class="callout-cyan">
+          <strong>约束解码原理：</strong> SGLang 在每步生成时对 logits 进行 mask——不符合约束的 token 概率置为 -∞，确保每步输出都在合法集合内。基于 <code>outlines</code> 库实现，支持 JSON Schema / Regex / CFG 多种约束形式。
+        </div>
+      </section>
+
+      <!-- ══ §5 部署实践 ══ -->
+      <section class="section" id="deploy">
+        <div class="section-title">
+          <div class="icon" style="background:#f0fdf4;">🛠️</div>
+          §5 部署实践：多 GPU、量化与投机解码
+        </div>
+
+        <h3 id="multiGPU">5.1 多 GPU 部署（Tensor Parallel）</h3>
+
+        <p>SGLang 通过 <code>--tp</code> 参数一键开启 Tensor Parallel，自动把模型权重切分到多张卡：</p>
+
+        <pre># 单机多卡（8 卡 A100，TP=8）
+python -m sglang.launch_server \
+    --model-path meta-llama/Llama-3-70B-Instruct \
+    --tp 8 \
+    --port 30000
+
+# 多机部署（2 节点，每节点 8 卡，TP=16）
+# 节点 0（主节点）
+python -m sglang.launch_server \
+    --model-path meta-llama/Llama-3-70B-Instruct \
+    --tp 16 \
+    --dist-url "tcp://主节点IP:29500" \
+    --nnodes 2 --node-rank 0
+
+# 节点 1
+python -m sglang.launch_server \
+    --model-path meta-llama/Llama-3-70B-Instruct \
+    --tp 16 \
+    --dist-url "tcp://主节点IP:29500" \
+    --nnodes 2 --node-rank 1</pre>
+
+        <!-- 多 GPU 部署选型 -->
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 820 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:820px;">
+            <text x="410" y="18" text-anchor="middle" font-size="13" font-weight="700" fill="#111827">多 GPU 部署方案选型（按模型大小）</text>
+
+            <!-- 列头 -->
+            <text x="130" y="38" text-anchor="middle" font-size="11" fill="#64748b" font-weight="600">模型规模</text>
+            <text x="310" y="38" text-anchor="middle" font-size="11" fill="#64748b" font-weight="600">推荐方案</text>
+            <text x="530" y="38" text-anchor="middle" font-size="11" fill="#64748b" font-weight="600">显存需求</text>
+            <text x="720" y="38" text-anchor="middle" font-size="11" fill="#64748b" font-weight="600">典型配置</text>
+
+            <!-- 行 1 -->
+            <rect x="10" y="46" width="240" height="28" rx="6" fill="#d1fae5" stroke="#6ee7b7"/>
+            <text x="130" y="65" text-anchor="middle" font-size="11" fill="#065f46" font-weight="600">7B / 8B</text>
+            <rect x="255" y="46" width="200" height="28" rx="6" fill="#eff6ff" stroke="#bfdbfe"/>
+            <text x="355" y="65" text-anchor="middle" font-size="11" fill="#1e40af">单卡 TP=1</text>
+            <rect x="460" y="46" width="140" height="28" rx="6" fill="#f1f5f9" stroke="#e2e8f0"/>
+            <text x="530" y="65" text-anchor="middle" font-size="11" fill="#374151">14 GB (BF16)</text>
+            <rect x="605" y="46" width="205" height="28" rx="6" fill="#f1f5f9" stroke="#e2e8f0"/>
+            <text x="707" y="65" text-anchor="middle" font-size="11" fill="#374151">A100-40G × 1</text>
+
+            <!-- 行 2 -->
+            <rect x="10" y="80" width="240" height="28" rx="6" fill="#fef3c7" stroke="#fbbf24"/>
+            <text x="130" y="99" text-anchor="middle" font-size="11" fill="#92400e" font-weight="600">30B / 34B</text>
+            <rect x="255" y="80" width="200" height="28" rx="6" fill="#eff6ff" stroke="#bfdbfe"/>
+            <text x="355" y="99" text-anchor="middle" font-size="11" fill="#1e40af">TP=2（节点内）</text>
+            <rect x="460" y="80" width="140" height="28" rx="6" fill="#f1f5f9" stroke="#e2e8f0"/>
+            <text x="530" y="99" text-anchor="middle" font-size="11" fill="#374151">60 GB (BF16)</text>
+            <rect x="605" y="80" width="205" height="28" rx="6" fill="#f1f5f9" stroke="#e2e8f0"/>
+            <text x="707" y="99" text-anchor="middle" font-size="11" fill="#374151">A100-80G × 2</text>
+
+            <!-- 行 3 -->
+            <rect x="10" y="114" width="240" height="28" rx="6" fill="#fde8d8" stroke="#fbbf24"/>
+            <text x="130" y="133" text-anchor="middle" font-size="11" fill="#7c2d12" font-weight="600">70B</text>
+            <rect x="255" y="114" width="200" height="28" rx="6" fill="#eff6ff" stroke="#bfdbfe"/>
+            <text x="355" y="133" text-anchor="middle" font-size="11" fill="#1e40af">TP=4 或 TP=8</text>
+            <rect x="460" y="114" width="140" height="28" rx="6" fill="#f1f5f9" stroke="#e2e8f0"/>
+            <text x="530" y="133" text-anchor="middle" font-size="11" fill="#374151">140 GB (BF16)</text>
+            <rect x="605" y="114" width="205" height="28" rx="6" fill="#f1f5f9" stroke="#e2e8f0"/>
+            <text x="707" y="133" text-anchor="middle" font-size="11" fill="#374151">A100-80G × 2/4</text>
+
+            <!-- 行 4 -->
+            <rect x="10" y="148" width="240" height="28" rx="6" fill="#fca5a5" stroke="#f87171"/>
+            <text x="130" y="167" text-anchor="middle" font-size="11" fill="#991b1b" font-weight="600">405B / 671B (MoE)</text>
+            <rect x="255" y="148" width="200" height="28" rx="6" fill="#eff6ff" stroke="#bfdbfe"/>
+            <text x="355" y="167" text-anchor="middle" font-size="11" fill="#1e40af">TP=8 / 多机 TP</text>
+            <rect x="460" y="148" width="140" height="28" rx="6" fill="#f1f5f9" stroke="#e2e8f0"/>
+            <text x="530" y="167" text-anchor="middle" font-size="11" fill="#374151">800 GB+ (BF16)</text>
+            <rect x="605" y="148" width="205" height="28" rx="6" fill="#f1f5f9" stroke="#e2e8f0"/>
+            <text x="707" y="167" text-anchor="middle" font-size="11" fill="#374151">H100-80G × 8+</text>
+          </svg>
+          <div class="diagram-caption">图 5-1：多 GPU 部署方案按模型大小选型。SGLang 通过 --tp 参数一键配置 Tensor Parallel。</div>
+        </div>
+
+        <h3 id="quant">5.2 量化（INT4 / FP8）</h3>
+
+        <p>量化在保持推理质量的同时大幅减少显存占用和提升吞吐量。SGLang 支持多种量化格式：</p>
+
+        <pre># AWQ 量化（INT4，推荐）
+python -m sglang.launch_server \
+    --model-path casperhansen/llama-3-8b-instruct-awq \
+    --quantization awq \
+    --port 30000
+
+# GPTQ 量化
+python -m sglang.launch_server \
+    --model-path TheBloke/Llama-2-7B-Chat-GPTQ \
+    --quantization gptq
+
+# FP8 量化（H100 原生支持，精度最高）
+python -m sglang.launch_server \
+    --model-path meta-llama/Llama-3-8B-Instruct \
+    --quantization fp8  # 需要 H100 / 4090</pre>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>量化格式</th><th>显存占用</th><th>精度损失</th><th>推理速度</th><th>推荐场景</th></tr></thead>
+            <tbody>
+              <tr><td><strong>BF16（无量化）</strong></td><td>2 字节/参数</td><td>baseline</td><td>baseline</td><td>质量优先</td></tr>
+              <tr><td><strong>FP8</strong></td><td>1 字节/参数</td><td>极小</td><td>1.5~2×</td><td>H100 生产环境首选</td></tr>
+              <tr><td><strong>AWQ (INT4)</strong></td><td>0.5 字节/参数</td><td>小</td><td>2~3×</td><td>消费级 GPU / 资源受限</td></tr>
+              <tr><td><strong>GPTQ (INT4)</strong></td><td>0.5 字节/参数</td><td>小～中</td><td>1.5~2×</td><td>与 AWQ 类似，模型生态更丰富</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="speculative">5.3 投机解码（Speculative Decoding）</h3>
+
+        <p>投机解码用小模型（draft model）快速生成多个候选 token，再用大模型（target model）一次性并行 verify，大幅降低 TTFT 和 TPOT：</p>
+
+        <!-- 投机解码流程图 -->
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 820 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:820px;">
+            <defs>
+              <marker id="arrS" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#2563eb"/>
+              </marker>
+            </defs>
+            <text x="410" y="18" text-anchor="middle" font-size="13" font-weight="700" fill="#111827">投机解码原理（Speculative Decoding）</text>
+
+            <!-- Step 1: Draft -->
+            <rect x="10" y="28" width="220" height="72" rx="8" fill="#dbeafe" stroke="#93c5fd" stroke-width="1.5"/>
+            <text x="120" y="50" text-anchor="middle" font-size="12" fill="#1e40af" font-weight="700">① Draft 阶段</text>
+            <text x="120" y="68" text-anchor="middle" font-size="11" fill="#1e40af">小模型（如 68M Vicuna）</text>
+            <text x="120" y="84" text-anchor="middle" font-size="11" fill="#1e40af">快速串行生成 K=4 个候选 token</text>
+            <text x="120" y="98" text-anchor="middle" font-size="10" fill="#3b82f6">K=4 时只需 4 次 small-model forward</text>
+
+            <line x1="232" y1="64" x2="268" y2="64" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrS)"/>
+
+            <!-- Step 2: Verify -->
+            <rect x="270" y="28" width="280" height="72" rx="8" fill="#d1fae5" stroke="#6ee7b7" stroke-width="1.5"/>
+            <text x="410" y="50" text-anchor="middle" font-size="12" fill="#065f46" font-weight="700">② Verify 阶段</text>
+            <text x="410" y="68" text-anchor="middle" font-size="11" fill="#065f46">大模型（如 Llama-3-70B）</text>
+            <text x="410" y="84" text-anchor="middle" font-size="11" fill="#065f46">并行验证 K 个 token（1 次 forward）</text>
+            <text x="410" y="98" text-anchor="middle" font-size="10" fill="#16a34a">1 次 large-model forward ≈ 验证 K 个 token</text>
+
+            <line x1="552" y1="64" x2="588" y2="64" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrS)"/>
+
+            <!-- Step 3: Accept/Reject -->
+            <rect x="590" y="28" width="220" height="72" rx="8" fill="#fef3c7" stroke="#fbbf24" stroke-width="1.5"/>
+            <text x="700" y="50" text-anchor="middle" font-size="12" fill="#92400e" font-weight="700">③ Accept/Reject</text>
+            <text x="700" y="68" text-anchor="middle" font-size="11" fill="#92400e">接受符合大模型分布的 token</text>
+            <text x="700" y="84" text-anchor="middle" font-size="11" fill="#92400e">拒绝不符合的，从该处重采样</text>
+            <text x="700" y="98" text-anchor="middle" font-size="10" fill="#d97706">平均接受 2~3 个 / 轮（取决于 draft 质量）</text>
+
+            <!-- 结果说明 -->
+            <rect x="10" y="114" width="800" height="72" rx="10" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
+            <text x="410" y="134" text-anchor="middle" font-size="12" fill="#065f46" font-weight="700">效果：等价于大模型独立生成（不改变分布），但速度快 2~4×</text>
+            <text x="410" y="152" text-anchor="middle" font-size="11" fill="#166534">原理：接受率 α 决定实际加速。当 draft 模型与 target 模型输出分布越接近，接受率越高，加速越大。</text>
+            <text x="410" y="170" text-anchor="middle" font-size="11" fill="#374151">代价：需要额外显存放 draft 模型。Draft model 通常为 target 的 1/10 体积（如 70B+7B 组合）。</text>
+          </svg>
+          <div class="diagram-caption">图 5-2：投机解码原理。小模型快速草稿（Draft），大模型并行验证（Verify），Accept/Reject 保证与纯大模型等价的输出分布。</div>
+        </div>
+
+        <pre># 启动投机解码（使用 draft model）
+python -m sglang.launch_server \
+    --model-path meta-llama/Llama-3-70B-Instruct \
+    --speculative-draft-model-path meta-llama/Llama-3-8B-Instruct \
+    --speculative-num-draft-tokens 4 \
+    --tp 4 --port 30000
+
+# Eagle-2 投机解码（SGLang 内置，更高接受率）
+python -m sglang.launch_server \
+    --model-path meta-llama/Llama-3-70B-Instruct \
+    --speculative-algorithm EAGLE2 \
+    --tp 4 --port 30000</pre>
+      </section>
+
+      <!-- ══ §6 性能对比 & 选型 ══ -->
+      <section class="section" id="perf">
+        <div class="section-title">
+          <div class="icon" style="background:#eff6ff;">📊</div>
+          §6 性能对比 &amp; 选型指南
+        </div>
+
+        <h3>SGLang vs vLLM 性能基准（官方 Benchmark）</h3>
+
+        <!-- 性能对比图 -->
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 820 240" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:820px;">
+            <text x="410" y="18" text-anchor="middle" font-size="13" font-weight="700" fill="#111827">SGLang vs vLLM 吞吐量对比（Llama-3-8B，A100-80G）</text>
+
+            <!-- 表头 -->
+            <text x="175" y="38" text-anchor="middle" font-size="11" fill="#64748b" font-weight="600">测试场景</text>
+            <text x="430" y="38" text-anchor="middle" font-size="11" fill="#1e40af" font-weight="600">吞吐量（output tokens/s）</text>
+            <text x="730" y="38" text-anchor="middle" font-size="11" fill="#64748b" font-weight="600">SGLang 提升</text>
+
+            <!-- 行 1：ShareGPT（有前缀复用） -->
+            <rect x="10" y="46" width="330" height="30" rx="6" fill="#ede9fe" stroke="#c4b5fd"/>
+            <text x="175" y="66" text-anchor="middle" font-size="11" fill="#5b21b6" font-weight="600">ShareGPT（多轮对话，有公共前缀）</text>
+
+            <rect x="345" y="50" width="152" height="22" rx="4" fill="#94a3b8"/>
+            <text x="345" y="66" font-size="10" fill="#64748b">vLLM</text>
+            <text x="505" y="66" font-size="11" fill="#64748b" font-weight="600"> 2840 t/s</text>
+
+            <rect x="345" y="50" width="228" height="22" rx="4" fill="#7c3aed" opacity="0"/>
+            <!-- SGLang bar -->
+            <rect x="345" y="50" width="228" height="22" rx="4" fill="#7c3aed"/>
+            <text x="583" y="66" font-size="11" fill="#5b21b6" font-weight="600"> 4280 t/s (SGLang)</text>
+            <rect x="700" y="50" width="110" height="22" rx="6" fill="#d1fae5" stroke="#6ee7b7"/>
+            <text x="755" y="66" text-anchor="middle" font-size="12" fill="#065f46" font-weight="700">+51%</text>
+
+            <!-- 行 2：RAG -->
+            <rect x="10" y="84" width="330" height="30" rx="6" fill="#d1fae5" stroke="#6ee7b7"/>
+            <text x="175" y="104" text-anchor="middle" font-size="11" fill="#065f46" font-weight="600">RAG（固定文档前缀，高命中率）</text>
+
+            <rect x="345" y="88" width="110" height="22" rx="4" fill="#94a3b8"/>
+            <text x="465" y="104" font-size="11" fill="#64748b" font-weight="600"> 1580 t/s (vLLM)</text>
+
+            <rect x="345" y="88" width="276" height="22" rx="4" fill="#16a34a"/>
+            <text x="631" y="104" font-size="11" fill="#166534" font-weight="600"> 4850 t/s (SGLang)</text>
+            <rect x="700" y="88" width="110" height="22" rx="6" fill="#d1fae5" stroke="#6ee7b7"/>
+            <text x="755" y="104" text-anchor="middle" font-size="12" fill="#065f46" font-weight="700">+207%</text>
+
+            <!-- 行 3：Agent -->
+            <rect x="10" y="122" width="330" height="30" rx="6" fill="#fef3c7" stroke="#fbbf24"/>
+            <text x="175" y="142" text-anchor="middle" font-size="11" fill="#92400e" font-weight="600">Agent（System Prompt 共享，中等命中率）</text>
+
+            <rect x="345" y="126" width="132" height="22" rx="4" fill="#94a3b8"/>
+            <text x="487" y="142" font-size="11" fill="#64748b" font-weight="600"> 1920 t/s (vLLM)</text>
+
+            <rect x="345" y="126" width="196" height="22" rx="4" fill="#f59e0b"/>
+            <text x="551" y="142" font-size="11" fill="#92400e" font-weight="600"> 2810 t/s (SGLang)</text>
+            <rect x="700" y="126" width="110" height="22" rx="6" fill="#fef3c7" stroke="#fbbf24"/>
+            <text x="755" y="142" text-anchor="middle" font-size="12" fill="#92400e" font-weight="700">+46%</text>
+
+            <!-- 行 4：无前缀 -->
+            <rect x="10" y="160" width="330" height="30" rx="6" fill="#f1f5f9" stroke="#e2e8f0"/>
+            <text x="175" y="180" text-anchor="middle" font-size="11" fill="#64748b" font-weight="600">无公共前缀（独立单问）</text>
+
+            <rect x="345" y="164" width="180" height="22" rx="4" fill="#94a3b8"/>
+            <text x="535" y="180" font-size="11" fill="#64748b" font-weight="600"> 2620 t/s (vLLM)</text>
+
+            <rect x="345" y="164" width="186" height="22" rx="4" fill="#64748b"/>
+            <text x="541" y="180" font-size="11" fill="#374151" font-weight="600"> 2710 t/s (SGLang)</text>
+            <rect x="700" y="164" width="110" height="22" rx="6" fill="#f1f5f9" stroke="#e2e8f0"/>
+            <text x="755" y="180" text-anchor="middle" font-size="12" fill="#64748b" font-weight="700">≈ 持平</text>
+
+            <!-- 注释 -->
+            <rect x="10" y="200" width="800" height="32" rx="6" fill="#fffbeb" stroke="#fcd34d" stroke-width="1.5"/>
+            <text x="410" y="214" text-anchor="middle" font-size="11" fill="#92400e" font-weight="600">测试条件：Llama-3-8B，A100-80G，batch=100，SGLang v0.3，vLLM v0.5（2024年7月数据）</text>
+            <text x="410" y="228" text-anchor="middle" font-size="10" fill="#92400e">实际差距因模型、硬件、负载不同而有所变化。建议在自己的场景下 benchmark。</text>
+          </svg>
+          <div class="diagram-caption">图 6-1：SGLang vs vLLM 吞吐量对比。前缀复用越多，SGLang 优势越大；无公共前缀场景基本持平。</div>
+        </div>
+
+        <h3>选型决策表</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>场景</th><th>推荐框架</th><th>理由</th></tr></thead>
+            <tbody>
+              <tr><td>RAG / 检索增强系统</td><td><strong>SGLang ✅</strong></td><td>文档前缀高度重复，RadixAttention 效果最佳</td></tr>
+              <tr><td>多轮对话 Chatbot</td><td><strong>SGLang ✅</strong></td><td>历史对话作为前缀可复用，且支持 fork 并行采样</td></tr>
+              <tr><td>Agent / 工具调用</td><td><strong>SGLang ✅</strong></td><td>固定 system prompt 共享 + 约束生成 JSON 输出</td></tr>
+              <tr><td>结构化数据提取</td><td><strong>SGLang ✅</strong></td><td>内置 JSON Schema / Regex 约束解码</td></tr>
+              <tr><td>通用 OpenAI 兼容 API</td><td><strong>vLLM 或 SGLang</strong></td><td>两者都支持，SGLang 在有前缀时更优</td></tr>
+              <tr><td>独立单次推理（无前缀）</td><td><strong>vLLM / TRT-LLM</strong></td><td>无复用场景下 SGLang 无优势；TRT-LLM 编译优化更好</td></tr>
+              <tr><td>NVIDIA 硬件极致优化</td><td><strong>TensorRT-LLM</strong></td><td>静态图编译，A100/H100 性能天花板</td></tr>
+              <tr><td>本地单机轻量部署</td><td><strong>Ollama / LMDeploy</strong></td><td>部署简单，无需 Python 环境</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>常见问题 FAQ</h3>
+        <div class="callout-red">
+          <ul style="margin:0;line-height:2.2;">
+            <li><strong>Q：SGLang 和 vLLM 能混用吗？</strong><br>A：不能直接混用，但都兼容 OpenAI API 格式，可以通过负载均衡在两者之间路由。</li>
+            <li><strong>Q：RadixAttention 会影响输出质量吗？</strong><br>A：不会。它只是复用已计算的 KV Cache，与模型参数无关，输出分布完全等价。</li>
+            <li><strong>Q：SGLang 支持 LoRA 吗？</strong><br>A：支持，<code>--lora-paths</code> 参数可加载多个 LoRA adapter，运行时动态切换。</li>
+            <li><strong>Q：显存不够时 SGLang 会怎么处理？</strong><br>A：RadixAttention 淘汰旧缓存 → preempt 低优先级请求（recompute 策略）→ 拒绝新请求（可配置）。</li>
+            <li><strong>Q：SGLang 的 fork() 安全吗？会影响其他请求？</strong><br>A：安全。fork 后各分支的 KV Cache 是 Copy-on-Write 的，共享前缀只读，独有部分独立存储。</li>
+          </ul>
+        </div>
+
+        <h3>一句话总结</h3>
+        <div class="big-concept">
+          <p style="margin:0;font-size:15px;">SGLang 的核心洞察是：<strong>LLM 推理中大量请求共享相同的前缀，这些重复计算是系统层面的浪费</strong>。RadixAttention 用一棵前缀树把这个浪费彻底消灭——共享的前缀只算一次，只存一份。有了这个基础，再叠加 Continuous Batching、Chunked Prefill 和高级编程原语，才有了 SGLang「有公共前缀场景比 vLLM 快 2~5×」的竞争力。<br><br>选型原则只有一句话：<strong>如果你的推理工作有大量公共前缀（RAG / Agent / 多轮），选 SGLang；如果基本没有公共前缀，vLLM 足够了</strong>。</p>
+        </div>
+      </section>
+
+      <footer>
+        <a href="../index.html">← 返回笔记列表</a>
+      </footer>
+
+    </main>
+  </div>
+</div>
+
+<script>
+// TOC IntersectionObserver 滚动高亮
+document.addEventListener('DOMContentLoaded', () => {
+  const sections = document.querySelectorAll('section[id], h3[id]');
+  const links = document.querySelectorAll('.toc a');
+  const map = {};
+  links.forEach(a => { map[a.getAttribute('href').slice(1)] = a; });
+
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if(e.isIntersecting){
+        links.forEach(l => l.classList.remove('active'));
+        const a = map[e.target.id];
+        if(a) a.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+
+  sections.forEach(s => obs.observe(s));
+});
+</script>
+</body>
+</html>
