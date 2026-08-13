@@ -1,0 +1,1468 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TM20K 论文解读</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false }
+          ],
+          throwOnError: false
+        });
+      }
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f5f7fb; --card: #ffffff; --text: #1f2937; --muted: #667085;
+      --line: #e5e7eb; --primary: #2563eb; --primary-soft: #eff6ff;
+      --accent: #7c3aed; --accent-soft: rgba(124,58,237,0.06);
+      --shadow: 0 10px 30px rgba(15,23,42,0.08); --radius: 18px; --max: 1300px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: linear-gradient(180deg,#f8fbff 0%,var(--bg) 240px);
+      color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      line-height: 1.8;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .page { max-width: var(--max); margin: 0 auto; padding: 32px 20px 80px; }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    .back-link:hover { color: var(--primary); text-decoration: none; }
+    .hero {
+      background: radial-gradient(circle at top right,rgba(37,99,235,0.14),transparent 30%),
+                  radial-gradient(circle at left bottom,rgba(124,58,237,0.10),transparent 24%), var(--card);
+      border: 1px solid rgba(37,99,235,0.08); border-radius: 24px;
+      box-shadow: var(--shadow); padding: 34px 34px 28px; margin-bottom: 22px;
+    }
+    .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--primary-soft); color: var(--primary); font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+    h1 { font-size: 34px; line-height: 1.25; letter-spacing: -0.02em; margin-bottom: 10px; }
+    .subtitle { color: var(--muted); font-size: 16px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-top: 24px; }
+    .meta-card { background: #fbfdff; border: 1px solid #e7eefb; border-radius: 16px; padding: 14px 16px; }
+    .meta-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .meta-value { font-size: 14px; font-weight: 600; word-break: break-word; }
+    .layout { display: grid; grid-template-columns: 260px minmax(0,1fr); gap: 22px; align-items: start; }
+    .toc { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; max-height: calc(100vh - 60px); overflow-y: auto; }
+    .toc h2 { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+    .toc-list { list-style: none; }
+    .toc-list li { margin: 7px 0; }
+    .toc-list a { font-size: 13.5px; color: var(--muted); }
+    .toc-list a:hover { color: var(--primary); text-decoration: none; }
+    .toc-list a.active, .toc-sub a.active { color: var(--primary); background: #eff6ff; font-weight: 600; border-left: 3px solid var(--primary); padding-left: 6px; }
+    .toc-sub { padding-left: 14px; margin-top: 4px; }
+    .toc-sub li { margin: 4px 0; }
+    .toc-sub a { font-size: 12.5px; }
+    .content { display: flex; flex-direction: column; gap: 20px; }
+    .section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 28px 30px; }
+    .section-title { font-size: 22px; font-weight: 800; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 2px solid #f0f4ff; display: flex; align-items: center; gap: 10px; }
+    .section-title .icon { width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+    h3 { font-size: 18px; font-weight: 700; margin: 26px 0 12px; color: #111827; }
+    h4 { font-size: 15px; font-weight: 700; margin: 20px 0 10px; color: #1d4ed8; }
+    p { margin-bottom: 12px; }
+    p:last-child { margin-bottom: 0; }
+    ul, ol { padding-left: 22px; }
+    li { margin-bottom: 8px; }
+    .callout { border-radius: 14px; padding: 14px 18px; margin: 16px 0; font-size: 14.5px; }
+    .callout-blue { background: linear-gradient(180deg,rgba(37,99,235,0.08),rgba(37,99,235,0.04)); border: 1px solid rgba(37,99,235,0.16); }
+    .callout-blue strong { color: #1d4ed8; }
+    .callout-amber { background: #fffbeb; border: 1px solid #fde68a; }
+    .callout-amber strong { color: #92400e; }
+    .callout-green { background: #f0fdf4; border: 1px solid #86efac; }
+    .callout-green strong { color: #166534; }
+    .callout-purple { background: var(--accent-soft); border: 1px solid rgba(124,58,237,0.18); }
+    .callout-purple strong { color: #6d28d9; }
+    .note { background: #f8faff; border: 1px dashed #cbd5e1; border-radius: 12px; padding: 12px 16px; color: #475467; font-size: 13.5px; margin: 12px 0; }
+    .example-box { background: #f0fdf4; border: 1px solid #86efac; border-radius: 14px; padding: 16px 20px; margin: 16px 0; }
+    .example-box .ex-title { font-size: 12px; font-weight: 700; color: #166534; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+    .example-box p { margin-bottom: 8px; font-size: 14px; color: #166534; }
+    .example-box p:last-child { margin-bottom: 0; }
+    blockquote { margin: 16px 0; padding: 14px 18px; border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 0 12px 12px 0; color: #3f3f46; font-size: 14.5px; }
+    .paper-info { background: #fafbff; border-left: 4px solid var(--primary); border-radius: 12px; padding: 14px 16px; margin: 16px 0; color: #334155; font-size: 14px; }
+    .paper-info p { margin: 5px 0; }
+    figure { margin: 22px 0; background: #fbfdff; border: 1px solid #e8edf5; border-radius: 16px; padding: 14px; }
+    figure img { width: 100%; display: block; border-radius: 12px; background: #fff; }
+    figcaption { margin-top: 10px; font-size: 13.5px; color: var(--muted); line-height: 1.6; }
+    .fig-placeholder { padding: 36px 24px; text-align: center; background: #f8faff; border-radius: 12px; color: #94a3b8; font-size: 14px; border: 2px dashed #e2e8f0; line-height: 1.9; }
+    .formula-block { background: #fafbff; border: 1px solid #e8edf5; border-radius: 14px; padding: 16px 20px; margin: 14px 0; overflow-x: auto; }
+    .formula-vars { background: #f0f7ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 12px 16px; margin: 6px 0 16px; font-size: 13.5px; color: #374151; }
+    .formula-vars .var-title { font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+    .formula-vars ul { margin: 0; padding-left: 18px; }
+    .formula-vars li { margin: 5px 0; }
+    .katex-display { overflow-x: auto; overflow-y: hidden; padding: 6px 0; }
+    .table-wrap { overflow-x: auto; margin: 16px 0; }
+    table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 12px; font-size: 13.5px; }
+    thead th { background: #f3f6fb; color: #334155; font-weight: 700; border-bottom: 2px solid var(--line); text-align: left; padding: 12px 14px; }
+    td { padding: 11px 14px; border-bottom: 1px solid #eef2f7; vertical-align: top; }
+    tbody tr:nth-child(even) { background: #fafcff; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; }
+    .badge-green { background: #dcfce7; color: #166534; }
+    .badge-red { background: #fee2e2; color: #991b1b; }
+    .badge-blue { background: #dbeafe; color: #1e40af; }
+    .badge-gray { background: #f3f4f6; color: #374151; }
+    .badge-yellow { background: #fef9c3; color: #854d0e; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+    .mini-card { border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; background: #fff; }
+    .mini-card h4 { margin-top: 0; font-size: 14px; }
+    .step-list { display: flex; flex-direction: column; gap: 14px; margin: 16px 0; }
+    .step { display: flex; gap: 14px; background: #fafbff; border: 1px solid #e8edf5; border-radius: 14px; padding: 14px 16px; }
+    .step-num { width: 28px; height: 28px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; flex-shrink: 0; margin-top: 2px; }
+    .step-body { flex: 1; }
+    .step-body strong { display: block; margin-bottom: 4px; font-size: 14.5px; color: #111; }
+    .step-body p { font-size: 13.5px; color: #374151; margin: 0; }
+    .flow-diagram { background: #f8faff; border: 1px solid #dbeafe; border-radius: 16px; padding: 24px; margin: 20px 0; overflow-x: auto; }
+    .flow-row { display: flex; align-items: center; gap: 0; flex-wrap: nowrap; justify-content: center; min-width: max-content; }
+    .flow-box { background: #fff; border: 1.5px solid #93c5fd; border-radius: 12px; padding: 10px 16px; text-align: center; font-size: 13px; min-width: 110px; }
+    .flow-box .fb-title { font-weight: 700; color: #1e40af; margin-bottom: 3px; }
+    .flow-box .fb-desc { font-size: 11.5px; color: var(--muted); }
+    .flow-box.stage1 { border-color: #a78bfa; background: #f5f3ff; }
+    .flow-box.stage1 .fb-title { color: #6d28d9; }
+    .flow-box.stage2 { border-color: #6ee7b7; background: #f0fdf4; }
+    .flow-box.stage2 .fb-title { color: #065f46; }
+    .flow-box.out { border-color: #fca5a5; background: #fff1f2; }
+    .flow-box.out .fb-title { color: #991b1b; }
+    .flow-arrow { font-size: 20px; color: #93c5fd; padding: 0 8px; flex-shrink: 0; }
+    .footer { margin-top: 18px; color: var(--muted); font-size: 13px; text-align: center; }
+    @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } .toc { position: static; max-height: none; } .meta-grid, .two-col { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 640px) { .page { padding: 18px 12px 56px; } .hero, .section { padding: 20px 18px; } h1 { font-size: 26px; } .meta-grid, .two-col { grid-template-columns: 1fr; } th, td { padding: 10px; } }
+  </style>
+</head>
+<body>
+<div class="page">
+  <a class="back-link" href="../index.html">← 返回论文列表</a>
+
+  <header class="hero">
+    <div class="eyebrow">📄 论文解读 · 超长序列 × 知识蒸馏</div>
+    <h1>TM20K：老师读全文，学生读缩写</h1>
+    <p class="subtitle">Teacher Retains Full Tokens, Student Merges Efficiently: TM20K for E-Commerce Sequence Modeling in Ad Recommendation</p>
+    <div class="meta-grid">
+      <div class="meta-card"><div class="meta-label">作者</div><div class="meta-value">Xinchun Li*, Duoru Zheng*, Wenlin Zhao* et al. · ByteDance</div></div>
+      <div class="meta-card"><div class="meta-label">发表</div><div class="meta-value">arXiv 2608.07055v1 · 2026.08.07 · cs.IR</div></div>
+      <div class="meta-card"><div class="meta-label">场景</div><div class="meta-value">字节电商广告 CVR 预估（20K 电商行为序列）</div></div>
+      <div class="meta-card"><div class="meta-label">线上结果</div><div class="meta-value">ADSS +1.036% · 延迟仅 +5.6%</div></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="toc">
+      <h2>📋 目录</h2>
+      <ul class="toc-list">
+        <li><a href="#summary">一句话总结</a></li>
+        <li><a href="#background">背景与动机</a>
+          <ul class="toc-sub">
+            <li><a href="#bg-cost">超长序列的成本死结</a></li>
+            <li><a href="#bg-prior">现有两条路线的局限</a></li>
+            <li><a href="#bg-position">TM20K 的定位</a></li>
+          </ul>
+        </li>
+        <li><a href="#observation">前置实验与观测</a>
+          <ul class="toc-sub">
+            <li><a href="#obs-fa-ta">FA vs TA：为什么坚持全注意力</a></li>
+            <li><a href="#obs-attn">三组注意力分数观测</a></li>
+          </ul>
+        </li>
+        <li><a href="#method">方法详解</a>
+          <ul class="toc-sub">
+            <li><a href="#m-overview">整体框架</a></li>
+            <li><a href="#m-litm">LITM：局部同 ID 合并</a></li>
+            <li><a href="#m-patm">PATM：位置自适应合并</a></li>
+            <li><a href="#m-lptm">LPTM：层间金字塔合并</a></li>
+            <li><a href="#m-impl">工程实现：CPU/GPU 分工</a></li>
+            <li><a href="#m-kd">Teacher 与知识蒸馏</a></li>
+            <li><a href="#m-other">Stack Sequence 与 QK Norm</a></li>
+            <li><a href="#m-vs">与 LONGER / TWIN 的核心区别</a></li>
+          </ul>
+        </li>
+        <li><a href="#exp">实验结果</a>
+          <ul class="toc-sub">
+            <li><a href="#exp-setup">实验设置</a></li>
+            <li><a href="#exp-main">主实验：效果与效率</a></li>
+            <li><a href="#exp-ablation">三种 TM 的消融</a></li>
+            <li><a href="#exp-hyper">超参与蒸馏权重</a></li>
+            <li><a href="#exp-online">线上 A/B</a></li>
+          </ul>
+        </li>
+        <li><a href="#insight">个人理解与延伸</a></li>
+      </ul>
+    </aside>
+
+    <main class="content">
+
+      <!-- ═══ 一句话总结 ═══ -->
+      <section class="section" id="summary">
+        <div class="section-title"><span class="icon" style="background:#dbeafe">💡</span>一句话总结</div>
+        <p><strong>TM20K 用「老师读全文、学生读缩写」的两阶段蒸馏范式破解超长序列的效率困境：一次性训练的 teacher 吃完整 20K token 但永不上线，学生模型用三种由注意力观测反推出来的 token merge 把 20K 压到平均 1.8K 后上线，再靠 KD 把 teacher 约 85% 的收益捞回来——最终线上 ADSS +1.036%，serving 延迟只涨 5.6%。</strong></p>
+        <div class="paper-info">
+          <p>📄 <strong>原文：</strong><a href="https://arxiv.org/abs/2608.07055" target="_blank">https://arxiv.org/abs/2608.07055</a></p>
+          <p>🔗 <strong>密切相关工作：</strong>LONGER（均匀 token merge + Perceiver）、TWIN-V1/V2（检索式压缩）、ExFM（外部大 foundation model 蒸馏）、HSTU / M-Falcon（serving 基建）、RankMixer（特征交互骨架）</p>
+        </div>
+        <div class="callout callout-blue">
+          <strong>四句话核心贡献：</strong><br>
+          ① <strong>范式</strong>：首个把「teacher 保留全 token / student 合并 token」的两阶段 KD 用于超长序列 scaling 的工业框架；<br>
+          ② <strong>方法</strong>：三种极简但动机扎实的 token merge（LITM / PATM / LPTM），全部由真实注意力分数统计推导而来；<br>
+          ③ <strong>取向</strong>：架构上坚持 full attention 而非轻量 target attention，效率问题从「压序列 + 蒸馏」而非「削注意力」解决；<br>
+          ④ <strong>落地</strong>：字节电商广告全量上线，序列 5K → 20K，吞吐仅降 5%，ADSS +1.036%。
+        </div>
+        <div class="note">
+          <strong>名词速查：</strong>FA = Full Attention（全注意力）；TA = Target Attention（只算 target 对序列的 cross attention）；TM = Token Merge；UTM<sub>k</sub> = 均匀 token merge，压缩因子 k；LITM/PATM/LPTM = 本文三种 merge；KD = 知识蒸馏；ADSS = Advertiser Score；ADVV = Advertiser Value；Thr = 训练吞吐；AvgL/P90L = 实际参与计算序列长度的均值 / 90 分位。
+        </div>
+      </section>
+
+      <!-- ═══ 背景与动机 ═══ -->
+      <section class="section" id="background">
+        <div class="section-title"><span class="icon" style="background:#fef9c3">🔍</span>背景与动机</div>
+
+        <h3 id="bg-cost">超长序列建模的「效果 - 效率」死结</h3>
+        <p>超长用户行为序列建模已被反复证明能同时刻画长期与短期兴趣、显著提升推荐质量，是当前公认的 scaling 方向之一。但字节在自家电商广告系统里把最大序列长度从 5K 拉到 20K 时发现：<strong>即使已经上了 FlashAttention 和 M-Falcon serving，代价依然是灾难性的。</strong></p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>成本指标</th><th>5K</th><th>10K</th><th>15K</th><th>20K</th><th>净增</th></tr></thead>
+            <tbody>
+              <tr><td>训练时间</td><td>1×</td><td>1.9×</td><td>3.0×</td><td><strong>4.5×</strong></td><td><span class="badge badge-red">+3.5×</span></td></tr>
+              <tr><td>GPU 显存</td><td>+0GB</td><td>+21GB</td><td>+40GB</td><td><strong>+49GB</strong></td><td><span class="badge badge-red">+49GB</span></td></tr>
+              <tr><td>Serving 延迟</td><td>1×</td><td>1.7×</td><td>3.1×</td><td><strong>7.3×</strong></td><td><span class="badge badge-red">+6.3×</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout callout-amber">
+          <strong>核心矛盾：</strong>对超长序列建模而言，<em>效果与效率是一对直接冲突的目标</em>，必须做显式的 trade-off 设计——这就是全文的出发点。
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2608.07055v1/x1.png" alt="Figure 1: TM20K 的动机"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+                 <b>Figure 1: TM20K 的动机</b><br><br>
+                 左侧三个柱状图：随最大序列长度 5K→20K 增长，<br>
+                 训练时间 1×→4.5×（+3.5×）、GPU 显存 +0GB→+49GB、Serving 延迟 1×→7.3×（+6.3×）<br><br>
+                 右侧示意图：<b>Teaching Token By Token</b>（低效但只需一次）<br>
+                 → <b>Token Merge &amp; Knowledge Transfer</b>（高效且效果好）
+               </div>`" />
+          <figcaption><strong>Figure 1（论文原图）：</strong>左侧量化了超长序列在训练时间、显存、延迟三方面的爆炸式成本；右侧是全文的核心隐喻——把重计算全部丢给「只训一次、不上线」的 teacher，学生靠 token merge + 知识迁移做到又快又好。</figcaption>
+        </figure>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：为什么 20K 比 5K 贵这么多</div>
+          <p><strong>注意力是二次复杂度。</strong>假设 5K 序列一层 attention 的计算量记为 1 个单位（$5000^2 = 2.5\times10^7$ 量级），那么 20K 序列就是 $20000^2 = 4\times10^8$，即 <strong>16 倍</strong>。</p>
+          <p>实测只涨了 3.5× 训练时间而不是 16×，是因为：① FlashAttention 把显存墙推后、访存效率提升；② 真实用户序列长度分布极不均匀，多数用户远不到 20K（论文里 20K 配置下 AvgL 才 8.8K）；③ 模型里还有大量与序列长度无关的计算（RankMixer、非序列特征）在摊薄。</p>
+          <p><strong>但 serving 延迟涨了 6.3×</strong>——线上单请求要对几百个候选广告打分，序列侧一旦变重，延迟就被直接放大，这是最致命的一项。</p>
+        </div>
+
+        <h3 id="bg-prior">现有两条路线，各有硬伤</h3>
+        <p>论文把业界的 trade-off 方案归成两类，并逐一点出问题。</p>
+
+        <h4>路线 A：序列长度压缩（Sequence Length Compression）</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>子类</th><th>代表工作</th><th>硬伤</th></tr></thead>
+            <tbody>
+              <tr><td>检索式（search-based）</td><td>SIM、TWIN-V1（CP-GSU）、TWIN-V2、DIN 系</td><td>① 每个候选只捞相关 token，<strong>必然丢弃细粒度行为信息</strong>；② <strong>与 M-Falcon serving 不兼容</strong>（每个候选检索结果不同，无法共享序列侧计算）</td></tr>
+              <tr><td>聚类式（cluster-based）</td><td>TWIN-V2（HC）、HiSAC</td><td>依赖<strong>高质量预训练 token embedding</strong> 才能稳定聚类，需要额外多模态/表征体系支撑</td></tr>
+              <tr><td>长度外推（LE）</td><td>STCA</td><td>训练时随机丢 token，本质仍是<strong>丢信息</strong></td></tr>
+              <tr><td>均匀 token merge</td><td>LONGER</td><td>全序列<strong>一刀切等比压缩</strong>，把最近行为和远古行为当同等重要</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout callout-purple">
+          <strong>一个容易被忽略的观察：</strong>这些方法号称支持 $10^6$ 的 MaxLen，但压缩后<strong>真正参与计算的 EffLen 只有 $10^2\sim10^3$</strong>。也就是说「支持超长序列」在很大程度上是个名义指标——真实被模型看到的信息量并没有那么多。
+        </div>
+
+        <h4>路线 B：轻量注意力架构（Lightweight Attention）</h4>
+        <p>TWIN 的 ETA、STCA 的堆叠 target-to-history cross attention、EST 的 LCA + CSA、HyTRec 的「线性注意力管长期 + softmax 注意力管近期」混合、MTFM 的 GQA + 混合 target attention、LONGER 的 Perceiver 式「底层 CA + 上层 SA」……</p>
+        <div class="callout callout-amber">
+          <strong>共同缺陷：</strong>这些设计都在削减 token 之间的两两交互，导致<strong>无法充分捕捉行为 token 间的内在依赖，序列特征抽取不足</strong>。作者在真实场景里实测确认：full transformer 相比轻量 target attention 有明显的效果增益。
+        </div>
+
+        <h4>路线 C（论文选择的方向）：两阶段框架</h4>
+        <p>除了上述端到端方案，还有一类更灵活的思路：两阶段。</p>
+        <ul>
+          <li><strong>知识蒸馏路线</strong>：以 ExFM 为代表——构建一个 foundation-model 式的 teacher，同时服务多个 vertical model（学生），把构建成本摊薄。</li>
+          <li><strong>Foundation model 路线</strong>：通过缓存 user embedding / item embedding 来提升下游任务，以及近期的 instance-as-token 范式。</li>
+        </ul>
+        <p>TM20K 属于第一类，但差异是：<strong>别人用 KD 解决「模型容量/特征规模」的 scaling，本文用 KD 专门解决「序列长度」的 scaling</strong>——teacher 保留全部 token，student 做高效训练与推理。作者也明确说，foundation model 的整合留作未来工作。</p>
+
+        <h3 id="bg-position">TM20K 在方法谱系中的位置</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>方法</th><th>MaxLen（名义最大）</th><th>压缩方式</th><th>EffLen（实际计算）</th><th>注意力架构</th></tr></thead>
+            <tbody>
+              <tr><td>TWIN-V1</td><td>$10^4$</td><td>GSU</td><td>$10^2$</td><td>ETA</td></tr>
+              <tr><td>TWIN-V2</td><td>$10^6$</td><td>HC &amp; GSU</td><td>$10^2$</td><td>ETA</td></tr>
+              <tr><td>EST</td><td>$10^6$</td><td>SIM</td><td>$10^3$</td><td>LCA &amp; CSA</td></tr>
+              <tr><td>STCA</td><td>$10^4$</td><td>LE</td><td>$2\times10^3$</td><td>STCA</td></tr>
+              <tr><td>HyTRec</td><td>$10^4$</td><td>—</td><td>$10^4$</td><td>HA</td></tr>
+              <tr><td>HiSAC</td><td>$10^4$</td><td>HC</td><td>$2\times10^2$</td><td>MHA</td></tr>
+              <tr><td>LONGER</td><td>$2\times10^3$</td><td>TM</td><td>$10^3$</td><td>CA &amp; SA</td></tr>
+              <tr style="background:#eff6ff"><td><strong>TM20K-S</strong>（学生）</td><td><strong>$2\times10^4$</strong></td><td>TM</td><td>$2\times10^3$</td><td><span class="badge badge-blue">FA</span></td></tr>
+              <tr style="background:#eff6ff"><td><strong>TM20K-T</strong>（老师）</td><td><strong>$2\times10^4$</strong></td><td>—</td><td><strong>$2\times10^4$</strong></td><td><span class="badge badge-blue">FA</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout callout-green">
+          <strong>读表要点：</strong>TM20K 是这张表里唯一做到「MaxLen 2 万 + 全注意力 + 一个 token 都不丢弃」的组合。注意 <em>不丢 token</em> 与 <em>不压缩</em> 是两件事：merge 是把多个 token 求和聚合成一个（信息被浓缩），检索/外推是直接把 token 扔掉（信息被删除）——这是作者反复强调的差别。
+        </div>
+      </section>
+
+      <!-- ═══ 前置实验与观测 ═══ -->
+      <section class="section" id="observation">
+        <div class="section-title"><span class="icon" style="background:#fff7ed">🔬</span>前置实验与观测</div>
+        <p>方法部分的每一个设计都不是拍脑袋来的。论文先做了两组前置研究：<strong>（1）架构选型实验</strong>决定用 FA 还是 TA；<strong>（2）注意力分数统计</strong>直接反推出三种 token merge 策略。这一节是理解方法的必要前提。</p>
+
+        <h3 id="obs-fa-ta">3.1 FA vs TA：为什么坚持全注意力</h3>
+        <p>先把两种架构写清楚。<strong>Full Attention（FA）</strong>把 target 拼到序列前面做整体自注意力：</p>
+        <div class="formula-block">
+          $$E_c = \mathrm{Concat}(e_t,\, E_s)$$
+          $$A_c = \mathrm{Softmax}\!\left(\frac{E_cW_Q(E_cW_K)^{T}}{\sqrt{d}} + \mathcal{M}\right)E_cW_V$$
+          $$O_c = \bigl(A_cW_u \odot \mathrm{Swish}(A_cW_v)\bigr)W_d$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$e_t \in \mathbb{R}^{d}$：目标候选广告（target item）的 embedding</li>
+            <li>$E_s \in \mathbb{R}^{L\times d}$：$L$ 个历史行为 token 的 embedding 矩阵（$L$ 最大 20000）</li>
+            <li>$E_c \in \mathbb{R}^{(L+1)\times d}$：把 target 拼进序列后的完整输入，<strong>关键：target 也是序列的一员</strong></li>
+            <li>$W_Q, W_K, W_V$：query / key / value 投影矩阵</li>
+            <li>$\mathcal{M}$：<strong>causal mask</strong>（因果掩码），禁止早期 token 看到后续 token；这不只是建模选择，更是 <strong>M-Falcon serving 的硬性要求</strong>（因为 M-Falcon 要把多个候选拼成一条长序列共享前缀计算）</li>
+            <li>$W_u, W_v, W_d$：SwiGLU FFN 的三个投影矩阵；$\odot$ 是逐元素乘</li>
+            <li>公式中省略了 LayerNorm、多头拆分和残差连接</li>
+          </ul>
+        </div>
+
+        <p>而 <strong>Target Attention（TA）</strong>把注意力简化成「target 对序列的一次 cross attention」：</p>
+        <div class="formula-block">
+          $$a_t = \mathrm{Softmax}\!\left(\frac{e_tW_Q(E_sW_K)^{T}}{\sqrt{d}}\right)E_sW_V$$
+          $$o_t = \bigl(a_tW_u \odot \mathrm{Swish}(a_tW_v)\bigr)W_d$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$a_t \in \mathbb{R}^{d}$：<strong>只有一个向量</strong>——target 汇聚全序列后的表示（注意与 FA 的 $A_c \in \mathbb{R}^{(L+1)\times d}$ 对比）</li>
+            <li>query 只有 $e_t$ 一个：所以计算量从 $O(L^2)$ 降到 $O(L)$</li>
+            <li>只有 target 的特征过 SwiGLU FFN，序列 token 本身<strong>不做任何变换</strong></li>
+          </ul>
+        </div>
+        <div class="callout callout-amber">
+          <strong>TA 的结构性缺陷：</strong>序列 token 之间从头到尾没有任何交互，每个 token 只是被动地被 target「读一次」就丢掉。序列越长，这种「不做序列内建模」的信息损失越严重——这就是论文说的 <em>insufficient sequence feature extraction</em>。
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：FA 和 TA 到底差在哪</div>
+          <p><strong>假设用户序列是：</strong>[看运动鞋 → 看篮球 → 加购篮球 → 看护腕 → 下单篮球]，目标候选广告 = <em>篮球气筒</em>。</p>
+          <p><strong>TA 的视角：</strong>「篮球气筒」这个 query 分别问 5 个 token「你跟我有多像」，得到 5 个分数，加权求和结束。它<strong>不知道</strong>「加购篮球」后面紧跟着「下单篮球」这条转化链路，也不知道「护腕」是在篮球语境下才出现的。</p>
+          <p><strong>FA 的视角：</strong>6 个 token（含 target）两两交互。「下单篮球」这个 token 可以 attend 到前面的「加购篮球」，形成「加购→下单」的强转化信号；「护腕」可以 attend 到「篮球」，被上下文重新解释为「篮球周边配件」。这些经过序列内加工的表示再和 target 交互，信号质量远高于原始 embedding。</p>
+          <p><strong>结论：</strong>序列越长、行为链路越复杂，FA 相对 TA 的优势就越大——这也解释了下面表格里 TA 加长度几乎不涨的现象。</p>
+        </div>
+
+        <h4>实验结论（基线 = 5K + TA）</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>MaxLen</th><th>Full Attention ΔAUC</th><th>Target Attention ΔAUC</th><th>FA − TA 差距</th></tr></thead>
+            <tbody>
+              <tr><td>5K</td><td>+0.20%</td><td>+0%（基线）</td><td>0.20%</td></tr>
+              <tr><td>10K</td><td>+0.24%</td><td>+0.03%</td><td>0.21%</td></tr>
+              <tr><td>15K</td><td>+0.28%</td><td>+0.04%</td><td>0.24%</td></tr>
+              <tr style="background:#eff6ff"><td><strong>20K</strong></td><td><strong>+0.30%</strong></td><td>+0.05%</td><td><span class="badge badge-green">0.25%</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout callout-blue">
+          <strong>三个关键结论：</strong><br>
+          ① <strong>FA 全面碾压 TA</strong>，20K 下差距达 0.25% AUC（推荐系统里这是很大的数字）；<br>
+          ② <strong>TA 吃不下长序列</strong>——从 5K 到 20K，TA 只从 +0% 涨到 +0.05%，几乎等于白加长度；而 FA 稳定爬升。这说明「支持长序列」的前提是注意力架构本身有足够表达力；<br>
+          ③ <strong>FA 的收益随训练时长持续放大</strong>：在超过半年的训练数据上，FA vs TA 的 AUC delta 从 0 单调爬升到 0.0035（Figure 2b），是典型的「越训越值」结构，而不是早期虚高。
+        </div>
+        <div class="callout callout-green">
+          <strong>反直觉的一点：FA 的 GPU 利用率反而更高。</strong>20K 下 FA 的 GPU 利用率提升 +51%，TA 只有 +29%（Figure 2c）。原因是 FA 是规整的大矩阵乘法，对 GPU 极其友好；TA 那种「一个 query × 长 key」的细碎 cross attention 打不满算力，属于访存受限。<em>所以 FA 虽然总计算量大，但每一分算力更"值钱"。</em>
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2608.07055v1/x2.png" alt="Figure 2(a): CVR AUC，FA vs TA 在不同序列长度下的对比"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+                 <b>Figure 2(a): CVR AUC</b><br><br>
+                 横轴最大序列长度 5K/10K/15K/20K，纵轴相对 5K+TA 基线的 AUC Delta。<br>
+                 Full Attention：+0.20% → +0.24% → +0.28% → +0.30%（持续爬升）<br>
+                 Target Attention：+0% → +0.03% → +0.04% → +0.05%（几乎不涨）
+               </div>`" />
+          <figcaption><strong>Figure 2(a)（论文原图）：</strong>CVR AUC 对比。FA 随序列变长稳定获益，TA 基本原地不动——「加长度」这件事只有在 FA 架构下才成立。</figcaption>
+        </figure>
+
+        <h4>最关键的证据：seq-seq 注意力不能丢</h4>
+        <p>这一段是在回答一个非常具体的工程问题：<strong>注意力矩阵里，除了 target 那一行，其他行能不能直接砍掉？</strong>先把矩阵画出来才好理解。</p>
+
+        <p><strong>行 = query（谁在提问），列 = key（问谁）。</strong>假设历史只有 5 个行为 $h_1 \sim h_5$（$h_5$ 最近）加上 target $t$，矩阵是 $6\times 6$（因果掩码使右上角为空，每行 Softmax 后加起来 = 1）：</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>query ↓ \ key →</th><th>$h_1$</th><th>$h_2$</th><th>$h_3$</th><th>$h_4$</th><th>$h_5$</th><th>属于哪类</th></tr></thead>
+            <tbody>
+              <tr><td>$h_1$</td><td>1.00</td><td>—</td><td>—</td><td>—</td><td>—</td><td rowspan="5"><span class="badge badge-yellow">seq-seq</span><br>共 5 行<br><strong>TA 完全不算</strong></td></tr>
+              <tr><td>$h_2$</td><td>0.40</td><td>0.60</td><td>—</td><td>—</td><td>—</td></tr>
+              <tr><td>$h_3$</td><td>0.10</td><td>0.20</td><td>0.70</td><td>—</td><td>—</td></tr>
+              <tr><td>$h_4$</td><td>0.10</td><td>0.10</td><td>0.30</td><td>0.50</td><td>—</td></tr>
+              <tr><td>$h_5$</td><td>0.05</td><td>0.05</td><td>0.20</td><td>0.30</td><td>0.40</td></tr>
+              <tr style="background:#eff6ff"><td><strong>$t$（target）</strong></td><td><strong>0.05</strong></td><td><strong>0.30</strong></td><td><strong>0.15</strong></td><td><strong>0.20</strong></td><td><strong>0.30</strong></td><td><span class="badge badge-blue">target-seq</span><br><strong>只有这 1 行</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout callout-blue">
+          <strong>这张表把 FA / TA 的差别彻底讲清楚了：</strong><br>
+          • <strong>TA = 只算最后一行。</strong>它只关心「target 对每个历史行为的关注度」，前 5 行根本不计算；<br>
+          • <strong>FA = 整个矩阵都算。</strong>多出来的前 5 行就是「历史 token 互相看」；<br>
+          • <strong>FA 比 TA 贵的开销，几乎全部来自前 5 行</strong>——$O(L^2)$ 与 $O(L)$ 的差距就在这里。<br>
+          于是最自然的省钱思路是「砍掉前 5 行只留最后一行」。<strong>这一小节就是在证明：不行，前 5 行有用。</strong>
+        </div>
+
+        <p>论文的做法是把矩阵里的数值分成两堆——<strong>堆 A</strong> = 最后一行的所有数值（target-seq），<strong>堆 B</strong> = 前 5 行的所有数值（seq-seq）——各画一条概率密度曲线，看两堆数值的<strong>分布形态</strong>。结果是<strong>两条曲线基本重合</strong>。</p>
+
+        <p>为什么「形态重合」能算证据？因为如果 seq-seq 是纯粹浪费算力的计算，我们应该看到两种退化形态之一：</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>假如 seq-seq 无用，应该长这样</th><th>含义</th></tr></thead>
+            <tbody>
+              <tr><td>分布极度<strong>均匀</strong>（全挤在 $1/L$ 附近）</td><td>历史 token 之间「谁都不特别关注谁」，等于什么都没学到</td></tr>
+              <tr><td>分布极度<strong>尖锐</strong>（一个 token 吃掉几乎全部权重）</td><td>退化成「每个 token 只看自己」，等价于恒等映射，没有交互发生</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>而实测是：<strong>seq-seq 的分布和 target-seq 一样有结构、一样有区分度</strong>。既然 target-seq 那一行公认有用（TA 就只用它），形态相同的 seq-seq 就很难说是噪声。进一步放大到「5 个 query token（1 个 target + 4 个序列 token）× 最近 50 个 key token」的局部热力图后可以看到：<strong>那 4 个序列 token 的行同样出现明显亮格子，而且亮的位置各不相同</strong>——每个历史 token 都在<strong>有选择地</strong>关注特定的其他历史 token，这种「有选择」就是在做真实的信息加工。</p>
+
+        <figure>
+          <img src="https://arxiv.org/html/2608.07055v1/x5.png" alt="Figure 2(d): target-seq 与 seq-seq 注意力分布对比"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+                 <b>Figure 2(d): 注意力分布对比</b><br><br>
+                 上：target-sequence attention 与 sequence-sequence attention 的概率密度曲线高度重合，说明两类交互的强度分布相似。<br><br>
+                 下：局部放大——5 个 query token（Target / Seq1~Seq4）× 最近 50 个 key token 的热力图，<br>
+                 Seq1~Seq4 这几行同样存在明显的高注意力格子，证明序列 token 之间的交互确实在传递有效信息。
+               </div>`" />
+          <figcaption><strong>Figure 2(d)（论文原图）：</strong>target-seq 与 seq-seq 注意力分布几乎重合；局部放大后可见 4 个序列 query token 同样产生了结构化的注意力模式。这是「不能只保留 target attention」的直接实证。</figcaption>
+        </figure>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：seq-seq 到底在加工什么</div>
+          <p><strong>序列：</strong>$h_1$ 看运动鞋 → $h_2$ 看篮球 → $h_3$ 加购篮球 → $h_4$ 看护腕 → $h_5$ 下单篮球，target = <em>篮球气筒</em>。</p>
+          <p><strong>TA 的世界（只有最后一行）：</strong>target 逐个去问这 5 个行为「你跟我像不像」，拿到 5 个分数、加权求和、结束。这 5 个行为<strong>始终是它们最原始的样子</strong>—— $h_4$ 就是"看了个护腕"，一个孤立的、语义模糊的行为。</p>
+          <p><strong>FA 的世界（整个矩阵）：</strong>在 target 提问之前，这 5 个 token 先互相"开了个会"：</p>
+          <p>• $h_4$（看护腕）那一行把注意力投给 $h_2/h_3$（篮球相关）→ $h_4$ 的表示被改写成「<strong>篮球场景下的配件浏览</strong>」，不再是"随便看了个护腕"；</p>
+          <p>• $h_5$（下单篮球）那一行把注意力投给 $h_3$（加购篮球）→ 形成「<strong>加购 → 下单</strong>」这条完整转化链路的表示。</p>
+          <p>等 target 来提问时，它面对的已经不是 5 个原始行为，而是 <strong>5 个被上下文重新解释过的行为</strong>。此时「篮球气筒」与「篮球场景下的配件浏览」的匹配度，显然远高于与「看了个护腕」的匹配度。</p>
+          <p><strong>一句话：seq-seq 不是在"回答 target 的问题"，而是在"提前把材料整理好"。</strong>砍掉它，target 只能对着原始素材硬猜。</p>
+        </div>
+
+        <div class="callout callout-amber">
+          <strong>这个论证有多硬？两层证据要分开看。</strong>作者其实用了强度不同的两层论据，读的时候不要混为一谈：
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>证据</th><th>类型</th><th>强度</th></tr></thead>
+            <tbody>
+              <tr><td>分布重合 + 局部热力图（Figure 2d）</td><td><strong>解释性 / 间接</strong></td><td><span class="badge badge-yellow">中</span> 严格说「分布形态相似」推不出「信息量相当」——形态像也可能是冗余信息</td></tr>
+              <tr style="background:#f0fdf4"><td>FA vs TA 在 20K 下 AUC 差 <strong>0.25%</strong>（上面那张表）</td><td><strong>因果 / 直接</strong></td><td><span class="badge badge-green">强</span> 砍掉就掉点，端到端实测结论</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>真正定案的是<strong>表</strong>，图只是在解释「为什么会掉点」。这个顺序不能反——如果只有图没有表，「seq-seq 有结构」完全可以是「有结构但对 CVR 没用」。</p>
+
+        <div class="callout callout-purple">
+          <strong>与 EST 论文的分歧，以及作者的解释：</strong>EST 曾报告 seq-seq 依赖不重要。作者认为原因在于 <strong>EST 用了检索式压缩，而检索本身就是在强化 target-seq 相关性</strong>——捞出来的 token 个个都跟 target 高度相关，于是 seq-seq 的边际价值自然被压低了。而在<strong>不做检索的原生长序列</strong>上，seq-seq 依赖依然关键。这是一个很漂亮的「结论依赖于实验设定」的辨析。
+        </div>
+        <div class="callout callout-blue">
+          <strong>决策落地：</strong>架构上死守 FA，<em>效率问题绝不通过削弱注意力来解决</em>，而是从另外两个维度攻——<strong>压缩序列长度（token merge）</strong> + <strong>把重计算转移给一次性 teacher（KD）</strong>。这就是 TM20K 的两条腿。
+        </div>
+
+        <h3 id="obs-attn">3.2 三组注意力分数观测 → 三种 token merge</h3>
+        <p>这是全文最精彩的部分：<strong>三种 merge 策略，一一对应三组真实统计观测</strong>，不是凭直觉设计的。这一节的实验设置写得很压缩，下面拆开讲。</p>
+
+        <h4>第一步：为什么必须先训一个 20K 的 FA 模型</h4>
+        <p>注意力分数是<strong>模型学出来的</strong>，不是数据自带的属性。随机初始化的模型，注意力矩阵基本是均匀噪声，看不出任何规律。所以必须先有一个训到收敛的、吃完整 20K 序列的 FA 模型——<strong>这个模型就是后来的 teacher</strong>。</p>
+        <div class="callout callout-blue">
+          <strong>全文的因果顺序：</strong>先训 teacher → <strong>剖开它的注意力看规律</strong> → 根据规律设计 merge → 用 merge 造 student。所以第 3.2 节本质上是<strong>在给 teacher 做「解剖」</strong>。
+        </div>
+
+        <h4>第二步：为什么只取一个局部子矩阵——因为全量存不下</h4>
+        <p>完整注意力矩阵有多大？序列 20000 + 1 个 target，矩阵是 $20001 \times 20001$：</p>
+        <div class="formula-block">
+          $20001^2 \approx 4\times 10^{8}\ \text{个数} \;\Rightarrow\; \text{fp32 约 } 1.6\,\text{GB}$
+        </div>
+        <p>一个样本、一个 head、一层就 1.6GB，而模型有 6 层、多个 head，还要跑一批样本——<strong>根本不可能落盘</strong>。所以作者做了三刀裁剪：</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>裁剪</th><th>从</th><th>到</th><th>理由</th></tr></thead>
+            <tbody>
+              <tr><td><strong>只留 5 行</strong>（$m=5$）</td><td>20001 个 query</td><td><strong>5 个 query</strong></td><td>论文明说是 for storage saving。5 行足够看规律</td></tr>
+              <tr style="background:#fffbeb"><td><strong>保留全部列</strong>（$n=L$）</td><td>—</td><td><strong>20000 个 key</strong></td><td><span class="badge badge-red">不能裁！</span>要研究「不同位置的 key 被关注程度」，列必须完整</td></tr>
+              <tr><td><strong>只看第 1 个 head</strong></td><td>多个 head</td><td><strong>1 个</strong></td><td>各 head 并行独立，挑一个报告，避免图表爆炸</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>裁完就是 $A \in \mathbb{R}^{5\times 20000}$ = <strong>10 万个数</strong>，轻松落盘。</p>
+        <div class="callout callout-green">
+          <strong>一句话：$m=5$ 是纯粹的存储妥协，$n=20000$ 是研究对象本身，不能动。</strong>这也解释了上一节 Figure 2(d) 为什么是「5 个 query × 最近 50 个 key」——那是从<em>同一份 dump</em> 里再横向截取 50 列画的热力图。<strong>整篇论文的注意力分析都基于这同一份 $5\times20000$ 的数据。</strong>
+        </div>
+
+        <h4>第三步：这个矩阵具体长什么样</h4>
+        <p>行 = query，列 = key，每行经过 Softmax 所以<strong>一行加起来 = 1</strong>。关键是<strong>每一列都挂着两个元信息标签</strong>：</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>query ↓ \ key →</th><th>列 0</th><th>列 1</th><th>列 2</th><th>列 3</th><th>…</th><th>列 19999</th><th>行和</th></tr></thead>
+            <tbody>
+              <tr style="background:#f3f6fb"><td><strong>PID 标签</strong></td><td><strong>A</strong></td><td><strong>A</strong></td><td><strong>B</strong></td><td><strong>C</strong></td><td>…</td><td><strong>Z</strong></td><td>← 分组用</td></tr>
+              <tr style="background:#f3f6fb"><td><strong>位置索引</strong></td><td>最近</td><td>↓</td><td>↓</td><td>↓</td><td>…</td><td>最远</td><td>← 分桶用</td></tr>
+              <tr style="background:#eff6ff"><td>$q_0$ = <strong>target</strong></td><td>0.30</td><td>0.28</td><td>0.05</td><td>0.19</td><td>…</td><td>0.00001</td><td><strong>= 1</strong></td></tr>
+              <tr><td>$q_1$ = seq token</td><td>0.12</td><td>0.09</td><td>0.31</td><td>0.02</td><td>…</td><td>0.00002</td><td><strong>= 1</strong></td></tr>
+              <tr><td>$q_2$ = seq token</td><td>0.05</td><td>0.40</td><td>0.11</td><td>0.07</td><td>…</td><td>0.00001</td><td><strong>= 1</strong></td></tr>
+              <tr><td>$q_3, q_4$</td><td colspan="6">…（同上）</td><td><strong>= 1</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout callout-amber">
+          <strong>两个极易踩坑的细节：</strong><br>
+          ① <strong>PID 和位置索引本身不参与计算</strong>，它们纯粹是<em>给后面分组用的标签</em>——观测一按 PID 分组，观测二按位置分桶，用的是同一份数值、不同的标签；<br>
+          ② <strong>位置索引的约定是反的</strong>：论文里 <strong>索引小 = 时间更近</strong>。所以「最近 10% 的 token」= 索引 0~2000 那一段。这个约定和直觉相反，读伪码时特别容易搞混。
+        </div>
+
+        <h4>第四步：三组观测 = 用三种方式切同一块数据</h4>
+        <p>这是这节最优雅的地方——<strong>一次 dump，三种切法</strong>：</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th></th><th>切的维度</th><th>具体操作</th><th>用到的标签</th><th>得出的结论</th><th>催生</th></tr></thead>
+            <tbody>
+              <tr><td><strong>观测一</strong></td><td><strong>列，按 PID 分组</strong></td><td>任取两列算差值 $\Delta_{i,j}^{(t)}$，按「PID 是否相同」分两堆画分布</td><td>product ID</td><td>同 PID 的两列，被关注程度几乎一样</td><td><span class="badge badge-blue">LITM</span></td></tr>
+              <tr><td><strong>观测二</strong></td><td><strong>列，按位置分桶</strong></td><td>每 10% 位置切一桶，桶内数值<strong>求和</strong> $M_k$</td><td>位置索引</td><td>最近 10% 占掉约 50% 权重</td><td><span class="badge badge-blue">PATM</span></td></tr>
+              <tr><td><strong>观测三</strong></td><td><strong>换层重新 dump</strong></td><td>每行算熵 $H_t$，对比不同层</td><td>层号</td><td>上层熵小（集中）、底层熵大（均匀）</td><td><span class="badge badge-blue">LPTM</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>注意观测一、二都在<strong>同一份数据的列上做文章</strong>，只是分组标签不同；只有观测三需要<strong>换一层再 dump 一次</strong>。</p>
+
+        <figure>
+          <img src="https://arxiv.org/html/2608.07055v1/x6.png" alt="Figure 3(a): 同 PID 与不同 PID 的注意力差异分布"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+                 <b>Figure 3(a): PID 维度</b><br><br>
+                 横轴：两个 key token 的注意力概率之差的绝对值；纵轴：密度。<br>
+                 <b>Same PID</b> 曲线明显更集中在接近 0 的位置；<br>
+                 <b>Different PID</b> 曲线的尾部更长、差异更大。<br><br>
+                 结论：同一个商品 ID 的 token，注意力权重高度接近 → 可以合并。
+               </div>`" />
+          <figcaption><strong>Figure 3(a)（论文原图）：</strong>按「两个 key token 的 product ID 是否相同」分组，画注意力概率差 $|A_{t,i} - A_{t,j}|$ 的分布。同 PID 组的差异显著更小。</figcaption>
+        </figure>
+
+        <h4>观测一：同 product ID 的 token，注意力分数高度接近 → LITM</h4>
+        <p>对第 $t$ 个 query，计算任意两个 key token 之间的注意力分数绝对差：</p>
+        <div class="formula-block">
+          $$\Delta_{i,j}^{(t)} = \bigl|A_{t,i} - A_{t,j}\bigr|$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$A_{t,i}$：第 $t$ 个 query token 分配给第 $i$ 个 key token 的注意力概率（Softmax 之后，$\sum_i A_{t,i}=1$）</li>
+            <li>$\Delta_{i,j}^{(t)}$：两个 key token 在同一 query 视角下「被关注程度」的差距</li>
+            <li>分组依据：$p_i = p_j$（同商品）还是 $p_i \neq p_j$（不同商品）</li>
+          </ul>
+        </div>
+        <p><strong>结果：</strong>同 product ID 的 token 对，$\Delta$ 分布明显更集中于 0。</p>
+
+        <div class="callout callout-purple">
+          <strong>一个必须搞清楚的疑问：同 PID 的差值为什么不是 0？</strong>直觉上——如果 $i$ 和 $j$ 是同一个 PID，key 向量就该完全相同，对同一个 query $t$ 算内积必然相同，$\Delta$ 应该恒等于 0。<strong>这个推理没错，但少了一步。</strong>
+        </div>
+        <p>回看 Eq. 2：$E_{s_i} = \mathrm{SumPooling}(E_{p_i},\, E_{o_i})$ ——<strong>token 不只是 PID</strong>。$p_i$ 是关键 ID 特征，$o_i$ 是<strong>其他特征</strong>（类目、交互类型、时间戳等）。所以同 PID 的两个 token，$E_{p_i}$ 那一半相同，$E_{o_i}$ 那一半不同。差异来源按影响排序：</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>差异来源</th><th>说明</th><th>举例</th></tr></thead>
+            <tbody>
+              <tr><td><strong>交互类型</strong></td><td>同一商品可被曝光/点击/加购/下单</td><td>「看了篮球」和「下单篮球」PID 相同，语义天差地别</td></tr>
+              <tr><td><strong>时间特征</strong></td><td>时间戳、距今时长</td><td>三天前看 vs 三个月前看</td></tr>
+              <tr><td><strong>位置信息</strong></td><td>因果 transformer 里位置本身携带信息</td><td>第 3 个行为 vs 第 8000 个行为</td></tr>
+              <tr><td><strong>上下文</strong>（若测的是高层）</td><td>经过 attention 后表示已被上下文改写</td><td>同一商品在"篮球场景"与"办公场景"里被重新解释</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout callout-green">
+          <strong>关键：正是「不等于 0」才让这个观测有意义。</strong>如果差值恒为 0，这个观测就是<strong>同义反复</strong>（tautology）——"相同的输入产生相同的输出"，一句废话，推不出任何设计。论文实际发现的是一个<strong>非平凡的经验事实</strong>：<br><br>
+          <em>尽管两个同 PID token 在交互类型、时间、位置、上下文上<strong>全都不同</strong>，它们最终拿到的注意力权重却<strong>几乎一样</strong>。</em><br><br>
+          这等价于说：<strong>在注意力分配这件事上，product ID 是压倒性的主导因素，其他侧信息的贡献很小。</strong>这才是「可以合并」的依据。注意 Figure 3(a) 的措辞也是「<em>更集中</em>在 0 附近」（more concentrated near zero）而不是「等于 0」——它是一条有宽度的分布曲线，只是比 Diff PID 那条窄得多。
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：观测一具体怎么算（取 $q_0$ 这一行）</div>
+          <p>用前面矩阵示意里 target 那一行的数值，两两算差、按 PID 标签归堆：</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>列对</th><th>PID</th><th>差值计算</th><th>归入哪堆</th></tr></thead>
+              <tbody>
+                <tr style="background:#f0fdf4"><td>列0 vs 列1</td><td>A vs A</td><td>$|0.30-0.28| = $ <strong>0.02</strong></td><td><strong>Same PID</strong></td></tr>
+                <tr><td>列0 vs 列2</td><td>A vs B</td><td>$|0.30-0.05| = $ <strong>0.25</strong></td><td>Diff PID</td></tr>
+                <tr><td>列2 vs 列3</td><td>B vs C</td><td>$|0.05-0.19| = $ <strong>0.14</strong></td><td>Diff PID</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>把成千上万个这样的差值分成两堆、各画一条密度曲线 → 就是 Figure 3(a)。<strong>Same PID 那堆明显更挤在 0 附近。</strong></p>
+        </div>
+
+        <div class="callout callout-amber">
+          <strong>一个漂亮的自洽性验证。</strong>顺着上面的疑问再追问一句：<em>如果同 PID 的注意力真的完全一样，那 LITM 为什么还需要 $T=3$ 这个间隔限制？直接全序列去重不就好了，反正无损。</em><br><br>
+          答案就在<strong>那点没归零的残差里</strong>——它是真实携带信息的，而且<strong>间隔越远差异越大</strong>（时间特征差得越多、上下文越不同）。超参消融正好证实：
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>$T$</th><th>压缩率</th><th>ΔAUC</th><th>解读</th></tr></thead>
+            <tbody>
+              <tr><td>1</td><td>−39%</td><td>−0.02%</td><td>只合严格相邻</td></tr>
+              <tr style="background:#f0fdf4"><td><strong>3</strong>（采用）</td><td>−43%</td><td><strong>−0.02%</strong></td><td><span class="badge badge-green">多压 4%，AUC 无额外损失 → 这段残差确实可忽略</span></td></tr>
+              <tr><td>10</td><td>−57%</td><td><strong>−0.04%</strong></td><td><span class="badge badge-yellow">损失翻倍 → 这段残差开始有信息了</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>所以完整的结论应该是：<strong>同 PID 且位置相近时，注意力差异可忽略；位置一旦拉远，差异就恢复了。</strong>$T=3$ 正是这条曲线的拐点。「为什么 $\Delta \ne 0$」这个疑问和这个消融实验，本质是同一件事的两面。</p>
+
+        <div class="callout callout-green">
+          <strong>推论：</strong>如果两个 token 在模型眼里「被关注的程度几乎一样」，那把它们合并成一个 token，模型损失的信息就很有限。<strong>→ 直接催生 LITM（Local-wise ID-based Token Merge）</strong>：把<em>局部窗口内</em>同 ID 的 token 聚合。
+        </div>
+
+        <h4>观测二：最近 10% 的 token 占掉约一半注意力 → PATM</h4>
+        <p>把序列按位置索引分桶（位置索引越小 = 越近期），对每个桶 $[i_k, i_{k+1}]$ 累加注意力质量：</p>
+        <div class="formula-block">
+          $$M_k = \sum_{j=i_k}^{i_{k+1}} A_{t,j}$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$M_k$：第 $k$ 个位置桶承载的注意力质量总和（attention mass）</li>
+            <li>$[i_k, i_{k+1}]$：第 $k$ 个位置桶的起止索引；论文按 10% 为步长分成 10 个桶</li>
+            <li><strong>约定：位置索引小 = 交互时间更近</strong>（整篇论文都遵循这个约定，读伪代码时尤其要注意）</li>
+          </ul>
+        </div>
+        <p><strong>结果：</strong>最近的 top 10% token 就贡献了<strong>接近一半</strong>的注意力总权重（Figure 3b 的累积概率曲线在 10% 处已到 ~0.5）。</p>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：观测二具体怎么分桶（20000 列切 10 桶，每桶 2000 列）</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>桶</th><th>位置范围</th><th>桶内注意力总和 $M_k$</th><th>累积</th></tr></thead>
+              <tbody>
+                <tr style="background:#f0fdf4"><td><strong>1（最近）</strong></td><td>0 ~ 2000</td><td><strong>0.50</strong></td><td><strong>0.50</strong></td></tr>
+                <tr><td>2</td><td>2001 ~ 4000</td><td>0.13</td><td>0.63</td></tr>
+                <tr><td>3</td><td>4001 ~ 6000</td><td>0.08</td><td>0.71</td></tr>
+                <tr><td>…</td><td>…</td><td>…</td><td>…</td></tr>
+                <tr><td>10（最远）</td><td>18001 ~ 20000</td><td>0.02</td><td>1.00</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>把最后一列画成曲线 → 就是 Figure 3(b)，<strong>在 10% 处就已经冲到 0.5</strong>。</p>
+        </div>
+
+        <div class="callout callout-purple">
+          <strong>关键澄清：这 10% 是「绝对分桶」，所有 query 共用同一套桶，不是每个 query 各自的最近 10%。</strong>「位置索引」是 <strong>key 列自身的属性</strong>（它在这个用户行为序列里排第几），不是相对于 query 的偏移量。
+        </div>
+        <p>这个判断不需要猜，<strong>从方法本身就能反推</strong>。看 PATM 的配置 $R = [[1,1000],[1001,5000],[5001,10000],[10001,20000]]$、$K=[1,2,3,4]$ ——这是<strong>固定的绝对区间</strong>。而且更关键的是：</p>
+        <div class="callout callout-blue">
+          <strong>PATM 是在输入侧做一次合并，产出一条压缩后的序列，被所有 query 共享。</strong>它发生在 embedding 之前的 CPU 预处理阶段，那时候连注意力都还没算，<strong>根本不存在"每个 query"的概念</strong>。<br><br>
+          所以如果观测二是「每个 query 各自的相对 10%」，结论就无法落地成 PATM —— 你会需要给每个 query 准备一条不同的压缩序列，计算上完全不可行（那比不压缩还贵）。<strong>观测必须和方法在同一个坐标系里，否则推不出来。</strong>
+        </div>
+        <p><strong>那为什么横轴用「%」而不是绝对位置？</strong>因为要<strong>跨用户可比</strong>——用户序列长度差异极大：</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>用户</th><th>序列长度</th><th>「最近 10%」</th></tr></thead>
+            <tbody>
+              <tr><td>重度用户</td><td>20000</td><td>最近 2000 个行为</td></tr>
+              <tr><td>轻度用户</td><td>3000</td><td>最近 300 个行为</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>如果横轴用绝对位置，两类用户的曲线没法叠在一张图上。用百分比归一化后才能画出统一的累积分布曲线。</p>
+        <div class="callout callout-amber">
+          <strong>一个值得注意的落差：</strong>观测用<strong>相对百分比</strong>，PATM 却用<strong>绝对区间</strong>，这里有个小错位，但方向是安全的——观测结论是「最近 <strong>10%</strong> 占一半注意力」，而 PATM 第一段 $[1,1000]$ 不压缩，$1000/20000 = $ <strong>5%</strong>，比观测结论<strong>更保守</strong>，留了安全边际。<br><br>
+          <strong>副作用：</strong>绝对区间意味着<strong>轻度用户几乎不被压缩</strong>（序列只有 800，全落在第一段 $k=1$ 里），重度用户才被重压。这个行为本身合理，但也说明按<strong>时间窗</strong>而非位置索引分段可能更精确（重度用户的最近 1000 个行为可能只跨 3 天，轻度用户可能跨 3 个月）。
+        </div>
+        <div class="note">
+          <strong>一个诚实的保留：</strong>论文没说清楚，5 个 query 里有 4 个是序列 token，它们受<strong>因果掩码</strong>限制看不到自己"之后"的 token，某些桶的注意力质量结构性为 0。所以位置分桶这个分析<strong>大概率主要基于 target query</strong>（只有它能看到全序列）。这是根据因果掩码和 PATM 设计做的推断，论文未明说，算不上定论。
+        </div>
+
+        <div class="callout callout-green">
+          <strong>推论：</strong>注意力质量在序列上分布得极不均匀，那压缩强度也不该均匀。<strong>→ 催生 PATM（Position-wise Adaptive Token Merge）</strong>：近期轻压、远期重压。这正是对 LONGER「全序列一刀切均匀 merge」的针对性改进。
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2608.07055v1/x7.png" alt="Figure 3(b): 注意力质量随位置桶的累积分布"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+                 <b>Figure 3(b): 位置索引维度</b><br><br>
+                 横轴：位置索引分桶 10%~100%（越小越近期）；纵轴：累积注意力概率 0.4~1.0。<br><br>
+                 曲线在 <b>10% 处已经接近 0.5</b>，之后增长趋缓。<br>
+                 → 最近 10% 的 token 拿走了约一半的注意力权重，<br>
+                 剩下 90% 的历史 token 只分享另一半。
+               </div>`" />
+          <figcaption><strong>Figure 3(b)（论文原图）：</strong>注意力质量的累积分布。最近 10% token 占约 50% 注意力，这是 PATM「分段差异化压缩」的全部依据。</figcaption>
+        </figure>
+
+        <h4>观测三：上层注意力更尖锐、底层更均匀 → LPTM</h4>
+        <p>逐层计算注意力概率分布的熵：</p>
+        <div class="formula-block">
+          $$H_t = -\sum_{i} A_{t,i}\log A_{t,i}$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$H_t$：第 $t$ 个 query 的注意力分布熵。熵大 = 注意力铺得均匀（谁都看一点）；熵小 = 注意力集中（只看少数几个 token）</li>
+            <li>统计对象：同一模型不同 transformer 层的注意力矩阵</li>
+          </ul>
+        </div>
+        <p>熵的直观含义：</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>熵</th><th>注意力形态</th><th>打个比方</th></tr></thead>
+            <tbody>
+              <tr><td><strong>大</strong></td><td>铺得均匀，谁都看一点</td><td>读者在<strong>通读全文</strong></td></tr>
+              <tr><td><strong>小</strong></td><td>高度集中在少数几列</td><td>读者只看<strong>划线重点</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p><strong>结果：</strong>上层（upper layer）熵更小、注意力分配更尖锐；底层（bottom layer）熵更大、注意力更均匀。这与 LLM 领域的注意力分析结论一致。<strong>注意这一组观测需要换层重新 dump 一次</strong>，不像观测一、二那样共用同一份数据。</p>
+        <div class="callout callout-green">
+          <strong>推论：</strong>底层需要「广泛地看」，所以序列要长；上层只集中在少数关键 token 上，长序列对它是浪费。<strong>→ 催生 LPTM（Layer-wise Pyramid Token Merge）</strong>：越往上层，序列越短，形成金字塔。
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2608.07055v1/x8.png" alt="Figure 3(c): 底层与上层注意力熵分布"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+                 <b>Figure 3(c): 层维度</b><br><br>
+                 横轴：注意力概率分布的熵；纵轴：密度。<br>
+                 <b>Bottom Layer</b> 曲线整体偏右（熵更大 → 注意力更均匀）<br>
+                 <b>Upper Layer</b> 曲线整体偏左（熵更小 → 注意力更集中）<br><br>
+                 → 上层只需要少数 token，可以更激进地压缩。
+               </div>`" />
+          <figcaption><strong>Figure 3(c)（论文原图）：</strong>底层 vs 上层注意力熵分布。上层注意力显著更集中，意味着上层保留全长序列是冗余的——LPTM 的依据。</figcaption>
+        </figure>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：三个观测如何变成三把「剪刀」</div>
+          <p>把 20K 序列想象成一本 2 万字的书，模型是读者：</p>
+          <p><strong>观测一 → LITM（去重）：</strong>书里连续 3 页都在讲同一件商品（用户反复点了 3 次同一双鞋），模型对这 3 页的关注度几乎一样 → 把它们<strong>缩写成一页</strong>，信息几乎不丢。</p>
+          <p><strong>观测二 → PATM（分段缩写）：</strong>最后一章（最近行为）是重点，逐字读；开头几章（远古行为）扫一眼就够 → 近期段落不压缩，远期段落 4 页压成 1 页。</p>
+          <p><strong>观测三 → LPTM（逐轮精简）：</strong>第一遍通读要看全文；第二遍只看划线部分；第三遍只看结论 → 每读 2 层，就把手里的材料<strong>对折一次</strong>（长度减半）。</p>
+          <p><strong>三者叠加的实际效果：</strong>teacher 的 AvgL = 8.8K → student 的 AvgL = <strong>1.8K</strong>，压掉约 80%，而 AUC 只掉 0.11%。</p>
+        </div>
+
+        <h4>整个 3.2 节的流程串起来</h4>
+        <div class="flow-diagram">
+          <div class="flow-row">
+            <div class="flow-box stage1">
+              <div class="fb-title">① 训 FA 模型</div>
+              <div class="fb-desc">吃满 20K<br>（= teacher）</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box">
+              <div class="fb-title">② dump 注意力</div>
+              <div class="fb-desc">裁成 5×20000<br>（存储妥协）</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box">
+              <div class="fb-title">③ 挂标签</div>
+              <div class="fb-desc">每列标注<br>PID + 位置</div>
+            </div>
+          </div>
+          <div style="text-align:center;margin:14px 0;color:var(--muted);font-size:13px">↓ 三种切法</div>
+          <div class="flow-row">
+            <div class="flow-box stage2">
+              <div class="fb-title">按 PID 分组</div>
+              <div class="fb-desc">算差值 → 同 PID 差异小</div>
+            </div>
+            <div class="flow-arrow">·</div>
+            <div class="flow-box stage2">
+              <div class="fb-title">按位置分桶</div>
+              <div class="fb-desc">求和 → 近期占一半</div>
+            </div>
+            <div class="flow-arrow">·</div>
+            <div class="flow-box stage2">
+              <div class="fb-title">换层比熵</div>
+              <div class="fb-desc">算熵 → 上层更集中</div>
+            </div>
+          </div>
+          <div style="text-align:center;margin:14px 0;color:var(--muted);font-size:13px">↓</div>
+          <div class="flow-row">
+            <div class="flow-box out">
+              <div class="fb-title">LITM</div>
+              <div class="fb-desc">同 ID 局部合并</div>
+            </div>
+            <div class="flow-arrow">·</div>
+            <div class="flow-box out">
+              <div class="fb-title">PATM</div>
+              <div class="fb-desc">分段差异化压缩</div>
+            </div>
+            <div class="flow-arrow">·</div>
+            <div class="flow-box out">
+              <div class="fb-title">LPTM</div>
+              <div class="fb-desc">层间金字塔</div>
+            </div>
+          </div>
+        </div>
+        <div class="callout callout-blue">
+          <strong>这套流程最值得学的地方是它可迁移。</strong>换到短视频、信息流场景，不用照搬论文的 $T=3$ 或那组 $K=[1,2,3,4]$ —— <strong>重跑这三个统计，数据会告诉你新场景该怎么调参</strong>。这比「我觉得应该这么压」靠谱得多，也正是作者在局限性里说「merge 是规则式的、换域需重调参」时，隐含给出的调参方法论。
+        </div>
+      </section>
+
+      <!-- ═══ 方法详解 ═══ -->
+      <section class="section" id="method">
+        <div class="section-title"><span class="icon" style="background:#dcfce7">⚙️</span>方法详解</div>
+
+        <h3 id="m-overview">4.1 整体框架：一个 teacher，多个 student</h3>
+        <p>TM20K 的输入输出链路是这样的：<strong>原始电商行为序列（最长 20K，每个 token = 商品 ID + 侧信息）→ CPU 侧数据处理做 LITM + PATM 合并 →查 embedding 表并 sum pooling → 6 层 full attention transformer（层间做 LPTM）→ 序列表示 $x_{\text{seq}}$ 与非序列特征一起送入 RankMixer 做高阶交互 → 输出 CVR 预估。</strong>Teacher 和 student 共享这套架构，唯一区别是 teacher 不做任何 token merge。</p>
+
+        <p>形式化地，单个 token 的表示由各个特征 embedding 求和得到：</p>
+        <div class="formula-block">
+          $$E_{s_i} = \mathrm{SumPooling}\bigl(E_{p_i},\, E_{o_i}\bigr)$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$s_i = [p_i, o_i]$：序列第 $i$ 个 token，由<strong>关键 ID 特征</strong> $p_i$（如 product ID）和<strong>其他特征</strong> $o_i$（类目、交互类型、时间戳等）组成</li>
+            <li>$E_{p_i}, E_{o_i}, E_{s_i} \in \mathbb{R}^{d}$：分别是 ID 特征、其他特征、以及合并后的 token embedding，都是 $d$ 维（论文中 $d = 512$）</li>
+            <li>所有 token embedding 堆成序列张量 $E_s \in \mathbb{R}^{L\times d}$</li>
+          </ul>
+        </div>
+
+        <p>然后走序列建模与特征交互：</p>
+        <div class="formula-block">
+          $$x_{\text{seq}} = F_{\text{seq}}(e_t,\, E_s), \qquad h = F_{\text{interaction}}\bigl(x_{\text{non-seq}},\, x_{\text{seq}}\bigr)$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$F_{\text{seq}}$：序列建模模块——<strong>本文选定为 full attention transformer</strong>（6 层，hidden 512，FFN 中间层 1024，SwiGLU 激活）</li>
+            <li>$e_t$：目标候选广告 embedding；$x_{\text{seq}}$：编码了 target 与历史序列交互信息的序列表示</li>
+            <li>$x_{\text{non-seq}}$：非序列特征（用户画像、商品属性、上下文等）</li>
+            <li>$F_{\text{interaction}}$：<strong>RankMixer</strong>，负责异构 token 之间的高阶交互</li>
+            <li>$h$：最终表示，接 MLP 后预测 CVR，用交叉熵损失优化</li>
+          </ul>
+        </div>
+
+        <figure>
+          <img src="https://arxiv.org/html/2608.07055v1/x9.png" alt="Figure 4: TM20K 整体框架"
+               onerror="this.onerror=null;this.parentElement.innerHTML=`<div class='fig-placeholder'>
+                 <b>Figure 4: TM20K 整体框架</b><br><br>
+                 <b>左侧（One-Time Teacher，Keeps Full Tokens）：</b><br>
+                 Seq ID Sideinfo + Seq Other Sideinfo → Embedding &amp; Sum pooling → Transformer(FA) → RankMixer<br>
+                 全部 20K token 原样输入，不做任何压缩<br><br>
+                 <b>右侧（Online Serving Students，Merge Tokens Efficiently）：</b><br>
+                 Data Processing (CPU): LITM → PATM → Embedding &amp; Sum pooling<br>
+                 → Transformer Layer 1 (FA) → <b>LPTM</b> → Transformer Layer 2 (FA) → … → RankMixer<br><br>
+                 Teacher 的预测 logits 被缓存下来，作为 student 蒸馏塔的监督信号
+               </div>`" />
+          <figcaption><strong>Figure 4（论文原图）：</strong>TM20K 整体框架。序列建模用 FA，异构 token 交互用 RankMixer。Teacher 学完整 token 无任何 merge；student 依次叠加 LITM（CPU）、PATM（CPU）、LPTM（GPU，层间）三种 merge。</figcaption>
+        </figure>
+
+        <div class="flow-diagram">
+          <div class="flow-row">
+            <div class="flow-box">
+              <div class="fb-title">原始序列</div>
+              <div class="fb-desc">最长 20K token<br>商品 ID + 侧信息</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box stage2">
+              <div class="fb-title">① LITM (CPU)</div>
+              <div class="fb-desc">同 ID 局部合并<br>8.8K → 5K</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box stage2">
+              <div class="fb-title">② PATM (CPU)</div>
+              <div class="fb-desc">分段差异化压缩<br>→ 1.8K</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box">
+              <div class="fb-title">Embedding<br>+ SumPooling</div>
+              <div class="fb-desc">查表后求和<br>得 token 向量</div>
+            </div>
+          </div>
+          <div style="text-align:center;margin:14px 0;color:var(--muted);font-size:13px">↓ 进入 6 层 Transformer（每 2 层做一次 LPTM）</div>
+          <div class="flow-row">
+            <div class="flow-box">
+              <div class="fb-title">Layer 1-2 (FA)</div>
+              <div class="fb-desc">长序列<br>广泛注意</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box stage2">
+              <div class="fb-title">③ LPTM</div>
+              <div class="fb-desc">长度减半<br>（GPU 张量操作）</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box">
+              <div class="fb-title">Layer 3-6 (FA)</div>
+              <div class="fb-desc">短序列<br>集中注意</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box stage1">
+              <div class="fb-title">RankMixer</div>
+              <div class="fb-desc">序列 + 非序列<br>高阶交互</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-box out">
+              <div class="fb-title">双塔输出</div>
+              <div class="fb-desc">main tower（上线）<br>dis tower（吃 KD）</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-blue">
+          <strong>为什么这个范式在工业上成立？</strong>关键在于成本结构的错配：teacher 虽然贵（吞吐从 88K 掉到 11K），但它<strong>只训一次、永不上线、无需在线推理</strong>。而在大规模推荐系统里，真正的成本大头是「每天滚动训练的 N 个线上模型 + 每秒几十万 QPS 的在线推理」。把重计算集中到一个一次性的离线模型上，摊到整个系统里几乎可以忽略。
+        </div>
+
+        <h3 id="m-litm">4.2.1 LITM：局部同 ID Token 合并</h3>
+        <p><strong>动机来源：</strong>观测一——同 product ID 的 token 注意力分数高度接近。</p>
+        <p><strong>做什么：</strong>在<strong>局部窗口内</strong>把相同关键 ID（product ID）的 token 求和聚合成一个 token。注意关键词是 <em>local-wise</em>（局部）——不是全序列去重，而是只合并「位置间隔不超过阈值 $T$」的同 ID token。</p>
+
+        <div class="callout callout-purple">
+          <strong>Algorithm 1（LITM）伪代码逻辑：</strong><br>
+          输入：$E \in \mathbb{R}^{L\times d}$（token embedding）、$p \in \mathcal{I}^{L}$（ID 列表）、$T$（最大间隔阈值）<br>
+          初始化：<code>p2i</code> = 空字典（ID → 在结果列表中的下标）、$\mathcal{G}$ = 空列表<br>
+          遍历 $j = 0 \ldots L-1$：<br>
+          &nbsp;&nbsp;• <strong>若</strong> $p_j$ 不在 <code>p2i</code> 中，<strong>或</strong> $j - \texttt{p2i}[p_j] &gt; T$：<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;→ 把 $E_j$ 作为<strong>新 token</strong> 追加到 $\mathcal{G}$，并记录 <code>p2i</code>$[p_j] = |\mathcal{G}| - 1$<br>
+          &nbsp;&nbsp;• <strong>否则</strong>：<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;→ $\mathcal{G}[\texttt{p2i}[p_j]] \leftarrow \mathrm{Sum}(\mathcal{G}[\texttt{p2i}[p_j]], E_j)$，即<strong>累加进已有 token</strong><br>
+          输出：$E_m \in \mathbb{R}^{L'\times d}$，$L' \le L$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\mathcal{I}$：所有唯一 ID 构成的离散集合</li>
+            <li>$T$：<strong>最大位置间隔阈值</strong>，控制「多远之内的同 ID 才合并」。论文取 $T = 3$</li>
+            <li><code>p2i</code>：id → index 映射，记录某 ID 最近一次落在结果列表的哪个位置</li>
+            <li>$L'$：合并后的序列长度；实测 LITM 单独可把 AvgL 从 8.8K 压到 5K（−43%）</li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：LITM 具体怎么合并（T=3）</div>
+          <p><strong>输入序列（按 product ID 列出，位置 0 最近）：</strong><br>
+          位置：&nbsp;0&nbsp;&nbsp;1&nbsp;&nbsp;2&nbsp;&nbsp;3&nbsp;&nbsp;4&nbsp;&nbsp;5&nbsp;&nbsp;6&nbsp;&nbsp;7<br>
+          PID：&nbsp;&nbsp;A&nbsp;&nbsp;A&nbsp;&nbsp;B&nbsp;&nbsp;A&nbsp;&nbsp;C&nbsp;&nbsp;D&nbsp;&nbsp;E&nbsp;&nbsp;A</p>
+          <p><strong>逐步执行：</strong></p>
+          <p>• $j=0$（A）：新 ID → 新建 token 0，<code>p2i[A]=0</code>。结果 = [A₀]</p>
+          <p>• $j=1$（A）：$1 - 0 = 1 \le 3$ → <strong>合并进 token 0</strong>。结果 = [A₀+A₁]</p>
+          <p>• $j=2$（B）：新 ID → 新建 token 1。结果 = [A₀+A₁, B₂]</p>
+          <p>• $j=3$（A）：<code>p2i[A]=0</code>，$3 - 0 = 3 \le 3$ → <strong>合并进 token 0</strong>。结果 = [A₀+A₁+A₃, B₂]</p>
+          <p>• $j=4$（C）、$j=5$（D）、$j=6$（E）：都是新 ID → 分别新建。结果 = [A₀₁₃, B₂, C₄, D₅, E₆]</p>
+          <p>• $j=7$（A）：<code>p2i[A]=0</code>，$7 - 0 = 7 &gt; 3$ → <strong>间隔太远，不合并</strong>，新建 token。结果 = [A₀₁₃, B₂, C₄, D₅, E₆, A₇]</p>
+          <p><strong>最终：8 个 token → 6 个 token。</strong>注意最后那个 A 单独成 token 是有意义的——它可能是「一周后又回来看这双鞋」，与三天前的连续三次浏览是两段不同的兴趣事件，不该混为一谈。<strong>这就是 <code>T</code> 的作用：区分"同一次逛店的重复点击"和"隔了很久的二次兴趣"。</strong></p>
+        </div>
+
+        <div class="callout callout-green">
+          <strong>LITM 的三重收益（论文明确列出）：</strong><br>
+          ① <strong>信息浓缩</strong>：把同一商品的多次交互聚成一个更强的表示，而非重复的弱信号；<br>
+          ② <strong>过滤异常行为噪声</strong>：疯狂连点、误触这类行为被自动折叠；<br>
+          ③ <strong>强化用户隐私保护</strong>：合并后无法还原精确的单次交互序列（论文脚注也说明所有数据都做了 hash 处理）。
+        </div>
+        <div class="note">
+          <strong>为什么叫「local-wise」而不是全局去重？</strong>如果不加 $T$ 限制，一个用户对某商品跨越三个月的 20 次浏览会被压成一个 token，时间维度的兴趣演化信息就彻底丢了。$T=3$ 是个很保守的设定——只折叠「几乎相邻」的重复行为。超参实验也验证了这点：$T$ 从 3 提到 10 虽然多压 14% 长度，但 AUC 损失从 0.02% 翻倍到 0.04%。
+        </div>
+
+        <h3 id="m-patm">4.2.2 PATM：位置自适应 Token 合并</h3>
+        <p><strong>动机来源：</strong>观测二——最近 10% 的 token 占掉约一半注意力。</p>
+        <p><strong>做什么：</strong>把序列切成 $B$ 个不重叠分段，<strong>每段用不同的压缩因子</strong>：近期段几乎不压，远期段狠狠压。</p>
+
+        <div class="callout callout-purple">
+          <strong>Algorithm 2（PATM）伪代码逻辑：</strong><br>
+          输入：$E \in \mathbb{R}^{L\times d}$、段数 $B$、段范围列表 $R$、压缩因子向量 $K$<br>
+          遍历 $b = 0 \ldots B-1$：<br>
+          &nbsp;&nbsp;• $(s, e) \leftarrow R_b$（第 $b$ 段的起止位置）<br>
+          &nbsp;&nbsp;• $k \leftarrow K_b$（该段压缩因子）<br>
+          &nbsp;&nbsp;• $\hat{E} = \mathrm{Sum}\bigl(\mathrm{Reshape}(E[s{:}e],\, (-1, k, d)),\ \mathrm{dim}=1\bigr)$ &nbsp;← <em>把 $k$ 个连续 token 求和成 1 个</em><br>
+          &nbsp;&nbsp;• $\mathcal{G}$.extend($\hat{E}$)<br>
+          输出：$E_m \in \mathbb{R}^{L'\times d}$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$R_b = (s, e)$：第 $b$ 段的起止位置索引</li>
+            <li>$K_b = k$：第 $b$ 段的压缩因子——<strong>$k$ 个连续 token 合并成 1 个</strong>；$k=1$ 表示不压缩</li>
+            <li>$\mathrm{Reshape}(\cdot, (-1,k,d))$ 后沿 $\mathrm{dim}=1$ 求和：这就是 LONGER 提出的 token merge 算子，本文的创新是<strong>让 $k$ 随位置变化</strong></li>
+            <li><strong>核心原则</strong>：位置索引小（近期行为）→ $k$ 小；位置索引大（远古行为）→ $k$ 大</li>
+            <li><strong>实现细节</strong>：每段用全零 token 做 padding，保证段长能被 $k$ 整除</li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：PATM 的一组真实配置（论文原文举例）</div>
+          <p><strong>配置：</strong>$L = 20{,}000$，$B = 4$<br>
+          段范围 $R = [[1,\,1000],\ [1001,\,5000],\ [5001,\,10000],\ [10001,\,20000]]$<br>
+          压缩因子 $K = [1,\ 2,\ 3,\ 4]$</p>
+          <p><strong>逐段算：</strong></p>
+          <p>• 第 1 段（最近 1000 个行为）：$k=1$ → <strong>1000 个 token 原样保留</strong>，一个都不合</p>
+          <p>• 第 2 段（第 1001~5000）：$k=2$ → 4000 / 2 = <strong>2000 个 token</strong></p>
+          <p>• 第 3 段（第 5001~10000）：$k=3$ → 5000 / 3 ≈ <strong>1667 个 token</strong></p>
+          <p>• 第 4 段（第 10001~20000）：$k=4$ → 10000 / 4 = <strong>2500 个 token</strong></p>
+          <p><strong>合计 ≈ 7167 ≈ 7000 个 token</strong>，从 20000 压到约 7000（−65%），但<strong>最近 1000 个行为的细粒度信息完全无损</strong>。</p>
+          <p><strong>对比 LONGER 的均匀 merge：</strong>若全序列统一 $k=3$，也能压到约 6667，长度差不多——但最近 1000 个高价值行为被三三合并，直接把 Figure 3(b) 里那「占一半注意力」的部分给糊掉了。这就是 PATM 的全部意义。</p>
+        </div>
+
+        <div class="callout callout-amber">
+          <strong>注意一个反直觉的现象：</strong>越远的段压缩因子越大，但因为段本身也越长，最终第 4 段（2500 个）反而比第 3 段（1667 个）贡献的 token 更多。<strong>压缩因子的梯度设置需要和分段长度配合看</strong>，光看 $K$ 向量会误判信息分配。
+        </div>
+
+        <h3 id="m-lptm">4.2.3 LPTM：层间金字塔 Token 合并</h3>
+        <p><strong>动机来源：</strong>观测三——上层注意力更集中，底层更均匀。</p>
+        <p><strong>做什么：</strong>随着 transformer 层数上升，逐步把序列<strong>对折</strong>，形成「底层长、上层短」的金字塔。</p>
+
+        <div class="formula-block">
+          $$E_{n+1} = \mathrm{Sum}\Bigl(\mathrm{Reshape}\bigl(\hat{E}_n,\ (L_n/2,\ 2,\ d)\bigr),\ \mathrm{dim}=1\Bigr)$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$\hat{E}_n \in \mathbb{R}^{L_n \times d}$：第 $n$ 层 transformer 的<strong>输出</strong></li>
+            <li>$E_{n+1} \in \mathbb{R}^{(L_n/2) \times d}$：第 $n+1$ 层的<strong>输入</strong>，长度<strong>减半</strong>，后续注意力计算量降为 $1/4$（二次复杂度）</li>
+            <li>$\mathrm{Reshape} + \mathrm{Sum}(\mathrm{dim}=1)$：把相邻 2 个 token 求和成 1 个，与 PATM 用的是同一个算子</li>
+            <li><strong>关键约束</strong>：只有历史序列 token 参与层间合并，<strong>target 候选 token 永不被合并</strong>（论文说伪代码里为简洁省略了这个实现）</li>
+            <li><strong>执行频率可调</strong>：可以每层做，也可以每若干层做一次。本文用 6 层 transformer，<strong>每 2 层做一次</strong></li>
+          </ul>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：6 层 transformer 的金字塔形状</div>
+          <p>假设经过 LITM + PATM 后进入 transformer 的序列长度是 $L_0 = 2000$，每 2 层做一次 LPTM：</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>层</th><th>输入长度</th><th>注意力相对计算量</th><th>说明</th></tr></thead>
+              <tbody>
+                <tr><td>Layer 1</td><td>2000</td><td>1.00</td><td rowspan="2">底层：注意力均匀，需要看全貌</td></tr>
+                <tr><td>Layer 2</td><td>2000</td><td>1.00</td></tr>
+                <tr><td colspan="4" style="background:#f0fdf4;color:#166534;font-weight:600">↓ LPTM：相邻 2 token 求和，2000 → 1000</td></tr>
+                <tr><td>Layer 3</td><td>1000</td><td>0.25</td><td rowspan="2">中层：开始聚焦</td></tr>
+                <tr><td>Layer 4</td><td>1000</td><td>0.25</td></tr>
+                <tr><td colspan="4" style="background:#f0fdf4;color:#166534;font-weight:600">↓ LPTM：1000 → 500</td></tr>
+                <tr><td>Layer 5</td><td>500</td><td>0.0625</td><td rowspan="2">上层：注意力已高度集中，短序列足够</td></tr>
+                <tr><td>Layer 6</td><td>500</td><td>0.0625</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p><strong>总计算量对比：</strong>不做 LPTM 时 6 层都是 1.00，合计 6.0；做 LPTM 后合计 = 1+1+0.25+0.25+0.0625+0.0625 = <strong>2.625</strong>，约省掉 <strong>56%</strong> 的注意力计算。而这一切只换来 0.03% 的 AUC 损失。</p>
+          <p><strong>为什么 target token 不能合并？</strong>因为 target 是唯一的「query 主角」，最终 $x_{\text{seq}}$ 要从它的位置读出。把它和某个历史 token 求和会直接污染预测信号。</p>
+        </div>
+
+        <div class="callout callout-blue">
+          <strong>LPTM 与前两者的本质区别：</strong>LITM / PATM 是<strong>输入侧压缩</strong>（进模型之前就压好，只做一次），LPTM 是<strong>计算过程中的渐进压缩</strong>（第一层看到的仍是完整长度）。所以在消融表里，LPTM 那一行的 AvgL / P90L 与 20K Full 完全相同（8.8K / 20K）——因为它<strong>不改变输入层长度分布</strong>，只让中间层变短。这个细节论文特意提醒过，读表时容易误判成「LPTM 没压缩」。
+        </div>
+
+        <h3 id="m-impl">4.2.4 工程实现：CPU / GPU 的分工艺术</h3>
+        <p>三种 merge <strong>按顺序叠加</strong>：LITM → PATM → LPTM。但落地时的关键决策是「谁在哪算」。</p>
+
+        <div class="step-list">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <strong>LITM 和 PATM 放 CPU 上算</strong>
+              <p>理由一：这两个是<strong>规则型（rule-based）</strong>操作——查字典、比较位置、分段 reshape，充满分支判断和不规则内存访问，天生 CPU 友好、GPU 不友好（无法向量化）。理由二：它们属于数据预处理阶段，可以和 GPU 训练<strong>流水线并行</strong>，不占用宝贵的 GPU 时间。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <strong>关键优化：CPU 上合并「原始特征」，而不是合并 embedding</strong>
+              <p>这是全文最有工程含金量的一处细节。<strong>不是</strong>先查 embedding 再在 CPU 上把向量相加（那样 CPU 要处理 $L \times 512$ 的浮点矩阵，还要把结果传给 GPU），<strong>而是</strong>先在 CPU 上按 LITM / PATM 规则把 token 的<strong>原始特征 ID 分好组</strong>，然后在 GPU 侧查 embedding 表、再做 sum pooling。这样 CPU→GPU 之间传的只是<strong>整数 ID + 分组信息</strong>，通信带宽开销大幅下降。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <strong>LPTM 放 GPU 上算</strong>
+              <p>它只需要对标准 transformer 做很小的改动，Eq. 9 就是一个 <code>reshape + sum</code>，是完美的规整张量操作，GPU 上几乎零成本。</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：为什么「合并特征」比「合并 embedding」省得多</div>
+          <p><strong>方案 A（先查表再合并，朴素做法）：</strong>假设一个用户 20000 个 token，$d=512$，fp32。CPU 需要处理 $20000 \times 512 \times 4\text{B} \approx 41\text{MB}$ 的浮点数据，做完合并后即使压到 1800 个 token，也要把 $1800 \times 512 \times 4\text{B} \approx 3.7\text{MB}$ 的稠密矩阵传给 GPU。batch 一大，PCIe 直接被打满。</p>
+          <p><strong>方案 B（本文做法，先分组再查表）：</strong>CPU 只处理整数 ID。假设每个 token 有 10 个特征 ID（int64），传输量约 $1800 \times 10 \times 8\text{B} \approx 144\text{KB}$，加上分组元信息也就几百 KB——<strong>比方案 A 小一个数量级以上</strong>。而且 embedding 表本来就在 GPU/参数服务器侧，查表 + sum pooling 都是 GPU 的强项。</p>
+          <p><strong>额外好处：</strong>CPU 侧完全不涉及模型参数，预处理逻辑可以独立部署、独立扩容，与训练解耦。</p>
+        </div>
+
+        <h3 id="m-kd">4.3 Teacher 模型与知识蒸馏</h3>
+        <p>Teacher 的定位非常明确：<strong>不追求效率、独立训练、缓存 logits 供所有 student 使用。</strong></p>
+
+        <h4>Teacher 的损失</h4>
+        <div class="formula-block">
+          $$\ell_{ce} = -y\log q_{\mathcal{T}} - (1-y)\log(1 - q_{\mathcal{T}})$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$g_{\mathcal{T}} = \mathrm{MLP}(h_{\mathcal{T}})$：teacher 的预测 logit，$h_{\mathcal{T}}$ 是 RankMixer 出来的最终表示</li>
+            <li>$q_{\mathcal{T}} = \mathrm{Sigmoid}(g_{\mathcal{T}})$：teacher 预测的转化率，<strong>这个值会被缓存下来做 KD</strong></li>
+            <li>$y \in \{0,1\}$：真实转化标签</li>
+            <li>标准二分类交叉熵，没有任何特殊设计——teacher 就是一个「什么都不省」的常规模型</li>
+          </ul>
+        </div>
+
+        <h4>Student 的双塔损失</h4>
+        <p>Student 设计了<strong>两个独立的预测头</strong>：main tower（只学真实标签）和 distillation tower（同时学标签和 teacher）。</p>
+        <div class="formula-block">
+          $$\ell_{\text{main}} = -y\log q_{\mathcal{S},\text{main}} - (1-y)\log(1 - q_{\mathcal{S},\text{main}})$$
+          $$\ell_{\text{dis}} = \ell_{ce} + \lambda\,\ell_{kd}$$
+          $$\ell_{ce} = -y\log q_{\mathcal{S},\text{dis}} - (1-y)\log(1 - q_{\mathcal{S},\text{dis}})$$
+          $$\ell_{kd} = -q_{\mathcal{T}}\log q_{\mathcal{S},\text{dis}} - (1 - q_{\mathcal{T}})\log(1 - q_{\mathcal{S},\text{dis}})$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$q_{\mathcal{S},\star} = \mathrm{Sigmoid}\bigl(\mathrm{MLP}_{\star}(h_{\mathcal{S}})\bigr)$，$\star \in \{\text{main},\ \text{dis}\}$：两个塔共享同一份 $h_{\mathcal{S}}$（student 骨干输出），只是各接一个独立 MLP 头</li>
+            <li>$\ell_{\text{main}}$：main tower 对<strong>硬标签</strong> $y$ 的交叉熵</li>
+            <li>$\ell_{kd}$：distillation tower 对<strong>软标签</strong> $q_{\mathcal{T}}$（teacher 预测概率）的交叉熵——形式上就是把 $y$ 换成 $q_{\mathcal{T}}$</li>
+            <li>$\lambda$：蒸馏损失权重，<strong>论文实验最优值 $\lambda = 50$</strong></li>
+            <li>总损失 = $\ell_{\text{main}} + \ell_{\text{dis}}$（两塔的梯度都回传到共享骨干）</li>
+          </ul>
+        </div>
+
+        <div class="callout callout-amber">
+          <strong>$\lambda = 50$ 这个数字为什么这么大？</strong>因为 $\ell_{kd}$ 是两个概率之间的交叉熵，$q_{\mathcal{T}}$ 和 $q_{\mathcal{S}}$ 都在同一量级且都接近真实 CVR（通常很小），差值极小，导致原始 loss 量级远小于对硬标签的 $\ell_{ce}$。论文明确说：<strong>在 $\lambda = 50$ 时，$\lambda\ell_{kd}$ 与 $\ell_{ce}$ 的量级几乎相同</strong>——所以 $\lambda$ 本质是个量级校准系数，不是「更重视蒸馏」的意思。这是个非常实用的调参经验。
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：双塔设计到底解决什么问题</div>
+          <p><strong>如果只有一个塔（把 KD loss 直接加到唯一的头上）：</strong>这个头要同时拟合 0/1 硬标签和 teacher 的软概率（比如 0.037）。两个目标的最优解不同——硬标签把预测往 0 或 1 推，软标签把预测往 0.037 拉。结果是<strong>预估值分布被扭曲</strong>，而广告系统里预估值的绝对校准（calibration）直接影响出价，不能乱。</p>
+          <p><strong>双塔的解法：</strong>main tower 只对硬标签负责，<strong>预估值分布干净、校准正确，这个才是上线用的</strong>；dis tower 负责吸收 teacher 知识。由于两塔共享骨干 $h_{\mathcal{S}}$，<strong>teacher 的知识通过梯度流进共享表示层</strong>，间接让 main tower 也变强，但不直接干扰它的输出分布。</p>
+          <p><strong>假设数字：</strong>某样本真实标签 $y=0$，teacher 预测 $q_{\mathcal{T}} = 0.15$（它凭 20K 完整序列看出这个用户其实有一定兴趣）。dis tower 会被拉向 0.15，学到「这类样本没那么无望」这个 teacher 独有的判断；这个信息通过骨干反哺给 main tower 的特征表示，而 main tower 自己仍然老老实实往 0 学。</p>
+        </div>
+
+        <div class="callout callout-green">
+          <strong>一个很实用的发现（消融表 6）：</strong>在训练后期<strong>去掉蒸馏损失，最终效果几乎不变</strong>。说明 student 在足够多的蒸馏迭代后已经把 teacher 的知识吸收完了。这在工程上意味着：<em>teacher logits 的缓存和读取可以在训练后期停掉，进一步省成本</em>。
+        </div>
+
+        <h3 id="m-other">4.4 两个额外的工程设计</h3>
+        <p>论文的基线已经用了一整套优化：User-Level Training（类似 STCA 的 RLB）、FlashAttention、混合精度、Remove-Padding、M-Falcon Serving。在此之上又加了两个。</p>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>① Stack Sequence（显存优化）</h4>
+            <p style="font-size:13.5px">一个 batch 内用户序列长度极不均匀，传统做法把所有序列 pad 到最长，得到 $E_s \in \mathbb{R}^{B\times L_{\max}\times d}$，浪费巨大。改法：<strong>把所有有效 token 在 batch 内重新均匀分配</strong>，并记录每条样本的真实 token 数，张量变成 $E_{\text{stack},s} \in \mathbb{R}^{B\times L\times d}$，其中 $L = \lceil L_{\text{total}}/B \rceil$，之后在 GPU 上按记录的计数重建 remove-padding 张量。<strong>完整 20K 序列下省下最多 10GB 显存。</strong></p>
+          </div>
+          <div class="mini-card">
+            <h4>② QK Norm（训练稳定性）</h4>
+            <p style="font-size:13.5px">加入超长序列 + KD loss 后，student <strong>频繁训练发散</strong>。借鉴 LLM 缓解极端 attention score 的方案，在算注意力之前对 query 和 key 各加一层 normalization。虽然带来轻微的显存和计算开销（吞吐 +2% 是<em>去掉</em>它才有的），但<strong>彻底稳住了整个训练过程</strong>。</p>
+          </div>
+        </div>
+
+        <div class="formula-block">
+          $$L_{\text{total}} = \sum_{i=1}^{B} L_{\text{valid},i}, \qquad L = \left\lceil \frac{L_{\text{total}}}{B} \right\rceil$$
+        </div>
+        <div class="formula-vars">
+          <div class="var-title">符号说明</div>
+          <ul>
+            <li>$B$：batch size（论文全局 320；teacher 因显存压力降到 96）</li>
+            <li>$L_{\text{valid},i}$：第 $i$ 条样本的真实有效 token 数</li>
+            <li>$L_{\text{total}}$：整个 batch 的有效 token 总数，实践中<strong>远小于</strong> $B \times L_{\max}$</li>
+            <li>$L$：重分配后每条「虚拟样本」的长度，即把总量摊平——本质是<strong>用「总量守恒」替代「按最长对齐」</strong></li>
+          </ul>
+        </div>
+
+        <div class="callout callout-amber">
+          <strong>QK Norm 这个消融值得单独强调：</strong>表 6 显示去掉 QK Norm 后，<strong>训练早期 AUC 完全没变化（+0.00%），但后期直接崩了 −0.45%</strong>。这是个典型的「早期看不出问题、后期爆炸」的陷阱——如果只看短周期实验，很可能会把 QK Norm 当成无用开销砍掉。<em>超长序列训练必须看长周期曲线。</em>
+        </div>
+
+        <h3 id="m-vs">4.5 与相邻工作的核心区别</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>对比维度</th><th>LONGER</th><th>TWIN-V2</th><th>ExFM</th><th>TM20K</th></tr></thead>
+            <tbody>
+              <tr><td>压缩粒度</td><td>全序列均匀 TM</td><td>检索 + 层次聚类</td><td>不针对序列</td><td><span class="badge badge-blue">ID / 位置 / 层三维差异化</span></td></tr>
+              <tr><td>是否丢 token</td><td>否（merge）</td><td><span class="badge badge-red">是（检索丢弃）</span></td><td>—</td><td><span class="badge badge-green">否（全 merge，一个不丢）</span></td></tr>
+              <tr><td>注意力架构</td><td>CA + SA（Perceiver）</td><td>ETA</td><td>—</td><td><span class="badge badge-blue">Full Attention</span></td></tr>
+              <tr><td>KD 的用途</td><td>无</td><td>无</td><td>解决<strong>模型容量</strong> scaling</td><td><span class="badge badge-green">解决<strong>序列长度</strong> scaling</span></td></tr>
+              <tr><td>Teacher 差异点</td><td>—</td><td>—</td><td>更大的 foundation model</td><td><span class="badge badge-blue">同架构，但序列不压缩</span></td></tr>
+              <tr><td>压缩依据</td><td>启发式（等比）</td><td>相关性 / 聚类</td><td>—</td><td><span class="badge badge-green">真实注意力分数统计</span></td></tr>
+              <tr><td>M-Falcon 兼容</td><td>兼容</td><td><span class="badge badge-red">不兼容</span></td><td>—</td><td><span class="badge badge-green">兼容（causal mask + 无检索）</span></td></tr>
+              <tr><td>EffLen</td><td>$10^3$</td><td>$10^2$</td><td>—</td><td>$2\times10^3$（S）/ $2\times10^4$（T）</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout callout-purple">
+          <strong>最核心的一句话区分：</strong>LONGER 问的是「怎么把序列压短」，TWIN 问的是「怎么挑出有用的 token」，ExFM 问的是「怎么让小模型学到大模型的知识」；<strong>TM20K 问的是「怎么让在线模型享受到 20K 序列的收益，但不付 20K 的代价」</strong>——它把前三者的答案组合起来，用 merge 代替丢弃、用观测代替启发式、用 KD 补回压缩损失。
+        </div>
+      </section>
+
+      <!-- ═══ 实验结果 ═══ -->
+      <section class="section" id="exp">
+        <div class="section-title"><span class="icon" style="background:#f3e8ff">📊</span>实验结果</div>
+
+        <h3 id="exp-setup">5.1 实验设置</h3>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>数据与场景</h4>
+            <p style="font-size:13.5px">字节电商广告<strong>真实生产环境</strong>的 CVR 预估任务。序列 token 由用户历史交互商品的 ID + 侧信息构成。<strong>训练数据横跨超过半年</strong>（论文强调长周期观察）。全部数据经 hash 处理，无隐私泄露。</p>
+          </div>
+          <div class="mini-card">
+            <h4>模型与训练</h4>
+            <p style="font-size:13.5px">6 层 transformer，hidden 512，FFN 中间层 1024，SwiGLU。特征交互用 RankMixer。全局 batch size 320（<strong>teacher 因显存限制降到 96</strong>）。基线已包含 FlashAttention、混合精度、Remove-Padding、User-Level Training、M-Falcon Serving。</p>
+          </div>
+        </div>
+        <div class="note">
+          <strong>指标口径：</strong>AUC / LogLoss 是离线效果；<strong>Thr</strong> = 训练吞吐（samples/s，越大越好）；<strong>Mem</strong> = GPU 显存占用；<strong>AvgL / P90L</strong> = 实际参与计算的序列长度均值 / 90 分位（这两列是判断「到底压了多少」的关键，比 MaxLen 有意义）。所有 Δ 都相对 5K Baseline。
+        </div>
+
+        <h3 id="exp-main">5.2 主实验：效果与效率的全景对比</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>MaxL</th><th>方法</th><th>AvgL</th><th>P90L</th><th>AUC</th><th>ΔAUC</th><th>LogLoss</th><th>ΔLogLoss</th><th>Thr</th><th>Mem</th></tr></thead>
+            <tbody>
+              <tr><td>5K</td><td>Baseline</td><td>1.8K</td><td>5K</td><td>0.8212</td><td>—</td><td>0.4917</td><td>—</td><td>88K</td><td>52G</td></tr>
+              <tr><td>5K</td><td>STCA</td><td>1.8K</td><td>5K</td><td>0.8200</td><td><span class="badge badge-red">−0.15%</span></td><td>0.4931</td><td>+0.29%</td><td>137K</td><td>40G</td></tr>
+              <tr><td>5K</td><td>LONGER</td><td>1.4K</td><td>3.5K</td><td>0.8215</td><td>+0.04%</td><td>0.4914</td><td>−0.07%</td><td>100K</td><td>58G</td></tr>
+              <tr><td>20K</td><td>LONGER</td><td>2.7K</td><td>7K</td><td>0.8221</td><td>+0.11%</td><td>0.4907</td><td>−0.21%</td><td>48K</td><td>70G</td></tr>
+              <tr><td>20K</td><td>HyFormer</td><td>8.8K</td><td>20K</td><td>0.8222</td><td>+0.12%</td><td>0.4906</td><td>−0.23%</td><td>36K</td><td>75G</td></tr>
+              <tr style="background:#f5f3ff"><td>20K</td><td><strong>TM20K-T</strong>（老师）</td><td>8.8K</td><td>20K</td><td><strong>0.8233</strong></td><td><span class="badge badge-green"><strong>+0.26%</strong></span></td><td>0.4890</td><td>−0.55%</td><td><span class="badge badge-red">11K</span></td><td>86G</td></tr>
+              <tr style="background:#eff6ff"><td>20K</td><td><strong>TM20K-S</strong>（学生）</td><td>1.8K</td><td>2.6K</td><td>0.8224</td><td>+0.15%</td><td>0.4903</td><td>−0.29%</td><td><span class="badge badge-green">83K</span></td><td>74G</td></tr>
+              <tr style="background:#f0fdf4"><td>20K</td><td><strong>TM20K-S w/ KD</strong></td><td>1.8K</td><td>2.6K</td><td><strong>0.8230</strong></td><td><span class="badge badge-green"><strong>+0.22%</strong></span></td><td>0.4896</td><td>−0.43%</td><td><span class="badge badge-green">83K</span></td><td>74G</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-blue">
+          <strong>五个必须读出来的结论：</strong><br>
+          ① <strong>STCA 是唯一负收益的方法</strong>（−0.15%）。它吞吐最高（137K）、显存最低（40G），但训练时随机丢 token 的做法在这个场景直接掉点——<em>丢信息是有代价的</em>；<br>
+          ② <strong>LONGER 从 5K 到 20K 只涨 0.07%</strong>（+0.04% → +0.11%）而吞吐从 100K 掉到 48K，性价比很差。原因就是均匀 merge 把近期高价值 token 也压糊了；<br>
+          ③ <strong>Teacher 是天花板但完全不能上线</strong>：+0.26% AUC 是全表最高，但吞吐 11K = 基线的 1/8，显存 86G。这就是「效果上限」的定义；<br>
+          ④ <strong>Student 单独就已经很能打</strong>：三种 merge 把 AvgL 从 8.8K 压到 1.8K（和 5K 基线一样！），吞吐回到 83K（基线的 94%），却拿到 +0.15%——<em>同样的计算量下，20K 压缩序列比 5K 原始序列更有信息量</em>；<br>
+          ⑤ <strong>KD 把 teacher 的收益捞回约 85%</strong>：0.15% → 0.22%，而 teacher 上限是 0.26%。<span class="badge badge-green">$0.22/0.26 \approx 85\%$</span> 且吞吐显存<strong>一分钱不多花</strong>（83K / 74G 完全不变）——因为 teacher logits 是离线缓存的。
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：怎么理解「AvgL 都是 1.8K，但 AUC 差 0.22%」</div>
+          <p><strong>5K Baseline：</strong>AvgL 1.8K，意思是平均每个用户实际有 1800 个行为 token 参与计算，这 1800 个是<strong>最近的 1800 次原始行为</strong>（因为 MaxL=5K 时大部分用户不到 5K）。</p>
+          <p><strong>TM20K-S：</strong>AvgL 也是 1.8K，但这 1800 个 token 是从<strong>最多 20000 次原始行为</strong>压缩来的——每个 token 可能聚合了多次同商品交互、或代表远期的一段行为区间。<strong>信息覆盖面广了 4 倍多，而计算量一样。</strong></p>
+          <p><strong>更妙的是 P90L：</strong>Baseline 是 5K，TM20K-S 只有 <strong>2.6K</strong>。P90 决定了 padding 后的实际张量大小和长尾延迟——<em>TM20K-S 的长尾用户比 5K 基线还要轻</em>。这就是为什么它吞吐能做到 83K 却看得比基线更远。</p>
+          <p><strong>类比：</strong>基线是「逐字读最近 1800 字」，TM20K-S 是「读一份 20000 字原文的 1800 字精编摘要」。摘要的信息密度更高。</p>
+        </div>
+
+        <h3 id="exp-ablation">5.3 三种 Token Merge 的消融</h3>
+        <p>从 20K Full（= teacher）出发逐步叠加 merge：</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>配置</th><th>AvgL</th><th>P90L</th><th>ΔAUC</th><th>Thr</th><th>吞吐提升</th></tr></thead>
+            <tbody>
+              <tr><td><strong>20K Full</strong>（无压缩）</td><td>8.8K</td><td>20K</td><td>—</td><td>11K</td><td>1.0×</td></tr>
+              <tr><td>+ LITM</td><td>5K</td><td>13K</td><td>−0.02%</td><td>25K</td><td>2.3×</td></tr>
+              <tr><td>+ PATM</td><td>4.5K</td><td>9K</td><td>−0.06%</td><td>34K</td><td>3.1×</td></tr>
+              <tr><td>+ LPTM</td><td>8.8K</td><td>20K</td><td>−0.03%</td><td>19K</td><td>1.7×</td></tr>
+              <tr><td>+ LITM &amp; PATM</td><td>1.8K</td><td>2.6K</td><td>−0.07%</td><td>68K</td><td>6.2×</td></tr>
+              <tr style="background:#f0fdf4"><td><strong>+ LITM &amp; PATM &amp; LPTM</strong></td><td><strong>1.8K</strong></td><td><strong>2.6K</strong></td><td><span class="badge badge-yellow">−0.11%</span></td><td><span class="badge badge-green"><strong>83K</strong></span></td><td><strong>7.5×</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout callout-green">
+          <strong>读表要点：</strong><br>
+          • <strong>三者叠加换来 7.5× 吞吐，只付 0.11% AUC</strong>——这个 trade-off 比例极其漂亮；<br>
+          • <strong>LITM 是性价比之王</strong>：单独用就有 2.3× 吞吐，AUC 只掉 0.02%。「合并连续同商品行为」这件事几乎是免费的；<br>
+          • <strong>LPTM 那一行的 AvgL/P90L 与 20K Full 完全相同（8.8K / 20K）</strong>——不是笔误！因为 LPTM 是<strong>层间</strong>压缩，输入层长度不变，AvgL/P90L 这两个指标测的是输入长度。它的价值体现在 Thr 从 11K 涨到 19K；<br>
+          • <strong>LITM + PATM 有超线性协同</strong>：单独 LITM 到 5K、单独 PATM 到 4.5K，两者叠加直接到 1.8K。因为 LITM 先把重复 token 折掉后，PATM 的分段压缩作用在更"干净"的序列上，等效压缩率被放大；<br>
+          • <strong>P90L 的暴降是关键</strong>：从 20K → 2.6K（−87%），这直接决定了 serving 长尾延迟能不能扛住。
+        </div>
+
+        <h3 id="exp-hyper">5.4 超参与蒸馏权重</h3>
+
+        <h4>LITM 的间隔阈值 $T$</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>$T$</th><th>序列长度变化</th><th>ΔAUC</th><th>解读</th></tr></thead>
+            <tbody>
+              <tr><td>1</td><td>−39%</td><td>−0.02%</td><td>只合并严格相邻的同 ID</td></tr>
+              <tr style="background:#f0fdf4"><td><strong>3</strong>（采用）</td><td><strong>−43%</strong></td><td><strong>−0.02%</strong></td><td><span class="badge badge-green">最优：多压 4% 且 AUC 无额外损失</span></td></tr>
+              <tr><td>10</td><td>−57%</td><td>−0.04%</td><td>压得更狠但 AUC 损失翻倍</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p><strong>结论：</strong>$T=1 \to 3$ 是纯赚（−39% → −43%，AUC 不变）；$T=3 \to 10$ 才开始付代价（AUC 损失从 0.02% 翻倍到 0.04%）。<strong>说明「同一次浏览会话内的重复点击」大约就在 3 个位置的间隔内，超出这个范围就是不同的兴趣事件了。</strong></p>
+
+        <h4>PATM 的分段配置</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>配置强度</th><th>序列长度变化</th><th>ΔAUC</th><th>解读</th></tr></thead>
+            <tbody>
+              <tr><td>激进</td><td>−55%</td><td><span class="badge badge-red">−0.09%</span></td><td>压得最多，损失最大</td></tr>
+              <tr style="background:#f0fdf4"><td><strong>中等</strong>（采用）</td><td>−49%</td><td>−0.06%</td><td><span class="badge badge-green">平衡点</span></td></tr>
+              <tr><td>保守</td><td>−40%</td><td>−0.05%</td><td>多保留 9% 长度只换回 0.01% AUC，不划算</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p><strong>结论：</strong>PATM 的效果损失对压缩强度<strong>更敏感</strong>（0.05% ~ 0.09% 的区间，比 LITM 的 0.02% ~ 0.04% 大一倍）。这符合直觉——PATM 是「不管内容、按位置强制合并」，而 LITM 有语义依据（同商品）。<strong>所以 PATM 应该调得比 LITM 保守。</strong></p>
+
+        <h4>蒸馏权重 $\lambda$</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>$\lambda$</th><th>30</th><th>50</th><th>75</th><th>100</th><th>150</th></tr></thead>
+            <tbody>
+              <tr><td>ΔAUC</td><td>−0.01%</td><td><span class="badge badge-green"><strong>+0.00%</strong></span></td><td>−0.01%</td><td>−0.01%</td><td>−0.03%</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout callout-green">
+          <strong>好消息：$\lambda$ 非常鲁棒。</strong>从 30 到 100 的四倍区间内，AUC 波动只有 0.01%；只有到 150 才明显退化（−0.03%）。<strong>调参负担极轻</strong>——这在工业落地里比「最优值是多少」更重要，意味着换个场景不用重新搜。原则依然是：让 $\lambda\ell_{kd}$ 与 $\ell_{ce}$ 处于同一量级。
+        </div>
+
+        <h4>其他实现选择的消融（表 6）</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>变体</th><th>ΔAUC</th><th>ΔThr</th><th>结论</th></tr></thead>
+            <tbody>
+              <tr><td>merge 用 MeanPooling + LogN 而非 SumPooling</td><td>−0.01%</td><td>+0%</td><td>差别可忽略，SumPooling 更简单</td></tr>
+              <tr><td>PATM 只压缩增量 token（复用历史压缩结果）</td><td><span class="badge badge-green">+0.01%</span></td><td>+0%</td><td>略有收益但<strong>工程复杂度太高</strong>，未采用</td></tr>
+              <tr style="background:#fffbeb"><td><strong>去掉 QK Norm</strong></td><td>前期 +0.00% / <span class="badge badge-red">后期 −0.45%</span></td><td>+2%</td><td><span class="badge badge-red">训练会发散，绝不能去</span></td></tr>
+              <tr><td>训练后期去掉 KD loss</td><td>±0%</td><td>+0%</td><td><span class="badge badge-green">知识已吸收完，可以省掉缓存读取</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout callout-amber">
+          <strong>「PATM 只压增量 token」这个变体值得单独说：</strong>思路是——用户序列是滚动更新的，今天只比昨天多了几个新行为，那能不能把昨天压好的结果缓存下来，只对新增部分做 merge？效果上 <strong>+0.01%</strong>（因为压缩边界更稳定，同一段历史每天的压缩结果一致，不会因序列平移而抖动）。但需要维护逐用户的压缩状态缓存，<strong>作者判断工程复杂度不值这 0.01%</strong>，果断放弃。这种「知道更好但选择不做」的取舍，是工业论文很有价值的部分。
+        </div>
+
+        <h3 id="exp-online">5.5 线上 A/B 实验</h3>
+        <p>在字节电商广告线上系统做 A/B，基线是 5K 序列的生产模型。</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>方法</th><th>ADSS（广告主分数）</th><th>ADVV（广告主价值）</th><th>Serving 延迟</th></tr></thead>
+            <tbody>
+              <tr><td>TM20K-S</td><td>+0.881%</td><td>+0.515%</td><td>+5.6%</td></tr>
+              <tr style="background:#f0fdf4"><td><strong>TM20K-S w/ KD</strong>（全量上线）</td><td><span class="badge badge-green"><strong>+1.036%</strong></span></td><td><span class="badge badge-green"><strong>+0.780%</strong></span></td><td><strong>+5.6%</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout callout-green">
+          <strong>三点关键：</strong><br>
+          ① <strong>KD 对线上指标的提升比离线更明显</strong>：ADSS +0.881% → +1.036%（相对提升 18%），ADVV +0.515% → +0.780%（相对提升 51%）。<em>离线 AUC 只涨 0.07pp，线上 ADVV 涨了半成——说明 teacher 教给 student 的知识，对高价值转化的判别尤其有帮助</em>；<br>
+          ② <strong>延迟只涨 5.6%</strong>，而 Figure 1 里原生 20K 的延迟是 7.3×。对比一下：<span class="badge badge-red">+630%</span> vs <span class="badge badge-green">+5.6%</span>，这就是三种 merge 的全部价值；<br>
+          ③ <strong>加 KD 不增加任何 serving 成本</strong>（两行延迟完全相同 +5.6%）——蒸馏的收益是纯赚的，因为 teacher 只在训练时以缓存 logits 的形式存在。<strong>已在字节电商广告全量部署。</strong>
+        </div>
+
+        <div class="example-box">
+          <div class="ex-title">💡 举例：从 +630% 延迟到 +5.6% 延迟，账是怎么算的</div>
+          <p><strong>原始 20K FA：</strong>序列侧注意力计算量 $\propto 20000^2$。相对 5K（$5000^2$）是 16×，加上 serving 阶段要对每个候选广告重复计算，实测延迟 7.3×（+630%）。</p>
+          <p><strong>加上三种 merge 后：</strong></p>
+          <p>• LITM + PATM：输入长度 20K → AvgL 1.8K / P90 2.6K。<strong>与 5K 基线的 AvgL 1.8K 持平</strong>，所以底层 attention 成本回到基线水平；</p>
+          <p>• LPTM：中间 4 层进一步减半再减半，注意力总计算量再省约 56%；</p>
+          <p>• M-Falcon：多候选共享序列前缀计算（causal mask 使之可行），摊薄单候选成本。</p>
+          <p><strong>净结果：</strong>比 5K 基线只多 5.6% 延迟。多出来的这 5.6% 主要来自 CPU 侧 merge 预处理和 LPTM 的 reshape 开销，而不是 attention 本身。<strong>换来的是覆盖 4 倍历史长度的信息量 + ADSS +1.036%。</strong></p>
+        </div>
+
+        <h3>5.6 作者自陈的局限</h3>
+        <div class="two-col">
+          <div class="mini-card">
+            <h4>① Token merge 是规则式的</h4>
+            <p style="font-size:13.5px">三种 merge 的超参（$T$、分段范围 $R$、压缩因子 $K$、LPTM 频率）都依赖<strong>特定业务场景的注意力统计</strong>。换到别的域（如短视频、信息流）需要重新做观测和调参。<strong>未来方向：让 merge 策略可学习</strong>，端到端优化压缩模式。</p>
+          </div>
+          <div class="mini-card">
+            <h4>② 没引入 sparse attention</h4>
+            <p style="font-size:13.5px">稀疏注意力理论上能进一步降本，但与本文已有的 <strong>User-Level Training / Remove-Padding / FlashAttention</strong> 这套优化组合<strong>难以兼容</strong>——需要定制 CUDA 算子。作者留作未来工作。</p>
+          </div>
+        </div>
+        <div class="note">
+          <strong>另外两个作者提到的未来方向：</strong>① 把 teacher 演化成真正的 <strong>foundation model</strong>，同时服务多个下游 vertical model（ExFM 路线）；② 引入 <strong>instance-as-token</strong> 范式。
+        </div>
+      </section>
+
+      <!-- ═══ 个人理解 ═══ -->
+      <section class="section" id="insight">
+        <div class="section-title"><span class="icon" style="background:#fce7f3">🧭</span>个人理解与延伸</div>
+
+        <h3>这篇论文最值得学的三件事</h3>
+        <div class="step-list">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <strong>「先观测，再设计」的方法论纪律</strong>
+              <p>三种 merge 不是从「我觉得应该这样压」出发，而是从三个具体的注意力统计量（$\Delta_{i,j}^{(t)}$ 按 PID 分组、$M_k$ 按位置分桶、$H_t$ 按层）出发。<strong>每一个观测精确对应一种压缩维度</strong>。这种「让数据告诉你哪里冗余」的做法，比堆砌复杂模块的论文有用得多——它可迁移：换个场景，重跑这三个统计，就知道该怎么调参。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <strong>把「不对称的成本结构」当成一种资源</strong>
+              <p>训练与推理的成本结构在工业系统里是<strong>极度不对称</strong>的：一次性离线训练可以任性，在线推理一毫秒都要抠。TM20K 的核心洞察就是把这个不对称性变成杠杆——<em>让贵的那一次去承担全部重计算，把便宜的那一亿次做到极轻，中间用 KD 搭桥</em>。这个思路远超序列建模本身，任何「效果好但太贵」的模块都可以套用：先建一个只训一次的重量级版本，再蒸馏出轻量上线版。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <strong>「merge 而非 discard」这条原则的分量</strong>
+              <p>表 1 里 TM20K 是唯一「一个 token 都不丢」的方法。表 2 里 STCA（随机丢 token）是唯一负收益的方法。这两个事实放在一起就是全文最有说服力的论证：<strong>信息可以浓缩，但不能删除。</strong>Sum pooling 保留了所有 token 的贡献（哪怕被稀释），而检索/丢弃是硬性的信息删除，模型无从恢复。这个原则应该成为做任何序列压缩时的第一条准则。</p>
+            </div>
+          </div>
+        </div>
+
+        <h3>几个我觉得特别锐利的判断</h3>
+        <blockquote>
+          <strong>关于 EffLen 的揭穿。</strong>表 1 那一列 EffLen 是全文最"不留情面"的设计。业界论文都爱标榜 MaxLen 支持到 $10^6$，但真正参与计算的只有 $10^2$。这等于在说：<em>你们号称支持百万序列，实际上模型只看到了几百个 token，剩下的都在检索阶段被扔掉了。</em>把 MaxLen 和 EffLen 并列摆出来，是一种非常有力的学术批评。<strong>以后读长序列论文，第一件事就该是问 EffLen 是多少。</strong>
+        </blockquote>
+        <blockquote>
+          <strong>关于与 EST 结论冲突的处理。</strong>面对「EST 说 seq-seq 依赖不重要」这个矛盾结论，作者没有简单说对方错了，而是指出<strong>EST 用了检索式压缩，检索本身在强化 target-seq 相关性，从而系统性压低了 seq-seq 的边际价值</strong>。这是教科书级别的「结论依赖于实验设定」辨析——同样的实验现象，在不同的数据预处理下会导向相反结论。<em>这提醒我们：任何"某模块不重要"的消融结论，都要先检查上游预处理是否已经替它做了工作。</em>
+        </blockquote>
+        <blockquote>
+          <strong>关于 FA 的 GPU 利用率更高。</strong>「计算量大的方案反而更快」是这篇论文最反直觉的发现。现代 GPU 的瓶颈早已从 FLOPs 转向<strong>访存带宽和算子规整度</strong>。TA 的一个 query × 长 key 是典型的 memory-bound 细碎操作；FA 的大矩阵乘法能打满 Tensor Core。<em>所以「减少计算量」不等于「变快」，选架构时必须看实测利用率而不是理论复杂度。</em>
+        </blockquote>
+
+        <h3>可以直接借鉴的工程 checklist</h3>
+        <ul>
+          <li><strong>CPU 侧只搬整数，不搬浮点。</strong>规则型预处理（去重、分段、分组）放 CPU，但要合并<strong>原始特征 ID</strong> 而非 embedding，CPU↔GPU 之间只传 ID + 分组元信息。这一条能省掉一个数量级的通信量。</li>
+          <li><strong>KD 权重的量级校准比数值本身重要。</strong>$\lambda = 50$ 看着离谱，但它的意义只是「让 $\lambda\ell_{kd}$ 和 $\ell_{ce}$ 同量级」。换场景时先算两个 loss 的量级比，而不是照搬 50。且 30~100 都行，鲁棒性很好。</li>
+          <li><strong>蒸馏一定要用独立的塔。</strong>不要把 KD loss 加到上线用的那个头上，否则预估值校准会被软标签污染。共享骨干 + 独立头，让知识走梯度而不走输出。</li>
+          <li><strong>超长序列训练必须看长周期曲线。</strong>QK Norm 的消融就是血泪教训：前期 +0.00%，后期 −0.45%。任何「早期看起来无用」的稳定性组件，都要跑到后期再判断。</li>
+          <li><strong>盯 P90L 而不只是 AvgL。</strong>P90L 决定 padding 张量大小和长尾延迟。TM20K-S 的 P90L 从 20K 降到 2.6K（−87%），这才是延迟能压在 +5.6% 的真正原因。</li>
+          <li><strong>训练后期可以关掉 KD。</strong>知识吸收完之后 KD loss 就没用了，关掉可以省掉 teacher logits 的缓存读取和存储成本。</li>
+          <li><strong>Stack Sequence 值得单独抄。</strong>把 batch 内有效 token 重新均匀分配 + 记录真实计数，替代 pad-to-max，20K 场景省 10GB 显存。这是个与序列建模方法无关的通用优化。</li>
+        </ul>
+
+        <h3>我的疑问与可延伸的方向</h3>
+        <ul>
+          <li><strong>Teacher 上限就一定是天花板吗？</strong>Student 拿到 teacher 的 85%，但 teacher 自己也只有 +0.26%。如果 teacher 再往上（比如 50K 序列、更宽的模型），student 能捞回的绝对值会不会更高？<strong>论文没有探索 teacher scaling 与 student 收益之间的关系曲线</strong>，这可能是下一篇的内容。</li>
+          <li><strong>三种 merge 的顺序能否交换或联合优化？</strong>现在是固定 LITM → PATM → LPTM。如果先 PATM 再 LITM，或者把 LITM 也做成层间的，效果如何？论文只给了「叠加」的消融，没给「排序」的消融。</li>
+          <li><strong>可学习的 merge 会不会反而更差？</strong>作者把「让 merge 可学习」列为未来工作，但我怀疑这里有个隐藏权衡：<em>规则式 merge 可以在 CPU 上做、可以缓存、可以和训练流水线并行；一旦变成可学习的（需要 embedding 参与决策），就必须搬到 GPU 上，那个 7.5× 吞吐提升可能就没了。</em>这不是纯粹的效果问题，而是效果与可实现性的冲突。</li>
+          <li><strong>为什么 KD 对 ADVV 的提升（+51% 相对）远大于对 AUC 的提升？</strong>ADVV +0.515% → +0.780%，而 AUC 只从 +0.15% 到 +0.22%。这暗示 teacher 教给 student 的知识在<strong>高价值样本上尤其有效</strong>——可能是因为高价值转化往往依赖更长期的兴趣线索，正是 20K 全序列的独有优势。如果这个猜想成立，那么<strong>按样本价值加权的蒸馏</strong>可能还有额外收益。</li>
+          <li><strong>PATM 的分段配置能否随用户自适应？</strong>现在 $R$ 和 $K$ 是全局固定的。但重度用户和轻度用户的行为密度差异巨大——重度用户最近 1000 个行为可能只跨 3 天，轻度用户可能跨 3 个月。<strong>按时间窗而不是位置索引分段</strong>，或者按用户活跃度选择配置，可能比全局固定更合理。</li>
+        </ul>
+
+        <div class="callout callout-purple">
+          <strong>一句话收尾：</strong>TM20K 不是一篇有惊艳新算法的论文（三种 merge 都是几行 reshape + sum），但它是一篇<strong>把工业约束当成一等公民</strong>的优秀范本——它清楚知道 M-Falcon 需要 causal mask、知道 CPU 该搬什么、知道校准不能被污染、知道哪个 0.01% 不值得追。<em>在推荐系统这个领域，这种"知道什么该放弃"的判断力，往往比模型创新更稀缺。</em>
+        </div>
+      </section>
+
+      <div class="footer">
+        论文解读 · TM20K（arXiv 2608.07055v1 · ByteDance）· 图片来源 arXiv 原文
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var links = Array.prototype.slice.call(document.querySelectorAll('.toc-list a, .toc-sub a'));
+    var map = {};
+    links.forEach(function (a) {
+      var id = a.getAttribute('href').replace('#', '');
+      map[id] = a;
+    });
+    function setActive(id) {
+      links.forEach(function (a) { a.classList.remove('active'); });
+      if (map[id]) { map[id].classList.add('active'); }
+    }
+    var targets = Object.keys(map).map(function (id) { return document.getElementById(id); }).filter(Boolean);
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) { setActive(entry.target.id); }
+      });
+    }, { rootMargin: '-10% 0px -60% 0px', threshold: 0 });
+    targets.forEach(function (t) { observer.observe(t); });
+    links.forEach(function (a) {
+      a.addEventListener('click', function () { setActive(a.getAttribute('href').replace('#', '')); });
+    });
+  })();
+</script>
+</body>
+</html>

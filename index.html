@@ -223,7 +223,7 @@
   <div class="tabs-wrap">
     <div class="tabs">
       <button class="tab-btn active" onclick="switchTab('all',this)">
-        全部 <span class="tab-count">61</span>
+        全部 <span class="tab-count">64</span>
       </button>
       <button class="tab-btn" onclick="switchTab('notes',this)">
         <span class="tab-dot" style="background:#0891b2"></span>
@@ -231,7 +231,7 @@
       </button>
       <button class="tab-btn" onclick="switchTab('gen-rec',this)">
         <span class="tab-dot" style="background:#1d4ed8"></span>
-        🧪 生成式推荐 <span class="tab-count">28</span>
+        🧪 生成式推荐 <span class="tab-count">30</span>
       </button>
       <button class="tab-btn" onclick="switchTab('llm4rec',this)">
         <span class="tab-dot" style="background:#92400e"></span>
@@ -239,7 +239,7 @@
       </button>
       <button class="tab-btn" onclick="switchTab('traditional',this)">
         <span class="tab-dot" style="background:#065f46"></span>
-        📊 传统推荐 <span class="tab-count">3</span>
+        📊 传统推荐 <span class="tab-count">4</span>
       </button>
       <button class="tab-btn" onclick="switchTab('llm',this)">
         <span class="tab-dot" style="background:#7c3aed"></span>
@@ -247,7 +247,7 @@
       </button>
       <button class="tab-btn" onclick="switchTab('finance',this)">
         <span class="tab-dot" style="background:#d4a017"></span>
-        💰 金融 <span class="tab-count">1</span>
+        💰 金融 <span class="tab-count">2</span>
       </button>
     </div>
   </div>
@@ -260,6 +260,52 @@
   <!-- 全部 -->
   <div id="panel-all" class="panel visible">
     <div class="paper-list">
+<!-- TM20K 2026 字节 -->
+      <a class="paper-card" href="papers/tm20k.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2026</span>
+            <span class="tag tv">arXiv 2608.07055</span>
+            <span class="tag tc-seq">超长序列 · Token Merge</span>
+            <span class="tag tc-rank">CVR 判别排序</span>
+            <span class="tag tc-indus">字节电商广告 ADSS +1.036%</span>
+          </div>
+          <div class="card-title">TM20K：老师读全文，学生读缩写——两阶段蒸馏把 20K 序列送上线</div>
+          <div class="card-subtitle">Teacher Retains Full Tokens, Student Merges Efficiently: TM20K for E-Commerce Sequence Modeling in Ad Recommendation · Xinchun Li, Duoru Zheng, Wenlin Zhao et al. · ByteDance · arXiv 2026.08</div>
+          <div class="card-summary">先用注意力分数统计证明 full attention 不可替代（20K 下比 target attention 高 0.25% AUC），再由三组观测反推出三种 token merge：LITM（同 PID 局部合并，T=3）、PATM（近期轻压远期重压）、LPTM（每 2 层长度减半）。一次性 teacher 吃完整 20K token 但永不上线，缓存 logits 蒸馏给双塔 student（main tower 保校准 + dis tower 吃 KD，λ=50）。学生 AvgL 从 8.8K 压到 1.8K、吞吐 7.5×，KD 捞回 teacher 约 85% 收益；线上 ADSS +1.036%、ADVV +0.780%，延迟仅 +5.6%（原生 20K 是 +630%）。字节电商广告已全量。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+<!-- STREAM-Rec 2025 RUC/腾讯微信 -->
+      <a class="paper-card" href="papers/stream-rec.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">arXiv:2504.09627</span>
+            <span class="tag tc-gen">生成式推荐 · 显式慢思考</span>
+            <span class="tag tc-indus">TIGER +19.5%</span>
+          </div>
+          <div class="card-title">STREAM-Rec：给生成式推荐器装上一段可训练的思考过程</div>
+          <div class="card-subtitle">Slow Thinking for Sequential Recommendation · Zhang, Zhang, Sun, Lu, Zhao, Chen, Wen · RUC GSAI + 腾讯微信</div>
+          <div class="card-summary">沿用 TIGER 的 encoder-decoder + RQ-VAE SID 骨架，让 decoder 在吐 target SID 之前先自回归生成 l 个 reasoning token。三阶段训练：Pretrain（拼相似 item token 撑长度）→ SFT（用<em>迭代残差量化</em>合成 CoT + DPO 对照 direct decoder）→ RL（GRPO + 4 种 reward）。Amazon Instrument 相对 TIGER，R@5 +19.5%，N@5 +21.4%。恰好是 LARES 的显式版孪生兄弟。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+<!-- LARES 2025 RUC + 美团 -->
+      <a class="paper-card" href="papers/lares.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">arXiv 2505.16865</span>
+            <span class="tag tc-gen">序列推荐 · 潜在推理</span>
+            <span class="tag tc-llm">Test-Time Scaling</span>
+          </div>
+          <div class="card-title">LARES：让序列推荐器在 latent 空间里"多想几步"</div>
+          <div class="card-subtitle">Latent Reasoning for Sequential Recommendation · RUC GSAI + Meituan</div>
+          <div class="card-summary">把 test-time compute scaling 搬进推荐：pre-block A 编码历史，core-block C 在 latent 空间循环 K 次做"思考"，参数量不变但深度可变。两阶段训练：SPT（Rec + 轨迹级 TLA + 步级 SLA 三个 InfoNCE）稳住 latent 语义；RPT 用 GRPO + NDCG/Recall 直接当奖励，进一步逼近排序目标。4 个 Amazon 子集、5 类 backbone 全面刷点，且推理成本可控。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
 <!-- GR4AD 2026 Kuaishou 广告 -->
       <a class="paper-card" href="papers/gr4ad.html">
         <div>
@@ -1483,6 +1529,36 @@
       <span class="cat-desc">自回归/seq2seq 直接生成 item ID + Semantic ID 表征；含工业落地与架构统一</span>
     </div>
     <div class="paper-list">
+<!-- STREAM-Rec 2025 RUC/腾讯微信 -->
+      <a class="paper-card" href="papers/stream-rec.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">arXiv:2504.09627</span>
+            <span class="tag tc-gen">生成式推荐 · 显式慢思考</span>
+            <span class="tag tc-indus">TIGER +19.5%</span>
+          </div>
+          <div class="card-title">STREAM-Rec：给生成式推荐器装上一段可训练的思考过程</div>
+          <div class="card-subtitle">Slow Thinking for Sequential Recommendation · Zhang, Zhang, Sun, Lu, Zhao, Chen, Wen · RUC GSAI + 腾讯微信</div>
+          <div class="card-summary">沿用 TIGER 的 encoder-decoder + RQ-VAE SID 骨架，让 decoder 在吐 target SID 之前先自回归生成 l 个 reasoning token。三阶段训练：Pretrain（拼相似 item token 撑长度）→ SFT（用<em>迭代残差量化</em>合成 CoT + DPO 对照 direct decoder）→ RL（GRPO + 4 种 reward）。Amazon Instrument 相对 TIGER，R@5 +19.5%，N@5 +21.4%。恰好是 LARES 的显式版孪生兄弟。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+<!-- LARES 2025 RUC + 美团 -->
+      <a class="paper-card" href="papers/lares.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2025</span>
+            <span class="tag tv">arXiv 2505.16865</span>
+            <span class="tag tc-gen">序列推荐 · 潜在推理</span>
+            <span class="tag tc-llm">Test-Time Scaling</span>
+          </div>
+          <div class="card-title">LARES：让序列推荐器在 latent 空间里"多想几步"</div>
+          <div class="card-subtitle">Latent Reasoning for Sequential Recommendation · RUC GSAI + Meituan</div>
+          <div class="card-summary">把 test-time compute scaling 搬进推荐：pre-block A 编码历史，core-block C 在 latent 空间循环 K 次做"思考"，参数量不变但深度可变。两阶段训练：SPT（Rec + 轨迹级 TLA + 步级 SLA 三个 InfoNCE）稳住 latent 语义；RPT 用 GRPO + NDCG/Recall 直接当奖励，进一步逼近排序目标。4 个 Amazon 子集、5 类 backbone 全面刷点，且推理成本可控。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
 <!-- GR4AD 2026 Kuaishou 广告 -->
       <a class="paper-card" href="papers/gr4ad.html">
         <div>
@@ -2056,6 +2132,22 @@
       <span class="cat-desc">判别式排序、训练效率、传统架构优化</span>
     </div>
     <div class="paper-list">
+<!-- TM20K 2026 字节 -->
+      <a class="paper-card" href="papers/tm20k.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag ty">2026</span>
+            <span class="tag tv">arXiv 2608.07055</span>
+            <span class="tag tc-seq">超长序列 · Token Merge</span>
+            <span class="tag tc-rank">CVR 判别排序</span>
+            <span class="tag tc-indus">字节电商广告 ADSS +1.036%</span>
+          </div>
+          <div class="card-title">TM20K：老师读全文，学生读缩写——两阶段蒸馏把 20K 序列送上线</div>
+          <div class="card-subtitle">Teacher Retains Full Tokens, Student Merges Efficiently: TM20K for E-Commerce Sequence Modeling in Ad Recommendation · Xinchun Li, Duoru Zheng, Wenlin Zhao et al. · ByteDance · arXiv 2026.08</div>
+          <div class="card-summary">先用注意力分数统计证明 full attention 不可替代（20K 下比 target attention 高 0.25% AUC），再由三组观测反推出三种 token merge：LITM（同 PID 局部合并，T=3）、PATM（近期轻压远期重压）、LPTM（每 2 层长度减半）。一次性 teacher 吃完整 20K token 但永不上线，缓存 logits 蒸馏给双塔 student（main tower 保校准 + dis tower 吃 KD，λ=50）。学生 AvgL 从 8.8K 压到 1.8K、吞吐 7.5×，KD 捞回 teacher 约 85% 收益；线上 ADSS +1.036%、ADVV +0.780%，延迟仅 +5.6%（原生 20K 是 +630%）。字节电商广告已全量。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
 <!-- DIET 2026 快手+中科大 -->
       <a class="paper-card" href="papers/diet.html">
         <div>
@@ -2121,6 +2213,20 @@
           <div class="card-title">币圈完全入门：从比特币到 RWA</div>
           <div class="card-subtitle">小白向 Crypto 全景图 · 2008→2026 发展史 · 区块链/智能合约/Gas/L2 基础 · DeFi/稳定币/RWA 实战</div>
           <div class="card-summary">完全零基础也能看懂的币圈百科：从中本聪 2008 白皮书讲到 2026 的 RWA 大爆发；用「全球共享 Excel」类比区块链、用「停车罚单 vs 最高法院」解释 L2、用阿根廷通胀讲清稳定币真实需求；三大灵魂拷问（币的实际意义 / ETH 会被 SOL 取代吗 / BTC 为何没取代黄金）一次说透；附 50 美元小白上手实操路径。</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </a>
+<!-- 量化交易完全入门 2026 -->
+      <a class="paper-card" href="topics/notes-quant.html">
+        <div>
+          <div class="card-meta">
+            <span class="tag" style="background:#ecfdf5;color:#065f46;">📈 金融笔记</span>
+            <span class="tag ty">2026</span>
+            <span class="tag" style="background:#d1fae5;color:#065f46;">因子 · Alpha · Sharpe · 回测</span>
+          </div>
+          <div class="card-title">量化交易完全入门：从因子到实盘</div>
+          <div class="card-subtitle">小白向量化全景图 · 因子/Alpha/Sharpe/回撤/IC 一次讲透 · 趋势/均值回归/套利/多因子六大策略 · 回测七大陷阱 · 半年学习路线</div>
+          <div class="card-summary">完全零基础也能看懂的量化百科：用「连续跌 3 天就买入」类比量化规则、用 Fama-French 讲因子、用凯利公式讲仓位；6 大经典策略 + 10 步开发流程 + 7 大回测陷阱 + 4 级普通人入坑路径；附 Qlib/akshare/backtrader 工具栈和 6 个月学习计划；外加 7 个灵魂问答（量化是不是稳赚 / 喊单号靠谱吗 / AI 会颠覆量化吗 / 1 万块能做量化吗）。</div>
         </div>
         <div class="card-arrow">→</div>
       </a>
